@@ -1,0 +1,319 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { AuthUser } from '@/types'
+
+const ACCESS_TOKEN_COOKIE = 'zenquanta-access-token'
+const REFRESH_TOKEN_COOKIE = 'zenquanta-refresh-token'
+const COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 30
+
+type SupabaseAuthUser = {
+  id: string
+  email?: string | null
+}
+
+type SupabaseSessionResponse = {
+  access_token: string
+  refresh_token: string
+  user: SupabaseAuthUser
+}
+
+type SupabaseAuthType = 'magiclink' | 'recovery' | 'invite' | 'signup' | 'email'
+
+export interface RequestAuthSession {
+  user: AuthUser | null
+  accessToken?: string
+  refreshToken?: string
+  refreshed?: boolean
+  shouldClearCookies?: boolean
+}
+
+function normalizeSupabaseUrl(value: string): string {
+  return value.trim().replace(/\/$/, '')
+}
+
+function toAuthUser(user: SupabaseAuthUser | null | undefined): AuthUser | null {
+  if (!user?.id) return null
+
+  return {
+    id: user.id,
+    email: user.email ?? null,
+  }
+}
+
+export function getSupabaseAuthConfig() {
+  const url =
+    process.env.NEXT_PUBLIC_SUPABASE_URL?.trim() ??
+    process.env.SUPABASE_URL?.trim() ??
+    ''
+  const anonKey =
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim() ??
+    process.env.SUPABASE_ANON_KEY?.trim() ??
+    ''
+
+  return {
+    url: url ? normalizeSupabaseUrl(url) : '',
+    anonKey,
+  }
+}
+
+export function hasSupabaseAuthConfig(): boolean {
+  const config = getSupabaseAuthConfig()
+  return Boolean(config.url && config.anonKey)
+}
+
+async function requestSupabaseAuth<T>(
+  path: string,
+  init: {
+    method?: 'GET' | 'POST'
+    accessToken?: string
+    body?: unknown
+  } = {}
+): Promise<T> {
+  const config = getSupabaseAuthConfig()
+
+  if (!config.url || !config.anonKey) {
+    throw new Error('Supabase auth configuration is missing.')
+  }
+
+  const response = await fetch(`${config.url}/auth/v1${path}`, {
+    method: init.method ?? 'GET',
+    headers: {
+      apikey: config.anonKey,
+      Authorization: `Bearer ${init.accessToken ?? config.anonKey}`,
+      ...(typeof init.body !== 'undefined'
+        ? { 'Content-Type': 'application/json' }
+        : {}),
+    },
+    ...(typeof init.body !== 'undefined'
+      ? { body: JSON.stringify(init.body) }
+      : {}),
+    cache: 'no-store',
+  })
+
+  const payload = await response.json().catch(() => null)
+
+  if (!response.ok) {
+    const message =
+      (payload as { msg?: string; error_description?: string; message?: string } | null)
+        ?.msg ??
+      (payload as { error_description?: string; message?: string } | null)
+        ?.error_description ??
+      (payload as { message?: string } | null)?.message ??
+      `Supabase auth request failed with status ${response.status}.`
+
+    throw new Error(message)
+  }
+
+  return payload as T
+}
+
+function serializeCookie(
+  name: string,
+  value: string,
+  options: {
+    maxAge?: number
+  } = {}
+): string {
+  const segments = [
+    `${name}=${encodeURIComponent(value)}`,
+    'Path=/',
+    'HttpOnly',
+    'SameSite=Lax',
+    ...(process.env.NODE_ENV === 'production' ? ['Secure'] : []),
+  ]
+
+  if (typeof options.maxAge === 'number') {
+    segments.push(`Max-Age=${options.maxAge}`)
+  }
+
+  return segments.join('; ')
+}
+
+function readCookieValue(
+  request: Pick<NextRequest, 'cookies'>,
+  name: string
+): string {
+  return request.cookies.get(name)?.value?.trim() ?? ''
+}
+
+export function appendAuthCookies(
+  headers: Headers,
+  session: Pick<RequestAuthSession, 'accessToken' | 'refreshToken'>
+): void {
+  if (session.accessToken) {
+    headers.append(
+      'Set-Cookie',
+      serializeCookie(ACCESS_TOKEN_COOKIE, session.accessToken, {
+        maxAge: COOKIE_MAX_AGE_SECONDS,
+      })
+    )
+  }
+
+  if (session.refreshToken) {
+    headers.append(
+      'Set-Cookie',
+      serializeCookie(REFRESH_TOKEN_COOKIE, session.refreshToken, {
+        maxAge: COOKIE_MAX_AGE_SECONDS,
+      })
+    )
+  }
+}
+
+export function appendClearedAuthCookies(headers: Headers): void {
+  headers.append(
+    'Set-Cookie',
+    serializeCookie(ACCESS_TOKEN_COOKIE, '', { maxAge: 0 })
+  )
+  headers.append(
+    'Set-Cookie',
+    serializeCookie(REFRESH_TOKEN_COOKIE, '', { maxAge: 0 })
+  )
+}
+
+export function createUnauthorizedResponse(clearCookies = false) {
+  const response = NextResponse.json(
+    { error: 'Authentication is required.' },
+    { status: 401 }
+  )
+
+  if (clearCookies) {
+    appendClearedAuthCookies(response.headers)
+  }
+
+  return response
+}
+
+export async function sendMagicLink(email: string, redirectTo: string): Promise<void> {
+  await requestSupabaseAuth('/otp', {
+    method: 'POST',
+    body: {
+      email,
+      create_user: true,
+      data: {},
+      gotrue_meta_security: {},
+      options: {
+        email_redirect_to: redirectTo,
+      },
+    },
+  })
+}
+
+export async function verifyMagicLink(
+  tokenHash: string,
+  type: SupabaseAuthType
+): Promise<RequestAuthSession> {
+  const session = await requestSupabaseAuth<SupabaseSessionResponse>('/verify', {
+    method: 'POST',
+    body: {
+      token_hash: tokenHash,
+      type,
+    },
+  })
+
+  return {
+    user: toAuthUser(session.user),
+    accessToken: session.access_token,
+    refreshToken: session.refresh_token,
+  }
+}
+
+async function fetchUser(accessToken: string): Promise<AuthUser | null> {
+  try {
+    const user = await requestSupabaseAuth<SupabaseAuthUser>('/user', {
+      method: 'GET',
+      accessToken,
+    })
+
+    return toAuthUser(user)
+  } catch {
+    return null
+  }
+}
+
+async function refreshSession(refreshToken: string): Promise<RequestAuthSession | null> {
+  try {
+    const session = await requestSupabaseAuth<SupabaseSessionResponse>(
+      '/token?grant_type=refresh_token',
+      {
+        method: 'POST',
+        body: {
+          refresh_token: refreshToken,
+        },
+      }
+    )
+
+    return {
+      user: toAuthUser(session.user),
+      accessToken: session.access_token,
+      refreshToken: session.refresh_token,
+      refreshed: true,
+    }
+  } catch {
+    return null
+  }
+}
+
+export async function readRequestAuthSession(
+  request: Pick<NextRequest, 'cookies'>
+): Promise<RequestAuthSession> {
+  const accessToken = readCookieValue(request, ACCESS_TOKEN_COOKIE)
+  const refreshToken = readCookieValue(request, REFRESH_TOKEN_COOKIE)
+
+  if (!accessToken && !refreshToken) {
+    return { user: null }
+  }
+
+  if (accessToken) {
+    const user = await fetchUser(accessToken)
+
+    if (user) {
+      return {
+        user,
+        accessToken,
+        refreshToken: refreshToken || undefined,
+      }
+    }
+  }
+
+  if (refreshToken) {
+    const refreshed = await refreshSession(refreshToken)
+    if (refreshed?.user) {
+      return refreshed
+    }
+  }
+
+  return {
+    user: null,
+    shouldClearCookies: true,
+  }
+}
+
+export async function requireAuthenticatedUser(request: NextRequest) {
+  const session = await readRequestAuthSession(request)
+
+  if (!session.user) {
+    return {
+      session,
+      response: createUnauthorizedResponse(session.shouldClearCookies),
+    }
+  }
+
+  return {
+    session,
+    user: session.user,
+  }
+}
+
+export async function signOutFromSupabase(
+  accessToken: string | undefined
+): Promise<void> {
+  if (!accessToken) return
+
+  try {
+    await requestSupabaseAuth('/logout', {
+      method: 'POST',
+      accessToken,
+    })
+  } catch {
+    // Clear local cookies even if upstream logout fails.
+  }
+}

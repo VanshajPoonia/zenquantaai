@@ -1,5 +1,3 @@
-import { SEEDED_CONVERSATIONS } from '@/data/seed/conversations'
-import { SEEDED_APP_SETTINGS } from '@/data/seed/settings'
 import { AppSettings, Conversation, Project, PromptLibraryItem } from '@/types'
 import {
   createSessionSettings,
@@ -12,17 +10,13 @@ import { updateConversationSnapshot } from '@/lib/utils/chat'
 const CONVERSATIONS_KEY = 'zenquanta:conversations:v1'
 const SETTINGS_KEY = 'zenquanta:settings:v1'
 const CURRENT_CHAT_ID_KEY = 'zenquanta:current-chat-id:v1'
-const WORKSPACE_ID_KEY = 'zenquanta:workspace-id:v1'
 const PROJECTS_KEY = 'zenquanta:projects:v1'
 const PROMPTS_KEY = 'zenquanta:prompts:v1'
 const SELECTED_PROJECT_ID_KEY = 'zenquanta:selected-project-id:v1'
+const IMPORT_MARKER_PREFIX = 'zenquanta:supabase-imported:v1:'
 
 function canUseBrowserStorage(): boolean {
   return typeof window !== 'undefined' && typeof window.localStorage !== 'undefined'
-}
-
-function cloneValue<T>(value: T): T {
-  return JSON.parse(JSON.stringify(value)) as T
 }
 
 function readJson<T>(key: string): T | null {
@@ -42,32 +36,8 @@ function writeJson<T>(key: string, value: T): void {
   window.localStorage.setItem(key, JSON.stringify(value))
 }
 
-function createRandomId(prefix: string): string {
-  const id =
-    typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
-      ? crypto.randomUUID()
-      : `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
-
-  return `${prefix}-${id}`
-}
-
 function nowIso(): string {
   return new Date().toISOString()
-}
-
-function createDefaultProject(workspaceId: string): Project {
-  const now = nowIso()
-
-  return {
-    id: DEFAULT_PROJECT_ID,
-    workspaceId,
-    name: DEFAULT_PROJECT_NAME,
-    description: 'Default home for new chats',
-    color: 'general',
-    createdAt: now,
-    updatedAt: now,
-    isDefault: true,
-  }
 }
 
 function normalizeAppSettings(input: AppSettings | null): AppSettings | null {
@@ -114,6 +84,65 @@ function normalizeConversation(conversation: Conversation): Conversation {
   })
 }
 
+function normalizeProjects(input: unknown): Project[] {
+  const defaultProject: Project = {
+    id: DEFAULT_PROJECT_ID,
+    name: DEFAULT_PROJECT_NAME,
+    description: 'Default home for new chats',
+    color: 'general',
+    createdAt: nowIso(),
+    updatedAt: nowIso(),
+    isDefault: true,
+  }
+
+  const items = Array.isArray(input) ? input : []
+  const projectMap = new Map<string, Project>([[defaultProject.id, defaultProject]])
+
+  for (const item of items) {
+    if (!item || typeof item !== 'object') continue
+
+    const project = item as Project & { workspaceId?: string }
+    if (!project.id || !project.name) continue
+
+    projectMap.set(project.id, {
+      id: project.id,
+      name: project.name,
+      description: project.description,
+      color: project.color || 'general',
+      createdAt: project.createdAt || defaultProject.createdAt,
+      updatedAt: project.updatedAt || defaultProject.updatedAt,
+      isDefault: project.id === DEFAULT_PROJECT_ID || Boolean(project.isDefault),
+    })
+  }
+
+  return [...projectMap.values()].sort((a, b) => {
+    if (a.isDefault !== b.isDefault) {
+      return a.isDefault ? -1 : 1
+    }
+
+    return a.name.localeCompare(b.name)
+  })
+}
+
+function normalizePrompts(input: unknown): PromptLibraryItem[] {
+  const items = Array.isArray(input) ? input : []
+
+  return items
+    .filter((item): item is PromptLibraryItem & { workspaceId?: string } => {
+      if (!item || typeof item !== 'object') return false
+      const prompt = item as PromptLibraryItem & { workspaceId?: string }
+      return Boolean(prompt.id && prompt.title && prompt.content)
+    })
+    .map((prompt) => ({
+      id: prompt.id,
+      title: prompt.title,
+      content: prompt.content,
+      mode: prompt.mode,
+      createdAt: prompt.createdAt,
+      updatedAt: prompt.updatedAt,
+    }))
+}
+
 export function readBrowserConversations(): Conversation[] | null {
   const conversations = readJson<Conversation[]>(CONVERSATIONS_KEY)
   return conversations?.map(normalizeConversation) ?? null
@@ -123,20 +152,12 @@ export function writeBrowserConversations(conversations: Conversation[]): void {
   writeJson(CONVERSATIONS_KEY, conversations)
 }
 
-export function getSeededBrowserConversations(): Conversation[] {
-  return cloneValue(SEEDED_CONVERSATIONS)
-}
-
 export function readBrowserAppSettings(): AppSettings | null {
   return normalizeAppSettings(readJson<AppSettings>(SETTINGS_KEY))
 }
 
 export function writeBrowserAppSettings(settings: AppSettings): void {
   writeJson(SETTINGS_KEY, settings)
-}
-
-export function getSeededBrowserAppSettings(): AppSettings {
-  return cloneValue(SEEDED_APP_SETTINGS)
 }
 
 export function readBrowserCurrentChatId(): string | null {
@@ -155,62 +176,16 @@ export function writeBrowserCurrentChatId(chatId: string | null): void {
   window.localStorage.setItem(CURRENT_CHAT_ID_KEY, chatId)
 }
 
-export function ensureBrowserWorkspaceId(): string {
-  if (!canUseBrowserStorage()) {
-    return createRandomId('workspace')
-  }
-
-  const existing = window.localStorage.getItem(WORKSPACE_ID_KEY)
-  if (existing) return existing
-
-  const next = createRandomId('workspace')
-  window.localStorage.setItem(WORKSPACE_ID_KEY, next)
-  return next
-}
-
-function normalizeProjects(
-  workspaceId: string,
-  input: Project[] | null
-): Project[] {
-  const projectMap = new Map<string, Project>()
-  const defaultProject = createDefaultProject(workspaceId)
-
-  projectMap.set(defaultProject.id, defaultProject)
-
-  for (const project of input ?? []) {
-    projectMap.set(project.id, {
-      ...project,
-      workspaceId,
-      color: project.color || 'general',
-      isDefault: project.id === DEFAULT_PROJECT_ID,
-      createdAt: project.createdAt || defaultProject.createdAt,
-      updatedAt: project.updatedAt || defaultProject.updatedAt,
-    })
-  }
-
-  return [...projectMap.values()].sort((a, b) => {
-    if (a.isDefault !== b.isDefault) {
-      return a.isDefault ? -1 : 1
-    }
-
-    return a.name.localeCompare(b.name)
-  })
-}
-
-export function readBrowserProjects(workspaceId: string): Project[] | null {
-  return normalizeProjects(workspaceId, readJson<Project[]>(PROJECTS_KEY))
+export function readBrowserProjects(): Project[] | null {
+  return normalizeProjects(readJson<Project[]>(PROJECTS_KEY))
 }
 
 export function writeBrowserProjects(projects: Project[]): void {
   writeJson(PROJECTS_KEY, projects)
 }
 
-export function getDefaultBrowserProjects(workspaceId: string): Project[] {
-  return [createDefaultProject(workspaceId)]
-}
-
 export function readBrowserPromptLibrary(): PromptLibraryItem[] | null {
-  return readJson<PromptLibraryItem[]>(PROMPTS_KEY)
+  return normalizePrompts(readJson<PromptLibraryItem[]>(PROMPTS_KEY))
 }
 
 export function writeBrowserPromptLibrary(items: PromptLibraryItem[]): void {
@@ -231,4 +206,18 @@ export function writeBrowserSelectedProjectId(projectId: string | null): void {
   }
 
   window.localStorage.setItem(SELECTED_PROJECT_ID_KEY, projectId)
+}
+
+function importMarkerKey(userId: string): string {
+  return `${IMPORT_MARKER_PREFIX}${userId}`
+}
+
+export function hasLocalImportMarker(userId: string): boolean {
+  if (!canUseBrowserStorage()) return false
+  return window.localStorage.getItem(importMarkerKey(userId)) === '1'
+}
+
+export function writeLocalImportMarker(userId: string): void {
+  if (!canUseBrowserStorage()) return
+  window.localStorage.setItem(importMarkerKey(userId), '1')
 }

@@ -11,16 +11,18 @@ import {
   type ReactNode,
 } from 'react'
 import {
-  AIMode,
   APISettings,
+  AIMode,
   AppSettings,
   AppSettingsPatch,
   Attachment,
+  AuthState,
   Chat,
   ChatAction,
   ChatRequest,
   Conversation,
   ConversationSummary,
+  PendingAttachment,
   Project,
   PromptLibraryItem,
   SessionSettings,
@@ -35,21 +37,16 @@ import {
   resolveModelConfig,
 } from '@/lib/config'
 import {
-  ensureBrowserWorkspaceId,
-  getDefaultBrowserProjects,
-  getSeededBrowserAppSettings,
+  hasLocalImportMarker,
   readBrowserAppSettings,
   readBrowserConversations,
   readBrowserCurrentChatId,
   readBrowserProjects,
   readBrowserPromptLibrary,
   readBrowserSelectedProjectId,
-  writeBrowserAppSettings,
-  writeBrowserConversations,
   writeBrowserCurrentChatId,
-  writeBrowserProjects,
-  writeBrowserPromptLibrary,
   writeBrowserSelectedProjectId,
+  writeLocalImportMarker,
 } from '@/lib/storage/browser'
 import {
   createConversation,
@@ -66,11 +63,11 @@ import {
   conversationToMarkdown,
   downloadTextFile,
 } from '@/lib/utils/export'
-import { toAttachmentContext } from '@/lib/utils/files'
+import { serializeAttachment, toAttachmentContext } from '@/lib/utils/files'
 
 interface SendMessageInput {
   content: string
-  attachments?: Attachment[]
+  attachments?: Array<Attachment | PendingAttachment>
 }
 
 type ProjectFilterId = 'all' | string
@@ -81,8 +78,16 @@ interface SavePromptInput {
   mode: AIMode | 'any'
 }
 
+interface AuthSessionResponse {
+  authenticated: boolean
+  user: AuthState['user']
+}
+
 interface ChatContextType {
-  workspaceId: string
+  authState: AuthState
+  authError: string | null
+  requestMagicLink: (email: string) => Promise<void>
+  signOut: () => Promise<void>
   currentMode: AIMode
   setCurrentMode: (mode: AIMode) => void
   conversations: Conversation[]
@@ -167,62 +172,18 @@ function sortPrompts(prompts: PromptLibraryItem[]): PromptLibraryItem[] {
   )
 }
 
-function readLocalConversations(): Conversation[] {
-  return sortConversationList(
-    (readBrowserConversations() ?? []).map((conversation) =>
-      updateConversationSnapshot(conversation, {
-        projectId: conversation.projectId ?? DEFAULT_PROJECT_ID,
-      })
-    )
-  )
-}
-
-function readLocalSettings(): AppSettings {
-  return normalizeAppSettingsState(
-    readBrowserAppSettings() ?? getSeededBrowserAppSettings()
-  )
-}
-
-function writeLocalConversations(conversations: Conversation[]): void {
-  writeBrowserConversations(sortConversationList(conversations))
-}
-
-function writeLocalSettings(settings: AppSettings): void {
-  writeBrowserAppSettings(normalizeAppSettingsState(settings))
-}
-
-async function fetchProjects(workspaceId: string): Promise<Project[]> {
-  const response = await fetch(
-    `/api/projects?workspaceId=${encodeURIComponent(workspaceId)}`,
-    {
-      cache: 'no-store',
-    }
-  )
-
-  if (!response.ok) {
-    throw new Error('Unable to load projects.')
-  }
-
-  return (await response.json()) as Project[]
-}
-
-async function fetchPrompts(workspaceId: string): Promise<PromptLibraryItem[]> {
-  const response = await fetch(
-    `/api/prompts?workspaceId=${encodeURIComponent(workspaceId)}`,
-    {
-      cache: 'no-store',
-    }
-  )
-
-  if (!response.ok) {
-    throw new Error('Unable to load prompt library.')
-  }
-
-  return (await response.json()) as PromptLibraryItem[]
+function isPendingAttachment(
+  attachment: Attachment | PendingAttachment
+): attachment is PendingAttachment {
+  return 'file' in attachment
 }
 
 export function ChatProvider({ children }: { children: ReactNode }) {
-  const [workspaceId, setWorkspaceId] = useState('')
+  const [authState, setAuthState] = useState<AuthState>({
+    status: 'loading',
+    user: null,
+  })
+  const [authError, setAuthError] = useState<string | null>(null)
   const [currentMode, setCurrentModeState] = useState<AIMode>(
     DEFAULT_APP_SETTINGS.defaultMode
   )
@@ -278,13 +239,71 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       ? 'all'
       : selectedProjectIdState
 
+  const clearAuthedState = useCallback(() => {
+    streamAbortRef.current?.abort()
+    streamAbortRef.current = null
+    setStreamingState({ status: 'idle' })
+    setConversations([])
+    setCurrentChatState(null)
+    setProjects([])
+    setPromptLibrary([])
+    setCurrentModeState(DEFAULT_APP_SETTINGS.defaultMode)
+    setAppSettings(DEFAULT_APP_SETTINGS)
+    setDraftSessionSettings(DEFAULT_APP_SETTINGS.sessionDefaults)
+    setSelectedProjectIdState('all')
+    writeBrowserCurrentChatId(null)
+  }, [])
+
+  const handleUnauthorized = useCallback((message?: string) => {
+    clearAuthedState()
+    setAuthState({
+      status: 'unauthenticated',
+      user: null,
+    })
+    setAuthError(message ?? 'Please sign in again to continue.')
+  }, [clearAuthedState])
+
+  const requestJson = useCallback(
+    async <T,>(input: string, init: RequestInit = {}): Promise<T> => {
+      const response = await fetch(input, {
+        ...init,
+        headers: {
+          ...(init.body instanceof FormData
+            ? {}
+            : { 'Content-Type': 'application/json' }),
+          ...(init.headers ?? {}),
+        },
+        cache: 'no-store',
+      })
+
+      if (response.status === 401) {
+        handleUnauthorized()
+        throw new Error('Authentication required.')
+      }
+
+      if (!response.ok) {
+        const payload = await response.json().catch(() => null)
+        throw new Error(
+          (payload as { error?: string } | null)?.error ??
+            'Request failed. Please try again.'
+        )
+      }
+
+      if (response.status === 204) {
+        return undefined as T
+      }
+
+      return (await response.json()) as T
+    },
+    [handleUnauthorized]
+  )
+
   const commitState = useCallback(
     (nextConversations: Conversation[], nextCurrentChat: Conversation | null) => {
       const sorted = sortConversationList(nextConversations)
       conversationsRef.current = sorted
       currentChatRef.current = nextCurrentChat
       setConversations(sorted)
-      writeLocalConversations(sorted)
       setCurrentChatState(nextCurrentChat)
       writeBrowserCurrentChatId(nextCurrentChat?.id ?? null)
 
@@ -343,67 +362,174 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     [commitState]
   )
 
+  const persistConversationMutation = useCallback(
+    async (conversationId: string, mutation: {
+      title?: string
+      mode?: AIMode
+      projectId?: string
+      isPinned?: boolean
+      sessionSettings?: SessionSettings
+    }) => {
+      const conversation = await requestJson<Conversation>(
+        `/api/conversations/${conversationId}`,
+        {
+          method: 'PATCH',
+          body: JSON.stringify(mutation),
+        }
+      )
+      upsertConversation(conversation)
+      return conversation
+    },
+    [requestJson, upsertConversation]
+  )
+
   const setSelectedProjectId = useCallback((projectId: ProjectFilterId) => {
     setSelectedProjectIdState(projectId)
     writeBrowserSelectedProjectId(projectId === 'all' ? null : projectId)
   }, [])
 
-  const loadBootData = useCallback(async () => {
-    const nextWorkspaceId = ensureBrowserWorkspaceId()
-    const settings = readLocalSettings()
-    const nextProjects = sortProjects(
-      readBrowserProjects(nextWorkspaceId) ?? getDefaultBrowserProjects(nextWorkspaceId)
-    )
-    const storedPrompts = sortPrompts(readBrowserPromptLibrary() ?? [])
-    const nextConversations = readLocalConversations()
-    const currentChatId = readBrowserCurrentChatId()
-    const activeConversation =
-      nextConversations.find((conversation) => conversation.id === currentChatId) ?? null
-    const storedProjectId = readBrowserSelectedProjectId()
+  const runLocalImport = useCallback(
+    async (userId: string) => {
+      if (hasLocalImportMarker(userId)) return
 
-    setWorkspaceId(nextWorkspaceId)
-    setProjects(nextProjects)
-    writeBrowserProjects(nextProjects)
-    setPromptLibrary(storedPrompts)
-    writeBrowserPromptLibrary(storedPrompts)
-    setSelectedProjectIdState(
-      storedProjectId && nextProjects.some((project) => project.id === storedProjectId)
-        ? storedProjectId
-        : 'all'
-    )
-    setAppSettings(settings)
-    writeLocalSettings(settings)
-    commitState(nextConversations, activeConversation)
-    setCurrentModeState(activeConversation?.mode ?? settings.defaultMode)
-    setDraftSessionSettings(
-      createSessionSettings(settings.defaultMode, settings.sessionDefaults)
-    )
+      const localConversations = readBrowserConversations() ?? []
+      const localProjects = readBrowserProjects() ?? []
+      const localPrompts = readBrowserPromptLibrary() ?? []
+      const localSettings = readBrowserAppSettings()
 
-    void Promise.all([
-      fetchProjects(nextWorkspaceId).then((remoteProjects) => {
-        const normalized = sortProjects(remoteProjects)
-        setProjects(normalized)
-        writeBrowserProjects(normalized)
-      }),
-      fetchPrompts(nextWorkspaceId).then((remotePrompts) => {
-        const normalized = sortPrompts(remotePrompts)
-        setPromptLibrary(normalized)
-        writeBrowserPromptLibrary(normalized)
-      }),
-    ]).catch((error) => {
-      console.error('Failed to refresh workspace data.', error)
-    })
-  }, [commitState])
+      const hasImportableData =
+        localConversations.length > 0 ||
+        localProjects.some((project) => project.id !== DEFAULT_PROJECT_ID) ||
+        localPrompts.length > 0 ||
+        Boolean(localSettings)
+
+      if (hasImportableData) {
+        await requestJson('/api/bootstrap/import-local', {
+          method: 'POST',
+          body: JSON.stringify({
+            conversations: localConversations,
+            projects: localProjects,
+            prompts: localPrompts,
+            settings: localSettings,
+          }),
+        })
+      }
+
+      writeLocalImportMarker(userId)
+    },
+    [requestJson]
+  )
+
+  const loadAuthedData = useCallback(
+    async (user: NonNullable<AuthState['user']>) => {
+      await runLocalImport(user.id)
+
+      const [settings, nextProjects, nextPrompts, nextConversations] =
+        await Promise.all([
+          requestJson<AppSettings>('/api/settings'),
+          requestJson<Project[]>('/api/projects'),
+          requestJson<PromptLibraryItem[]>('/api/prompts'),
+          requestJson<Conversation[]>('/api/conversations'),
+        ])
+
+      const normalizedSettings = normalizeAppSettingsState(settings)
+      const normalizedProjects = sortProjects(nextProjects)
+      const normalizedPrompts = sortPrompts(nextPrompts)
+      const normalizedConversations = sortConversationList(nextConversations)
+      const currentChatId = readBrowserCurrentChatId()
+      const activeConversation =
+        normalizedConversations.find(
+          (conversation) => conversation.id === currentChatId
+        ) ?? null
+      const storedProjectId = readBrowserSelectedProjectId()
+
+      setAppSettings(normalizedSettings)
+      setProjects(normalizedProjects)
+      setPromptLibrary(normalizedPrompts)
+      setSelectedProjectIdState(
+        storedProjectId &&
+          normalizedProjects.some((project) => project.id === storedProjectId)
+          ? storedProjectId
+          : 'all'
+      )
+      commitState(normalizedConversations, activeConversation)
+      setCurrentModeState(activeConversation?.mode ?? normalizedSettings.defaultMode)
+      setDraftSessionSettings(
+        createSessionSettings(
+          normalizedSettings.defaultMode,
+          normalizedSettings.sessionDefaults
+        )
+      )
+    },
+    [commitState, requestJson, runLocalImport]
+  )
+
+  const restoreSession = useCallback(async () => {
+    try {
+      const session = await requestJson<AuthSessionResponse>('/api/auth/session')
+
+      if (!session.authenticated || !session.user) {
+        handleUnauthorized()
+        return
+      }
+
+      setAuthState({
+        status: 'authenticated',
+        user: session.user,
+      })
+      setAuthError(null)
+      await loadAuthedData(session.user)
+    } catch (error) {
+      const searchParams =
+        typeof window !== 'undefined'
+          ? new URLSearchParams(window.location.search)
+          : null
+      const authParam = searchParams?.get('auth')
+      const nextError =
+        authParam === 'failed'
+          ? 'That magic link could not be verified. Please request a new one.'
+          : authParam === 'missing-token'
+            ? 'The sign-in link was incomplete. Please request a new one.'
+            : error instanceof Error
+              ? error.message
+              : 'Please sign in to continue.'
+
+      handleUnauthorized(nextError)
+    }
+  }, [handleUnauthorized, loadAuthedData, requestJson])
 
   useEffect(() => {
-    void loadBootData().catch((error) => {
-      console.error('Failed to load Zenquanta boot data.', error)
-    })
+    void restoreSession()
 
     return () => {
       streamAbortRef.current?.abort()
     }
-  }, [loadBootData])
+  }, [restoreSession])
+
+  const requestMagicLink = useCallback(
+    async (email: string) => {
+      await requestJson('/api/auth/magic-link', {
+        method: 'POST',
+        body: JSON.stringify({ email }),
+      })
+      setAuthError(null)
+    },
+    [requestJson]
+  )
+
+  const signOut = useCallback(async () => {
+    await fetch('/api/auth/sign-out', {
+      method: 'POST',
+      cache: 'no-store',
+    }).catch(() => undefined)
+
+    clearAuthedState()
+    setAuthState({
+      status: 'unauthenticated',
+      user: null,
+    })
+    setAuthError(null)
+  }, [clearAuthedState])
 
   const setCurrentChat = useCallback(
     (chat: ConversationSummary | Conversation | null) => {
@@ -430,9 +556,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       setCurrentModeState(mode)
 
       if (!currentChat) {
-        setDraftSessionSettings((previous) =>
-          createSessionSettings(mode, previous)
-        )
+        setDraftSessionSettings((previous) => createSessionSettings(mode, previous))
         return
       }
 
@@ -442,8 +566,15 @@ export function ChatProvider({ children }: { children: ReactNode }) {
           sessionSettings: createSessionSettings(mode, conversation.sessionSettings),
         })
       )
+
+      void persistConversationMutation(currentChat.id, {
+        mode,
+        sessionSettings: createSessionSettings(mode, currentChat.sessionSettings),
+      }).catch((error) => {
+        console.error('Failed to update conversation mode.', error)
+      })
     },
-    [applyConversationPatch, currentChat]
+    [applyConversationPatch, currentChat, persistConversationMutation]
   )
 
   const goHome = useCallback(() => {
@@ -461,18 +592,26 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   }, [appSettings])
 
   const createNewChat = useCallback(async () => {
-    const conversation = createConversation({
-      mode: currentMode,
-      projectId: selectedProjectId === 'all' ? DEFAULT_PROJECT_ID : selectedProjectId,
-      sessionSettings,
+    const conversation = await requestJson<Conversation>('/api/conversations', {
+      method: 'POST',
+      body: JSON.stringify({
+        mode: currentMode,
+        projectId:
+          selectedProjectId === 'all' ? DEFAULT_PROJECT_ID : selectedProjectId,
+        sessionSettings,
+      }),
     })
 
     setDraftSessionSettings(conversation.sessionSettings)
     upsertConversation(conversation)
-  }, [currentMode, selectedProjectId, sessionSettings, upsertConversation])
+  }, [currentMode, requestJson, selectedProjectId, sessionSettings, upsertConversation])
 
   const deleteChat = useCallback(
     async (chatId: string) => {
+      await requestJson(`/api/conversations/${chatId}`, {
+        method: 'DELETE',
+      })
+
       const nextConversations = conversations.filter(
         (conversation) => conversation.id !== chatId
       )
@@ -482,48 +621,46 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         currentChat?.id === chatId ? null : currentChat
       )
     },
-    [commitState, conversations, currentChat]
+    [commitState, conversations, currentChat, requestJson]
   )
 
   const togglePinChat = useCallback(
     async (chatId: string) => {
-      applyConversationPatch(chatId, (conversation) =>
-        updateConversationSnapshot(conversation, {
-          isPinned: !conversation.isPinned,
-        })
+      const existing = conversationsRef.current.find(
+        (conversation) => conversation.id === chatId
       )
+      if (!existing) return
+
+      const conversation = await persistConversationMutation(chatId, {
+        isPinned: !existing.isPinned,
+      })
+      if (conversation) {
+        upsertConversation(conversation, currentChatRef.current?.id === chatId)
+      }
     },
-    [applyConversationPatch]
+    [persistConversationMutation, upsertConversation]
   )
 
   const saveAppSettings = useCallback(
     async (settings: AppSettingsPatch) => {
-      const nextSettings = normalizeAppSettingsState({
-        ...appSettings,
-        ...settings,
-        sessionDefaults: {
-          ...appSettings.sessionDefaults,
-          ...settings.sessionDefaults,
-        },
-        gatewayDrafts: {
-          ...appSettings.gatewayDrafts,
-          ...settings.gatewayDrafts,
-        },
+      const nextSettings = await requestJson<AppSettings>('/api/settings', {
+        method: 'POST',
+        body: JSON.stringify(settings),
       })
 
-      setAppSettings(nextSettings)
-      writeLocalSettings(nextSettings)
+      const normalized = normalizeAppSettingsState(nextSettings)
+      setAppSettings(normalized)
 
       if (!currentChat) {
-        setCurrentModeState(nextSettings.defaultMode)
+        setCurrentModeState(normalized.defaultMode)
         setDraftSessionSettings(
-          createSessionSettings(nextSettings.defaultMode, nextSettings.sessionDefaults)
+          createSessionSettings(normalized.defaultMode, normalized.sessionDefaults)
         )
       }
 
-      return nextSettings
+      return normalized
     },
-    [appSettings, currentChat]
+    [currentChat, requestJson]
   )
 
   const updateApiSettings = useCallback(
@@ -538,7 +675,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const createProject = useCallback(
     async (name: string) => {
       const trimmedName = name.trim()
-      if (!trimmedName || !workspaceId) return null
+      if (!trimmedName) return null
 
       const color =
         PROJECT_COLOR_OPTIONS[
@@ -546,26 +683,16 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         ]
 
       try {
-        const response = await fetch('/api/projects', {
+        const project = await requestJson<Project>('/api/projects', {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
           body: JSON.stringify({
-            workspaceId,
             name: trimmedName,
             color,
           }),
         })
 
-        if (!response.ok) {
-          throw new Error('Unable to create project.')
-        }
-
-        const project = (await response.json()) as Project
         const nextProjects = sortProjects([...projects, project])
         setProjects(nextProjects)
-        writeBrowserProjects(nextProjects)
         setSelectedProjectId(project.id)
         return project
       } catch (error) {
@@ -573,7 +700,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         return null
       }
     },
-    [projects, setSelectedProjectId, workspaceId]
+    [projects, requestJson, setSelectedProjectId]
   )
 
   const moveCurrentChatToProject = useCallback(
@@ -585,8 +712,14 @@ export function ChatProvider({ children }: { children: ReactNode }) {
           projectId,
         })
       )
+
+      void persistConversationMutation(currentChat.id, {
+        projectId,
+      }).catch((error) => {
+        console.error('Failed to move chat to project.', error)
+      })
     },
-    [applyConversationPatch, currentChat]
+    [applyConversationPatch, currentChat, persistConversationMutation]
   )
 
   const savePrompt = useCallback(
@@ -594,55 +727,39 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       const trimmedTitle = title.trim()
       const trimmedContent = content.trim()
 
-      if (!workspaceId || !trimmedTitle || !trimmedContent) {
+      if (!trimmedTitle || !trimmedContent) {
         return null
       }
 
       try {
-        const response = await fetch('/api/prompts', {
+        const prompt = await requestJson<PromptLibraryItem>('/api/prompts', {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
           body: JSON.stringify({
-            workspaceId,
             title: trimmedTitle,
             content: trimmedContent,
             mode,
           }),
         })
 
-        if (!response.ok) {
-          throw new Error('Unable to save prompt.')
-        }
-
-        const prompt = (await response.json()) as PromptLibraryItem
         const nextPrompts = sortPrompts([
           prompt,
           ...promptLibrary.filter((item) => item.id !== prompt.id),
         ])
         setPromptLibrary(nextPrompts)
-        writeBrowserPromptLibrary(nextPrompts)
         return prompt
       } catch (error) {
         console.error('Failed to save prompt.', error)
         return null
       }
     },
-    [promptLibrary, workspaceId]
+    [promptLibrary, requestJson]
   )
 
   const deletePrompt = useCallback(
     async (promptId: string) => {
-      if (!workspaceId) return
-
       try {
-        await fetch(`/api/prompts/${promptId}`, {
+        await requestJson(`/api/prompts/${promptId}`, {
           method: 'DELETE',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ workspaceId }),
         })
       } catch (error) {
         console.error('Failed to delete prompt.', error)
@@ -650,9 +767,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
       const nextPrompts = promptLibrary.filter((prompt) => prompt.id !== promptId)
       setPromptLibrary(nextPrompts)
-      writeBrowserPromptLibrary(nextPrompts)
     },
-    [promptLibrary, workspaceId]
+    [promptLibrary, requestJson]
   )
 
   const applyLocalError = useCallback(
@@ -686,15 +802,75 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const ensureConversation = useCallback(async () => {
     if (currentChat) return currentChat
 
-    const conversation = createConversation({
-      mode: currentMode,
-      projectId: selectedProjectId === 'all' ? DEFAULT_PROJECT_ID : selectedProjectId,
-      sessionSettings,
+    const conversation = await requestJson<Conversation>('/api/conversations', {
+      method: 'POST',
+      body: JSON.stringify({
+        mode: currentMode,
+        projectId:
+          selectedProjectId === 'all' ? DEFAULT_PROJECT_ID : selectedProjectId,
+        sessionSettings,
+      }),
     })
 
     upsertConversation(conversation)
     return conversation
-  }, [currentChat, currentMode, selectedProjectId, sessionSettings, upsertConversation])
+  }, [currentChat, currentMode, requestJson, selectedProjectId, sessionSettings, upsertConversation])
+
+  const uploadAttachments = useCallback(
+    async (
+      attachments: Array<Attachment | PendingAttachment>
+    ): Promise<Attachment[]> => {
+      const existing = attachments.filter(
+        (attachment): attachment is Attachment => !isPendingAttachment(attachment)
+      )
+      const pending = attachments.filter(isPendingAttachment)
+
+      if (pending.length === 0) {
+        return existing
+      }
+
+      const formData = new FormData()
+      formData.append(
+        'metadata',
+        JSON.stringify(pending.map((attachment) => serializeAttachment(attachment)))
+      )
+      pending.forEach((attachment) => {
+        formData.append('files', attachment.file, attachment.name)
+      })
+
+      const response = await fetch('/api/attachments', {
+        method: 'POST',
+        body: formData,
+        cache: 'no-store',
+      })
+
+      if (response.status === 401) {
+        handleUnauthorized()
+        throw new Error('Authentication required.')
+      }
+
+      if (!response.ok) {
+        const payload = (await response.json().catch(() => null)) as
+          | { error?: string }
+          | null
+        throw new Error(payload?.error ?? 'Unable to upload attachments.')
+      }
+
+      const uploaded = (await response.json()) as Attachment[]
+
+      return [
+        ...existing,
+        ...uploaded.map((attachment, index) => ({
+          ...attachment,
+          previewUrl: pending[index]?.previewUrl ?? attachment.previewUrl,
+          textContent: pending[index]?.textContent ?? attachment.textContent,
+          textExcerpt: pending[index]?.textExcerpt ?? attachment.textExcerpt,
+          isExtracted: pending[index]?.isExtracted ?? attachment.isExtracted,
+        })),
+      ]
+    },
+    [handleUnauthorized]
+  )
 
   const runChatAction = useCallback(
     async (payload: {
@@ -728,7 +904,6 @@ export function ChatProvider({ children }: { children: ReactNode }) {
           body: JSON.stringify({
             action: payload.action,
             conversationId: payload.conversation.id,
-            conversation: payload.conversation,
             mode: currentMode,
             targetMode: payload.targetMode,
             content: payload.content,
@@ -739,6 +914,11 @@ export function ChatProvider({ children }: { children: ReactNode }) {
           } satisfies ChatRequest),
           signal: controller.signal,
         })
+
+        if (response.status === 401) {
+          handleUnauthorized()
+          throw new Error('Authentication required.')
+        }
 
         if (!response.ok) {
           const body = (await response.json().catch(() => null)) as
@@ -829,6 +1009,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       applyConversationPatch,
       applyLocalError,
       currentMode,
+      handleUnauthorized,
       sessionSettings,
       upsertConversation,
     ]
@@ -837,11 +1018,12 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const sendMessage = useCallback(
     async ({ content, attachments = [] }: SendMessageInput) => {
       const conversation = await ensureConversation()
+      const uploadedAttachments = await uploadAttachments(attachments)
       const userMessage = createMessage({
         role: 'user',
         content,
         mode: currentMode,
-        attachments,
+        attachments: uploadedAttachments,
       })
       const placeholder = createMessage({
         role: 'assistant',
@@ -864,10 +1046,10 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         content,
         conversation,
         optimisticConversation,
-        attachments,
+        attachments: uploadedAttachments,
       })
     },
-    [currentMode, ensureConversation, runChatAction, sessionSettings]
+    [currentMode, ensureConversation, runChatAction, sessionSettings, uploadAttachments]
   )
 
   const regenerateLastResponse = useCallback(async () => {
@@ -1034,16 +1216,24 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         return
       }
 
+      const nextSettings = normalizeModeSessionSettings(currentMode, {
+        ...currentChat.sessionSettings,
+        ...settings,
+      })
+
       applyConversationPatch(currentChat.id, (conversation) =>
         updateConversationSnapshot(conversation, {
-          sessionSettings: normalizeModeSessionSettings(currentMode, {
-            ...conversation.sessionSettings,
-            ...settings,
-          }),
+          sessionSettings: nextSettings,
         })
       )
+
+      void persistConversationMutation(currentChat.id, {
+        sessionSettings: nextSettings,
+      }).catch((error) => {
+        console.error('Failed to update session settings.', error)
+      })
     },
-    [applyConversationPatch, currentChat, currentMode]
+    [applyConversationPatch, currentChat, currentMode, persistConversationMutation]
   )
 
   const exportCurrentChat = useCallback(
@@ -1070,7 +1260,10 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo<ChatContextType>(
     () => ({
-      workspaceId,
+      authState,
+      authError,
+      requestMagicLink,
+      signOut,
       currentMode,
       setCurrentMode,
       conversations,
@@ -1115,6 +1308,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     [
       appSettings,
       askAnotherMode,
+      authError,
+      authState,
       chats,
       conversations,
       createNewChat,
@@ -1133,6 +1328,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       projects,
       promptLibrary,
       regenerateLastResponse,
+      requestMagicLink,
       retryLastMessage,
       saveAppSettings,
       savePrompt,
@@ -1143,13 +1339,13 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       setCurrentChat,
       setCurrentMode,
       setSelectedProjectId,
+      signOut,
       statusLabel,
       stopStreaming,
       streamingState,
       togglePinChat,
       updateApiSettings,
       updateSessionSettings,
-      workspaceId,
     ]
   )
 

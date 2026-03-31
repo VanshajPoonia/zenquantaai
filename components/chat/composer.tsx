@@ -5,7 +5,7 @@ import { BookText, BookmarkPlus, Trash2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useChatContext } from '@/lib/chat-context'
 import { Attachment, MODE_CONFIGS, PendingAttachment } from '@/lib/types'
-import { createPendingAttachment, serializeAttachment } from '@/lib/utils/files'
+import { createPendingAttachment } from '@/lib/utils/files'
 import { getModeAccentClass, getModeGlow } from '@/lib/mode-utils'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -23,7 +23,10 @@ import {
 import { SendIcon, StopIcon, PaperclipIcon, XIcon } from '@/components/icons'
 import { ModeSwitcherCompact } from './mode-switcher'
 interface ComposerProps {
-  onSend: (input: { content: string; attachments?: Attachment[] }) => void
+  onSend: (input: {
+    content: string
+    attachments?: Array<Attachment | PendingAttachment>
+  }) => void
   disabled?: boolean
   initialValue?: string
 }
@@ -73,7 +76,7 @@ export function Composer({ onSend, disabled, initialValue = '' }: ComposerProps)
 
     onSend({
       content: normalizedContent,
-      attachments: pendingAttachments.map(serializeAttachment),
+      attachments: pendingAttachments,
     })
     setValue('')
     setPendingAttachments([])

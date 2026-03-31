@@ -24,6 +24,12 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip'
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import {
   ZenquantaLogo,
   PlusIcon,
   SearchIcon,
@@ -216,6 +222,8 @@ export function Sidebar({ onOpenSettings }: SidebarProps) {
     searchQuery,
     setSearchQuery,
     isSidebarOpen,
+    authState,
+    signOut,
   } = useChatContext()
   const [isCreatingProject, setIsCreatingProject] = useState(false)
   const [newProjectName, setNewProjectName] = useState('')
@@ -465,22 +473,39 @@ export function Sidebar({ onOpenSettings }: SidebarProps) {
             <SettingsIcon className="size-4" />
             <span>Settings</span>
           </Button>
-          <TooltipProvider delayDuration={300}>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="size-9 text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent rounded-xl"
-                >
-                  <UserIcon className="size-4" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="top" className="text-xs">
-                Profile
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
+          <DropdownMenu>
+            <TooltipProvider delayDuration={300}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="size-9 rounded-xl text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground"
+                    >
+                      <UserIcon className="size-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                </TooltipTrigger>
+                <TooltipContent side="top" className="text-xs">
+                  Account
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+            <DropdownMenuContent align="end" className="w-60">
+              <div className="px-3 py-2">
+                <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                  Signed in
+                </p>
+                <p className="mt-1 truncate text-sm text-foreground">
+                  {authState.user?.email ?? 'Zenquanta user'}
+                </p>
+              </div>
+              <DropdownMenuItem onClick={() => void signOut()}>
+                Sign out
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
     </aside>

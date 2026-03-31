@@ -162,7 +162,7 @@ function buildOpenRouterMessages(
   ]
 }
 
-async function* generateAssistantStream(input: {
+export async function* generateAssistantStream(input: {
   conversation: Conversation
   settings: SessionSettings
   mode: AIMode

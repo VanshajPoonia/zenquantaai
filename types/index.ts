@@ -25,6 +25,8 @@ export type AccentStyle = 'mode' | 'glass'
 
 export type ResponseStyle = 'balanced' | 'concise' | 'detailed'
 
+export type AuthStatus = 'loading' | 'authenticated' | 'unauthenticated'
+
 export type SystemPresetId =
   | 'default'
   | 'concise'
@@ -145,7 +147,6 @@ export interface SystemPresetConfig {
 
 export interface Project {
   id: string
-  workspaceId: string
   name: string
   description?: string
   color: string
@@ -156,7 +157,6 @@ export interface Project {
 
 export interface PromptLibraryItem {
   id: string
-  workspaceId: string
   title: string
   content: string
   mode: AIMode | 'any'
@@ -232,6 +232,8 @@ export interface Attachment {
   mimeType: string
   size: number
   createdAt: string
+  bucket?: string
+  storagePath?: string
   previewUrl?: string
   textContent?: string
   textExcerpt?: string
@@ -255,6 +257,16 @@ export interface UsageEstimate {
   completionTokens: number
   totalTokens: number
   estimatedCostUsd: number
+}
+
+export interface AuthUser {
+  id: string
+  email: string | null
+}
+
+export interface AuthState {
+  status: AuthStatus
+  user: AuthUser | null
 }
 
 export interface AIModelInput {

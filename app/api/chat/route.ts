@@ -1,8 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server'
+import {
+  appendAuthCookies,
+  requireAuthenticatedUser,
+} from '@/lib/auth/session'
 import { createSessionSettings } from '@/lib/config'
+import { conversationStore, settingsStore } from '@/lib/storage'
 import { encodeStreamEvent } from '@/lib/utils/stream'
 import { ChatRequest } from '@/types'
-import { resolveSessionSettings, streamConversationReply } from '@/lib/ai/chat'
+import {
+  completeConversationWithAssistant,
+  generateAssistantStream,
+  prepareConversationForChat,
+  resolveSessionSettings,
+} from '@/lib/ai/chat'
 
 export const runtime = 'nodejs'
 
@@ -12,6 +22,9 @@ function toErrorMessage(error: unknown): string {
 }
 
 export async function POST(request: NextRequest) {
+  const auth = await requireAuthenticatedUser(request)
+  if ('response' in auth) return auth.response
+
   const body = (await request.json().catch(() => null)) as Partial<ChatRequest> | null
 
   if (!body?.action || !body.mode) {
@@ -21,16 +34,21 @@ export async function POST(request: NextRequest) {
     )
   }
 
+  const appSettings = await settingsStore.get(auth.user.id)
   const settings = resolveSessionSettings(
     body.mode,
     body.settings,
-    createSessionSettings(body.mode)
+    createSessionSettings(body.mode, appSettings.sessionDefaults)
   )
+
+  const storedConversation = body.conversationId
+    ? await conversationStore.get(auth.user.id, body.conversationId)
+    : null
 
   const payload: ChatRequest = {
     action: body.action,
-    conversationId: body.conversationId,
-    conversation: body.conversation,
+    conversationId: storedConversation?.id ?? body.conversationId,
+    conversation: storedConversation ?? body.conversation,
     mode: body.mode,
     targetMode: body.targetMode,
     content: body.content,
@@ -44,18 +62,72 @@ export async function POST(request: NextRequest) {
   const writer = stream.writable.getWriter()
 
   void (async () => {
-    let conversationId = payload.conversationId
+    let conversationId = storedConversation?.id ?? payload.conversationId
     let messageId: string | undefined
 
     try {
-      for await (const event of streamConversationReply(payload)) {
-        if (event.type === 'start') {
-          conversationId = event.conversation.id
-          messageId = event.message.id
-        }
+      const prepared = await prepareConversationForChat(payload)
+      const persistedConversation = await conversationStore.save(
+        auth.user.id,
+        prepared.conversation
+      )
 
-        await writer.write(encodeStreamEvent(event))
+      conversationId = persistedConversation.id
+      messageId = prepared.assistantPlaceholder.id
+
+      await writer.write(
+        encodeStreamEvent({
+          type: 'start',
+          conversation: persistedConversation,
+          message: prepared.assistantPlaceholder,
+        })
+      )
+
+      let accumulated = ''
+
+      for await (const chunk of generateAssistantStream({
+        conversation: prepared.generationConversation,
+        settings: payload.settings,
+        mode: prepared.assistantMode,
+      })) {
+        accumulated += chunk
+
+        await writer.write(
+          encodeStreamEvent({
+            type: 'delta',
+            conversationId: persistedConversation.id,
+            messageId: prepared.assistantPlaceholder.id,
+            delta: chunk,
+          })
+        )
       }
+
+      const completedConversation = await completeConversationWithAssistant(
+        persistedConversation,
+        prepared.assistantPlaceholder,
+        accumulated || 'No response returned.',
+        prepared.generationConversation,
+        prepared.assistantMode
+      )
+
+      const savedConversation = await conversationStore.save(
+        auth.user.id,
+        completedConversation
+      )
+
+      await writer.write(
+        encodeStreamEvent({
+          type: 'done',
+          conversation: savedConversation,
+          message: {
+            ...prepared.assistantPlaceholder,
+            content: accumulated || 'No response returned.',
+            status: 'complete',
+            usage: savedConversation.messages.at(-1)?.usage,
+          },
+          usage: savedConversation.messages.at(-1)?.usage,
+        })
+      )
     } catch (error) {
       await writer.write(
         encodeStreamEvent({
@@ -71,11 +143,15 @@ export async function POST(request: NextRequest) {
     }
   })()
 
-  return new Response(stream.readable, {
-    headers: {
-      'Content-Type': 'application/x-ndjson; charset=utf-8',
-      'Cache-Control': 'no-cache, no-transform',
-      Connection: 'keep-alive',
-    },
+  const headers = new Headers({
+    'Content-Type': 'application/x-ndjson; charset=utf-8',
+    'Cache-Control': 'no-cache, no-transform',
+    Connection: 'keep-alive',
   })
+
+  if (auth.session.refreshed) {
+    appendAuthCookies(headers, auth.session)
+  }
+
+  return new Response(stream.readable, { headers })
 }

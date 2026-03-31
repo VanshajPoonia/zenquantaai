@@ -1,49 +1,57 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { appendAuthCookies, requireAuthenticatedUser } from '@/lib/auth/session'
 import { promptStore } from '@/lib/storage'
 import { AIMode } from '@/types'
 
 export const runtime = 'nodejs'
 
 export async function GET(request: NextRequest) {
-  const workspaceId = request.nextUrl.searchParams.get('workspaceId')?.trim()
+  const auth = await requireAuthenticatedUser(request)
+  if ('response' in auth) return auth.response
 
-  if (!workspaceId) {
-    return NextResponse.json(
-      { error: 'workspaceId is required.' },
-      { status: 400 }
-    )
+  const prompts = await promptStore.list(auth.user.id)
+  const response = NextResponse.json(prompts)
+
+  if (auth.session.refreshed) {
+    appendAuthCookies(response.headers, auth.session)
   }
 
-  const prompts = await promptStore.list(workspaceId)
-  return NextResponse.json(prompts)
+  return response
 }
 
 export async function POST(request: NextRequest) {
+  const auth = await requireAuthenticatedUser(request)
+  if ('response' in auth) return auth.response
+
   const body = (await request.json().catch(() => null)) as
     | {
-        workspaceId?: string
         title?: string
         content?: string
         mode?: AIMode | 'any'
       }
     | null
 
-  const workspaceId = body?.workspaceId?.trim()
   const title = body?.title?.trim()
   const content = body?.content?.trim()
 
-  if (!workspaceId || !title || !content) {
+  if (!title || !content) {
     return NextResponse.json(
-      { error: 'workspaceId, title, and content are required.' },
+      { error: 'title and content are required.' },
       { status: 400 }
     )
   }
 
-  const prompt = await promptStore.create(workspaceId, {
+  const prompt = await promptStore.create(auth.user.id, {
     title,
     content,
     mode: body?.mode ?? 'any',
   })
 
-  return NextResponse.json(prompt, { status: 201 })
+  const response = NextResponse.json(prompt, { status: 201 })
+
+  if (auth.session.refreshed) {
+    appendAuthCookies(response.headers, auth.session)
+  }
+
+  return response
 }

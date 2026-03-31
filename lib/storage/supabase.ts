@@ -5,6 +5,7 @@ interface SupabaseRequestInit {
   query?: Record<string, string | number | undefined>
   body?: unknown
   prefer?: string
+  apiKey?: string
 }
 
 function normalizeSupabaseUrl(value: string): string {
@@ -12,51 +13,58 @@ function normalizeSupabaseUrl(value: string): string {
 }
 
 export function getSupabaseRuntimeConfig() {
-  const url = process.env.SUPABASE_URL?.trim() ?? ''
-  const apiKey =
-    process.env.SUPABASE_SERVICE_ROLE_KEY?.trim() ??
+  const url =
+    process.env.NEXT_PUBLIC_SUPABASE_URL?.trim() ??
+    process.env.SUPABASE_URL?.trim() ??
+    ''
+  const anonKey =
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim() ??
     process.env.SUPABASE_ANON_KEY?.trim() ??
     ''
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim() ?? ''
 
   return {
     url: url ? normalizeSupabaseUrl(url) : '',
-    apiKey,
+    anonKey,
+    serviceRoleKey,
   }
 }
 
 export function hasSupabaseConfig(): boolean {
   const config = getSupabaseRuntimeConfig()
-  return Boolean(config.url && config.apiKey)
+  return Boolean(config.url && (config.serviceRoleKey || config.anonKey))
 }
 
-export async function supabaseRequest<T>(
-  table: string,
-  init: SupabaseRequestInit = {}
+export function hasSupabaseAdminConfig(): boolean {
+  const config = getSupabaseRuntimeConfig()
+  return Boolean(config.url && config.serviceRoleKey)
+}
+
+function resolveApiKey(override?: string): string {
+  const config = getSupabaseRuntimeConfig()
+  return override || config.serviceRoleKey || config.anonKey
+}
+
+async function requestJson<T>(
+  url: string,
+  init: RequestInit & { apiKey?: string; prefer?: string } = {}
 ): Promise<T> {
   const config = getSupabaseRuntimeConfig()
+  const apiKey = resolveApiKey(init.apiKey)
 
-  if (!config.url || !config.apiKey) {
+  if (!config.url || !apiKey) {
     throw new Error('Supabase runtime configuration is missing.')
   }
 
-  const url = new URL(`${config.url}/rest/v1/${table}`)
-
-  for (const [key, value] of Object.entries(init.query ?? {})) {
-    if (typeof value === 'undefined') continue
-    url.searchParams.set(key, String(value))
-  }
-
-  const response = await fetch(url.toString(), {
-    method: init.method ?? 'GET',
+  const response = await fetch(url, {
+    ...init,
     headers: {
-      apikey: config.apiKey,
-      Authorization: `Bearer ${config.apiKey}`,
-      'Content-Type': 'application/json',
-      Prefer: init.prefer ?? 'return=representation',
+      apikey: apiKey,
+      Authorization: `Bearer ${apiKey}`,
+      ...(init.body ? { 'Content-Type': 'application/json' } : {}),
+      ...(init.prefer ? { Prefer: init.prefer } : {}),
+      ...(init.headers ?? {}),
     },
-    ...(typeof init.body !== 'undefined'
-      ? { body: JSON.stringify(init.body) }
-      : {}),
     cache: 'no-store',
   })
 
@@ -72,4 +80,97 @@ export async function supabaseRequest<T>(
   }
 
   return (await response.json().catch(() => null)) as T
+}
+
+export async function supabaseRequest<T>(
+  table: string,
+  init: SupabaseRequestInit = {}
+): Promise<T> {
+  const config = getSupabaseRuntimeConfig()
+  const url = new URL(`${config.url}/rest/v1/${table}`)
+
+  for (const [key, value] of Object.entries(init.query ?? {})) {
+    if (typeof value === 'undefined') continue
+    url.searchParams.set(key, String(value))
+  }
+
+  return await requestJson<T>(url.toString(), {
+    method: init.method ?? 'GET',
+    prefer: init.prefer ?? 'return=representation',
+    ...(typeof init.body !== 'undefined'
+      ? { body: JSON.stringify(init.body) }
+      : {}),
+    apiKey: init.apiKey,
+  })
+}
+
+export async function supabaseStorageUpload(input: {
+  bucket: string
+  path: string
+  contentType: string
+  body: Blob | ArrayBuffer | Buffer
+  upsert?: boolean
+}): Promise<void> {
+  const config = getSupabaseRuntimeConfig()
+  const apiKey = resolveApiKey()
+
+  if (!config.url || !apiKey) {
+    throw new Error('Supabase storage configuration is missing.')
+  }
+
+  const response = await fetch(
+    `${config.url}/storage/v1/object/${input.bucket}/${input.path}`,
+    {
+      method: 'POST',
+      headers: {
+        apikey: apiKey,
+        Authorization: `Bearer ${apiKey}`,
+        'Content-Type': input.contentType,
+        'x-upsert': input.upsert ? 'true' : 'false',
+      },
+      body: input.body as BodyInit,
+      cache: 'no-store',
+    }
+  )
+
+  if (!response.ok) {
+    const message = await response.text().catch(() => '')
+    throw new Error(
+      message || `Supabase storage upload failed with status ${response.status}.`
+    )
+  }
+}
+
+export async function createSupabaseSignedUrl(input: {
+  bucket: string
+  path: string
+  expiresIn?: number
+}): Promise<string> {
+  const config = getSupabaseRuntimeConfig()
+  const apiKey = resolveApiKey()
+
+  if (!config.url || !apiKey) {
+    throw new Error('Supabase storage configuration is missing.')
+  }
+
+  const response = await requestJson<{ signedURL?: string; signedUrl?: string }>(
+    `${config.url}/storage/v1/object/sign/${input.bucket}/${input.path}`,
+    {
+      method: 'POST',
+      body: JSON.stringify({
+        expiresIn: input.expiresIn ?? 60 * 60,
+      }),
+      apiKey,
+    }
+  )
+
+  const signedPath = response.signedURL ?? response.signedUrl
+
+  if (!signedPath) {
+    throw new Error('Supabase did not return a signed storage URL.')
+  }
+
+  return signedPath.startsWith('http')
+    ? signedPath
+    : `${config.url}/storage/v1${signedPath}`
 }
