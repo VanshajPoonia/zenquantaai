@@ -44,20 +44,21 @@ export function getSupabaseAuthConfig() {
     process.env.NEXT_PUBLIC_SUPABASE_URL?.trim() ??
     process.env.SUPABASE_URL?.trim() ??
     ''
-  const anonKey =
+  const publishableKey =
+    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY?.trim() ??
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim() ??
     process.env.SUPABASE_ANON_KEY?.trim() ??
     ''
 
   return {
     url: url ? normalizeSupabaseUrl(url) : '',
-    anonKey,
+    publishableKey,
   }
 }
 
 export function hasSupabaseAuthConfig(): boolean {
   const config = getSupabaseAuthConfig()
-  return Boolean(config.url && config.anonKey)
+  return Boolean(config.url && config.publishableKey)
 }
 
 async function requestSupabaseAuth<T>(
@@ -70,15 +71,15 @@ async function requestSupabaseAuth<T>(
 ): Promise<T> {
   const config = getSupabaseAuthConfig()
 
-  if (!config.url || !config.anonKey) {
+  if (!config.url || !config.publishableKey) {
     throw new Error('Supabase auth configuration is missing.')
   }
 
   const response = await fetch(`${config.url}/auth/v1${path}`, {
     method: init.method ?? 'GET',
     headers: {
-      apikey: config.anonKey,
-      Authorization: `Bearer ${init.accessToken ?? config.anonKey}`,
+      apikey: config.publishableKey,
+      Authorization: `Bearer ${init.accessToken ?? config.publishableKey}`,
       ...(typeof init.body !== 'undefined'
         ? { 'Content-Type': 'application/json' }
         : {}),

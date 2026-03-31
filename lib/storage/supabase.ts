@@ -17,32 +17,36 @@ export function getSupabaseRuntimeConfig() {
     process.env.NEXT_PUBLIC_SUPABASE_URL?.trim() ??
     process.env.SUPABASE_URL?.trim() ??
     ''
-  const anonKey =
+  const publishableKey =
+    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY?.trim() ??
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim() ??
     process.env.SUPABASE_ANON_KEY?.trim() ??
     ''
-  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim() ?? ''
+  const secretKey =
+    process.env.SUPABASE_SECRET_KEY?.trim() ??
+    process.env.SUPABASE_SERVICE_ROLE_KEY?.trim() ??
+    ''
 
   return {
     url: url ? normalizeSupabaseUrl(url) : '',
-    anonKey,
-    serviceRoleKey,
+    publishableKey,
+    secretKey,
   }
 }
 
 export function hasSupabaseConfig(): boolean {
   const config = getSupabaseRuntimeConfig()
-  return Boolean(config.url && (config.serviceRoleKey || config.anonKey))
+  return Boolean(config.url && (config.secretKey || config.publishableKey))
 }
 
 export function hasSupabaseAdminConfig(): boolean {
   const config = getSupabaseRuntimeConfig()
-  return Boolean(config.url && config.serviceRoleKey)
+  return Boolean(config.url && config.secretKey)
 }
 
 function resolveApiKey(override?: string): string {
   const config = getSupabaseRuntimeConfig()
-  return override || config.serviceRoleKey || config.anonKey
+  return override || config.secretKey || config.publishableKey
 }
 
 async function requestJson<T>(
