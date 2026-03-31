@@ -68,7 +68,7 @@ export function Header({ onOpenSettings }: HeaderProps) {
         )}
       </div>
 
-      {/* Center Section - Mode & Model Info */}
+      {/* Center Section - Mode & Status Info */}
       <div className="flex items-center gap-3">
         <div
           className={cn(
@@ -82,13 +82,10 @@ export function Header({ onOpenSettings }: HeaderProps) {
           <div className="hidden sm:flex flex-col leading-none">
             <span className="text-sm font-medium">{modeConfig.name}</span>
             <span className="text-[11px] text-muted-foreground">
-              {modeConfig.gatewayName}
+              Zenquanta AI
             </span>
           </div>
         </div>
-        <Badge variant="secondary" className="text-xs font-mono px-2.5 hidden md:inline-flex">
-          {modeConfig.label}
-        </Badge>
         <Badge
           variant={statusLabel === 'Streaming' ? 'default' : 'secondary'}
           className="text-[11px] px-2.5"

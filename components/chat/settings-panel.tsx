@@ -71,7 +71,7 @@ export function SettingsPanel() {
                 {currentChat?.title ?? 'Draft session'}
               </p>
               <p className="text-xs text-muted-foreground">
-                {modeConfig.gatewayName} routed to {modeConfig.label}
+                {modeConfig.name} mode
               </p>
             </div>
             <Badge variant={statusLabel === 'Streaming' ? 'default' : 'secondary'}>
@@ -83,10 +83,10 @@ export function SettingsPanel() {
           </p>
           <div className="rounded-xl border border-border/60 bg-background/60 px-3 py-2">
             <p className="text-[11px] uppercase tracking-widest text-muted-foreground mb-1">
-              Model routing
+              Mode
             </p>
             <p className="text-sm text-foreground">
-              {modeConfig.name} → {modeConfig.label}
+              {modeConfig.name}
             </p>
           </div>
         </div>

@@ -50,13 +50,13 @@ export function ChatArea() {
   const showEmptyState = !currentChat || currentChat.messages.length === 0
 
   return (
-    <div className="flex flex-col flex-1 h-full overflow-hidden">
+    <div className="flex flex-col flex-1 h-full min-h-0 overflow-hidden">
       {showEmptyState ? (
-        <div className="flex-1 overflow-y-auto">
+        <div className="flex-1 min-h-0 overflow-y-auto">
           <EmptyState onPromptSelect={setSelectedPrompt} />
         </div>
       ) : (
-        <ScrollArea ref={scrollAreaRef} className="flex-1">
+        <ScrollArea ref={scrollAreaRef} className="flex-1 min-h-0">
           <div className="max-w-4xl mx-auto px-4 py-6">
             <div className="flex justify-center mb-6">
               <ModeSwitcherCompact />

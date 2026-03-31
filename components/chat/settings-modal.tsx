@@ -59,7 +59,7 @@ function ModeSelectionCard({
         </div>
         <div>
           <p className="font-semibold text-foreground">{config.name}</p>
-          <p className="text-xs text-muted-foreground">{config.label}</p>
+          <p className="text-xs text-muted-foreground">{config.description}</p>
         </div>
       </div>
     </button>
@@ -382,12 +382,12 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                         <div>
                           <h3 className="font-semibold">{config.name}</h3>
                           <p className="text-sm text-muted-foreground">
-                            {config.gatewayName} · {config.label}
+                            {config.description}
                           </p>
                         </div>
                       </div>
 
-                      <div className="grid gap-3 md:grid-cols-4 text-sm">
+                      <div className="grid gap-3 md:grid-cols-3 text-sm">
                         <div className="rounded-lg border border-border/60 p-3">
                           <p className="text-muted-foreground mb-1">Default temperature</p>
                           <p className="font-medium">{config.temperature.toFixed(2)}</p>
@@ -399,10 +399,6 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                         <div className="rounded-lg border border-border/60 p-3">
                           <p className="text-muted-foreground mb-1">Top P</p>
                           <p className="font-medium">{config.topP.toFixed(2)}</p>
-                        </div>
-                        <div className="rounded-lg border border-border/60 p-3">
-                          <p className="text-muted-foreground mb-1">Model ID</p>
-                          <p className="font-medium break-all">{config.model}</p>
                         </div>
                       </div>
                     </div>
