@@ -78,6 +78,31 @@ export function getModeAccentClass(mode: AIMode, type: 'bg' | 'text' | 'border' 
   return classes[mode][type]
 }
 
+export function getModeTintClass(
+  mode: AIMode,
+  intensity: 'subtle' | 'soft' | 'strong' = 'soft'
+) {
+  const classes = {
+    creative: {
+      subtle: 'bg-creative/10',
+      soft: 'bg-creative/15',
+      strong: 'bg-creative/20',
+    },
+    logic: {
+      subtle: 'bg-logic/10',
+      soft: 'bg-logic/15',
+      strong: 'bg-logic/20',
+    },
+    code: {
+      subtle: 'bg-code/10',
+      soft: 'bg-code/15',
+      strong: 'bg-code/20',
+    },
+  }
+
+  return classes[mode][intensity]
+}
+
 // Mode gradient backgrounds for premium feel
 export function getModeGradient(mode: AIMode) {
   switch (mode) {

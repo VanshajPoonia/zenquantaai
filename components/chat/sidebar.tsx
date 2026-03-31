@@ -3,8 +3,9 @@
 import { useMemo, useState } from 'react'
 import { cn } from '@/lib/utils'
 import { useChatContext } from '@/lib/chat-context'
-import { MODE_CONFIGS, Chat, AIMode } from '@/lib/types'
+import { ConversationSummary } from '@/lib/types'
 import { ModeIcon, getModeAccentClass } from '@/lib/mode-utils'
+import { formatConversationDate } from '@/lib/utils/date'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -30,17 +31,6 @@ interface SidebarProps {
   onOpenSettings: () => void
 }
 
-function formatDate(date: Date): string {
-  const now = new Date()
-  const diffMs = now.getTime() - date.getTime()
-  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
-
-  if (diffDays === 0) return 'Today'
-  if (diffDays === 1) return 'Yesterday'
-  if (diffDays < 7) return `${diffDays}d ago`
-  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-}
-
 function ChatItem({
   chat,
   isActive,
@@ -48,7 +38,7 @@ function ChatItem({
   onPin,
   onDelete,
 }: {
-  chat: Chat
+  chat: ConversationSummary
   isActive: boolean
   onSelect: () => void
   onPin: () => void
@@ -82,7 +72,7 @@ function ChatItem({
       <div className="flex-1 min-w-0">
         <p className="text-sm font-medium truncate">{chat.title}</p>
         <p className="text-xs text-sidebar-foreground/50 truncate">
-          {formatDate(chat.updatedAt)}
+          {formatConversationDate(chat.updatedAt)}
         </p>
       </div>
 
@@ -153,9 +143,9 @@ function ChatSection({
   onDeleteChat,
 }: {
   title: string
-  chats: Chat[]
+  chats: ConversationSummary[]
   currentChatId?: string
-  onSelectChat: (chat: Chat) => void
+  onSelectChat: (chat: ConversationSummary) => void
   onPinChat: (id: string) => void
   onDeleteChat: (id: string) => void
 }) {
@@ -215,7 +205,7 @@ export function Sidebar({ onOpenSettings }: SidebarProps) {
     return chats.filter(
       (chat) =>
         chat.title.toLowerCase().includes(query) ||
-        chat.messages.some((m) => m.content.toLowerCase().includes(query))
+        chat.preview.toLowerCase().includes(query)
     )
   }, [chats, searchQuery])
 
@@ -228,7 +218,10 @@ export function Sidebar({ onOpenSettings }: SidebarProps) {
     () =>
       filteredChats
         .filter((c) => !c.isPinned)
-        .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime()),
+        .sort(
+          (a, b) =>
+            new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+        ),
     [filteredChats]
   )
 

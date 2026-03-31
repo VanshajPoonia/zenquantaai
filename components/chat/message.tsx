@@ -1,10 +1,17 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useMemo, useState } from 'react'
+import { PencilLine } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { Message, AIMode } from '@/lib/types'
-import { ModeIcon, getModeAccentClass } from '@/lib/mode-utils'
+import { AIMode, Message } from '@/lib/types'
+import {
+  getModeAccentClass,
+  getModeTintClass,
+  ModeIcon,
+} from '@/lib/mode-utils'
+import { formatMessageTime } from '@/lib/utils/date'
 import { Button } from '@/components/ui/button'
+import { Textarea } from '@/components/ui/textarea'
 import {
   Tooltip,
   TooltipContent,
@@ -12,29 +19,64 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip'
 import {
+  CheckIcon,
   CopyIcon,
   RefreshIcon,
-  CheckIcon,
   UserIcon,
+  XIcon,
 } from '@/components/icons'
 
 interface ChatMessageProps {
   message: Message
   onRegenerate?: () => void
   onRetry?: () => void
+  onEdit?: (content: string, targetMessageId?: string) => void
   isLastAssistant?: boolean
+  isLastUser?: boolean
 }
 
 function getModeColorClasses(mode: AIMode) {
   return cn(
-    'bg-opacity-20 border-opacity-30',
+    'border-opacity-30',
     getModeAccentClass(mode, 'text'),
     getModeAccentClass(mode, 'border'),
-    `bg-${mode}/20`
+    getModeTintClass(mode, 'strong')
   )
 }
 
-// Simple markdown-like rendering
+function renderStreamingState(content: string) {
+  if (!content.trim()) {
+    return (
+      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+        <div className="flex gap-1">
+          <span className="size-2 rounded-full bg-current animate-bounce" />
+          <span
+            className="size-2 rounded-full bg-current animate-bounce"
+            style={{ animationDelay: '120ms' }}
+          />
+          <span
+            className="size-2 rounded-full bg-current animate-bounce"
+            style={{ animationDelay: '240ms' }}
+          />
+        </div>
+        <span>Generating response...</span>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="prose prose-sm prose-invert max-w-none text-foreground">
+        {renderContent(content)}
+      </div>
+      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+        <span className="size-1.5 rounded-full bg-current animate-pulse" />
+        Streaming
+      </div>
+    </div>
+  )
+}
+
 function renderContent(content: string) {
   const lines = content.split('\n')
   const elements: React.ReactNode[] = []
@@ -42,7 +84,6 @@ function renderContent(content: string) {
   let codeLanguage = ''
 
   lines.forEach((line, index) => {
-    // Code block start/end
     if (line.startsWith('```')) {
       if (currentCodeBlock === null) {
         currentCodeBlock = []
@@ -66,7 +107,6 @@ function renderContent(content: string) {
       return
     }
 
-    // Headers
     if (line.startsWith('# ')) {
       elements.push(
         <h1 key={index} className="text-xl font-bold mt-4 mb-2">
@@ -75,6 +115,7 @@ function renderContent(content: string) {
       )
       return
     }
+
     if (line.startsWith('## ')) {
       elements.push(
         <h2 key={index} className="text-lg font-semibold mt-3 mb-2">
@@ -83,6 +124,7 @@ function renderContent(content: string) {
       )
       return
     }
+
     if (line.startsWith('### ')) {
       elements.push(
         <h3 key={index} className="text-base font-semibold mt-2 mb-1">
@@ -92,15 +134,11 @@ function renderContent(content: string) {
       return
     }
 
-    // Horizontal rule
     if (line.match(/^---+$/)) {
-      elements.push(
-        <hr key={index} className="my-4 border-border" />
-      )
+      elements.push(<hr key={index} className="my-4 border-border" />)
       return
     }
 
-    // List items
     if (line.match(/^[-*•]\s/)) {
       elements.push(
         <li key={index} className="ml-4 list-disc">
@@ -110,23 +148,23 @@ function renderContent(content: string) {
       return
     }
 
-    // Table detection
     if (line.includes('|') && line.trim().startsWith('|')) {
       elements.push(
-        <div key={index} className="overflow-x-auto text-sm font-mono bg-muted/30 px-2 py-1 rounded">
+        <div
+          key={index}
+          className="overflow-x-auto text-sm font-mono bg-muted/30 px-2 py-1 rounded"
+        >
           {line}
         </div>
       )
       return
     }
 
-    // Empty lines
     if (line.trim() === '') {
       elements.push(<div key={index} className="h-2" />)
       return
     }
 
-    // Regular paragraph
     elements.push(
       <p key={index} className="leading-relaxed">
         {formatInlineStyles(line)}
@@ -138,8 +176,8 @@ function renderContent(content: string) {
 }
 
 function formatInlineStyles(text: string): React.ReactNode {
-  // Process inline code
   const parts = text.split(/(`[^`]+`)/)
+
   return parts.map((part, i) => {
     if (part.startsWith('`') && part.endsWith('`')) {
       return (
@@ -151,8 +189,9 @@ function formatInlineStyles(text: string): React.ReactNode {
         </code>
       )
     }
-    // Bold
+
     const boldParts = part.split(/(\*\*[^*]+\*\*)/)
+
     return boldParts.map((boldPart, j) => {
       if (boldPart.startsWith('**') && boldPart.endsWith('**')) {
         return (
@@ -161,8 +200,9 @@ function formatInlineStyles(text: string): React.ReactNode {
           </strong>
         )
       }
-      // Italic
+
       const italicParts = boldPart.split(/(\*[^*]+\*)/)
+
       return italicParts.map((italicPart, k) => {
         if (italicPart.startsWith('*') && italicPart.endsWith('*')) {
           return (
@@ -171,6 +211,7 @@ function formatInlineStyles(text: string): React.ReactNode {
             </em>
           )
         }
+
         return italicPart
       })
     })
@@ -223,9 +264,13 @@ export function ChatMessage({
   message,
   onRegenerate,
   onRetry,
+  onEdit,
   isLastAssistant,
+  isLastUser,
 }: ChatMessageProps) {
   const [copied, setCopied] = useState(false)
+  const [isEditing, setIsEditing] = useState(false)
+  const [draftValue, setDraftValue] = useState(message.content)
 
   const handleCopy = async () => {
     await navigator.clipboard.writeText(message.content)
@@ -240,10 +285,71 @@ export function ChatMessage({
 
   if (message.role === 'user') {
     return (
-      <div className="flex justify-end mb-6">
+      <div className="flex justify-end mb-6 group">
         <div className="flex items-start gap-3 max-w-[85%]">
-          <div className="bg-primary text-primary-foreground rounded-2xl rounded-tr-md px-4 py-3">
-            <p className="text-sm leading-relaxed">{message.content}</p>
+          <div className="flex flex-col items-end">
+            <div className="bg-primary text-primary-foreground rounded-2xl rounded-tr-md px-4 py-3 min-w-[280px]">
+              {isEditing ? (
+                <div className="space-y-3">
+                  <Textarea
+                    value={draftValue}
+                    onChange={(event) => setDraftValue(event.target.value)}
+                    className="min-h-[120px] border-white/15 bg-white/5 text-primary-foreground placeholder:text-primary-foreground/60"
+                  />
+                  <div className="flex justify-end gap-2">
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => {
+                        setDraftValue(message.content)
+                        setIsEditing(false)
+                      }}
+                    >
+                      <XIcon className="size-3.5 mr-1.5" />
+                      Cancel
+                    </Button>
+                    <Button
+                      size="sm"
+                      className="bg-white text-black hover:bg-white/90"
+                      onClick={() => {
+                        onEdit?.(draftValue.trim(), message.id)
+                        setIsEditing(false)
+                      }}
+                      disabled={!draftValue.trim()}
+                    >
+                      Save & rerun
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <p className="text-sm leading-relaxed whitespace-pre-wrap">
+                  {message.content}
+                </p>
+              )}
+            </div>
+            <div className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
+              <span>{formatMessageTime(message.createdAt)}</span>
+              {isLastUser && !isEditing && (
+                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    className="size-7 text-muted-foreground hover:text-foreground"
+                    onClick={() => setIsEditing(true)}
+                  >
+                    <PencilLine className="size-3.5" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    className="size-7 text-muted-foreground hover:text-foreground"
+                    onClick={onRetry}
+                  >
+                    <RefreshIcon className="size-3.5" />
+                  </Button>
+                </div>
+              )}
+            </div>
           </div>
           <div className="shrink-0 size-8 rounded-full bg-primary/20 flex items-center justify-center">
             <UserIcon className="size-4 text-primary" />
@@ -266,15 +372,21 @@ export function ChatMessage({
         </div>
         <div className="flex-1">
           <div className="bg-card border border-border rounded-2xl rounded-tl-md px-4 py-3">
-            <div className="prose prose-sm prose-invert max-w-none text-foreground">
-              {renderedContent}
-            </div>
+            {message.status === 'streaming' ? (
+              renderStreamingState(message.content)
+            ) : (
+              <div className="prose prose-sm prose-invert max-w-none text-foreground">
+                {renderedContent}
+              </div>
+            )}
           </div>
-          {/* Action buttons */}
+
           <div
             className={cn(
               'flex items-center gap-1 mt-2 transition-opacity',
-              isLastAssistant ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+              isLastAssistant || message.status === 'error'
+                ? 'opacity-100'
+                : 'opacity-0 group-hover:opacity-100'
             )}
           >
             <TooltipProvider delayDuration={300}>
@@ -296,26 +408,55 @@ export function ChatMessage({
                 <TooltipContent>{copied ? 'Copied!' : 'Copy'}</TooltipContent>
               </Tooltip>
             </TooltipProvider>
+
             {isLastAssistant && (
-              <>
-                <TooltipProvider delayDuration={300}>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="icon-sm"
-                        className="size-7"
-                        onClick={onRegenerate}
-                      >
-                        <RefreshIcon className="size-3.5" />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>Regenerate</TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
-              </>
+              <TooltipProvider delayDuration={300}>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      className="size-7"
+                      onClick={onRegenerate}
+                    >
+                      <RefreshIcon className="size-3.5" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>Regenerate</TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
             )}
+
+            {(isLastAssistant || message.status === 'error') && (
+              <TooltipProvider delayDuration={300}>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      className="size-7"
+                      onClick={onRetry}
+                    >
+                      <RefreshIcon className="size-3.5" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>Retry</TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            )}
+
+            <span className="ml-1 text-xs text-muted-foreground">
+              {message.status === 'streaming'
+                ? 'Streaming'
+                : message.status === 'error'
+                  ? 'Needs retry'
+                  : formatMessageTime(message.createdAt)}
+            </span>
           </div>
+
+          {message.error && (
+            <p className="mt-2 text-xs text-destructive">{message.error}</p>
+          )}
         </div>
       </div>
     </div>

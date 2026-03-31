@@ -1,8 +1,14 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useChatContext } from '@/lib/chat-context'
-import { ModeIcon, getModeAccentClass, getModeGradient } from '@/lib/mode-utils'
+import { AIMode, AppSettings, MODE_CONFIGS } from '@/lib/types'
+import {
+  ModeIcon,
+  getModeAccentClass,
+  getModeGradient,
+  getModeTintClass,
+} from '@/lib/mode-utils'
 import {
   Dialog,
   DialogContent,
@@ -16,254 +22,404 @@ import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
-import { CheckIcon, KeyIcon } from '@/components/icons'
+import { Slider } from '@/components/ui/slider'
+import { Switch } from '@/components/ui/switch'
+import { CheckIcon } from '@/components/icons'
 
 interface SettingsModalProps {
   open: boolean
   onOpenChange: (open: boolean) => void
 }
 
+function ModeSelectionCard({
+  mode,
+  active,
+  onClick,
+}: {
+  mode: AIMode
+  active: boolean
+  onClick: () => void
+}) {
+  const config = MODE_CONFIGS[mode]
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`relative rounded-2xl border p-4 text-left transition-all ${
+        active
+          ? `${getModeTintClass(mode, 'strong')} border-current ${getModeAccentClass(mode, 'text')}`
+          : 'border-border bg-card hover:bg-card/80'
+      }`}
+    >
+      <div className={`absolute inset-0 rounded-2xl opacity-0 ${active ? 'opacity-100' : ''} ${getModeGradient(mode)}`} />
+      <div className="relative flex items-center gap-3">
+        <div className={`p-2 rounded-xl ${getModeTintClass(mode, 'strong')}`}>
+          <ModeIcon mode={mode} size="md" className={getModeAccentClass(mode, 'text')} />
+        </div>
+        <div>
+          <p className="font-semibold text-foreground">{config.name}</p>
+          <p className="text-xs text-muted-foreground">{config.label}</p>
+        </div>
+      </div>
+    </button>
+  )
+}
+
 export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
-  const { apiSettings, updateApiSettings } = useChatContext()
-  const [localSettings, setLocalSettings] = useState(apiSettings)
+  const { appSettings, saveAppSettings } = useChatContext()
+  const [localSettings, setLocalSettings] = useState<AppSettings>(appSettings)
   const [saved, setSaved] = useState(false)
 
-  const handleSave = () => {
-    updateApiSettings(localSettings)
+  useEffect(() => {
+    if (open) {
+      setLocalSettings(appSettings)
+    }
+  }, [appSettings, open])
+
+  const handleSave = async () => {
+    const next = await saveAppSettings(localSettings)
+    setLocalSettings(next)
     setSaved(true)
     setTimeout(() => setSaved(false), 2000)
   }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="max-w-3xl">
         <DialogHeader>
           <DialogTitle className="text-xl">Settings</DialogTitle>
           <DialogDescription>
-            Configure your API keys and preferences for Zenquanta AI.
+            Save default behavior for Zenquanta AI while keeping OpenRouter credentials env-backed on the server.
           </DialogDescription>
         </DialogHeader>
 
-        <Tabs defaultValue="api" className="mt-4">
-          <TabsList className="grid w-full grid-cols-3">
-            <TabsTrigger value="api">API Keys</TabsTrigger>
+        <Tabs defaultValue="general" className="mt-4">
+          <TabsList className="grid w-full grid-cols-4">
+            <TabsTrigger value="general">General</TabsTrigger>
+            <TabsTrigger value="gateway">Gateway</TabsTrigger>
             <TabsTrigger value="models">Models</TabsTrigger>
             <TabsTrigger value="about">About</TabsTrigger>
           </TabsList>
 
-          {/* API Keys Tab */}
-          <TabsContent value="api" className="space-y-6 mt-6">
-            <div className="space-y-4">
-              {/* Qwen API Key */}
-              <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <div className={`p-1.5 rounded-lg ${getModeGradient('creative')}`}>
-                    <ModeIcon mode="creative" size="sm" className={getModeAccentClass('creative', 'text')} />
-                  </div>
-                  <Label htmlFor="qwenApiKey" className="font-medium">
-                    Qwen API Key
-                  </Label>
-                  <Badge variant="secondary" className="text-xs">
-                    Creative Writer
-                  </Badge>
+          <TabsContent value="general" className="space-y-6 mt-6">
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="font-semibold">Default Mode</h3>
+                  <p className="text-sm text-muted-foreground">
+                    Applies when you open a fresh chat session.
+                  </p>
                 </div>
-                <Input
-                  id="qwenApiKey"
-                  type="password"
-                  placeholder="sk-..."
-                  value={localSettings.qwenApiKey}
-                  onChange={(e) =>
-                    setLocalSettings((prev) => ({
-                      ...prev,
-                      qwenApiKey: e.target.value,
-                    }))
-                  }
-                  className="font-mono"
-                />
-                <p className="text-xs text-muted-foreground">
-                  Get your API key from{' '}
-                  <a
-                    href="https://dashscope.console.aliyun.com/"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-creative hover:underline"
-                  >
-                    DashScope Console
-                  </a>
-                </p>
+                <Badge variant="secondary">Saved to settings</Badge>
               </div>
-
-              <Separator />
-
-              {/* DeepSeek API Key */}
-              <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <div className={`p-1.5 rounded-lg ${getModeGradient('logic')}`}>
-                    <ModeIcon mode="logic" size="sm" className={getModeAccentClass('logic', 'text')} />
-                  </div>
-                  <Label htmlFor="deepseekApiKey" className="font-medium">
-                    DeepSeek API Key
-                  </Label>
-                  <Badge variant="secondary" className="text-xs">
-                    Logic Focused
-                  </Badge>
-                </div>
-                <Input
-                  id="deepseekApiKey"
-                  type="password"
-                  placeholder="sk-..."
-                  value={localSettings.deepseekApiKey}
-                  onChange={(e) =>
-                    setLocalSettings((prev) => ({
-                      ...prev,
-                      deepseekApiKey: e.target.value,
-                    }))
-                  }
-                  className="font-mono"
-                />
-                <p className="text-xs text-muted-foreground">
-                  Get your API key from{' '}
-                  <a
-                    href="https://platform.deepseek.com/"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-logic hover:underline"
-                  >
-                    DeepSeek Platform
-                  </a>
-                </p>
-              </div>
-
-              <Separator />
-
-              {/* Qwen Coder API Key */}
-              <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <div className={`p-1.5 rounded-lg ${getModeGradient('code')}`}>
-                    <ModeIcon mode="code" size="sm" className={getModeAccentClass('code', 'text')} />
-                  </div>
-                  <Label htmlFor="qwenCoderApiKey" className="font-medium">
-                    Qwen Coder API Key
-                  </Label>
-                  <Badge variant="secondary" className="text-xs">
-                    Code Assistant
-                  </Badge>
-                </div>
-                <Input
-                  id="qwenCoderApiKey"
-                  type="password"
-                  placeholder="sk-..."
-                  value={localSettings.qwenCoderApiKey}
-                  onChange={(e) =>
-                    setLocalSettings((prev) => ({
-                      ...prev,
-                      qwenCoderApiKey: e.target.value,
-                    }))
-                  }
-                  className="font-mono"
-                />
-                <p className="text-xs text-muted-foreground">
-                  Get your API key from{' '}
-                  <a
-                    href="https://dashscope.console.aliyun.com/"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-code hover:underline"
-                  >
-                    DashScope Console
-                  </a>
-                </p>
+              <div className="grid gap-3 md:grid-cols-3">
+                {(['creative', 'logic', 'code'] as AIMode[]).map((mode) => (
+                  <ModeSelectionCard
+                    key={mode}
+                    mode={mode}
+                    active={localSettings.defaultMode === mode}
+                    onClick={() =>
+                      setLocalSettings((previous) => ({
+                        ...previous,
+                        defaultMode: mode,
+                      }))
+                    }
+                  />
+                ))}
               </div>
             </div>
 
-            <div className="flex justify-end">
-              <Button onClick={handleSave} className="gap-2">
-                {saved ? (
-                  <>
-                    <CheckIcon className="size-4" />
-                    Saved
-                  </>
-                ) : (
-                  'Save API Keys'
-                )}
-              </Button>
+            <Separator />
+
+            <div className="grid gap-6 md:grid-cols-2">
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="defaultTemperature">Default Temperature</Label>
+                  <span className="text-sm text-muted-foreground font-mono">
+                    {localSettings.sessionDefaults.temperature.toFixed(1)}
+                  </span>
+                </div>
+                <Slider
+                  id="defaultTemperature"
+                  min={0}
+                  max={2}
+                  step={0.1}
+                  value={[localSettings.sessionDefaults.temperature]}
+                  onValueChange={([value]) =>
+                    setLocalSettings((previous) => ({
+                      ...previous,
+                      sessionDefaults: {
+                        ...previous.sessionDefaults,
+                        temperature: value,
+                      },
+                    }))
+                  }
+                />
+              </div>
+
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="defaultMaxTokens">Default Max Tokens</Label>
+                  <span className="text-sm text-muted-foreground font-mono">
+                    {localSettings.sessionDefaults.maxTokens}
+                  </span>
+                </div>
+                <Slider
+                  id="defaultMaxTokens"
+                  min={256}
+                  max={8192}
+                  step={256}
+                  value={[localSettings.sessionDefaults.maxTokens]}
+                  onValueChange={([value]) =>
+                    setLocalSettings((previous) => ({
+                      ...previous,
+                      sessionDefaults: {
+                        ...previous.sessionDefaults,
+                        maxTokens: value,
+                      },
+                    }))
+                  }
+                />
+              </div>
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="rounded-2xl border border-border p-4 space-y-3">
+                <div>
+                  <h3 className="font-semibold">Response Style</h3>
+                  <p className="text-sm text-muted-foreground">
+                    Shapes the overall tone of assistant output.
+                  </p>
+                </div>
+                <div className="grid grid-cols-3 gap-2">
+                  {(['balanced', 'concise', 'detailed'] as const).map((style) => (
+                    <Button
+                      key={style}
+                      type="button"
+                      variant={localSettings.responseStyle === style ? 'default' : 'outline'}
+                      onClick={() =>
+                        setLocalSettings((previous) => ({
+                          ...previous,
+                          responseStyle: style,
+                        }))
+                      }
+                      className="capitalize"
+                    >
+                      {style}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-border p-4 space-y-3">
+                <div>
+                  <h3 className="font-semibold">Visual Preferences</h3>
+                  <p className="text-sm text-muted-foreground">
+                    Stored now for future theming and accent routing.
+                  </p>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <Button type="button" variant="default" disabled>
+                    Dark
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={localSettings.accentStyle === 'glass' ? 'default' : 'outline'}
+                    onClick={() =>
+                      setLocalSettings((previous) => ({
+                        ...previous,
+                        accentStyle:
+                          previous.accentStyle === 'glass' ? 'mode' : 'glass',
+                      }))
+                    }
+                  >
+                    {localSettings.accentStyle === 'glass' ? 'Glass accents' : 'Mode accents'}
+                  </Button>
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-4 rounded-2xl border border-border p-4">
+              <h3 className="font-semibold">Default Feature Toggles</h3>
+              <div className="grid gap-4 md:grid-cols-3">
+                <div className="flex items-center justify-between rounded-xl border border-border px-3 py-3">
+                  <div>
+                    <p className="text-sm font-medium">Web Search</p>
+                    <p className="text-xs text-muted-foreground">Off by default</p>
+                  </div>
+                  <Switch
+                    checked={localSettings.sessionDefaults.webSearch}
+                    onCheckedChange={(checked) =>
+                      setLocalSettings((previous) => ({
+                        ...previous,
+                        sessionDefaults: {
+                          ...previous.sessionDefaults,
+                          webSearch: checked,
+                        },
+                      }))
+                    }
+                  />
+                </div>
+
+                <div className="flex items-center justify-between rounded-xl border border-border px-3 py-3">
+                  <div>
+                    <p className="text-sm font-medium">Memory</p>
+                    <p className="text-xs text-muted-foreground">Carry conversation context</p>
+                  </div>
+                  <Switch
+                    checked={localSettings.sessionDefaults.memory}
+                    onCheckedChange={(checked) =>
+                      setLocalSettings((previous) => ({
+                        ...previous,
+                        sessionDefaults: {
+                          ...previous.sessionDefaults,
+                          memory: checked,
+                        },
+                      }))
+                    }
+                  />
+                </div>
+
+                <div className="flex items-center justify-between rounded-xl border border-border px-3 py-3">
+                  <div>
+                    <p className="text-sm font-medium">File Context</p>
+                    <p className="text-xs text-muted-foreground">Reserved for future upload support</p>
+                  </div>
+                  <Switch
+                    checked={localSettings.sessionDefaults.fileContext}
+                    onCheckedChange={(checked) =>
+                      setLocalSettings((previous) => ({
+                        ...previous,
+                        sessionDefaults: {
+                          ...previous.sessionDefaults,
+                          fileContext: checked,
+                        },
+                      }))
+                    }
+                  />
+                </div>
+              </div>
             </div>
           </TabsContent>
 
-          {/* Models Tab */}
+          <TabsContent value="gateway" className="space-y-6 mt-6">
+            <div className="rounded-2xl border border-border bg-muted/20 p-4">
+              <p className="text-sm text-muted-foreground">
+                OpenRouter is the only AI gateway in this app. These fields stay as local placeholders for convenience, but live requests use the server env vars.
+              </p>
+            </div>
+
+            <div className="relative rounded-2xl border border-border p-4 overflow-hidden">
+              <div className="absolute inset-0 opacity-20 bg-gradient-to-br from-logic/20 via-transparent to-code/20" />
+              <div className="relative space-y-4">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 rounded-xl bg-secondary/60">
+                    <span className="text-sm font-semibold">OR</span>
+                  </div>
+                  <div>
+                    <p className="font-semibold">OpenRouter</p>
+                    <p className="text-sm text-muted-foreground">
+                      Single gateway for all Zenquanta modes and models
+                    </p>
+                  </div>
+                </div>
+
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="openrouter-api-key">OpenRouter API key placeholder</Label>
+                    <Input
+                      id="openrouter-api-key"
+                      type="password"
+                      placeholder="sk-or-..."
+                      value={localSettings.gatewayDrafts.openRouterApiKey}
+                      onChange={(event) =>
+                        setLocalSettings((previous) => ({
+                          ...previous,
+                          gatewayDrafts: {
+                            ...previous.gatewayDrafts,
+                            openRouterApiKey: event.target.value,
+                          },
+                        }))
+                      }
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="openrouter-base-url">Base URL placeholder</Label>
+                    <Input
+                      id="openrouter-base-url"
+                      placeholder="https://openrouter.ai/api/v1"
+                      value={localSettings.gatewayDrafts.openRouterBaseUrl}
+                      onChange={(event) =>
+                        setLocalSettings((previous) => ({
+                          ...previous,
+                          gatewayDrafts: {
+                            ...previous.gatewayDrafts,
+                            openRouterBaseUrl: event.target.value,
+                          },
+                        }))
+                      }
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+          </TabsContent>
+
           <TabsContent value="models" className="space-y-4 mt-6">
             <div className="grid gap-4">
-              {/* Creative Writer */}
-              <div className={`relative p-4 rounded-xl border border-border bg-card overflow-hidden group hover:border-creative/30 transition-colors`}>
-                <div className={`absolute inset-0 ${getModeGradient('creative')} opacity-0 group-hover:opacity-100 transition-opacity`} />
-                <div className="relative">
-                  <div className="flex items-center gap-3 mb-3">
-                    <div className="p-2 rounded-lg bg-creative/20">
-                      <ModeIcon mode="creative" size="md" className="text-creative" />
-                    </div>
-                    <div>
-                      <h3 className="font-semibold">Creative Writer</h3>
-                      <p className="text-sm text-muted-foreground">
-                        Qwen-Max / Qwen-Plus
-                      </p>
-                    </div>
-                  </div>
-                  <p className="text-sm text-muted-foreground">
-                    Optimized for creative writing, storytelling, brainstorming,
-                    and artistic content generation. Excels at narrative flow and
-                    emotional expression.
-                  </p>
-                </div>
-              </div>
+              {(['creative', 'logic', 'code'] as AIMode[]).map((mode) => {
+                const config = MODE_CONFIGS[mode]
 
-              {/* Logic Focused */}
-              <div className={`relative p-4 rounded-xl border border-border bg-card overflow-hidden group hover:border-logic/30 transition-colors`}>
-                <div className={`absolute inset-0 ${getModeGradient('logic')} opacity-0 group-hover:opacity-100 transition-opacity`} />
-                <div className="relative">
-                  <div className="flex items-center gap-3 mb-3">
-                    <div className="p-2 rounded-lg bg-logic/20">
-                      <ModeIcon mode="logic" size="md" className="text-logic" />
-                    </div>
-                    <div>
-                      <h3 className="font-semibold">Logic Focused</h3>
-                      <p className="text-sm text-muted-foreground">
-                        DeepSeek-V3 / DeepSeek-R1
-                      </p>
-                    </div>
-                  </div>
-                  <p className="text-sm text-muted-foreground">
-                    Designed for analytical thinking, mathematical reasoning,
-                    problem solving, and structured analysis. Shows step-by-step
-                    reasoning.
-                  </p>
-                </div>
-              </div>
+                return (
+                  <div
+                    key={mode}
+                    className={`relative p-4 rounded-xl border border-border bg-card overflow-hidden`}
+                  >
+                    <div className={`absolute inset-0 ${getModeGradient(mode)} opacity-20`} />
+                    <div className="relative space-y-3">
+                      <div className="flex items-center gap-3">
+                        <div className={`p-2 rounded-lg ${getModeTintClass(mode, 'strong')}`}>
+                          <ModeIcon
+                            mode={mode}
+                            size="md"
+                            className={getModeAccentClass(mode, 'text')}
+                          />
+                        </div>
+                        <div>
+                          <h3 className="font-semibold">{config.name}</h3>
+                          <p className="text-sm text-muted-foreground">
+                            {config.gatewayName} · {config.label}
+                          </p>
+                        </div>
+                      </div>
 
-              {/* Code Assistant */}
-              <div className={`relative p-4 rounded-xl border border-border bg-card overflow-hidden group hover:border-code/30 transition-colors`}>
-                <div className={`absolute inset-0 ${getModeGradient('code')} opacity-0 group-hover:opacity-100 transition-opacity`} />
-                <div className="relative">
-                  <div className="flex items-center gap-3 mb-3">
-                    <div className="p-2 rounded-lg bg-code/20">
-                      <ModeIcon mode="code" size="md" className="text-code" />
-                    </div>
-                    <div>
-                      <h3 className="font-semibold">Code Assistant</h3>
-                      <p className="text-sm text-muted-foreground">
-                        Qwen-Coder-Plus / Qwen-Coder-Turbo
-                      </p>
+                      <div className="grid gap-3 md:grid-cols-4 text-sm">
+                        <div className="rounded-lg border border-border/60 p-3">
+                          <p className="text-muted-foreground mb-1">Default temperature</p>
+                          <p className="font-medium">{config.temperature.toFixed(2)}</p>
+                        </div>
+                        <div className="rounded-lg border border-border/60 p-3">
+                          <p className="text-muted-foreground mb-1">Default max tokens</p>
+                          <p className="font-medium">{config.maxTokens}</p>
+                        </div>
+                        <div className="rounded-lg border border-border/60 p-3">
+                          <p className="text-muted-foreground mb-1">Top P</p>
+                          <p className="font-medium">{config.topP.toFixed(2)}</p>
+                        </div>
+                        <div className="rounded-lg border border-border/60 p-3">
+                          <p className="text-muted-foreground mb-1">Model ID</p>
+                          <p className="font-medium break-all">{config.model}</p>
+                        </div>
+                      </div>
                     </div>
                   </div>
-                  <p className="text-sm text-muted-foreground">
-                    Specialized for code generation, debugging, code review, and
-                    technical documentation. Supports 100+ programming languages.
-                  </p>
-                </div>
-              </div>
+                )
+              })}
             </div>
           </TabsContent>
 
-          {/* About Tab */}
           <TabsContent value="about" className="space-y-4 mt-6">
             <div className="text-center py-8">
               <div className="inline-flex items-center gap-2 mb-4">
@@ -272,30 +428,28 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                 </div>
               </div>
               <h2 className="text-2xl font-bold mb-2">Zenquanta AI</h2>
-              <p className="text-muted-foreground mb-4">Version 1.0.0</p>
-              <p className="text-sm text-muted-foreground max-w-md mx-auto">
-                A premium 3-model AI chat system combining the best of creative
-                writing, logical reasoning, and code assistance in one unified
-                interface.
+              <p className="text-muted-foreground mb-4">
+                Multi-model creative, reasoning, and coding assistant
               </p>
-            </div>
-            <Separator />
-            <div className="grid grid-cols-3 gap-4 text-center text-sm">
-              <div>
-                <p className="text-2xl font-bold text-foreground">3</p>
-                <p className="text-muted-foreground">AI Models</p>
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-foreground">∞</p>
-                <p className="text-muted-foreground">Possibilities</p>
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-foreground">0</p>
-                <p className="text-muted-foreground">Limits</p>
-              </div>
+              <p className="text-sm text-muted-foreground max-w-md mx-auto">
+                This refactor keeps the existing premium interface intact while moving the app onto a typed, OpenRouter-first architecture with streaming-ready contracts and replaceable storage.
+              </p>
             </div>
           </TabsContent>
         </Tabs>
+
+        <div className="flex justify-end">
+          <Button onClick={handleSave} className="gap-2">
+            {saved ? (
+              <>
+                <CheckIcon className="size-4" />
+                Saved
+              </>
+            ) : (
+              'Save settings'
+            )}
+          </Button>
+        </div>
       </DialogContent>
     </Dialog>
   )

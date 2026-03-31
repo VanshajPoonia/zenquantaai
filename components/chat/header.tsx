@@ -3,7 +3,7 @@
 import { cn } from '@/lib/utils'
 import { useChatContext } from '@/lib/chat-context'
 import { MODE_CONFIGS } from '@/lib/types'
-import { ModeIcon, getModeAccentClass } from '@/lib/mode-utils'
+import { ModeIcon, getModeAccentClass, getModeTintClass } from '@/lib/mode-utils'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import {
@@ -39,6 +39,7 @@ export function Header({ onOpenSettings }: HeaderProps) {
     isSidebarOpen,
     isSettingsPanelOpen,
     toggleSettingsPanel,
+    statusLabel,
   } = useChatContext()
 
   const modeConfig = MODE_CONFIGS[currentMode]
@@ -73,17 +74,26 @@ export function Header({ onOpenSettings }: HeaderProps) {
           className={cn(
             'flex items-center gap-2 px-3 py-1.5 rounded-full border transition-all duration-300',
             getModeAccentClass(currentMode, 'text'),
-            getModeAccentClass(currentMode, 'border').replace('border-', 'border-') + '/30',
-            `bg-${currentMode}/10`
+            `${getModeAccentClass(currentMode, 'border')}/30`,
+            getModeTintClass(currentMode, 'subtle')
           )}
         >
           <ModeIcon mode={currentMode} size="sm" />
-          <span className="text-sm font-medium hidden sm:inline">
-            {modeConfig.name}
-          </span>
+          <div className="hidden sm:flex flex-col leading-none">
+            <span className="text-sm font-medium">{modeConfig.name}</span>
+            <span className="text-[11px] text-muted-foreground">
+              {modeConfig.gatewayName}
+            </span>
+          </div>
         </div>
-        <Badge variant="secondary" className="text-xs font-mono px-2.5">
-          {modeConfig.model}
+        <Badge variant="secondary" className="text-xs font-mono px-2.5 hidden md:inline-flex">
+          {modeConfig.label}
+        </Badge>
+        <Badge
+          variant={statusLabel === 'Streaming' ? 'default' : 'secondary'}
+          className="text-[11px] px-2.5"
+        >
+          {statusLabel}
         </Badge>
       </div>
 

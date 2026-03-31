@@ -22,7 +22,7 @@ interface ComposerProps {
 }
 
 export function Composer({ onSend, disabled, initialValue = '' }: ComposerProps) {
-  const { currentMode, isStreaming, setIsStreaming } = useChatContext()
+  const { currentMode, isStreaming, stopStreaming } = useChatContext()
   const [value, setValue] = useState(initialValue)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
@@ -62,7 +62,7 @@ export function Composer({ onSend, disabled, initialValue = '' }: ComposerProps)
   }
 
   const handleStop = () => {
-    setIsStreaming(false)
+    stopStreaming()
   }
 
   return (

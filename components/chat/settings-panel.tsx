@@ -2,30 +2,42 @@
 
 import { cn } from '@/lib/utils'
 import { useChatContext } from '@/lib/chat-context'
-import { getModeAccentClass } from '@/lib/mode-utils'
+import { MODE_CONFIGS, createSessionSettings } from '@/lib/types'
+import {
+  getModeAccentClass,
+  getModeTintClass,
+} from '@/lib/mode-utils'
 import { Button } from '@/components/ui/button'
 import { Slider } from '@/components/ui/slider'
 import { Switch } from '@/components/ui/switch'
 import { Label } from '@/components/ui/label'
 import { Separator } from '@/components/ui/separator'
+import { Badge } from '@/components/ui/badge'
 import { XIcon, GlobeIcon, DatabaseIcon, FileIcon } from '@/components/icons'
 
 function getSliderClass(mode: string) {
   const colorClass = getModeAccentClass(mode as 'creative' | 'logic' | 'code', 'bg')
-  const borderClass = getModeAccentClass(mode as 'creative' | 'logic' | 'code', 'border')
+  const borderClass = getModeAccentClass(
+    mode as 'creative' | 'logic' | 'code',
+    'border'
+  )
   return `[&_[data-slot=slider-range]]:${colorClass} [&_[data-slot=slider-thumb]]:${borderClass}`
 }
 
 export function SettingsPanel() {
   const {
+    currentMode,
+    currentChat,
     sessionSettings,
+    statusLabel,
     updateSessionSettings,
     isSettingsPanelOpen,
     toggleSettingsPanel,
-    currentMode,
   } = useChatContext()
 
   if (!isSettingsPanelOpen) return null
+
+  const modeConfig = MODE_CONFIGS[currentMode]
 
   return (
     <aside
@@ -34,17 +46,51 @@ export function SettingsPanel() {
         'animate-in slide-in-from-right-5 duration-200'
       )}
     >
-      {/* Header */}
       <div className="flex items-center justify-between p-4 border-b border-border">
-        <h2 className="font-semibold text-foreground">Session Settings</h2>
+        <div>
+          <h2 className="font-semibold text-foreground">Session Settings</h2>
+          <p className="text-xs text-muted-foreground">
+            Conversation controls for the current mode
+          </p>
+        </div>
         <Button variant="ghost" size="icon-sm" onClick={toggleSettingsPanel}>
           <XIcon className="size-4" />
         </Button>
       </div>
 
-      {/* Settings Content */}
       <div className="flex-1 overflow-y-auto p-4 space-y-6">
-        {/* Temperature */}
+        <div
+          className={cn(
+            'rounded-2xl border p-4 space-y-3',
+            getModeTintClass(currentMode, 'subtle')
+          )}
+        >
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-sm font-semibold text-foreground">
+                {currentChat?.title ?? 'Draft session'}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                {modeConfig.gatewayName} routed to {modeConfig.label}
+              </p>
+            </div>
+            <Badge variant={statusLabel === 'Streaming' ? 'default' : 'secondary'}>
+              {statusLabel}
+            </Badge>
+          </div>
+          <p className="text-xs leading-relaxed text-muted-foreground">
+            {modeConfig.description}
+          </p>
+          <div className="rounded-xl border border-border/60 bg-background/60 px-3 py-2">
+            <p className="text-[11px] uppercase tracking-widest text-muted-foreground mb-1">
+              Model routing
+            </p>
+            <p className="text-sm text-foreground">
+              {modeConfig.name} → {modeConfig.label}
+            </p>
+          </div>
+        </div>
+
         <div className="space-y-3">
           <div className="flex items-center justify-between">
             <Label htmlFor="temperature" className="text-sm font-medium">
@@ -66,11 +112,10 @@ export function SettingsPanel() {
             className={getSliderClass(currentMode)}
           />
           <p className="text-xs text-muted-foreground">
-            Higher values make output more random, lower values more focused.
+            Higher values make outputs more exploratory. Lower values keep them tighter.
           </p>
         </div>
 
-        {/* Max Tokens */}
         <div className="space-y-3">
           <div className="flex items-center justify-between">
             <Label htmlFor="maxTokens" className="text-sm font-medium">
@@ -92,31 +137,26 @@ export function SettingsPanel() {
             className={getSliderClass(currentMode)}
           />
           <p className="text-xs text-muted-foreground">
-            Maximum length of the generated response.
+            Upper bound for the generated response length.
           </p>
         </div>
 
         <Separator />
 
-        {/* Toggle Options */}
         <div className="space-y-4">
           <h3 className="text-sm font-medium text-foreground">Features</h3>
 
-          {/* Web Search */}
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="p-2 rounded-lg bg-muted">
                 <GlobeIcon className="size-4 text-muted-foreground" />
               </div>
               <div>
-                <Label
-                  htmlFor="webSearch"
-                  className="text-sm font-medium cursor-pointer"
-                >
+                <Label htmlFor="webSearch" className="text-sm font-medium cursor-pointer">
                   Web Search
                 </Label>
                 <p className="text-xs text-muted-foreground">
-                  Search the web for context
+                  Allow retrieval-style context when the gateway supports it
                 </p>
               </div>
             </div>
@@ -129,21 +169,17 @@ export function SettingsPanel() {
             />
           </div>
 
-          {/* Memory */}
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="p-2 rounded-lg bg-muted">
                 <DatabaseIcon className="size-4 text-muted-foreground" />
               </div>
               <div>
-                <Label
-                  htmlFor="memory"
-                  className="text-sm font-medium cursor-pointer"
-                >
+                <Label htmlFor="memory" className="text-sm font-medium cursor-pointer">
                   Memory
                 </Label>
                 <p className="text-xs text-muted-foreground">
-                  Remember conversation context
+                  Carry forward recent conversation context
                 </p>
               </div>
             </div>
@@ -156,21 +192,17 @@ export function SettingsPanel() {
             />
           </div>
 
-          {/* File Context */}
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="p-2 rounded-lg bg-muted">
                 <FileIcon className="size-4 text-muted-foreground" />
               </div>
               <div>
-                <Label
-                  htmlFor="fileContext"
-                  className="text-sm font-medium cursor-pointer"
-                >
+                <Label htmlFor="fileContext" className="text-sm font-medium cursor-pointer">
                   File Context
                 </Label>
                 <p className="text-xs text-muted-foreground">
-                  Use uploaded files as context
+                  Reserve file-aware routing for future attachment support
                 </p>
               </div>
             </div>
@@ -186,21 +218,19 @@ export function SettingsPanel() {
 
         <Separator />
 
-        {/* Reset */}
+        <div className="space-y-3">
+          <h3 className="text-sm font-medium text-foreground">Recent attachments</h3>
+          <div className="rounded-xl border border-dashed border-border bg-background/50 px-3 py-4 text-sm text-muted-foreground">
+            No files attached yet. The upload UI is ready, but backend file handling is still mocked.
+          </div>
+        </div>
+
         <Button
           variant="outline"
           className="w-full"
-          onClick={() =>
-            updateSessionSettings({
-              temperature: 0.7,
-              maxTokens: 4096,
-              webSearch: false,
-              memory: true,
-              fileContext: false,
-            })
-          }
+          onClick={() => updateSessionSettings(createSessionSettings(currentMode))}
         >
-          Reset to Defaults
+          Reset to mode defaults
         </Button>
       </div>
     </aside>
