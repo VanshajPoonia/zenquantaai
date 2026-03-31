@@ -77,6 +77,8 @@ export function toConversationSummary(
     preview: latestMessage ? getMessagePreview(latestMessage.content) : '',
     messageCount: conversation.messages.length,
     sessionSettings: conversation.sessionSettings,
+    memorySummary: conversation.memorySummary,
+    memoryUpdatedAt: conversation.memoryUpdatedAt,
   }
 }
 
@@ -100,6 +102,8 @@ export function updateConversationSnapshot(
     projectId: next.projectId ?? conversation.projectId ?? DEFAULT_PROJECT_ID,
     sessionSettings: next.sessionSettings ?? conversation.sessionSettings,
     attachments,
+    memorySummary: next.memorySummary ?? conversation.memorySummary,
+    memoryUpdatedAt: next.memoryUpdatedAt ?? conversation.memoryUpdatedAt,
     updatedAt: next.updatedAt ?? nowIso(),
   }
 
@@ -167,6 +171,8 @@ export function createConversation(input: {
   isPinned?: boolean
   attachments?: Attachment[]
   usage?: Conversation['usage']
+  memorySummary?: string
+  memoryUpdatedAt?: string
 }): Conversation {
   const createdAt = input.createdAt ?? nowIso()
 
@@ -184,6 +190,8 @@ export function createConversation(input: {
     messages: input.messages ?? [],
     attachments: input.attachments ?? [],
     usage: input.usage,
+    memorySummary: input.memorySummary,
+    memoryUpdatedAt: input.memoryUpdatedAt,
   })
 }
 

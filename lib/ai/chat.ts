@@ -13,6 +13,11 @@ import {
   createGeneratedImageAttachment,
 } from '@/lib/utils/generated-image'
 import {
+  buildMemoryBlock,
+  getRecentContextMessages,
+  updateConversationMemory,
+} from './memory'
+import {
   AIMode,
   AttachmentContext,
   ChatAction,
@@ -149,10 +154,18 @@ function buildOpenRouterMessages(
   content: string
 }> {
   const systemPrompt = buildSystemPrompt(mode, settings.systemPreset)
+  const contextMessages = getRecentContextMessages(conversation)
+  const memoryBlock =
+    settings.memory && conversation.memorySummary
+      ? buildMemoryBlock(conversation.memorySummary)
+      : ''
 
   return [
     { role: 'system', content: systemPrompt },
-    ...conversation.messages
+    ...(memoryBlock
+      ? [{ role: 'system' as const, content: memoryBlock }]
+      : []),
+    ...contextMessages
       .filter((message) => message.role !== 'system')
       .map((message) => ({
         role: message.role,
@@ -604,8 +617,16 @@ export async function completeConversationWithAssistant(
     usage: options?.action === 'generate-image' ? undefined : usage,
   }
 
-  return updateConversationSnapshot(conversation, {
+  const completedConversation = updateConversationSnapshot(conversation, {
     messages: [...conversation.messages, finalAssistant],
+  })
+  const memoryUpdate = updateConversationMemory(
+    completedConversation,
+    completedConversation.sessionSettings.memory
+  )
+
+  return updateConversationSnapshot(completedConversation, {
+    ...memoryUpdate,
   })
 }
 

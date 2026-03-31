@@ -199,16 +199,23 @@ export function Composer({ onSend, disabled, initialValue = '' }: ComposerProps)
                 open={isPromptPopoverOpen}
                 onOpenChange={setIsPromptPopoverOpen}
               >
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon-sm"
-                    className="text-muted-foreground hover:text-foreground"
-                    disabled={disabled || isStreaming}
-                  >
-                    <BookText className="size-4" />
-                  </Button>
-                </PopoverTrigger>
+                <TooltipProvider delayDuration={300}>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          className="text-muted-foreground hover:text-foreground"
+                          disabled={disabled || isStreaming}
+                        >
+                          <BookText className="size-4" />
+                        </Button>
+                      </PopoverTrigger>
+                    </TooltipTrigger>
+                    <TooltipContent>Prompt Library</TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
                 <PopoverContent
                   align="start"
                   className="w-[360px] rounded-2xl border-border/70 bg-background/95 p-4"

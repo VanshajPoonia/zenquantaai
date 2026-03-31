@@ -22,6 +22,8 @@ type ConversationRow = {
   message_count: number
   session_settings: Conversation['sessionSettings']
   usage: Conversation['usage'] | null
+  memory_summary: string | null
+  memory_updated_at: string | null
   created_at: string
   updated_at: string
   messages?: MessageRow[]
@@ -137,6 +139,8 @@ async function rowToConversation(row: ConversationRow): Promise<Conversation> {
     messages: hydratedMessages,
     attachments,
     usage: row.usage ?? undefined,
+    memorySummary: row.memory_summary ?? undefined,
+    memoryUpdatedAt: row.memory_updated_at ?? undefined,
   })
 }
 
@@ -152,6 +156,8 @@ function conversationToRow(userId: string, conversation: Conversation): Conversa
     message_count: conversation.messageCount,
     session_settings: conversation.sessionSettings,
     usage: conversation.usage ?? null,
+    memory_summary: conversation.memorySummary ?? null,
+    memory_updated_at: conversation.memoryUpdatedAt ?? null,
     created_at: conversation.createdAt,
     updated_at: conversation.updatedAt,
   }

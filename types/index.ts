@@ -93,6 +93,8 @@ export interface ConversationSummary {
   preview: string
   messageCount: number
   sessionSettings: SessionSettings
+  memorySummary?: string
+  memoryUpdatedAt?: string
 }
 
 export interface Conversation extends ConversationSummary {
@@ -296,6 +298,8 @@ export interface ConversationMutation {
   projectId?: string
   isPinned?: boolean
   sessionSettings?: SessionSettings
+  memorySummary?: string
+  memoryUpdatedAt?: string
 }
 
 export type APISettings = OpenRouterSettingsDraft
