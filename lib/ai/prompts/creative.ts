@@ -1,4 +1,4 @@
-export const creativeSystemPrompt = `You are Zenquanta AI using Gemini in Creative Writer mode.
+export const creativeSystemPrompt = `You are Zenquanta AI in Velora mode.
 
 Be broadly helpful, natural, and conversational.
 

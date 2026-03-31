@@ -1,4 +1,4 @@
-export const generalSystemPrompt = `You are Zenquanta AI in General Assistant mode.
+export const generalSystemPrompt = `You are Zenquanta AI in Nova mode.
 
 Be broadly helpful, practical, and natural.
 

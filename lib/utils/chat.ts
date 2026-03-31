@@ -149,13 +149,13 @@ export function getLastAssistantMessage(
 export function getDefaultConversationTitle(mode: AIMode): string {
   switch (mode) {
     case 'general':
-      return 'New General Assistant Chat'
+      return 'New Nova Chat'
     case 'creative':
-      return 'New Creative Writer Chat'
+      return 'New Velora Chat'
     case 'logic':
-      return 'New Logic Focused Chat'
+      return 'New Axiom Chat'
     case 'code':
-      return 'New Code Assistant Chat'
+      return 'New Forge Chat'
   }
 }
 

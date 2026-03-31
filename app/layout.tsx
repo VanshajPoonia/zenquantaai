@@ -13,10 +13,11 @@ const geistMono = Geist_Mono({
 })
 
 export const metadata: Metadata = {
-  title: 'Zenquanta AI | Premium Multi-Model Chat',
-  description: 'A premium AI chat workspace for general assistance, creative writing, structured reasoning, and coding in one unified interface.',
+  title: 'Zenquanta AI | Nova, Velora, Axiom, Forge',
+  description:
+    'A premium AI workspace built around Nova, Velora, Axiom, and Forge for everyday help, creativity, reasoning, and technical work.',
   generator: 'v0.app',
-  keywords: ['AI', 'chat', 'general assistant', 'creative writing', 'reasoning', 'code assistant'],
+  keywords: ['AI', 'chat', 'Nova', 'Velora', 'Axiom', 'Forge', 'creative', 'reasoning', 'coding'],
   authors: [{ name: 'Zenquanta' }],
   icons: {
     icon: [

@@ -7,7 +7,7 @@ const MODE_DISPLAY_CONFIGS: Record<
 > = {
   general: {
     id: 'general',
-    name: 'General Assistant',
+    name: 'Nova',
     placeholder: 'Ask anything: recipes, travel, planning, research, or everyday help...',
     helperText:
       'Flexible everyday assistance for general questions, planning, summarizing, and practical tasks.',
@@ -25,7 +25,7 @@ const MODE_DISPLAY_CONFIGS: Record<
   },
   creative: {
     id: 'creative',
-    name: 'Creative Writer',
+    name: 'Velora',
     placeholder: 'Draft a story, campaign, script, or idea...',
     helperText:
       'Imaginative, expressive, elegant writing for storytelling, copy, and rewording.',
@@ -43,7 +43,7 @@ const MODE_DISPLAY_CONFIGS: Record<
   },
   logic: {
     id: 'logic',
-    name: 'Logic Focused',
+    name: 'Axiom',
     placeholder: 'Ask for precise reasoning, analysis, or breakdown...',
     helperText:
       'Precise, structured analysis for breakdowns, comparisons, and decision support.',
@@ -61,7 +61,7 @@ const MODE_DISPLAY_CONFIGS: Record<
   },
   code: {
     id: 'code',
-    name: 'Code Assistant',
+    name: 'Forge',
     placeholder: 'Describe the feature, bug, or code you need...',
     helperText:
       'Developer-first implementation help for debugging, architecture, and backend tasks.',

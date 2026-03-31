@@ -2,6 +2,12 @@
 
 Zenquanta AI is a production-style AI chat app built with Next.js, TypeScript, Tailwind CSS, shadcn/ui, OpenRouter, and Supabase.
 
+Its four branded core modes are:
+- `Nova` for everyday help and general questions
+- `Velora` for creative writing and brand language
+- `Axiom` for structured reasoning and decision support
+- `Forge` for coding, debugging, and implementation work
+
 It supports:
 - multi-mode chat
 - OpenRouter model routing
@@ -28,12 +34,12 @@ It supports:
 
 ## Modes
 
-Zenquanta keeps the mode-based product structure while routing models through OpenRouter.
+Zenquanta keeps a mode-based product structure while presenting each mode as its own branded intelligence:
 
-- `general`: everyday assistant
-- `creative`: expressive writing
-- `logic`: structured reasoning
-- `code`: technical implementation help
+- `general` → `Nova`
+- `creative` → `Velora`
+- `logic` → `Axiom`
+- `code` → `Forge`
 
 The app also supports per-chat model override on top of the default mode routing.
 
