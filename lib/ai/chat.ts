@@ -6,8 +6,12 @@ import {
   getLastUserMessage,
   updateConversationSnapshot,
 } from '@/lib/utils/chat'
+import { estimateUsage } from '@/lib/utils/cost'
+import { toAttachmentContext } from '@/lib/utils/files'
 import {
   AIMode,
+  Attachment,
+  AttachmentContext,
   ChatAction,
   ChatRequest,
   Conversation,
@@ -19,6 +23,7 @@ import { SYSTEM_PROMPTS } from './prompts'
 import {
   createOpenRouterTextResponse,
   hasOpenRouterConfig,
+  streamOpenRouterTextResponse,
 } from './openrouter'
 
 function sleep(ms: number): Promise<void> {
@@ -55,6 +60,20 @@ async function* streamText(text: string, delayMs = 24) {
 
 function buildMockResponse(mode: AIMode, prompt: string): string {
   switch (mode) {
+    case 'general':
+      return `# Helpful Answer
+
+Here is a practical response to your request:
+
+> ${prompt}
+
+## Quick answer
+I would start with the most useful next step, keep it simple, and give you something actionable right away.
+
+## If you want more
+- ask for a shorter version
+- ask for a checklist
+- ask for examples tailored to your situation`
     case 'creative':
       return `# Creative Draft
 
@@ -104,7 +123,28 @@ type NextStep = {
   }
 }
 
-function buildOpenRouterMessages(conversation: Conversation): Array<{
+function formatAttachmentBlock(
+  attachments: AttachmentContext[] | undefined
+): string {
+  if (!attachments || attachments.length === 0) return ''
+
+  return [
+    '',
+    '[Attached context]',
+    ...attachments.map((attachment) => {
+      const detail = attachment.textContent
+        ? `\n${attachment.textContent}`
+        : '\nNo extracted text available.'
+
+      return `File: ${attachment.name} (${attachment.kind}, ${attachment.mimeType})${detail}`
+    }),
+  ].join('\n\n')
+}
+
+function buildOpenRouterMessages(
+  conversation: Conversation,
+  settings: SessionSettings
+): Array<{
   role: 'system' | 'user' | 'assistant'
   content: string
 }> {
@@ -116,14 +156,19 @@ function buildOpenRouterMessages(conversation: Conversation): Array<{
       .filter((message) => message.role !== 'system')
       .map((message) => ({
         role: message.role,
-        content: message.content,
+        content:
+          message.role === 'user' && settings.fileContext
+            ? `${message.content}${formatAttachmentBlock(
+                (message.attachments ?? []).map(toAttachmentContext)
+              )}`
+            : message.content,
       })),
   ]
 }
 
 async function generateAssistantText(
   conversation: Conversation,
-  _settings: SessionSettings
+  settings: SessionSettings
 ): Promise<string> {
   const config = MODEL_ROUTE_CONFIGS[conversation.mode]
   const latestPrompt =
@@ -134,20 +179,42 @@ async function generateAssistantText(
     return buildMockResponse(conversation.mode, latestPrompt)
   }
 
-  if (conversation.mode === 'creative') {
-    return createOpenRouterTextResponse({
-      model: config.model,
-      messages: buildOpenRouterMessages(conversation),
-    })
-  }
-
   return createOpenRouterTextResponse({
     model: config.model,
-    messages: buildOpenRouterMessages(conversation),
-    temperature: config.temperature,
-    maxTokens: config.maxTokens,
-    topP: config.topP,
+    messages: buildOpenRouterMessages(conversation, settings),
+    temperature: settings.temperature,
+    maxTokens: settings.maxTokens,
+    topP: settings.topP,
   })
+}
+
+async function* generateAssistantStream(
+  conversation: Conversation,
+  settings: SessionSettings
+): AsyncIterable<string> {
+  const config = MODEL_ROUTE_CONFIGS[conversation.mode]
+  const latestPrompt =
+    [...conversation.messages].reverse().find((message) => message.role === 'user')
+      ?.content ?? 'the user request'
+
+  if (!hasOpenRouterConfig()) {
+    for await (const chunk of streamText(buildMockResponse(conversation.mode, latestPrompt), 16)) {
+      yield chunk
+    }
+    return
+  }
+
+  const stream = streamOpenRouterTextResponse({
+    model: config.model,
+    messages: buildOpenRouterMessages(conversation, settings),
+    temperature: settings.temperature,
+    maxTokens: settings.maxTokens,
+    topP: settings.topP,
+  })
+
+  for await (const chunk of stream) {
+    yield chunk
+  }
 }
 
 function assertContent(content: string | undefined, action: ChatAction): string {
@@ -219,6 +286,7 @@ function applySend(
     role: 'user',
     content,
     mode: payload.mode,
+    attachments: payload.attachments,
   })
 
   return {
@@ -358,11 +426,23 @@ export async function completeConversationWithAssistant(
   assistantMessage: Message,
   content: string
 ): Promise<Conversation> {
+  const promptText = buildOpenRouterMessages(
+    conversation,
+    conversation.sessionSettings
+  )
+    .map((message) => message.content)
+    .join('\n\n')
+  const usage = estimateUsage({
+    mode: conversation.mode,
+    promptText,
+    completionText: content,
+  })
   const finalAssistant = {
     ...assistantMessage,
     content,
     status: 'complete' as const,
     error: undefined,
+    usage,
   }
 
   return updateConversationSnapshot(conversation, {
@@ -382,10 +462,9 @@ export async function* streamConversationReply(
     message: assistantPlaceholder,
   }
 
-  const fullContent = await generateAssistantText(conversation, payload.settings)
   let accumulated = ''
 
-  for await (const chunk of streamText(fullContent, 16)) {
+  for await (const chunk of generateAssistantStream(conversation, payload.settings)) {
     accumulated += chunk
 
     yield {
@@ -409,7 +488,9 @@ export async function* streamConversationReply(
       ...assistantPlaceholder,
       content: accumulated || 'No response returned.',
       status: 'complete',
+      usage: savedConversation.messages.at(-1)?.usage,
     },
+    usage: savedConversation.messages.at(-1)?.usage,
   }
 }
 
@@ -419,8 +500,11 @@ export function resolveSessionSettings(
   fallback: SessionSettings
 ): SessionSettings {
   return {
-    temperature: MODEL_ROUTE_CONFIGS[mode].temperature,
-    maxTokens: MODEL_ROUTE_CONFIGS[mode].maxTokens,
+    temperature:
+      provided?.temperature ?? fallback.temperature ?? MODEL_ROUTE_CONFIGS[mode].temperature,
+    maxTokens:
+      provided?.maxTokens ?? fallback.maxTokens ?? MODEL_ROUTE_CONFIGS[mode].maxTokens,
+    topP: provided?.topP ?? fallback.topP ?? MODEL_ROUTE_CONFIGS[mode].topP,
     webSearch: provided?.webSearch ?? fallback.webSearch,
     memory: provided?.memory ?? fallback.memory,
     fileContext: provided?.fileContext ?? fallback.fileContext,

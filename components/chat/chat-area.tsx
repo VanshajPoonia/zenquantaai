@@ -42,9 +42,12 @@ export function ChatArea() {
     [currentChat?.messages]
   )
 
-  const handleSendMessage = async (content: string) => {
+  const handleSendMessage = async (input: {
+    content: string
+    attachments?: Parameters<typeof sendMessage>[0]['attachments']
+  }) => {
     setSelectedPrompt('')
-    await sendMessage(content)
+    await sendMessage(input)
   }
 
   const showEmptyState = !currentChat || currentChat.messages.length === 0

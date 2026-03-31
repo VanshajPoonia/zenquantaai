@@ -1,6 +1,8 @@
 import { SEEDED_CONVERSATIONS } from '@/data/seed/conversations'
 import { SEEDED_APP_SETTINGS } from '@/data/seed/settings'
 import { AppSettings, Conversation } from '@/types'
+import { createSessionSettings, DEFAULT_APP_SETTINGS } from '@/lib/config'
+import { updateConversationSnapshot } from '@/lib/utils/chat'
 
 const CONVERSATIONS_KEY = 'zenquanta:conversations:v1'
 const SETTINGS_KEY = 'zenquanta:settings:v1'
@@ -31,8 +33,48 @@ function writeJson<T>(key: string, value: T): void {
   window.localStorage.setItem(key, JSON.stringify(value))
 }
 
+function normalizeAppSettings(input: AppSettings | null): AppSettings | null {
+  if (!input) return null
+
+  const defaultMode = input.defaultMode ?? DEFAULT_APP_SETTINGS.defaultMode
+
+  return {
+    ...DEFAULT_APP_SETTINGS,
+    ...input,
+    defaultMode,
+    sessionDefaults: createSessionSettings(defaultMode, {
+      temperature: input.sessionDefaults?.temperature,
+      maxTokens: input.sessionDefaults?.maxTokens,
+      topP: input.sessionDefaults?.topP,
+      webSearch: input.sessionDefaults?.webSearch,
+      memory: input.sessionDefaults?.memory,
+      fileContext: input.sessionDefaults?.fileContext,
+    }),
+  }
+}
+
+function normalizeConversation(conversation: Conversation): Conversation {
+  return updateConversationSnapshot({
+    ...conversation,
+    sessionSettings: createSessionSettings(conversation.mode, {
+      temperature: conversation.sessionSettings?.temperature,
+      maxTokens: conversation.sessionSettings?.maxTokens,
+      topP: conversation.sessionSettings?.topP,
+      webSearch: conversation.sessionSettings?.webSearch,
+      memory: conversation.sessionSettings?.memory,
+      fileContext: conversation.sessionSettings?.fileContext,
+    }),
+    attachments: conversation.attachments ?? [],
+    messages: conversation.messages.map((message) => ({
+      ...message,
+      attachments: message.attachments ?? [],
+    })),
+  })
+}
+
 export function readBrowserConversations(): Conversation[] | null {
-  return readJson<Conversation[]>(CONVERSATIONS_KEY)
+  const conversations = readJson<Conversation[]>(CONVERSATIONS_KEY)
+  return conversations?.map(normalizeConversation) ?? null
 }
 
 export function writeBrowserConversations(conversations: Conversation[]): void {
@@ -44,7 +86,7 @@ export function getSeededBrowserConversations(): Conversation[] {
 }
 
 export function readBrowserAppSettings(): AppSettings | null {
-  return readJson<AppSettings>(SETTINGS_KEY)
+  return normalizeAppSettings(readJson<AppSettings>(SETTINGS_KEY))
 }
 
 export function writeBrowserAppSettings(settings: AppSettings): void {

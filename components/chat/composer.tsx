@@ -3,7 +3,8 @@
 import { useState, useRef, useEffect } from 'react'
 import { cn } from '@/lib/utils'
 import { useChatContext } from '@/lib/chat-context'
-import { MODE_CONFIGS } from '@/lib/types'
+import { Attachment, MODE_CONFIGS, PendingAttachment } from '@/lib/types'
+import { createPendingAttachment, serializeAttachment } from '@/lib/utils/files'
 import { getModeAccentClass, getModeGlow } from '@/lib/mode-utils'
 import { Button } from '@/components/ui/button'
 import {
@@ -12,11 +13,10 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
-import { SendIcon, StopIcon, PaperclipIcon } from '@/components/icons'
+import { SendIcon, StopIcon, PaperclipIcon, XIcon } from '@/components/icons'
 import { ModeSwitcherCompact } from './mode-switcher'
-
 interface ComposerProps {
-  onSend: (content: string) => void
+  onSend: (input: { content: string; attachments?: Attachment[] }) => void
   disabled?: boolean
   initialValue?: string
 }
@@ -24,7 +24,9 @@ interface ComposerProps {
 export function Composer({ onSend, disabled, initialValue = '' }: ComposerProps) {
   const { currentMode, isStreaming, stopStreaming } = useChatContext()
   const [value, setValue] = useState(initialValue)
+  const [pendingAttachments, setPendingAttachments] = useState<PendingAttachment[]>([])
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   const modeConfig = MODE_CONFIGS[currentMode]
 
@@ -46,9 +48,19 @@ export function Composer({ onSend, disabled, initialValue = '' }: ComposerProps)
   }, [value])
 
   const handleSubmit = () => {
-    if (!value.trim() || disabled || isStreaming) return
-    onSend(value.trim())
+    if ((!value.trim() && pendingAttachments.length === 0) || disabled || isStreaming) return
+    const normalizedContent =
+      value.trim() ||
+      `Review these files and help me with them: ${pendingAttachments
+        .map((attachment) => attachment.name)
+        .join(', ')}.`
+
+    onSend({
+      content: normalizedContent,
+      attachments: pendingAttachments.map(serializeAttachment),
+    })
     setValue('')
+    setPendingAttachments([])
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto'
     }
@@ -65,8 +77,21 @@ export function Composer({ onSend, disabled, initialValue = '' }: ComposerProps)
     stopStreaming()
   }
 
+  const handleOpenFilePicker = () => {
+    fileInputRef.current?.click()
+  }
+
+  const handleFilesSelected = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(event.target.files ?? [])
+    if (files.length === 0) return
+
+    const nextAttachments = await Promise.all(files.map(createPendingAttachment))
+    setPendingAttachments((previous) => [...previous, ...nextAttachments])
+    event.target.value = ''
+  }
+
   return (
-    <div className="border-t border-border bg-background/80 backdrop-blur-sm p-4">
+    <div className="sticky bottom-0 z-20 border-t border-border bg-gradient-to-t from-background via-background/95 to-background/70 backdrop-blur-xl px-4 pb-4 pt-6">
       <div className="max-w-4xl mx-auto">
         <div
           className={cn(
@@ -77,6 +102,47 @@ export function Composer({ onSend, disabled, initialValue = '' }: ComposerProps)
             getModeAccentClass(currentMode, 'border').replace('border-', 'focus-within:border-') + '/50'
           )}
         >
+          <input
+            ref={fileInputRef}
+            type="file"
+            multiple
+            accept="image/*,.pdf,.txt,.md,.mdx,.json,.csv,.xml,.yaml,.yml,.ts,.tsx,.js,.jsx,.css,.scss,.html,.py,.go,.java,.rb,.rs,.sql"
+            className="hidden"
+            onChange={handleFilesSelected}
+          />
+
+          {pendingAttachments.length > 0 && (
+            <div className="flex flex-wrap gap-2 px-4 pt-4">
+              {pendingAttachments.map((attachment) => (
+                <div
+                  key={attachment.id}
+                  className="group flex max-w-full items-center gap-2 rounded-xl border border-border/60 bg-background/70 px-3 py-2 text-sm"
+                >
+                  <div className="min-w-0">
+                    <p className="truncate text-foreground">{attachment.name}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {attachment.kind}
+                      {attachment.isExtracted ? ' • text ready' : ''}
+                    </p>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    className="size-6 shrink-0"
+                    onClick={() =>
+                      setPendingAttachments((previous) =>
+                        previous.filter((item) => item.id !== attachment.id)
+                      )
+                    }
+                  >
+                    <XIcon className="size-3" />
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
+
           {/* Textarea */}
           <textarea
             ref={textareaRef}
@@ -106,11 +172,12 @@ export function Composer({ onSend, disabled, initialValue = '' }: ComposerProps)
                       size="icon-sm"
                       className="text-muted-foreground hover:text-foreground"
                       disabled={disabled || isStreaming}
+                      onClick={handleOpenFilePicker}
                     >
                       <PaperclipIcon className="size-4" />
                     </Button>
                   </TooltipTrigger>
-                  <TooltipContent>Attach file</TooltipContent>
+                  <TooltipContent>Attach files, PDFs, or images</TooltipContent>
                 </Tooltip>
               </TooltipProvider>
             </div>
@@ -128,7 +195,7 @@ export function Composer({ onSend, disabled, initialValue = '' }: ComposerProps)
               ) : (
                 <Button
                   onClick={handleSubmit}
-                  disabled={!value.trim() || disabled}
+                  disabled={(!value.trim() && pendingAttachments.length === 0) || disabled}
                   className={cn(
                     'transition-all duration-300 text-white disabled:opacity-50',
                     getModeAccentClass(currentMode, 'bg'),

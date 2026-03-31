@@ -14,9 +14,9 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: 'Zenquanta AI | Premium Multi-Model Chat',
-  description: 'A premium 3-model AI chat system combining creative writing, logical reasoning, and code assistance in one unified interface.',
+  description: 'A premium AI chat workspace for general assistance, creative writing, structured reasoning, and coding in one unified interface.',
   generator: 'v0.app',
-  keywords: ['AI', 'chat', 'Qwen', 'DeepSeek', 'creative writing', 'code assistant'],
+  keywords: ['AI', 'chat', 'general assistant', 'creative writing', 'reasoning', 'code assistant'],
   authors: [{ name: 'Zenquanta' }],
   icons: {
     icon: [

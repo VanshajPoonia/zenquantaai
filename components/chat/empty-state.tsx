@@ -63,13 +63,14 @@ export function EmptyState({ onPromptSelect }: EmptyStateProps) {
   const modeConfig = MODE_CONFIGS[currentMode]
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-[70vh] px-4 py-12">
+    <div className="flex min-h-full flex-col items-center justify-center px-4 py-8 md:py-10">
       {/* Animated background glow */}
       <div
         className={cn(
           'absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2',
           'w-[600px] h-[400px] rounded-full blur-[120px] opacity-20',
           'transition-all duration-700 pointer-events-none',
+          currentMode === 'general' && 'bg-general',
           currentMode === 'creative' && 'bg-creative',
           currentMode === 'logic' && 'bg-logic',
           currentMode === 'code' && 'bg-code'

@@ -31,6 +31,19 @@ type OpenRouterCreateChatCompletionResponse = {
   }
 }
 
+type OpenRouterStreamChunk = {
+  choices?: Array<{
+    delta?: {
+      content?:
+        | string
+        | Array<{
+            type?: string
+            text?: string
+          }>
+    }
+  }>
+}
+
 type OpenRouterContent =
   | string
   | Array<{
@@ -113,6 +126,34 @@ export const openRouterClient = {
   },
 }
 
+async function* parseSseLines(stream: ReadableStream<Uint8Array>) {
+  const reader = stream.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ''
+
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) break
+
+    buffer += decoder.decode(value, { stream: true })
+    const chunks = buffer.split('\n\n')
+    buffer = chunks.pop() ?? ''
+
+    for (const chunk of chunks) {
+      const dataLines = chunk
+        .split('\n')
+        .map((line) => line.trim())
+        .filter((line) => line.startsWith('data: '))
+
+      for (const line of dataLines) {
+        const payload = line.slice(6).trim()
+        if (!payload || payload === '[DONE]') continue
+        yield payload
+      }
+    }
+  }
+}
+
 export async function createOpenRouterTextResponse(input: {
   model: string
   messages: OpenRouterMessage[]
@@ -142,4 +183,61 @@ export async function createOpenRouterTextResponse(input: {
   }
 
   return content
+}
+
+export async function* streamOpenRouterTextResponse(input: {
+  model: string
+  messages: OpenRouterMessage[]
+  temperature?: number
+  maxTokens?: number
+  topP?: number
+}): AsyncIterable<string> {
+  const runtimeConfig = getOpenRouterRuntimeConfig()
+
+  if (!runtimeConfig.apiKey) {
+    throw new Error('OPENROUTER_API_KEY is not configured.')
+  }
+
+  const response = await fetch(`${runtimeConfig.baseUrl}/chat/completions`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${runtimeConfig.apiKey}`,
+      'HTTP-Referer': 'http://localhost:3000',
+      'X-Title': 'Zenquanta AI',
+    },
+    body: JSON.stringify({
+      model: input.model,
+      messages: input.messages,
+      ...(typeof input.temperature === 'number'
+        ? { temperature: input.temperature }
+        : {}),
+      ...(typeof input.maxTokens === 'number'
+        ? { max_tokens: input.maxTokens }
+        : {}),
+      ...(typeof input.topP === 'number'
+        ? { top_p: input.topP }
+        : {}),
+      stream: true,
+    }),
+  })
+
+  if (!response.ok || !response.body) {
+    const data = (await response.json().catch(() => null)) as
+      | OpenRouterCreateChatCompletionResponse
+      | null
+
+    throw new Error(
+      data?.error?.message ??
+        `OpenRouter streaming request failed with status ${response.status}.`
+    )
+  }
+
+  for await (const payload of parseSseLines(response.body)) {
+    const parsed = JSON.parse(payload) as OpenRouterStreamChunk
+    const content = extractContent(parsed.choices?.[0]?.delta?.content)
+    if (content) {
+      yield content
+    }
+  }
 }

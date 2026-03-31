@@ -32,6 +32,15 @@ function normalizeSettings(input: Partial<AppSettings>): AppSettings {
     defaultMode,
     responseStyle: input.responseStyle ?? DEFAULT_APP_SETTINGS.responseStyle,
     sessionDefaults: createSessionSettings(defaultMode, {
+      temperature:
+        input.sessionDefaults?.temperature ??
+        DEFAULT_APP_SETTINGS.sessionDefaults.temperature,
+      maxTokens:
+        input.sessionDefaults?.maxTokens ??
+        DEFAULT_APP_SETTINGS.sessionDefaults.maxTokens,
+      topP:
+        input.sessionDefaults?.topP ??
+        DEFAULT_APP_SETTINGS.sessionDefaults.topP,
       webSearch:
         input.sessionDefaults?.webSearch ??
         DEFAULT_APP_SETTINGS.sessionDefaults.webSearch,

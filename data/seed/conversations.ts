@@ -14,6 +14,51 @@ function seedConversation(conversation: Conversation): Conversation {
 export const SEEDED_CONVERSATIONS: Conversation[] = [
   seedConversation(
     createConversation({
+      mode: 'general',
+      title: 'Kyoto trip plan',
+      sessionSettings: createSessionSettings('general'),
+      createdAt: hoursAgo(18),
+      updatedAt: hoursAgo(3),
+      isPinned: false,
+      messages: [
+        createMessage({
+          role: 'user',
+          content:
+            'Plan a relaxed 3-day Kyoto itinerary with great food, neighborhood walks, and a mix of famous and quieter spots.',
+          mode: 'general',
+          createdAt: hoursAgo(4),
+        }),
+        createMessage({
+          role: 'assistant',
+          content: `# 3-Day Kyoto Plan
+
+## Day 1: Ease Into Higashiyama
+- Start early at Kiyomizu-dera before the busiest hours.
+- Walk down Sannenzaka and Ninenzaka with coffee and light shopping.
+- Have lunch around Gion, then spend the afternoon in Maruyama Park and Yasaka Shrine.
+- Finish with a calm evening meal in Pontocho.
+
+## Day 2: Arashiyama Without Rushing
+- Visit the bamboo grove early, then cross to Tenryu-ji.
+- Slow down with a riverside walk and lunch nearby.
+- In the afternoon, choose either Okochi Sanso Garden or a scenic train ride for a quieter finish.
+
+## Day 3: Markets, Temples, and Neighborhood Time
+- Start at Nishiki Market for casual bites.
+- Head to Nanzen-ji and the Philosopher's Path for a slower stretch.
+- Keep the evening flexible for a final dinner in your favorite area.
+
+If you want, I can turn this into a map-friendly schedule with train tips and restaurant picks next.`,
+          mode: 'general',
+          model: 'openai/gpt-4.1-mini',
+          provider: 'openrouter',
+          createdAt: hoursAgo(3),
+        }),
+      ],
+    })
+  ),
+  seedConversation(
+    createConversation({
       mode: 'creative',
       title: 'Brand campaign for a premium journaling app',
       sessionSettings: createSessionSettings('creative'),

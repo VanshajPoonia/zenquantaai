@@ -23,6 +23,14 @@ export function ModeIcon({
   const iconClass = cn(sizeClasses[size], className)
 
   switch (mode) {
+    case 'general':
+      return (
+        <svg className={iconClass} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M12 4.5C8.134 4.5 5 7.41 5 11s3.134 6.5 7 6.5c.58 0 1.144-.065 1.684-.188L18.5 19l-1.31-4.25C18.31 13.68 19 12.39 19 11c0-3.59-3.134-6.5-7-6.5Z" />
+          <path d="M9 10h6" />
+          <path d="M9 13h4" />
+        </svg>
+      )
     case 'creative':
       return (
         <svg className={iconClass} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
@@ -56,6 +64,12 @@ export function ModeIcon({
 // Mode background/accent classes
 export function getModeAccentClass(mode: AIMode, type: 'bg' | 'text' | 'border' | 'ring' = 'bg') {
   const classes = {
+    general: {
+      bg: 'bg-general',
+      text: 'text-general',
+      border: 'border-general',
+      ring: 'ring-general',
+    },
     creative: {
       bg: 'bg-creative',
       text: 'text-creative',
@@ -83,6 +97,11 @@ export function getModeTintClass(
   intensity: 'subtle' | 'soft' | 'strong' = 'soft'
 ) {
   const classes = {
+    general: {
+      subtle: 'bg-general/10',
+      soft: 'bg-general/15',
+      strong: 'bg-general/20',
+    },
     creative: {
       subtle: 'bg-creative/10',
       soft: 'bg-creative/15',
@@ -106,6 +125,8 @@ export function getModeTintClass(
 // Mode gradient backgrounds for premium feel
 export function getModeGradient(mode: AIMode) {
   switch (mode) {
+    case 'general':
+      return 'bg-gradient-to-br from-general/20 via-general/5 to-transparent'
     case 'creative':
       return 'bg-gradient-to-br from-creative/20 via-creative/5 to-transparent'
     case 'logic':
@@ -118,6 +139,8 @@ export function getModeGradient(mode: AIMode) {
 // Mode glow effect
 export function getModeGlow(mode: AIMode) {
   switch (mode) {
+    case 'general':
+      return 'shadow-[0_0_30px_-5px] shadow-general/30'
     case 'creative':
       return 'shadow-[0_0_30px_-5px] shadow-creative/30'
     case 'logic':

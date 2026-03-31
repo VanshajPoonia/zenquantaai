@@ -33,18 +33,26 @@ function migrateConversation(conversation: Conversation): Conversation {
   return updateConversationSnapshot({
     ...conversation,
     sessionSettings: createSessionSettings(conversation.mode, {
+      temperature: conversation.sessionSettings?.temperature,
+      maxTokens: conversation.sessionSettings?.maxTokens,
+      topP: conversation.sessionSettings?.topP,
       webSearch: conversation.sessionSettings?.webSearch ?? false,
       memory: conversation.sessionSettings?.memory ?? true,
       fileContext: conversation.sessionSettings?.fileContext ?? false,
     }),
+    attachments: conversation.attachments ?? [],
     messages: conversation.messages.map((message) =>
       message.role === 'assistant'
         ? {
             ...message,
             model: modelConfig.model,
             provider: 'openrouter',
+            attachments: message.attachments ?? [],
           }
-        : message
+        : {
+            ...message,
+            attachments: message.attachments ?? [],
+          }
     ),
   })
 }

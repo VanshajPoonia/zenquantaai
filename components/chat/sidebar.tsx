@@ -188,6 +188,7 @@ function EmptyChatState({ hasSearch }: { hasSearch: boolean }) {
 
 export function Sidebar({ onOpenSettings }: SidebarProps) {
   const {
+    conversations,
     chats,
     currentChat,
     setCurrentChat,
@@ -202,12 +203,30 @@ export function Sidebar({ onOpenSettings }: SidebarProps) {
   const filteredChats = useMemo(() => {
     if (!searchQuery.trim()) return chats
     const query = searchQuery.toLowerCase()
-    return chats.filter(
-      (chat) =>
-        chat.title.toLowerCase().includes(query) ||
-        chat.preview.toLowerCase().includes(query)
+    const matchingIds = new Set(
+      conversations
+        .filter((conversation) => {
+          const messageText = conversation.messages
+            .map((message) => message.content)
+            .join(' ')
+            .toLowerCase()
+          const attachmentNames = (conversation.attachments ?? [])
+            .map((attachment) => attachment.name)
+            .join(' ')
+            .toLowerCase()
+
+          return (
+            conversation.title.toLowerCase().includes(query) ||
+            conversation.preview.toLowerCase().includes(query) ||
+            messageText.includes(query) ||
+            attachmentNames.includes(query)
+          )
+        })
+        .map((conversation) => conversation.id)
     )
-  }, [chats, searchQuery])
+
+    return chats.filter((chat) => matchingIds.has(chat.id))
+  }, [chats, conversations, searchQuery])
 
   const pinnedChats = useMemo(
     () => filteredChats.filter((c) => c.isPinned),

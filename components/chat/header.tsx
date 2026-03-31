@@ -35,6 +35,8 @@ interface HeaderProps {
 export function Header({ onOpenSettings }: HeaderProps) {
   const {
     currentMode,
+    currentChat,
+    exportCurrentChat,
     toggleSidebar,
     isSidebarOpen,
     isSettingsPanelOpen,
@@ -120,17 +122,23 @@ export function Header({ onOpenSettings }: HeaderProps) {
               <ShareIcon className="size-4" />
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-48">
-            <DropdownMenuItem>
+            <DropdownMenuContent align="end" className="w-48">
+            <DropdownMenuItem disabled={!currentChat}>
               <ShareIcon className="size-4 mr-2" />
               Share Chat
             </DropdownMenuItem>
-            <DropdownMenuItem>
+            <DropdownMenuItem
+              disabled={!currentChat}
+              onClick={() => exportCurrentChat('markdown')}
+            >
               <DownloadIcon className="size-4 mr-2" />
               Export as Markdown
             </DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem>
+            <DropdownMenuItem
+              disabled={!currentChat}
+              onClick={() => exportCurrentChat('json')}
+            >
               <DownloadIcon className="size-4 mr-2" />
               Export as JSON
             </DropdownMenuItem>

@@ -260,6 +260,40 @@ function CodeBlock({ code, language }: { code: string; language: string }) {
   )
 }
 
+function AttachmentList({ message }: { message: Message }) {
+  if (!message.attachments || message.attachments.length === 0) return null
+
+  return (
+    <div className="mt-3 space-y-2">
+      {message.attachments.map((attachment) => (
+        <div
+          key={attachment.id}
+          className="rounded-xl border border-border/60 bg-background/50 px-3 py-2"
+        >
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <p className="truncate text-sm font-medium text-foreground">
+                {attachment.name}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                {attachment.kind}
+                {attachment.isExtracted ? ' • text extracted' : ''}
+              </p>
+            </div>
+            {attachment.previewUrl ? (
+              <img
+                src={attachment.previewUrl}
+                alt={attachment.name}
+                className="size-12 rounded-lg object-cover"
+              />
+            ) : null}
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 export function ChatMessage({
   message,
   onRegenerate,
@@ -322,9 +356,14 @@ export function ChatMessage({
                   </div>
                 </div>
               ) : (
-                <p className="text-sm leading-relaxed whitespace-pre-wrap">
-                  {message.content}
-                </p>
+                <div>
+                  {!!message.content && (
+                    <p className="text-sm leading-relaxed whitespace-pre-wrap">
+                      {message.content}
+                    </p>
+                  )}
+                  <AttachmentList message={message} />
+                </div>
               )}
             </div>
             <div className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
@@ -452,6 +491,11 @@ export function ChatMessage({
                   ? 'Needs retry'
                   : formatMessageTime(message.createdAt)}
             </span>
+            {message.usage && (
+              <span className="rounded-full border border-border/60 px-2 py-0.5 text-[11px] text-muted-foreground">
+                ${message.usage.estimatedCostUsd.toFixed(4)}
+              </span>
+            )}
           </div>
 
           {message.error && (

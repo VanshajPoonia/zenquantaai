@@ -25,6 +25,8 @@
   --ring: oklch(0.5 0.15 280);
   
   /* Mode-specific accent colors */
+  --general: oklch(0.76 0.14 190);
+  --general-foreground: oklch(0.98 0 0);
   --creative: oklch(0.7 0.18 330);
   --creative-foreground: oklch(0.98 0 0);
   --logic: oklch(0.65 0.2 250);
@@ -71,6 +73,8 @@
   --input: oklch(0.2 0.005 260);
   --ring: oklch(0.5 0.15 280);
   
+  --general: oklch(0.76 0.14 190);
+  --general-foreground: oklch(0.98 0 0);
   --creative: oklch(0.7 0.18 330);
   --creative-foreground: oklch(0.98 0 0);
   --logic: oklch(0.65 0.2 250);
@@ -110,6 +114,8 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
+  --color-general: var(--general);
+  --color-general-foreground: var(--general-foreground);
   --color-creative: var(--creative);
   --color-creative-foreground: var(--creative-foreground);
   --color-logic: var(--logic);
@@ -177,6 +183,10 @@
 /* Premium glow effects */
 .glow-creative {
   box-shadow: 0 0 40px -10px oklch(0.7 0.18 330 / 0.4);
+}
+
+.glow-general {
+  box-shadow: 0 0 40px -10px oklch(0.76 0.14 190 / 0.4);
 }
 
 .glow-logic {

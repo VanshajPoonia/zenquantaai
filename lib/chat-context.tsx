@@ -15,6 +15,7 @@ import {
   APISettings,
   AppSettings,
   AppSettingsPatch,
+  Attachment,
   Chat,
   ChatAction,
   ChatRequest,
@@ -39,24 +40,34 @@ import {
   createConversation,
   createMessage,
   getLastAssistantMessage,
+  sortConversationSummaries,
   toConversationSummary,
   updateConversationSnapshot,
 } from '@/lib/utils/chat'
 import { readNdjsonStream } from '@/lib/utils/stream'
+import { conversationToJson, conversationToMarkdown, downloadTextFile } from '@/lib/utils/export'
+import { toAttachmentContext } from '@/lib/utils/files'
+
+interface SendMessageInput {
+  content: string
+  attachments?: Attachment[]
+}
 
 interface ChatContextType {
   currentMode: AIMode
   setCurrentMode: (mode: AIMode) => void
+  conversations: Conversation[]
   chats: ConversationSummary[]
   currentChat: Chat | null
   setCurrentChat: (chat: ConversationSummary | Conversation | null) => void
   createNewChat: () => Promise<void>
   deleteChat: (chatId: string) => Promise<void>
   togglePinChat: (chatId: string) => Promise<void>
-  sendMessage: (content: string) => Promise<void>
+  sendMessage: (input: SendMessageInput) => Promise<void>
   regenerateLastResponse: () => Promise<void>
   retryLastMessage: () => Promise<void>
   editLastUserMessage: (content: string, targetMessageId?: string) => Promise<void>
+  exportCurrentChat: (format: 'markdown' | 'json') => void
   isStreaming: boolean
   stopStreaming: () => void
   streamingState: StreamingState
@@ -81,55 +92,14 @@ function normalizeModeSessionSettings(
   mode: AIMode,
   settings: SessionSettings
 ): SessionSettings {
-  return createSessionSettings(mode, {
-    webSearch: settings.webSearch,
-    memory: settings.memory,
-    fileContext: settings.fileContext,
-  })
+  return createSessionSettings(mode, settings)
 }
 
 function normalizeAppSettingsState(input: AppSettings): AppSettings {
   return {
     ...input,
-    sessionDefaults: createSessionSettings(input.defaultMode, {
-      webSearch: input.sessionDefaults.webSearch,
-      memory: input.sessionDefaults.memory,
-      fileContext: input.sessionDefaults.fileContext,
-    }),
+    sessionDefaults: createSessionSettings(input.defaultMode, input.sessionDefaults),
   }
-}
-
-function readLocalConversations(): Conversation[] {
-  return readBrowserConversations() ?? getSeededBrowserConversations()
-}
-
-function readLocalSettings(): AppSettings {
-  return normalizeAppSettingsState(
-    readBrowserAppSettings() ?? getSeededBrowserAppSettings()
-  )
-}
-
-function writeLocalConversations(conversations: Conversation[]): void {
-  writeBrowserConversations(conversations)
-}
-
-function writeLocalSettings(settings: AppSettings): void {
-  writeBrowserAppSettings(normalizeAppSettingsState(settings))
-}
-
-function upsertConversation(
-  conversations: Conversation[],
-  conversation: Conversation
-): Conversation[] {
-  const next = [conversation, ...conversations.filter((item) => item.id !== conversation.id)]
-
-  return next.sort((a, b) => {
-    if (a.isPinned !== b.isPinned) {
-      return a.isPinned ? -1 : 1
-    }
-
-    return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
-  })
 }
 
 function sortConversationList(conversations: Conversation[]): Conversation[] {
@@ -142,16 +112,44 @@ function sortConversationList(conversations: Conversation[]): Conversation[] {
   })
 }
 
-function sortConversationSummaries(
-  summaries: ConversationSummary[]
-): ConversationSummary[] {
-  return [...summaries].sort((a, b) => {
-    if (a.isPinned !== b.isPinned) {
-      return a.isPinned ? -1 : 1
-    }
+function readLocalConversations(): Conversation[] {
+  return sortConversationList(
+    readBrowserConversations() ?? getSeededBrowserConversations()
+  )
+}
 
-    return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+function readLocalSettings(): AppSettings {
+  return normalizeAppSettingsState(
+    readBrowserAppSettings() ?? getSeededBrowserAppSettings()
+  )
+}
+
+function writeLocalConversations(conversations: Conversation[]): void {
+  writeBrowserConversations(sortConversationList(conversations))
+}
+
+function writeLocalSettings(settings: AppSettings): void {
+  writeBrowserAppSettings(normalizeAppSettingsState(settings))
+}
+
+async function fetchJson<T>(input: RequestInfo, init?: RequestInit): Promise<T> {
+  const response = await fetch(input, {
+    ...init,
+    headers: {
+      'Content-Type': 'application/json',
+      ...(init?.headers ?? {}),
+    },
   })
+
+  if (!response.ok) {
+    const body = (await response.json().catch(() => null)) as
+      | { error?: string }
+      | null
+
+    throw new Error(body?.error ?? `Request failed with ${response.status}`)
+  }
+
+  return (await response.json()) as T
 }
 
 async function hydrateServerConversations(): Promise<Conversation[] | null> {
@@ -182,46 +180,11 @@ async function hydrateServerSettings(): Promise<AppSettings | null> {
   }
 }
 
-async function fetchJson<T>(input: RequestInfo, init?: RequestInit): Promise<T> {
-  const response = await fetch(input, {
-    ...init,
-    headers: {
-      'Content-Type': 'application/json',
-      ...(init?.headers ?? {}),
-    },
-  })
-
-  if (!response.ok) {
-    const body = (await response.json().catch(() => null)) as
-      | { error?: string }
-      | null
-
-    throw new Error(body?.error ?? `Request failed with ${response.status}`)
-  }
-
-  return (await response.json()) as T
-}
-
-function upsertSummary(
-  current: ConversationSummary[],
-  summary: ConversationSummary
-): ConversationSummary[] {
-  const next = [summary, ...current.filter((item) => item.id !== summary.id)]
-
-  return next.sort((a, b) => {
-    if (a.isPinned !== b.isPinned) {
-      return a.isPinned ? -1 : 1
-    }
-
-    return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
-  })
-}
-
 export function ChatProvider({ children }: { children: ReactNode }) {
   const [currentMode, setCurrentModeState] = useState<AIMode>(
     DEFAULT_APP_SETTINGS.defaultMode
   )
-  const [chats, setChats] = useState<ConversationSummary[]>([])
+  const [conversations, setConversations] = useState<Conversation[]>([])
   const [currentChat, setCurrentChatState] = useState<Conversation | null>(null)
   const [appSettings, setAppSettings] = useState<AppSettings>(DEFAULT_APP_SETTINGS)
   const [draftSessionSettings, setDraftSessionSettings] = useState<SessionSettings>(
@@ -234,8 +197,23 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const [isSettingsPanelOpen, setIsSettingsPanelOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const streamAbortRef = useRef<AbortController | null>(null)
+  const conversationsRef = useRef<Conversation[]>([])
+  const currentChatRef = useRef<Conversation | null>(null)
+
+  const chats = useMemo(
+    () => sortConversationSummaries(conversations.map(toConversationSummary)),
+    [conversations]
+  )
 
   const isStreaming = streamingState.status === 'streaming'
+
+  useEffect(() => {
+    conversationsRef.current = conversations
+  }, [conversations])
+
+  useEffect(() => {
+    currentChatRef.current = currentChat
+  }, [currentChat])
 
   const sessionSettings = normalizeModeSessionSettings(
     currentChat?.mode ?? currentMode,
@@ -248,34 +226,66 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       ? 'Ready'
       : 'Idle'
 
-  const persistCurrentChat = useCallback((conversation: Conversation | null) => {
-    setCurrentChatState(conversation)
+  const commitState = useCallback(
+    (nextConversations: Conversation[], nextCurrentChat: Conversation | null) => {
+      const sorted = sortConversationList(nextConversations)
+      conversationsRef.current = sorted
+      currentChatRef.current = nextCurrentChat
+      setConversations(sorted)
+      writeLocalConversations(sorted)
+      setCurrentChatState(nextCurrentChat)
+      writeBrowserCurrentChatId(nextCurrentChat?.id ?? null)
 
-    if (!conversation) {
-      writeBrowserCurrentChatId(null)
-      return
-    }
-
-    const nextConversations = upsertConversation(readLocalConversations(), conversation)
-    writeLocalConversations(nextConversations)
-    writeBrowserCurrentChatId(conversation.id)
-    setChats(sortConversationSummaries(nextConversations.map(toConversationSummary)))
-  }, [])
-
-  const loadChat = useCallback(
-    async (chatId: string) => {
-      const conversation = readLocalConversations().find((item) => item.id === chatId)
-      if (!conversation) {
-        setCurrentChatState(null)
-        writeBrowserCurrentChatId(null)
-        return
+      if (nextCurrentChat) {
+        setCurrentModeState(nextCurrentChat.mode)
       }
-
-      setCurrentModeState(conversation.mode)
-      setCurrentChatState(conversation)
-      writeBrowserCurrentChatId(conversation.id)
     },
     []
+  )
+
+  const upsertConversation = useCallback(
+    (conversation: Conversation, makeCurrent = true) => {
+      const nextConversations = [
+        conversation,
+        ...conversationsRef.current.filter((item) => item.id !== conversation.id),
+      ]
+
+      commitState(
+        nextConversations,
+        makeCurrent ? conversation : currentChatRef.current
+      )
+    },
+    [commitState]
+  )
+
+  const applyConversationPatch = useCallback(
+    (
+      conversationId: string,
+      updater: (conversation: Conversation) => Conversation
+    ): Conversation | null => {
+      let updatedConversation: Conversation | null = null
+
+      const nextConversations = conversationsRef.current.map((conversation) => {
+        if (conversation.id !== conversationId) {
+          return conversation
+        }
+
+        updatedConversation = updater(conversation)
+        return updatedConversation
+      })
+
+      if (!updatedConversation) return null
+
+      commitState(
+        nextConversations,
+        currentChatRef.current?.id === conversationId
+          ? updatedConversation
+          : currentChatRef.current
+      )
+
+      return updatedConversation
+    },
+    [commitState]
   )
 
   const loadBootData = useCallback(async () => {
@@ -285,25 +295,23 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       normalizeAppSettingsState(
         storedSettings ?? (await hydrateServerSettings()) ?? getSeededBrowserAppSettings()
       )
-    const conversations = sortConversationList(
+    const nextConversations = sortConversationList(
       storedConversations ??
         (await hydrateServerConversations()) ??
         getSeededBrowserConversations()
     )
     const currentChatId = readBrowserCurrentChatId()
     const activeConversation =
-      conversations.find((conversation) => conversation.id === currentChatId) ?? null
+      nextConversations.find((conversation) => conversation.id === currentChatId) ?? null
 
     setAppSettings(settings)
     writeLocalSettings(settings)
-    writeLocalConversations(conversations)
+    commitState(nextConversations, activeConversation)
     setCurrentModeState(activeConversation?.mode ?? settings.defaultMode)
     setDraftSessionSettings(
       createSessionSettings(settings.defaultMode, settings.sessionDefaults)
     )
-    setChats(sortConversationSummaries(conversations.map(toConversationSummary)))
-    setCurrentChatState(activeConversation)
-  }, [])
+  }, [commitState])
 
   useEffect(() => {
     void loadBootData().catch((error) => {
@@ -323,11 +331,16 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         return
       }
 
-      void loadChat(chat.id).catch((error) => {
-        console.error('Failed to load conversation.', error)
-      })
+      const nextConversation =
+        conversations.find((conversation) => conversation.id === chat.id) ?? null
+
+      if (!nextConversation) return
+
+      setCurrentModeState(nextConversation.mode)
+      setCurrentChatState(nextConversation)
+      writeBrowserCurrentChatId(nextConversation.id)
     },
-    [loadChat]
+    [conversations]
   )
 
   const setCurrentMode = useCallback(
@@ -335,12 +348,10 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       setCurrentModeState(mode)
 
       if (!currentChat) {
-        setDraftSessionSettings(
-          createSessionSettings(mode, appSettings.sessionDefaults)
-        )
+        setDraftSessionSettings(createSessionSettings(mode, draftSessionSettings))
       }
     },
-    [appSettings.sessionDefaults, currentChat]
+    [currentChat, draftSessionSettings]
   )
 
   const createNewChat = useCallback(async () => {
@@ -349,50 +360,33 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       sessionSettings,
     })
 
-    setCurrentModeState(conversation.mode)
     setDraftSessionSettings(conversation.sessionSettings)
-    persistCurrentChat(conversation)
-  }, [currentMode, persistCurrentChat, sessionSettings])
+    upsertConversation(conversation)
+  }, [currentMode, sessionSettings, upsertConversation])
 
   const deleteChat = useCallback(
     async (chatId: string) => {
-      const nextConversations = readLocalConversations().filter(
+      const nextConversations = conversations.filter(
         (conversation) => conversation.id !== chatId
       )
-      writeLocalConversations(nextConversations)
 
-      setChats(sortConversationSummaries(nextConversations.map(toConversationSummary)))
-
-      if (currentChat?.id === chatId) {
-        setCurrentChatState(null)
-        writeBrowserCurrentChatId(null)
-      }
+      commitState(
+        nextConversations,
+        currentChat?.id === chatId ? null : currentChat
+      )
     },
-    [currentChat?.id]
+    [commitState, conversations, currentChat]
   )
 
   const togglePinChat = useCallback(
     async (chatId: string) => {
-      const source =
-        currentChat?.id === chatId
-          ? currentChat
-          : readLocalConversations().find((conversation) => conversation.id === chatId)
-
-      if (!source) return
-
-      const updated = updateConversationSnapshot(source, {
-        isPinned: !source.isPinned,
-      })
-      const nextConversations = upsertConversation(readLocalConversations(), updated)
-      writeLocalConversations(nextConversations)
-
-      if (currentChat?.id === chatId) {
-        setCurrentChatState(updated)
-      }
-
-      setChats(sortConversationSummaries(nextConversations.map(toConversationSummary)))
+      applyConversationPatch(chatId, (conversation) =>
+        updateConversationSnapshot(conversation, {
+          isPinned: !conversation.isPinned,
+        })
+      )
     },
-    [currentChat]
+    [applyConversationPatch]
   )
 
   const saveAppSettings = useCallback(
@@ -416,10 +410,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       if (!currentChat) {
         setCurrentModeState(nextSettings.defaultMode)
         setDraftSessionSettings(
-          createSessionSettings(
-            nextSettings.defaultMode,
-            nextSettings.sessionDefaults
-          )
+          createSessionSettings(nextSettings.defaultMode, nextSettings.sessionDefaults)
         )
       }
 
@@ -437,27 +428,27 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     [saveAppSettings]
   )
 
-  const applyLocalError = useCallback((messageId: string | undefined, error: string) => {
-    if (!messageId) return
+  const applyLocalError = useCallback(
+    (conversationId: string | undefined, messageId: string | undefined, error: string) => {
+      if (!conversationId || !messageId) return
 
-    setCurrentChatState((previous) => {
-      if (!previous) return previous
-
-      return {
-        ...previous,
-        messages: previous.messages.map((message) =>
-          message.id === messageId
-            ? {
-                ...message,
-                status: 'error',
-                error,
-                content: message.content || error,
-              }
-            : message
-        ),
-      }
-    })
-  }, [])
+      applyConversationPatch(conversationId, (conversation) =>
+        updateConversationSnapshot(conversation, {
+          messages: conversation.messages.map((message) =>
+            message.id === messageId
+              ? {
+                  ...message,
+                  status: 'error',
+                  error,
+                  content: message.content || error,
+                }
+              : message
+          ),
+        })
+      )
+    },
+    [applyConversationPatch]
+  )
 
   const stopStreaming = useCallback(() => {
     streamAbortRef.current?.abort()
@@ -473,9 +464,9 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       sessionSettings,
     })
 
-    persistCurrentChat(conversation)
+    upsertConversation(conversation)
     return conversation
-  }, [currentChat, currentMode, persistCurrentChat, sessionSettings])
+  }, [currentChat, currentMode, sessionSettings, upsertConversation])
 
   const runChatAction = useCallback(
     async (payload: {
@@ -484,14 +475,15 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       targetMessageId?: string
       conversation: Conversation
       optimisticConversation: Conversation
+      attachments?: Attachment[]
     }) => {
-      persistCurrentChat(payload.optimisticConversation)
+      upsertConversation(payload.optimisticConversation)
 
       const placeholder = payload.optimisticConversation.messages.at(-1)
 
       setStreamingState({
         status: 'streaming',
-        conversationId: payload.conversation.id,
+        conversationId: payload.optimisticConversation.id,
         messageId: placeholder?.id,
       })
 
@@ -512,6 +504,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
             content: payload.content,
             settings: sessionSettings,
             targetMessageId: payload.targetMessageId,
+            attachments: payload.attachments,
+            attachmentContext: (payload.attachments ?? []).map(toAttachmentContext),
           } satisfies ChatRequest),
           signal: controller.signal,
         })
@@ -526,13 +520,14 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         await readNdjsonStream<StreamEvent>(response, (event) => {
           switch (event.type) {
             case 'start': {
-              const startedConversation = {
-                ...event.conversation,
-                messages: [...event.conversation.messages, event.message],
-              }
+              const startedConversation = updateConversationSnapshot(
+                event.conversation,
+                {
+                  messages: [...event.conversation.messages, event.message],
+                }
+              )
 
-              setCurrentModeState(startedConversation.mode)
-              persistCurrentChat(startedConversation)
+              upsertConversation(startedConversation)
               setStreamingState({
                 status: 'streaming',
                 conversationId: startedConversation.id,
@@ -541,14 +536,9 @@ export function ChatProvider({ children }: { children: ReactNode }) {
               break
             }
             case 'delta': {
-              setCurrentChatState((previous) => {
-                if (!previous || previous.id !== event.conversationId) {
-                  return previous
-                }
-
-                return {
-                  ...previous,
-                  messages: previous.messages.map((message) =>
+              applyConversationPatch(event.conversationId, (conversation) =>
+                updateConversationSnapshot(conversation, {
+                  messages: conversation.messages.map((message) =>
                     message.id === event.messageId
                       ? {
                           ...message,
@@ -557,17 +547,17 @@ export function ChatProvider({ children }: { children: ReactNode }) {
                         }
                       : message
                   ),
-                }
-              })
+                })
+              )
               break
             }
             case 'done': {
-              persistCurrentChat(event.conversation)
+              upsertConversation(event.conversation)
               setStreamingState({ status: 'idle' })
               break
             }
             case 'error': {
-              applyLocalError(event.messageId, event.error)
+              applyLocalError(event.conversationId, event.messageId, event.error)
               setStreamingState({
                 status: 'error',
                 conversationId: event.conversationId,
@@ -581,8 +571,10 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
         setStreamingState({ status: 'idle' })
       } catch (error) {
+        const lastMessageId = payload.optimisticConversation.messages.at(-1)?.id
+
         if (error instanceof DOMException && error.name === 'AbortError') {
-          applyLocalError(payload.optimisticConversation.messages.at(-1)?.id, 'Generation stopped.')
+          applyLocalError(payload.optimisticConversation.id, lastMessageId, 'Generation stopped.')
           setStreamingState({ status: 'idle' })
           return
         }
@@ -592,27 +584,34 @@ export function ChatProvider({ children }: { children: ReactNode }) {
             ? error.message
             : 'Something went wrong while generating a response.'
 
-          applyLocalError(payload.optimisticConversation.messages.at(-1)?.id, message)
+        applyLocalError(payload.optimisticConversation.id, lastMessageId, message)
         setStreamingState({
           status: 'error',
-          conversationId: payload.conversation.id,
-          messageId: payload.optimisticConversation.messages.at(-1)?.id,
+          conversationId: payload.optimisticConversation.id,
+          messageId: lastMessageId,
           error: message,
         })
       } finally {
         streamAbortRef.current = null
       }
     },
-    [applyLocalError, currentMode, persistCurrentChat, sessionSettings]
+    [
+      applyConversationPatch,
+      applyLocalError,
+      currentMode,
+      sessionSettings,
+      upsertConversation,
+    ]
   )
 
   const sendMessage = useCallback(
-    async (content: string) => {
+    async ({ content, attachments = [] }: SendMessageInput) => {
       const conversation = await ensureConversation()
       const userMessage = createMessage({
         role: 'user',
         content,
         mode: currentMode,
+        attachments,
       })
       const placeholder = createMessage({
         role: 'assistant',
@@ -634,6 +633,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         content,
         conversation,
         optimisticConversation,
+        attachments,
       })
     },
     [currentMode, ensureConversation, runChatAction, sessionSettings]
@@ -652,6 +652,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       content: '',
       mode: currentMode,
       status: 'streaming',
+      model: MODE_CONFIGS[currentMode].model,
+      provider: 'openrouter',
     })
 
     const optimisticConversation = updateConversationSnapshot(currentChat, {
@@ -681,6 +683,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       content: '',
       mode: currentMode,
       status: 'streaming',
+      model: MODE_CONFIGS[currentMode].model,
+      provider: 'openrouter',
     })
 
     const optimisticConversation = updateConversationSnapshot(currentChat, {
@@ -722,6 +726,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         content: '',
         mode: currentMode,
         status: 'streaming',
+        model: MODE_CONFIGS[currentMode].model,
+        provider: 'openrouter',
       })
 
       const optimisticConversation = updateConversationSnapshot(currentChat, {
@@ -740,6 +746,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         targetMessageId: lastUser.id,
         conversation: currentChat,
         optimisticConversation,
+        attachments: editedUser.attachments,
       })
     },
     [currentChat, currentMode, runChatAction, sessionSettings]
@@ -757,24 +764,45 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         return
       }
 
-      const nextSessionSettings = normalizeModeSessionSettings(currentChat.mode, {
-        ...currentChat.sessionSettings,
-        ...settings,
-      })
-
-      const optimisticConversation = updateConversationSnapshot(currentChat, {
-        sessionSettings: nextSessionSettings,
-      })
-
-      persistCurrentChat(optimisticConversation)
+      applyConversationPatch(currentChat.id, (conversation) =>
+        updateConversationSnapshot(conversation, {
+          sessionSettings: normalizeModeSessionSettings(conversation.mode, {
+            ...conversation.sessionSettings,
+            ...settings,
+          }),
+        })
+      )
     },
-    [currentChat, persistCurrentChat]
+    [applyConversationPatch, currentChat, currentMode]
+  )
+
+  const exportCurrentChat = useCallback(
+    (format: 'markdown' | 'json') => {
+      if (!currentChat) return
+
+      if (format === 'markdown') {
+        downloadTextFile(
+          `${currentChat.title.toLowerCase().replace(/[^a-z0-9]+/g, '-') || 'chat'}.md`,
+          conversationToMarkdown(currentChat),
+          'text/markdown;charset=utf-8'
+        )
+        return
+      }
+
+      downloadTextFile(
+        `${currentChat.title.toLowerCase().replace(/[^a-z0-9]+/g, '-') || 'chat'}.json`,
+        conversationToJson(currentChat),
+        'application/json;charset=utf-8'
+      )
+    },
+    [currentChat]
   )
 
   const value = useMemo<ChatContextType>(
     () => ({
       currentMode,
       setCurrentMode,
+      conversations,
       chats,
       currentChat,
       setCurrentChat,
@@ -785,6 +813,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       regenerateLastResponse,
       retryLastMessage,
       editLastUserMessage,
+      exportCurrentChat,
       isStreaming,
       stopStreaming,
       streamingState,
@@ -805,11 +834,13 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     [
       appSettings,
       chats,
+      conversations,
       createNewChat,
       currentChat,
       currentMode,
       deleteChat,
       editLastUserMessage,
+      exportCurrentChat,
       isSettingsPanelOpen,
       isSidebarOpen,
       isStreaming,

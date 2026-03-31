@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useChatContext } from '@/lib/chat-context'
-import { AIMode, AppSettings, MODE_CONFIGS, createSessionSettings } from '@/lib/types'
+import { AIMode, AppSettings, MODE_CONFIGS, MODE_ORDER, createSessionSettings } from '@/lib/types'
 import {
   ModeIcon,
   getModeAccentClass,
@@ -87,15 +87,16 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl">
-        <DialogHeader>
+      <DialogContent className="max-h-[85vh] max-w-4xl overflow-hidden p-0">
+        <div className="flex h-full max-h-[85vh] flex-col">
+        <DialogHeader className="border-b border-border px-6 py-5">
           <DialogTitle className="text-xl">Settings</DialogTitle>
           <DialogDescription>
             Save default behavior for Zenquanta AI while keeping OpenRouter credentials env-backed on the server.
           </DialogDescription>
         </DialogHeader>
 
-        <Tabs defaultValue="general" className="mt-4">
+        <Tabs defaultValue="general" className="flex min-h-0 flex-1 flex-col px-6 py-4">
           <TabsList className="grid w-full grid-cols-4">
             <TabsTrigger value="general">General</TabsTrigger>
             <TabsTrigger value="gateway">Gateway</TabsTrigger>
@@ -103,7 +104,7 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
             <TabsTrigger value="about">About</TabsTrigger>
           </TabsList>
 
-          <TabsContent value="general" className="space-y-6 mt-6">
+          <TabsContent value="general" className="mt-6 min-h-0 flex-1 space-y-6 overflow-y-auto pb-6">
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <div>
@@ -115,7 +116,7 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                 <Badge variant="secondary">Saved to settings</Badge>
               </div>
               <div className="grid gap-3 md:grid-cols-3">
-                {(['creative', 'logic', 'code'] as AIMode[]).map((mode) => (
+                {MODE_ORDER.map((mode) => (
                   <ModeSelectionCard
                     key={mode}
                     mode={mode}
@@ -139,19 +140,27 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                 <div className="flex items-center justify-between">
                   <Label htmlFor="defaultTemperature">Default Temperature</Label>
                   <span className="text-sm text-muted-foreground font-mono">
-                    {defaultModeConfig.temperature.toFixed(2)}
+                    {localSettings.sessionDefaults.temperature.toFixed(2)}
                   </span>
                 </div>
                 <Slider
                   id="defaultTemperature"
                   min={0}
                   max={2}
-                  step={0.1}
-                  value={[defaultModeConfig.temperature]}
-                  disabled
+                  step={0.05}
+                  value={[localSettings.sessionDefaults.temperature]}
+                  onValueChange={([value]) =>
+                    setLocalSettings((previous) => ({
+                      ...previous,
+                      sessionDefaults: {
+                        ...previous.sessionDefaults,
+                        temperature: value,
+                      },
+                    }))
+                  }
                 />
                 <p className="text-xs text-muted-foreground">
-                  Locked to the selected mode so defaults match the shared model routing config.
+                  Starts from the selected mode default, but you can tune it for new chats.
                 </p>
               </div>
 
@@ -159,21 +168,57 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                 <div className="flex items-center justify-between">
                   <Label htmlFor="defaultMaxTokens">Default Max Tokens</Label>
                   <span className="text-sm text-muted-foreground font-mono">
-                    {defaultModeConfig.maxTokens}
+                    {localSettings.sessionDefaults.maxTokens}
                   </span>
                 </div>
                 <Slider
                   id="defaultMaxTokens"
                   min={256}
-                  max={8192}
+                  max={4096}
                   step={256}
-                  value={[defaultModeConfig.maxTokens]}
-                  disabled
+                  value={[localSettings.sessionDefaults.maxTokens]}
+                  onValueChange={([value]) =>
+                    setLocalSettings((previous) => ({
+                      ...previous,
+                      sessionDefaults: {
+                        ...previous.sessionDefaults,
+                        maxTokens: value,
+                      },
+                    }))
+                  }
                 />
                 <p className="text-xs text-muted-foreground">
-                  Managed by the mode mapping so API defaults and UI stay aligned.
+                  Sets the default response length ceiling for newly created chats.
                 </p>
               </div>
+            </div>
+
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <Label htmlFor="defaultTopP">Default Top P</Label>
+                <span className="text-sm text-muted-foreground font-mono">
+                  {localSettings.sessionDefaults.topP.toFixed(2)}
+                </span>
+              </div>
+              <Slider
+                id="defaultTopP"
+                min={0.1}
+                max={1}
+                step={0.05}
+                value={[localSettings.sessionDefaults.topP]}
+                onValueChange={([value]) =>
+                  setLocalSettings((previous) => ({
+                    ...previous,
+                    sessionDefaults: {
+                      ...previous.sessionDefaults,
+                      topP: value,
+                    },
+                  }))
+                }
+              />
+              <p className="text-xs text-muted-foreground">
+                Controls how broad token sampling should be in freshly started chats.
+              </p>
             </div>
 
             <div className="grid gap-4 md:grid-cols-2">
@@ -276,7 +321,7 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                 <div className="flex items-center justify-between rounded-xl border border-border px-3 py-3">
                   <div>
                     <p className="text-sm font-medium">File Context</p>
-                    <p className="text-xs text-muted-foreground">Reserved for future upload support</p>
+                    <p className="text-xs text-muted-foreground">Include extracted attachment text by default</p>
                   </div>
                   <Switch
                     checked={localSettings.sessionDefaults.fileContext}
@@ -295,7 +340,7 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
             </div>
           </TabsContent>
 
-          <TabsContent value="gateway" className="space-y-6 mt-6">
+          <TabsContent value="gateway" className="mt-6 min-h-0 flex-1 space-y-6 overflow-y-auto pb-6">
             <div className="rounded-2xl border border-border bg-muted/20 p-4">
               <p className="text-sm text-muted-foreground">
                 OpenRouter is the only AI gateway in this app. These fields stay as local placeholders for convenience, but live requests use the server env vars.
@@ -359,9 +404,9 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
             </div>
           </TabsContent>
 
-          <TabsContent value="models" className="space-y-4 mt-6">
+          <TabsContent value="models" className="mt-6 min-h-0 flex-1 space-y-4 overflow-y-auto pb-6">
             <div className="grid gap-4">
-              {(['creative', 'logic', 'code'] as AIMode[]).map((mode) => {
+              {MODE_ORDER.map((mode) => {
                 const config = MODE_CONFIGS[mode]
 
                 return (
@@ -408,7 +453,7 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
             </div>
           </TabsContent>
 
-          <TabsContent value="about" className="space-y-4 mt-6">
+          <TabsContent value="about" className="mt-6 min-h-0 flex-1 space-y-4 overflow-y-auto pb-6">
             <div className="text-center py-8">
               <div className="inline-flex items-center gap-2 mb-4">
                 <div className="size-12 rounded-xl bg-gradient-to-br from-creative via-logic to-code flex items-center justify-center">
@@ -426,6 +471,7 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
           </TabsContent>
         </Tabs>
 
+        <div className="border-t border-border px-6 py-4">
         <div className="flex justify-end">
           <Button onClick={handleSave} className="gap-2">
             {saved ? (
@@ -437,6 +483,8 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
               'Save settings'
             )}
           </Button>
+        </div>
+        </div>
         </div>
       </DialogContent>
     </Dialog>

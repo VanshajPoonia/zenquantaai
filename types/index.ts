@@ -1,4 +1,4 @@
-export type AIMode = 'creative' | 'logic' | 'code'
+export type AIMode = 'general' | 'creative' | 'logic' | 'code'
 
 export type GatewayId = 'openrouter'
 
@@ -15,6 +15,7 @@ export type ResponseStyle = 'balanced' | 'concise' | 'detailed'
 export interface SessionSettings {
   temperature: number
   maxTokens: number
+  topP: number
   webSearch: boolean
   memory: boolean
   fileContext: boolean
@@ -50,6 +51,8 @@ export interface Message {
   model?: string
   provider?: GatewayId
   error?: string
+  attachments?: Attachment[]
+  usage?: UsageEstimate
 }
 
 export interface ConversationSummary {
@@ -66,6 +69,8 @@ export interface ConversationSummary {
 
 export interface Conversation extends ConversationSummary {
   messages: Message[]
+  attachments?: Attachment[]
+  usage?: UsageEstimate
 }
 
 export type Chat = Conversation
@@ -81,6 +86,8 @@ export interface ModelRouteConfig {
   maxTokens: number
   topP: number
   systemPromptKey: AIMode
+  inputCostPerMillion: number
+  outputCostPerMillion: number
 }
 
 export interface ModeConfig extends ModelRouteConfig {
@@ -103,11 +110,14 @@ export interface ChatRequest {
   content?: string
   settings: SessionSettings
   targetMessageId?: string
+  attachments?: Attachment[]
+  attachmentContext?: AttachmentContext[]
 }
 
 export interface ChatResponse {
   conversation: Conversation
   message: Message
+  usage?: UsageEstimate
 }
 
 export type StreamEvent =
@@ -126,6 +136,7 @@ export type StreamEvent =
       type: 'done'
       conversation: Conversation
       message: Message
+      usage?: UsageEstimate
     }
   | {
       type: 'error'
@@ -140,6 +151,47 @@ export interface StreamingState {
   conversationId?: string
   messageId?: string
   error?: string
+}
+
+export type AttachmentKind =
+  | 'image'
+  | 'pdf'
+  | 'text'
+  | 'code'
+  | 'document'
+  | 'spreadsheet'
+  | 'other'
+
+export interface Attachment {
+  id: string
+  kind: AttachmentKind
+  name: string
+  mimeType: string
+  size: number
+  createdAt: string
+  previewUrl?: string
+  textContent?: string
+  textExcerpt?: string
+  isExtracted?: boolean
+}
+
+export interface PendingAttachment extends Attachment {
+  file: File
+}
+
+export interface AttachmentContext {
+  id: string
+  name: string
+  kind: AttachmentKind
+  mimeType: string
+  textContent?: string
+}
+
+export interface UsageEstimate {
+  promptTokens: number
+  completionTokens: number
+  totalTokens: number
+  estimatedCostUsd: number
 }
 
 export interface AIModelInput {

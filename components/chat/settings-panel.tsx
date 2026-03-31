@@ -2,7 +2,7 @@
 
 import { cn } from '@/lib/utils'
 import { useChatContext } from '@/lib/chat-context'
-import { MODE_CONFIGS, createSessionSettings } from '@/lib/types'
+import { AIMode, MODE_CONFIGS, createSessionSettings } from '@/lib/types'
 import {
   getModeAccentClass,
   getModeTintClass,
@@ -15,12 +15,9 @@ import { Separator } from '@/components/ui/separator'
 import { Badge } from '@/components/ui/badge'
 import { XIcon, GlobeIcon, DatabaseIcon, FileIcon } from '@/components/icons'
 
-function getSliderClass(mode: string) {
-  const colorClass = getModeAccentClass(mode as 'creative' | 'logic' | 'code', 'bg')
-  const borderClass = getModeAccentClass(
-    mode as 'creative' | 'logic' | 'code',
-    'border'
-  )
+function getSliderClass(mode: AIMode) {
+  const colorClass = getModeAccentClass(mode, 'bg')
+  const borderClass = getModeAccentClass(mode, 'border')
   return `[&_[data-slot=slider-range]]:${colorClass} [&_[data-slot=slider-thumb]]:${borderClass}`
 }
 
@@ -42,7 +39,7 @@ export function SettingsPanel() {
   return (
     <aside
       className={cn(
-        'w-80 bg-card border-l border-border h-full flex flex-col',
+        'w-80 bg-card border-l border-border h-full min-h-0 flex flex-col',
         'animate-in slide-in-from-right-5 duration-200'
       )}
     >
@@ -58,7 +55,7 @@ export function SettingsPanel() {
         </Button>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-4 space-y-6">
+      <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-6 pb-8">
         <div
           className={cn(
             'rounded-2xl border p-4 space-y-3',
@@ -89,51 +86,94 @@ export function SettingsPanel() {
               {modeConfig.name}
             </p>
           </div>
+          {currentChat?.usage && (
+            <div className="grid grid-cols-2 gap-3 rounded-xl border border-border/60 bg-background/60 px-3 py-3">
+              <div>
+                <p className="text-[11px] uppercase tracking-widest text-muted-foreground mb-1">
+                  Est. Cost
+                </p>
+                <p className="text-sm font-medium text-foreground">
+                  ${currentChat.usage.estimatedCostUsd.toFixed(4)}
+                </p>
+              </div>
+              <div>
+                <p className="text-[11px] uppercase tracking-widest text-muted-foreground mb-1">
+                  Tokens
+                </p>
+                <p className="text-sm font-medium text-foreground">
+                  {currentChat.usage.totalTokens}
+                </p>
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="space-y-3">
           <div className="flex items-center justify-between">
-                  <Label htmlFor="temperature" className="text-sm font-medium">
+            <Label htmlFor="temperature" className="text-sm font-medium">
               Temperature
             </Label>
             <span className="text-sm text-muted-foreground font-mono">
-              {modeConfig.temperature.toFixed(2)}
+              {sessionSettings.temperature.toFixed(2)}
             </span>
           </div>
           <Slider
             id="temperature"
             min={0}
             max={2}
-            step={0.1}
-            value={[modeConfig.temperature]}
-            disabled
+            step={0.05}
+            value={[sessionSettings.temperature]}
+            onValueChange={([value]) => updateSessionSettings({ temperature: value })}
             className={getSliderClass(currentMode)}
           />
           <p className="text-xs text-muted-foreground">
-            Locked to the active mode so the UI matches the exact sampling used by `/api/chat`.
+            Start from the mode default, then tune creativity or precision for this conversation.
           </p>
         </div>
 
         <div className="space-y-3">
           <div className="flex items-center justify-between">
-                  <Label htmlFor="maxTokens" className="text-sm font-medium">
+            <Label htmlFor="maxTokens" className="text-sm font-medium">
               Max Tokens
             </Label>
             <span className="text-sm text-muted-foreground font-mono">
-              {modeConfig.maxTokens}
+              {sessionSettings.maxTokens}
             </span>
           </div>
           <Slider
             id="maxTokens"
             min={256}
-            max={8192}
+            max={4096}
             step={256}
-            value={[modeConfig.maxTokens]}
-            disabled
+            value={[sessionSettings.maxTokens]}
+            onValueChange={([value]) => updateSessionSettings({ maxTokens: value })}
             className={getSliderClass(currentMode)}
           />
           <p className="text-xs text-muted-foreground">
-            Mode-managed response length ceiling from the shared routing config.
+            Controls the response length ceiling for this chat.
+          </p>
+        </div>
+
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <Label htmlFor="topP" className="text-sm font-medium">
+              Top P
+            </Label>
+            <span className="text-sm text-muted-foreground font-mono">
+              {sessionSettings.topP.toFixed(2)}
+            </span>
+          </div>
+          <Slider
+            id="topP"
+            min={0.1}
+            max={1}
+            step={0.05}
+            value={[sessionSettings.topP]}
+            onValueChange={([value]) => updateSessionSettings({ topP: value })}
+            className={getSliderClass(currentMode)}
+          />
+          <p className="text-xs text-muted-foreground">
+            Narrows or broadens token sampling for the current session.
           </p>
         </div>
 
@@ -216,15 +256,36 @@ export function SettingsPanel() {
 
         <div className="space-y-3">
           <h3 className="text-sm font-medium text-foreground">Recent attachments</h3>
-          <div className="rounded-xl border border-dashed border-border bg-background/50 px-3 py-4 text-sm text-muted-foreground">
-            No files attached yet. The upload UI is ready, but backend file handling is still mocked.
-          </div>
+          {currentChat?.attachments && currentChat.attachments.length > 0 ? (
+            <div className="space-y-2">
+              {currentChat.attachments.slice(-4).map((attachment) => (
+                <div
+                  key={attachment.id}
+                  className="rounded-xl border border-border bg-background/50 px-3 py-3"
+                >
+                  <p className="text-sm font-medium text-foreground">{attachment.name}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {attachment.kind}
+                    {attachment.isExtracted ? ' • extracted text ready' : ''}
+                  </p>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="rounded-xl border border-dashed border-border bg-background/50 px-3 py-4 text-sm text-muted-foreground">
+              No files attached yet. Add PDFs, images, or text files from the composer.
+            </div>
+          )}
         </div>
 
         <Button
           variant="outline"
           className="w-full"
-          onClick={() => updateSessionSettings(createSessionSettings(currentMode))}
+          onClick={() =>
+            updateSessionSettings(
+              createSessionSettings(currentChat?.mode ?? currentMode)
+            )
+          }
         >
           Reset to mode defaults
         </Button>

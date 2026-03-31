@@ -3,7 +3,7 @@
 import { useRef, useEffect, useState } from 'react'
 import { cn } from '@/lib/utils'
 import { useChatContext } from '@/lib/chat-context'
-import { AIMode, MODE_CONFIGS } from '@/lib/types'
+import { AIMode, MODE_CONFIGS, MODE_ORDER } from '@/lib/types'
 import { ModeIcon, getModeAccentClass, getModeGlow } from '@/lib/mode-utils'
 
 export function ModeSwitcher() {
@@ -49,7 +49,7 @@ export function ModeSwitcher() {
           }}
         />
 
-        {(Object.keys(MODE_CONFIGS) as AIMode[]).map((mode) => {
+        {MODE_ORDER.map((mode) => {
           const config = MODE_CONFIGS[mode]
           const isActive = currentMode === mode
 
@@ -96,7 +96,7 @@ export function ModeSwitcherCompact() {
 
   return (
     <div className="flex items-center gap-0.5 p-1 bg-secondary/50 rounded-xl border border-border/30">
-      {(Object.keys(MODE_CONFIGS) as AIMode[]).map((mode) => {
+      {MODE_ORDER.map((mode) => {
         const isActive = currentMode === mode
 
         return (
@@ -131,7 +131,7 @@ export function ModeSwitcherVertical() {
 
   return (
     <div className="flex flex-col gap-2">
-      {(Object.keys(MODE_CONFIGS) as AIMode[]).map((mode) => {
+      {MODE_ORDER.map((mode) => {
         const config = MODE_CONFIGS[mode]
         const isActive = currentMode === mode
 
@@ -173,7 +173,7 @@ export function ModeSwitcherVertical() {
                   isActive ? 'text-white/80' : 'text-muted-foreground'
                 )}
               >
-                {config.model}
+                {config.helperText}
               </p>
             </div>
             {isActive && (

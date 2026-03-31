@@ -1,4 +1,13 @@
-import { AIMode, Conversation, ConversationSummary, Message, MessageRole, SessionSettings } from '@/types'
+import {
+  AIMode,
+  Attachment,
+  Conversation,
+  ConversationSummary,
+  Message,
+  MessageRole,
+  SessionSettings,
+} from '@/types'
+import { sumConversationUsage } from './cost'
 
 export function createId(prefix = ''): string {
   const id =
@@ -36,6 +45,8 @@ export function createMessage(input: {
   createdAt?: string
   status?: Message['status']
   error?: string
+  attachments?: Attachment[]
+  usage?: Message['usage']
 }): Message {
   return {
     id: createId('msg'),
@@ -69,11 +80,21 @@ export function updateConversationSnapshot(
   conversation: Conversation,
   next: Partial<Conversation> = {}
 ): Conversation {
+  const mergedMessages = next.messages ?? conversation.messages
+  const attachments = [
+    ...(next.attachments ?? conversation.attachments ?? []),
+    ...mergedMessages.flatMap((message) => message.attachments ?? []),
+  ].filter(
+    (attachment, index, all) =>
+      all.findIndex((item) => item.id === attachment.id) === index
+  )
+
   const merged: Conversation = {
     ...conversation,
     ...next,
-    messages: next.messages ?? conversation.messages,
+    messages: mergedMessages,
     sessionSettings: next.sessionSettings ?? conversation.sessionSettings,
+    attachments,
     updatedAt: next.updatedAt ?? nowIso(),
   }
 
@@ -90,6 +111,7 @@ export function updateConversationSnapshot(
     ...merged,
     preview: summary.preview,
     messageCount: summary.messageCount,
+    usage: next.usage ?? sumConversationUsage(merged),
   }
 }
 
@@ -117,6 +139,8 @@ export function getLastAssistantMessage(
 
 export function getDefaultConversationTitle(mode: AIMode): string {
   switch (mode) {
+    case 'general':
+      return 'New General Assistant Chat'
     case 'creative':
       return 'New Creative Writer Chat'
     case 'logic':
@@ -135,6 +159,8 @@ export function createConversation(input: {
   createdAt?: string
   updatedAt?: string
   isPinned?: boolean
+  attachments?: Attachment[]
+  usage?: Conversation['usage']
 }): Conversation {
   const createdAt = input.createdAt ?? nowIso()
 
@@ -149,6 +175,8 @@ export function createConversation(input: {
     messageCount: input.messages?.length ?? 0,
     sessionSettings: input.sessionSettings,
     messages: input.messages ?? [],
+    attachments: input.attachments ?? [],
+    usage: input.usage,
   })
 }
 

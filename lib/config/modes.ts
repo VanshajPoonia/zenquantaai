@@ -5,6 +5,24 @@ const MODE_DISPLAY_CONFIGS: Record<
   AIMode,
   Omit<ModeConfig, keyof typeof MODEL_ROUTE_CONFIGS.creative | 'description'>
 > = {
+  general: {
+    id: 'general',
+    name: 'General Assistant',
+    placeholder: 'Ask anything: recipes, travel, planning, research, or everyday help...',
+    helperText:
+      'Flexible everyday assistance for general questions, planning, summarizing, and practical tasks.',
+    emptyStateTitle: 'Start Anywhere, Then Go Deeper',
+    emptyStateDescription:
+      'Use a balanced general assistant for open-ended questions, planning, summaries, research notes, and everyday help.',
+    suggestedPrompts: [
+      'Plan a 3-day Kyoto itinerary with food, temples, and a relaxed pace',
+      'Give me a quick mushroom pasta recipe with substitutions and timing',
+      'Summarize the pros and cons of moving from freelance to agency work',
+      'Help me turn a messy notes dump into a structured action plan',
+    ],
+    accentColor: 'general',
+    icon: 'sparkles',
+  },
   creative: {
     id: 'creative',
     name: 'Creative Writer',
@@ -62,6 +80,10 @@ const MODE_DISPLAY_CONFIGS: Record<
 }
 
 export const MODE_CONFIGS: Record<AIMode, ModeConfig> = {
+  general: {
+    ...MODEL_ROUTE_CONFIGS.general,
+    ...MODE_DISPLAY_CONFIGS.general,
+  },
   creative: {
     ...MODEL_ROUTE_CONFIGS.creative,
     ...MODE_DISPLAY_CONFIGS.creative,
@@ -76,4 +98,4 @@ export const MODE_CONFIGS: Record<AIMode, ModeConfig> = {
   },
 }
 
-export const MODE_ORDER: AIMode[] = ['creative', 'logic', 'code']
+export const MODE_ORDER: AIMode[] = ['general', 'creative', 'logic', 'code']
