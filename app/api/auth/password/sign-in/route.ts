@@ -30,7 +30,30 @@ export async function POST(request: NextRequest) {
   }
 
   const loginId = parseLoginId(identifier)
-  const session = await signInWithLoginId(loginId, password)
+  let session
+
+  try {
+    session = await signInWithLoginId(loginId, password)
+  } catch (error) {
+    const message = error instanceof Error ? error.message.toLowerCase() : ''
+
+    if (
+      message.includes('invalid login credentials') ||
+      message.includes('invalid credentials') ||
+      message.includes('invalid grant')
+    ) {
+      return NextResponse.json(
+        {
+          error:
+            'That ID or password is not correct. If your ID is correct, check your password and try again.',
+        },
+        { status: 401 }
+      )
+    }
+
+    throw error
+  }
+
   const response = NextResponse.json({ ok: true, user: session.user })
   appendAuthCookies(response.headers, session)
   return response
