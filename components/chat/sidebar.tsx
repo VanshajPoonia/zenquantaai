@@ -297,7 +297,7 @@ export function Sidebar({ onOpenSettings }: SidebarProps) {
         <button
           type="button"
           onClick={goHome}
-          className="flex items-center gap-3 rounded-2xl p-1 text-left transition-colors hover:bg-sidebar-accent/40"
+          className="flex cursor-pointer items-center gap-3 rounded-2xl p-1 text-left transition-colors hover:bg-sidebar-accent/40"
         >
           <ZenquantaLogo className="size-9" />
           <div>

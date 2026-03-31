@@ -60,7 +60,7 @@ export function Header({ onOpenSettings }: HeaderProps) {
             <button
               type="button"
               onClick={goHome}
-              className="flex items-center gap-2 rounded-xl px-2 py-1 transition-colors hover:bg-accent/40"
+              className="flex cursor-pointer items-center gap-2 rounded-xl px-2 py-1 transition-colors hover:bg-accent/40"
             >
               <ZenquantaLogo className="size-6" />
               <span className="font-semibold text-foreground hidden sm:inline">

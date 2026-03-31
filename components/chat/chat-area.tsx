@@ -22,10 +22,33 @@ export function ChatArea() {
   const [selectedPrompt, setSelectedPrompt] = useState('')
   const scrollAreaRef = useRef<HTMLDivElement>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  const previousMessageCountRef = useRef(0)
+  const previousChatIdRef = useRef<string | null>(null)
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [currentChat?.messages])
+    const messageCount = currentChat?.messages.length ?? 0
+    const isChatSwitch = currentChat?.id !== previousChatIdRef.current
+    previousChatIdRef.current = currentChat?.id ?? null
+    previousMessageCountRef.current = messageCount
+
+    const viewport = scrollAreaRef.current?.querySelector(
+      '[data-slot="scroll-area-viewport"]'
+    ) as HTMLDivElement | null
+
+    if (!viewport || !messagesEndRef.current) return
+
+    const distanceFromBottom =
+      viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight
+    const shouldFollow =
+      streamingState.status === 'streaming' || distanceFromBottom < 160 || isChatSwitch
+
+    if (!shouldFollow) return
+
+    messagesEndRef.current.scrollIntoView({
+      behavior: streamingState.status === 'streaming' ? 'auto' : 'smooth',
+      block: 'end',
+    })
+  }, [currentChat?.id, currentChat?.messages, streamingState.status])
 
   const lastAssistantId = useMemo(
     () =>
