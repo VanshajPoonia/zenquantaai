@@ -89,6 +89,7 @@ export async function POST(request: NextRequest) {
         conversation: prepared.generationConversation,
         settings: payload.settings,
         mode: prepared.assistantMode,
+        action: payload.action,
       })) {
         accumulated += chunk
 
@@ -107,7 +108,11 @@ export async function POST(request: NextRequest) {
         prepared.assistantPlaceholder,
         accumulated || 'No response returned.',
         prepared.generationConversation,
-        prepared.assistantMode
+        prepared.assistantMode,
+        {
+          action: payload.action,
+          userMessage: prepared.userMessage,
+        }
       )
 
       const savedConversation = await conversationStore.save(

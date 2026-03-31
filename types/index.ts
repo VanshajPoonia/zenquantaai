@@ -14,6 +14,7 @@ export type MessageRole = 'system' | 'user' | 'assistant'
 
 export type ChatAction =
   | 'send'
+  | 'generate-image'
   | 'regenerate'
   | 'retry'
   | 'edit-last-user'

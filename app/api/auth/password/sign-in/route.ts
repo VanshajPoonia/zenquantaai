@@ -29,7 +29,22 @@ export async function POST(request: NextRequest) {
     )
   }
 
-  const loginId = parseLoginId(identifier)
+  let loginId: string
+
+  try {
+    loginId = parseLoginId(identifier)
+  } catch (error) {
+    return NextResponse.json(
+      {
+        error:
+          error instanceof Error
+            ? error.message
+            : 'Your ID format is not valid.',
+      },
+      { status: 400 }
+    )
+  }
+
   let session
 
   try {

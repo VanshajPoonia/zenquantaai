@@ -48,7 +48,8 @@ export function Header({ onOpenSettings }: HeaderProps) {
   const modeConfig = MODE_CONFIGS[currentMode]
 
   return (
-    <header className="h-14 border-b border-border bg-card/50 backdrop-blur-sm flex items-center justify-between px-4">
+    <div className="px-3 pt-3">
+      <header className="h-14 rounded-2xl border border-border/70 bg-card/60 backdrop-blur-sm flex items-center justify-between px-4 shadow-sm">
       {/* Left Section */}
       <div className="flex items-center gap-3">
         {!isSidebarOpen && (
@@ -161,6 +162,7 @@ export function Header({ onOpenSettings }: HeaderProps) {
           </Tooltip>
         </TooltipProvider>
       </div>
-    </header>
+      </header>
+    </div>
   )
 }

@@ -1,7 +1,7 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import { ChevronDown, PencilLine } from 'lucide-react'
+import { ChevronDown, ExternalLink, ImageIcon, PencilLine, Play } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { AIMode, Message, MODE_CONFIGS, MODE_ORDER } from '@/lib/types'
 import {
@@ -25,12 +25,20 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import {
   CheckIcon,
   CopyIcon,
   RefreshIcon,
   UserIcon,
   XIcon,
 } from '@/components/icons'
+import { getWebPreviewDocument } from '@/lib/utils/web-preview'
 
 interface ChatMessageProps {
   message: Message
@@ -295,6 +303,27 @@ function AttachmentList({ message }: { message: Message }) {
               />
             ) : null}
           </div>
+          {attachment.kind === 'image' && attachment.previewUrl ? (
+            <div className="mt-3 overflow-hidden rounded-xl border border-border/60 bg-background/80">
+              <img
+                src={attachment.previewUrl}
+                alt={attachment.name}
+                className="max-h-[360px] w-full object-cover"
+              />
+              <div className="flex items-center justify-between gap-3 px-3 py-2 text-xs text-muted-foreground">
+                <span>Generated visual</span>
+                <a
+                  href={attachment.previewUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-1 text-foreground transition-opacity hover:opacity-80"
+                >
+                  Open
+                  <ExternalLink className="size-3.5" />
+                </a>
+              </div>
+            </div>
+          ) : null}
         </div>
       ))}
     </div>
@@ -312,6 +341,7 @@ export function ChatMessage({
 }: ChatMessageProps) {
   const [copied, setCopied] = useState(false)
   const [isEditing, setIsEditing] = useState(false)
+  const [isPreviewOpen, setIsPreviewOpen] = useState(false)
   const [draftValue, setDraftValue] = useState(message.content)
 
   const handleCopy = async () => {
@@ -322,6 +352,10 @@ export function ChatMessage({
 
   const renderedContent = useMemo(
     () => renderContent(message.content),
+    [message.content]
+  )
+  const previewDocument = useMemo(
+    () => getWebPreviewDocument(message.content),
     [message.content]
   )
 
@@ -407,62 +441,43 @@ export function ChatMessage({
   }
 
   return (
-    <div className="flex justify-start mb-6 group">
-      <div className="flex items-start gap-3 max-w-[85%]">
-        <div
-          className={cn(
-            'shrink-0 size-8 rounded-full flex items-center justify-center border',
-            getModeColorClasses(message.mode)
-          )}
-        >
-          <ModeIcon mode={message.mode} size="sm" />
-        </div>
-        <div className="flex-1">
-          <div className="bg-card border border-border rounded-2xl rounded-tl-md px-4 py-3">
-            {message.branchLabel ? (
-              <div className="mb-3 inline-flex items-center gap-1 rounded-full border border-border/60 bg-background/60 px-2.5 py-1 text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
-                <ModeIcon mode={message.mode} size="sm" />
-                {message.branchLabel}
-              </div>
-            ) : null}
-            {message.status === 'streaming' ? (
-              renderStreamingState(message.content)
-            ) : (
-              <div className="prose prose-sm prose-invert max-w-none text-foreground">
-                {renderedContent}
-              </div>
-            )}
-          </div>
-
+    <>
+      <div className="flex justify-start mb-6 group">
+        <div className="flex items-start gap-3 max-w-[85%]">
           <div
             className={cn(
-              'flex items-center gap-1 mt-2 transition-opacity',
-              isLastAssistant || message.status === 'error'
-                ? 'opacity-100'
-                : 'opacity-0 group-hover:opacity-100'
+              'shrink-0 size-8 rounded-full flex items-center justify-center border',
+              getModeColorClasses(message.mode)
             )}
           >
-            <TooltipProvider delayDuration={300}>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon-sm"
-                    className="size-7"
-                    onClick={handleCopy}
-                  >
-                    {copied ? (
-                      <CheckIcon className="size-3.5 text-code" />
-                    ) : (
-                      <CopyIcon className="size-3.5" />
-                    )}
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>{copied ? 'Copied!' : 'Copy'}</TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
+            <ModeIcon mode={message.mode} size="sm" />
+          </div>
+          <div className="flex-1">
+            <div className="bg-card border border-border rounded-2xl rounded-tl-md px-4 py-3">
+              {message.branchLabel ? (
+                <div className="mb-3 inline-flex items-center gap-1 rounded-full border border-border/60 bg-background/60 px-2.5 py-1 text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+                  <ModeIcon mode={message.mode} size="sm" />
+                  {message.branchLabel}
+                </div>
+              ) : null}
+              {message.status === 'streaming' ? (
+                renderStreamingState(message.content)
+              ) : (
+                <div className="prose prose-sm prose-invert max-w-none text-foreground">
+                  {renderedContent}
+                </div>
+              )}
+              <AttachmentList message={message} />
+            </div>
 
-            {isLastAssistant && (
+            <div
+              className={cn(
+                'flex flex-wrap items-center gap-1 mt-2 transition-opacity',
+                isLastAssistant || message.status === 'error'
+                  ? 'opacity-100'
+                  : 'opacity-0 group-hover:opacity-100'
+              )}
+            >
               <TooltipProvider delayDuration={300}>
                 <Tooltip>
                   <TooltipTrigger asChild>
@@ -470,77 +485,151 @@ export function ChatMessage({
                       variant="ghost"
                       size="icon-sm"
                       className="size-7"
-                      onClick={onRegenerate}
+                      onClick={handleCopy}
                     >
-                      <RefreshIcon className="size-3.5" />
+                      {copied ? (
+                        <CheckIcon className="size-3.5 text-code" />
+                      ) : (
+                        <CopyIcon className="size-3.5" />
+                      )}
                     </Button>
                   </TooltipTrigger>
-                  <TooltipContent>Regenerate</TooltipContent>
+                  <TooltipContent>{copied ? 'Copied!' : 'Copy'}</TooltipContent>
                 </Tooltip>
               </TooltipProvider>
-            )}
 
-            {isLastAssistant && onAskAnotherMode ? (
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="sm" className="h-7 gap-1 rounded-full px-2.5 text-xs">
-                    Another mode
-                    <ChevronDown className="size-3" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="start" className="w-44">
-                  {MODE_ORDER.filter((mode) => mode !== message.mode).map((mode) => (
-                    <DropdownMenuItem
-                      key={mode}
-                      onClick={() => onAskAnotherMode(mode)}
-                    >
-                      <span className={cn('mr-2 inline-flex', getModeAccentClass(mode, 'text'))}>
-                        <ModeIcon mode={mode} size="sm" />
-                      </span>
-                      {MODE_CONFIGS[mode].name}
-                    </DropdownMenuItem>
-                  ))}
-                </DropdownMenuContent>
-              </DropdownMenu>
-            ) : null}
+              {previewDocument ? (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 gap-1 rounded-full px-2.5 text-xs"
+                  onClick={() => setIsPreviewOpen(true)}
+                >
+                  <Play className="size-3.5" />
+                  Preview app
+                </Button>
+              ) : null}
 
-            {(isLastAssistant || message.status === 'error') && (
-              <TooltipProvider delayDuration={300}>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="icon-sm"
-                      className="size-7"
-                      onClick={onRetry}
-                    >
-                      <RefreshIcon className="size-3.5" />
+              {message.attachments?.some(
+                (attachment) => attachment.kind === 'image' && attachment.previewUrl
+              ) ? (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 gap-1 rounded-full px-2.5 text-xs"
+                  onClick={() => {
+                    const imageAttachment = message.attachments?.find(
+                      (attachment) =>
+                        attachment.kind === 'image' && attachment.previewUrl
+                    )
+                    if (imageAttachment?.previewUrl) {
+                      window.open(imageAttachment.previewUrl, '_blank', 'noopener,noreferrer')
+                    }
+                  }}
+                >
+                  <ImageIcon className="size-3.5" />
+                  Open image
+                </Button>
+              ) : null}
+
+              {isLastAssistant && (
+                <TooltipProvider delayDuration={300}>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        className="size-7"
+                        onClick={onRegenerate}
+                      >
+                        <RefreshIcon className="size-3.5" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>Regenerate</TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              )}
+
+              {isLastAssistant && onAskAnotherMode ? (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="sm" className="h-7 gap-1 rounded-full px-2.5 text-xs">
+                      Another mode
+                      <ChevronDown className="size-3" />
                     </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>Retry</TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-            )}
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start" className="w-44">
+                    {MODE_ORDER.filter((mode) => mode !== message.mode).map((mode) => (
+                      <DropdownMenuItem
+                        key={mode}
+                        onClick={() => onAskAnotherMode(mode)}
+                      >
+                        <span className={cn('mr-2 inline-flex', getModeAccentClass(mode, 'text'))}>
+                          <ModeIcon mode={mode} size="sm" />
+                        </span>
+                        {MODE_CONFIGS[mode].name}
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              ) : null}
 
-            <span className="ml-1 text-xs text-muted-foreground">
-              {message.status === 'streaming'
-                ? 'Streaming'
-                : message.status === 'error'
-                  ? 'Needs retry'
-                  : formatMessageTime(message.createdAt)}
-            </span>
-            {message.usage && (
-              <span className="rounded-full border border-border/60 px-2 py-0.5 text-[11px] text-muted-foreground">
-                ${message.usage.estimatedCostUsd.toFixed(4)}
+              {(isLastAssistant || message.status === 'error') && (
+                <TooltipProvider delayDuration={300}>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        className="size-7"
+                        onClick={onRetry}
+                      >
+                        <RefreshIcon className="size-3.5" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>Retry</TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              )}
+
+              <span className="ml-1 text-xs text-muted-foreground">
+                {message.status === 'streaming'
+                  ? 'Streaming'
+                  : message.status === 'error'
+                    ? 'Needs retry'
+                    : formatMessageTime(message.createdAt)}
               </span>
+            </div>
+
+            {message.error && (
+              <p className="mt-2 text-xs text-destructive">{message.error}</p>
             )}
           </div>
-
-          {message.error && (
-            <p className="mt-2 text-xs text-destructive">{message.error}</p>
-          )}
         </div>
       </div>
-    </div>
+
+      {previewDocument ? (
+        <Dialog open={isPreviewOpen} onOpenChange={setIsPreviewOpen}>
+          <DialogContent className="w-[calc(100vw-1rem)] max-w-5xl rounded-[28px] border border-border/70 bg-background/95 p-0 shadow-2xl shadow-black/40">
+            <DialogHeader className="border-b border-border/70 px-4 py-4 text-left sm:px-6">
+              <DialogTitle>Live Preview</DialogTitle>
+              <DialogDescription>
+                Run and inspect HTML, CSS, and JavaScript directly from this response.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="p-3 sm:p-4">
+              <div className="overflow-hidden rounded-2xl border border-border/70 bg-background">
+                <iframe
+                  title="Zenquanta app preview"
+                  srcDoc={previewDocument}
+                  sandbox="allow-scripts allow-modals"
+                  className="h-[65vh] min-h-[420px] w-full bg-white"
+                />
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+      ) : null}
+    </>
   )
 }

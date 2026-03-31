@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
-import { BookText, BookmarkPlus, Trash2 } from 'lucide-react'
+import { BookText, BookmarkPlus, ImagePlus, Trash2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useChatContext } from '@/lib/chat-context'
 import { Attachment, MODE_CONFIGS, PendingAttachment } from '@/lib/types'
@@ -26,6 +26,7 @@ interface ComposerProps {
   onSend: (input: {
     content: string
     attachments?: Array<Attachment | PendingAttachment>
+    kind?: 'chat' | 'image'
   }) => void
   disabled?: boolean
   initialValue?: string
@@ -41,6 +42,7 @@ export function Composer({ onSend, disabled, initialValue = '' }: ComposerProps)
     stopStreaming,
   } = useChatContext()
   const [value, setValue] = useState(initialValue)
+  const [composerKind, setComposerKind] = useState<'chat' | 'image'>('chat')
   const [pendingAttachments, setPendingAttachments] = useState<PendingAttachment[]>([])
   const [promptTitle, setPromptTitle] = useState('')
   const [isPromptPopoverOpen, setIsPromptPopoverOpen] = useState(false)
@@ -77,9 +79,11 @@ export function Composer({ onSend, disabled, initialValue = '' }: ComposerProps)
     onSend({
       content: normalizedContent,
       attachments: pendingAttachments,
+      kind: composerKind,
     })
     setValue('')
     setPendingAttachments([])
+    setComposerKind('chat')
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto'
     }
@@ -172,7 +176,11 @@ export function Composer({ onSend, disabled, initialValue = '' }: ComposerProps)
             value={value}
             onChange={(e) => setValue(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder={modeConfig.placeholder}
+            placeholder={
+              composerKind === 'image'
+                ? 'Describe the image you want to create...'
+                : modeConfig.placeholder
+            }
             disabled={disabled || isStreaming}
             rows={1}
             className={cn(
@@ -308,6 +316,35 @@ export function Composer({ onSend, disabled, initialValue = '' }: ComposerProps)
                   <TooltipContent>Attach files, PDFs, or images</TooltipContent>
                 </Tooltip>
               </TooltipProvider>
+              <TooltipProvider delayDuration={300}>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      type="button"
+                      variant={composerKind === 'image' ? 'secondary' : 'ghost'}
+                      size="icon-sm"
+                      className={cn(
+                        'text-muted-foreground hover:text-foreground',
+                        composerKind === 'image' &&
+                          `${getModeAccentClass(currentMode, 'text')} ${getModeGlow(currentMode)}`
+                      )}
+                      disabled={disabled || isStreaming}
+                      onClick={() =>
+                        setComposerKind((previous) =>
+                          previous === 'image' ? 'chat' : 'image'
+                        )
+                      }
+                    >
+                      <ImagePlus className="size-4" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    {composerKind === 'image'
+                      ? 'Switch back to chat'
+                      : 'Create an image from your prompt'}
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
             </div>
 
             {/* Right Actions */}
@@ -332,7 +369,7 @@ export function Composer({ onSend, disabled, initialValue = '' }: ComposerProps)
                   )}
                 >
                   <SendIcon className="size-4 mr-2" />
-                  Send
+                  {composerKind === 'image' ? 'Create' : 'Send'}
                 </Button>
               )}
             </div>
@@ -341,6 +378,12 @@ export function Composer({ onSend, disabled, initialValue = '' }: ComposerProps)
 
         {/* Helper text */}
         <p className="text-xs text-muted-foreground text-center mt-3">
+          {composerKind === 'image' ? (
+            <>
+              Image mode creates a quick visual concept card from your prompt.
+            </>
+          ) : null}
+          {composerKind === 'image' ? ' ' : null}
           Press <kbd className="px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-mono text-xs">Enter</kbd> to send,{' '}
           <kbd className="px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-mono text-xs">Shift + Enter</kbd> for new line
         </p>

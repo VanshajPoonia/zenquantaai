@@ -46,6 +46,7 @@ export function ChatArea() {
   const handleSendMessage = async (input: {
     content: string
     attachments?: Parameters<typeof sendMessage>[0]['attachments']
+    kind?: Parameters<typeof sendMessage>[0]['kind']
   }) => {
     setSelectedPrompt('')
     await sendMessage(input)

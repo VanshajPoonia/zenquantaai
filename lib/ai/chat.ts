@@ -9,6 +9,10 @@ import {
 import { estimateUsage } from '@/lib/utils/cost'
 import { toAttachmentContext } from '@/lib/utils/files'
 import {
+  buildGeneratedImageCaption,
+  createGeneratedImageAttachment,
+} from '@/lib/utils/generated-image'
+import {
   AIMode,
   AttachmentContext,
   ChatAction,
@@ -166,12 +170,23 @@ export async function* generateAssistantStream(input: {
   conversation: Conversation
   settings: SessionSettings
   mode: AIMode
+  action?: ChatAction
 }): AsyncIterable<string> {
   const config = resolveModelConfig(input.mode, input.settings.modelOverride)
   const latestPrompt =
     [...input.conversation.messages]
       .reverse()
       .find((message) => message.role === 'user')?.content ?? 'the user request'
+
+  if (input.action === 'generate-image') {
+    for await (const chunk of streamText(
+      buildGeneratedImageCaption(latestPrompt),
+      20
+    )) {
+      yield chunk
+    }
+    return
+  }
 
   if (!hasOpenRouterConfig()) {
     for await (const chunk of streamText(buildMockResponse(input.mode, latestPrompt), 16)) {
@@ -268,6 +283,39 @@ function buildAssistantPlaceholder(
 }
 
 function applySend(
+  conversation: Conversation,
+  payload: ChatRequest
+): {
+  conversation: Conversation
+  generationConversation: Conversation
+  userMessage: Message
+  assistantMode: AIMode
+} {
+  const content = assertContent(payload.content, payload.action)
+  const userMessage = createMessage({
+    role: 'user',
+    content,
+    mode: payload.mode,
+    attachments: payload.attachments,
+  })
+
+  const nextConversation = updateConversationSnapshot(
+    resolveConversationMode(conversation, payload.mode),
+    {
+      sessionSettings: payload.settings,
+      messages: [...conversation.messages, userMessage],
+    }
+  )
+
+  return {
+    conversation: nextConversation,
+    generationConversation: nextConversation,
+    userMessage,
+    assistantMode: payload.mode,
+  }
+}
+
+function applyGenerateImage(
   conversation: Conversation,
   payload: ChatRequest
 ): {
@@ -472,6 +520,9 @@ export async function prepareConversationForChat(
     case 'send':
       prepared = applySend(baseConversation, payload)
       break
+    case 'generate-image':
+      prepared = applyGenerateImage(baseConversation, payload)
+      break
     case 'regenerate':
       prepared = applyRegenerate(baseConversation, payload)
       break
@@ -512,8 +563,22 @@ export async function completeConversationWithAssistant(
   assistantMessage: Message,
   content: string,
   generationConversation: Conversation,
-  generationMode: AIMode
+  generationMode: AIMode,
+  options?: {
+    action?: ChatAction
+    userMessage?: Message
+  }
 ): Promise<Conversation> {
+  const generatedAttachments =
+    options?.action === 'generate-image' && options.userMessage
+      ? [
+          createGeneratedImageAttachment(
+            options.userMessage.content,
+            generationMode
+          ),
+        ]
+      : []
+
   const activeConfig = resolveModelConfig(
     generationMode,
     conversation.sessionSettings.modelOverride
@@ -533,9 +598,10 @@ export async function completeConversationWithAssistant(
   const finalAssistant = {
     ...assistantMessage,
     content,
+    attachments: generatedAttachments,
     status: 'complete' as const,
     error: undefined,
-    usage,
+    usage: options?.action === 'generate-image' ? undefined : usage,
   }
 
   return updateConversationSnapshot(conversation, {
@@ -560,6 +626,7 @@ export async function* streamConversationReply(
     conversation: prepared.generationConversation,
     settings: payload.settings,
     mode: prepared.assistantMode,
+    action: payload.action,
   })) {
     accumulated += chunk
 
@@ -576,7 +643,11 @@ export async function* streamConversationReply(
     prepared.assistantPlaceholder,
     accumulated || 'No response returned.',
     prepared.generationConversation,
-    prepared.assistantMode
+    prepared.assistantMode,
+    {
+      action: payload.action,
+      userMessage: prepared.userMessage,
+    }
   )
 
   yield {

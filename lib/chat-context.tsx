@@ -68,6 +68,7 @@ import { serializeAttachment, toAttachmentContext } from '@/lib/utils/files'
 interface SendMessageInput {
   content: string
   attachments?: Array<Attachment | PendingAttachment>
+  kind?: 'chat' | 'image'
 }
 
 type ProjectFilterId = 'all' | string
@@ -395,7 +396,18 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     async (userId: string) => {
       if (hasLocalImportMarker(userId)) return
 
-      const localConversations = readBrowserConversations() ?? []
+      const localConversations = (readBrowserConversations() ?? []).filter(
+        (conversation) => {
+          const hasMeaningfulMessage = conversation.messages.some((message) => {
+            if (message.role === 'system') return false
+            return message.content.trim().length > 0
+          })
+
+          const hasAttachment = (conversation.attachments ?? []).length > 0
+
+          return hasMeaningfulMessage || hasAttachment
+        }
+      )
       const localProjects = readBrowserProjects() ?? []
       const localPrompts = readBrowserPromptLibrary() ?? []
       const localSettings = readBrowserAppSettings()
@@ -543,10 +555,11 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       )
 
       setAuthError(null)
+      await restoreSession()
 
       return response.message ?? 'Account created. You are now signed in.'
     },
-    [requestJson]
+    [requestJson, restoreSession]
   )
 
   const requestPasswordReset = useCallback(
@@ -1065,7 +1078,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   )
 
   const sendMessage = useCallback(
-    async ({ content, attachments = [] }: SendMessageInput) => {
+    async ({ content, attachments = [], kind = 'chat' }: SendMessageInput) => {
       const conversation = await ensureConversation()
       const uploadedAttachments = await uploadAttachments(attachments)
       const userMessage = createMessage({
@@ -1091,7 +1104,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       })
 
       await runChatAction({
-        action: 'send',
+        action: kind === 'image' ? 'generate-image' : 'send',
         content,
         conversation,
         optimisticConversation,

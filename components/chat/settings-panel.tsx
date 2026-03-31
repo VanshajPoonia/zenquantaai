@@ -5,12 +5,10 @@ import { cn } from '@/lib/utils'
 import { useChatContext } from '@/lib/chat-context'
 import {
   AIMode,
-  MODEL_OVERRIDE_CONFIGS,
   MODE_CONFIGS,
   ModelOverrideOption,
   SYSTEM_PRESET_CONFIGS,
   createSessionSettings,
-  resolveModelConfig,
 } from '@/lib/types'
 import {
   getModeAccentClass,
@@ -60,10 +58,24 @@ export function SettingsPanel() {
   if (!isSettingsPanelOpen) return null
 
   const modeConfig = MODE_CONFIGS[currentMode]
-  const activeModelConfig = resolveModelConfig(
-    currentMode,
-    sessionSettings.modelOverride
-  )
+
+  const ROUTING_PROFILE_LABELS: Record<ModelOverrideOption, string> = {
+    auto: 'Mode Default',
+    gemini: 'Balanced',
+    claude: 'Refined',
+    gpt: 'Structured',
+    deepseek: 'Analytical',
+    qwen: 'Technical',
+  }
+
+  const ROUTING_PROFILE_DESCRIPTIONS: Record<ModelOverrideOption, string> = {
+    auto: `Uses the standard ${modeConfig.name.toLowerCase()} behavior for this session.`,
+    gemini: 'A fast, balanced response profile for broad tasks.',
+    claude: 'A more polished profile for nuanced writing and careful reasoning.',
+    gpt: 'A structured profile for crisp answers and organized outputs.',
+    deepseek: 'A more analytical profile for breakdowns and stepwise reasoning.',
+    qwen: 'A more technical profile for implementation-heavy work.',
+  }
 
   return (
     <aside
@@ -137,34 +149,12 @@ export function SettingsPanel() {
           </div>
           <div className="rounded-xl border border-border/60 bg-background/60 px-3 py-2">
             <p className="text-[11px] uppercase tracking-widest text-muted-foreground mb-1">
-              Model Routing
+              Response Profile
             </p>
             <p className="text-sm text-foreground">
-              {sessionSettings.modelOverride === 'auto'
-                ? `Auto · ${activeModelConfig.label}`
-                : activeModelConfig.label}
+              {ROUTING_PROFILE_LABELS[sessionSettings.modelOverride]}
             </p>
           </div>
-          {currentChat?.usage && (
-            <div className="grid grid-cols-2 gap-3 rounded-xl border border-border/60 bg-background/60 px-3 py-3">
-              <div>
-                <p className="text-[11px] uppercase tracking-widest text-muted-foreground mb-1">
-                  Est. Cost
-                </p>
-                <p className="text-sm font-medium text-foreground">
-                  ${currentChat.usage.estimatedCostUsd.toFixed(4)}
-                </p>
-              </div>
-              <div>
-                <p className="text-[11px] uppercase tracking-widest text-muted-foreground mb-1">
-                  Tokens
-                </p>
-                <p className="text-sm font-medium text-foreground">
-                  {currentChat.usage.totalTokens}
-                </p>
-              </div>
-            </div>
-          )}
         </div>
 
         <div className="space-y-3">
@@ -271,7 +261,7 @@ export function SettingsPanel() {
             <div>
               <h3 className="text-sm font-medium text-foreground">Advanced Settings</h3>
               <p className="text-xs text-muted-foreground">
-                Override the routed model without changing the active mode prompt.
+                Fine-tune the session behavior without changing the active mode.
               </p>
             </div>
             <Button
@@ -287,7 +277,7 @@ export function SettingsPanel() {
             <div className="space-y-3 rounded-2xl border border-border/70 bg-background/50 p-4">
               <div className="space-y-2">
                 <Label htmlFor="modelOverride" className="text-sm font-medium">
-                  Model
+                  Response Profile
                 </Label>
                 <Select
                   value={sessionSettings.modelOverride}
@@ -299,19 +289,17 @@ export function SettingsPanel() {
                     <SelectValue placeholder="Auto" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="auto">Auto</SelectItem>
-                    <SelectItem value="gemini">Gemini</SelectItem>
-                    <SelectItem value="claude">Claude</SelectItem>
-                    <SelectItem value="gpt">GPT</SelectItem>
-                    <SelectItem value="deepseek">DeepSeek</SelectItem>
-                    <SelectItem value="qwen">Qwen</SelectItem>
+                    <SelectItem value="auto">Mode Default</SelectItem>
+                    <SelectItem value="gemini">Balanced</SelectItem>
+                    <SelectItem value="claude">Refined</SelectItem>
+                    <SelectItem value="gpt">Structured</SelectItem>
+                    <SelectItem value="deepseek">Analytical</SelectItem>
+                    <SelectItem value="qwen">Technical</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
               <p className="text-xs leading-relaxed text-muted-foreground">
-                {sessionSettings.modelOverride === 'auto'
-                  ? `Auto uses the ${modeConfig.name.toLowerCase()} routing default: ${activeModelConfig.label}.`
-                  : MODEL_OVERRIDE_CONFIGS[sessionSettings.modelOverride].description}
+                {ROUTING_PROFILE_DESCRIPTIONS[sessionSettings.modelOverride]}
               </p>
             </div>
           )}
@@ -332,7 +320,7 @@ export function SettingsPanel() {
                   Web Search
                 </Label>
                 <p className="text-xs text-muted-foreground">
-                  Allow retrieval-style context when the gateway supports it
+                  Allow retrieval-style context when available
                 </p>
               </div>
             </div>
@@ -378,7 +366,7 @@ export function SettingsPanel() {
                   File Context
                 </Label>
                 <p className="text-xs text-muted-foreground">
-                  Include extracted attachment text in the model context for this chat
+                  Include extracted attachment text in the assistant context for this chat
                 </p>
               </div>
             </div>

@@ -55,6 +55,12 @@ export function AuthGate() {
     status !== 'submitting' &&
     (!validationMessage || passwordMode === 'sign-in') &&
     (passwordMode === 'sign-in' || Boolean(confirmPassword.trim()))
+  const feedbackTone =
+    validationMessage || status === 'error' || authError
+      ? 'error'
+      : message
+        ? 'success'
+        : 'neutral'
 
   return (
     <div className="flex h-screen w-full items-center justify-center bg-background px-6">
@@ -199,15 +205,17 @@ export function AuthGate() {
           </Button>
         </div>
 
-        {validationMessage && (
-          <div className="mt-4 rounded-2xl border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
-            {validationMessage}
-          </div>
-        )}
-
-        {(message || authError) && (
-          <div className="mt-4 rounded-2xl border border-border/70 bg-background/60 px-4 py-3 text-sm text-muted-foreground">
-            {message || authError}
+        {(validationMessage || message || authError) && (
+          <div
+            className={
+              feedbackTone === 'error'
+                ? 'mt-4 rounded-2xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive'
+                : feedbackTone === 'success'
+                  ? 'mt-4 rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200'
+                  : 'mt-4 rounded-2xl border border-border/70 bg-background/60 px-4 py-3 text-sm text-muted-foreground'
+            }
+          >
+            {validationMessage || message || authError}
           </div>
         )}
       </div>
