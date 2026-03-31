@@ -41,6 +41,7 @@ The app also supports per-chat model override on top of the default mode routing
 
 - authenticated chat workspace
 - chat projects/folders
+- draft-first new chats that are only saved after the first real message
 - saved prompts
 - system presets
 - ask another mode
@@ -190,6 +191,7 @@ types/
 
 - OpenRouter is the only model gateway.
 - Supabase is the source of truth after sign-in.
+- `New Chat` opens a draft state first and does not create an empty saved conversation in the sidebar.
 - `.env.local` is for local secrets and should never be committed.
 - The publishable Supabase key is safe for `NEXT_PUBLIC_*`.
 - The Supabase secret key must remain server-only.
