@@ -1,35 +1,204 @@
-# zenquantaai
+# Zenquanta AI
 
-This is a [Next.js](https://nextjs.org) project bootstrapped with [v0](https://v0.app).
+Zenquanta AI is a production-style AI chat app built with Next.js, TypeScript, Tailwind CSS, shadcn/ui, OpenRouter, and Supabase.
 
-## Built with v0
+It supports:
+- multi-mode chat
+- OpenRouter model routing
+- email magic-link auth
+- email/password auth
+- password recovery
+- project-based chat organization
+- prompt library
+- file uploads
+- streaming responses
+- exported chats
+- Supabase-backed sync
 
-This repository is linked to a [v0](https://v0.app) project. You can continue developing by visiting the link below -- start new chats to make changes, and v0 will push commits directly to this repo. Every merge to `main` will automatically deploy.
+## Stack
 
-[Continue working on v0 →](https://v0.app/chat/projects/prj_z0SQ5pGOKDnas9HoHYusveXp8Xwj)
+- Next.js App Router
+- TypeScript
+- Tailwind CSS
+- shadcn/ui
+- OpenRouter
+- Supabase Auth
+- Supabase Postgres
+- Supabase Storage
 
-## Getting Started
+## Modes
 
-First, run the development server:
+Zenquanta keeps the mode-based product structure while routing models through OpenRouter.
+
+- `general`: everyday assistant
+- `creative`: expressive writing
+- `logic`: structured reasoning
+- `code`: technical implementation help
+
+The app also supports per-chat model override on top of the default mode routing.
+
+## Features
+
+- authenticated chat workspace
+- chat projects/folders
+- saved prompts
+- system presets
+- ask another mode
+- mode switching mid-conversation
+- browser upload flow for text, images, and PDFs
+- private attachment storage in Supabase
+- markdown and JSON export
+- streaming-ready chat API
+
+## Local Setup
+
+1. Install dependencies:
+
+```bash
+npm install
+```
+
+2. Create your local env file:
+
+```bash
+cp .env.example .env.local
+```
+
+3. Fill in [`.env.local`](/Users/vanshajpoonia/Code/Zenquanta%20AI/.env.local):
+
+```env
+OPENROUTER_API_KEY=
+OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
+
+NEXT_PUBLIC_SUPABASE_URL=
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=
+SUPABASE_SECRET_KEY=
+```
+
+4. Start the app:
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+5. Open:
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```text
+http://localhost:3000
+```
 
-## Learn More
+## Supabase Setup
 
-To learn more, take a look at the following resources:
+After creating your Supabase project, do this:
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-- [v0 Documentation](https://v0.app/docs) - learn about v0 and how to use it.
+1. Enable email auth and magic links.
+2. Set auth URLs in `Authentication -> URL Configuration`.
+3. Run the SQL migration from [20260401_zenquanta_projects_prompts.sql](/Users/vanshajpoonia/Code/Zenquanta%20AI/supabase/migrations/20260401_zenquanta_projects_prompts.sql).
+4. Update the Supabase email templates.
 
-<a href="https://v0.app/chat/api/kiro/clone/VanshajPoonia/zenquantaai" alt="Open in Kiro"><img src="https://pdgvvgmkdvyeydso.public.blob.vercel-storage.com/open%20in%20kiro.svg?sanitize=true" /></a>
+### URL Configuration
+
+For local development:
+
+- `Site URL`: `http://localhost:3000`
+- Redirect URL: `http://localhost:3000/auth/callback`
+
+For production, add your deployed domain and callback URL too.
+
+### Migration
+
+Run the SQL from:
+
+- [20260401_zenquanta_projects_prompts.sql](/Users/vanshajpoonia/Code/Zenquanta%20AI/supabase/migrations/20260401_zenquanta_projects_prompts.sql)
+
+This creates:
+
+- `zen_projects`
+- `zen_conversations`
+- `zen_messages`
+- `zen_prompt_library`
+- `zen_user_settings`
+- private storage bucket `zen-attachments`
+
+It also enables RLS and adds ownership policies.
+
+### Email Templates
+
+Use these templates in `Authentication -> Email Templates`.
+
+`Magic Link`
+
+```html
+<h2>Sign in to Zenquanta AI</h2>
+<p>Follow this link to continue:</p>
+<p><a href="{{ .RedirectTo }}?token_hash={{ .TokenHash }}&type=email">Continue</a></p>
+```
+
+`Confirm sign up`
+
+```html
+<h2>Confirm your Zenquanta AI account</h2>
+<p>Follow this link to verify your email and continue:</p>
+<p><a href="{{ .RedirectTo }}?token_hash={{ .TokenHash }}&type=email">Confirm your email</a></p>
+```
+
+`Reset Password`
+
+```html
+<h2>Reset your Zenquanta AI password</h2>
+<p>Follow this link to reset your password:</p>
+<p><a href="{{ .RedirectTo }}?token_hash={{ .TokenHash }}&type=recovery">Reset Password</a></p>
+```
+
+`Confirm Email Change`
+
+```html
+<h2>Confirm change of email</h2>
+<p>Follow this link to confirm the update of your email from {{ .Email }} to {{ .NewEmail }}:</p>
+<p><a href="{{ .RedirectTo }}?token_hash={{ .TokenHash }}&type=email">Change Email</a></p>
+```
+
+## Scripts
+
+- `npm run dev`
+- `npm run build`
+- `npm run start`
+- `npm run lint`
+
+## Project Structure
+
+```text
+app/
+  api/
+  auth/
+components/
+  auth/
+  chat/
+  ui/
+lib/
+  ai/
+  auth/
+  config/
+  storage/
+  utils/
+supabase/
+  migrations/
+types/
+```
+
+## Notes
+
+- OpenRouter is the only model gateway.
+- Supabase is the source of truth after sign-in.
+- `.env.local` is for local secrets and should never be committed.
+- The publishable Supabase key is safe for `NEXT_PUBLIC_*`.
+- The Supabase secret key must remain server-only.
+
+## Verification
+
+The current app is expected to pass:
+
+```bash
+npx tsc --noEmit
+npm run build
+```
