@@ -2,12 +2,19 @@
 
 import { cn } from '@/lib/utils'
 import { useChatContext } from '@/lib/chat-context'
+import { getModeAccentClass } from '@/lib/mode-utils'
 import { Button } from '@/components/ui/button'
 import { Slider } from '@/components/ui/slider'
 import { Switch } from '@/components/ui/switch'
 import { Label } from '@/components/ui/label'
 import { Separator } from '@/components/ui/separator'
 import { XIcon, GlobeIcon, DatabaseIcon, FileIcon } from '@/components/icons'
+
+function getSliderClass(mode: string) {
+  const colorClass = getModeAccentClass(mode as 'creative' | 'logic' | 'code', 'bg')
+  const borderClass = getModeAccentClass(mode as 'creative' | 'logic' | 'code', 'border')
+  return `[&_[data-slot=slider-range]]:${colorClass} [&_[data-slot=slider-thumb]]:${borderClass}`
+}
 
 export function SettingsPanel() {
   const {
@@ -56,11 +63,7 @@ export function SettingsPanel() {
             onValueChange={([value]) =>
               updateSessionSettings({ temperature: value })
             }
-            className={cn(
-              currentMode === 'creative' && '[&_[data-slot=slider-range]]:bg-creative [&_[data-slot=slider-thumb]]:border-creative',
-              currentMode === 'logic' && '[&_[data-slot=slider-range]]:bg-logic [&_[data-slot=slider-thumb]]:border-logic',
-              currentMode === 'code' && '[&_[data-slot=slider-range]]:bg-code [&_[data-slot=slider-thumb]]:border-code'
-            )}
+            className={getSliderClass(currentMode)}
           />
           <p className="text-xs text-muted-foreground">
             Higher values make output more random, lower values more focused.
@@ -86,11 +89,7 @@ export function SettingsPanel() {
             onValueChange={([value]) =>
               updateSessionSettings({ maxTokens: value })
             }
-            className={cn(
-              currentMode === 'creative' && '[&_[data-slot=slider-range]]:bg-creative [&_[data-slot=slider-thumb]]:border-creative',
-              currentMode === 'logic' && '[&_[data-slot=slider-range]]:bg-logic [&_[data-slot=slider-thumb]]:border-logic',
-              currentMode === 'code' && '[&_[data-slot=slider-range]]:bg-code [&_[data-slot=slider-thumb]]:border-code'
-            )}
+            className={getSliderClass(currentMode)}
           />
           <p className="text-xs text-muted-foreground">
             Maximum length of the generated response.

@@ -2,7 +2,8 @@
 
 import { useState, useMemo } from 'react'
 import { cn } from '@/lib/utils'
-import { Message } from '@/lib/types'
+import { Message, AIMode } from '@/lib/types'
+import { ModeIcon, getModeAccentClass } from '@/lib/mode-utils'
 import { Button } from '@/components/ui/button'
 import {
   Tooltip,
@@ -14,9 +15,6 @@ import {
   CopyIcon,
   RefreshIcon,
   CheckIcon,
-  SparklesIcon,
-  BrainIcon,
-  CodeIcon,
   UserIcon,
 } from '@/components/icons'
 
@@ -27,30 +25,13 @@ interface ChatMessageProps {
   isLastAssistant?: boolean
 }
 
-function getModeIcon(mode: string, className?: string) {
-  switch (mode) {
-    case 'creative':
-      return <SparklesIcon className={cn('size-5', className)} />
-    case 'logic':
-      return <BrainIcon className={cn('size-5', className)} />
-    case 'code':
-      return <CodeIcon className={cn('size-5', className)} />
-    default:
-      return null
-  }
-}
-
-function getModeColor(mode: string) {
-  switch (mode) {
-    case 'creative':
-      return 'bg-creative/20 text-creative border-creative/30'
-    case 'logic':
-      return 'bg-logic/20 text-logic border-logic/30'
-    case 'code':
-      return 'bg-code/20 text-code border-code/30'
-    default:
-      return 'bg-muted text-muted-foreground'
-  }
+function getModeColorClasses(mode: AIMode) {
+  return cn(
+    'bg-opacity-20 border-opacity-30',
+    getModeAccentClass(mode, 'text'),
+    getModeAccentClass(mode, 'border'),
+    `bg-${mode}/20`
+  )
 }
 
 // Simple markdown-like rendering
@@ -278,10 +259,10 @@ export function ChatMessage({
         <div
           className={cn(
             'shrink-0 size-8 rounded-full flex items-center justify-center border',
-            getModeColor(message.mode)
+            getModeColorClasses(message.mode)
           )}
         >
-          {getModeIcon(message.mode, 'size-4')}
+          <ModeIcon mode={message.mode} size="sm" />
         </div>
         <div className="flex-1">
           <div className="bg-card border border-border rounded-2xl rounded-tl-md px-4 py-3">
