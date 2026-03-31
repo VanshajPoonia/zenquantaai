@@ -521,10 +521,10 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   )
 
   const requestPasswordSignIn = useCallback(
-    async (email: string, password: string) => {
+    async (identifier: string, password: string) => {
       await requestJson('/api/auth/password/sign-in', {
         method: 'POST',
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ identifier, password }),
       })
       setAuthError(null)
       await restoreSession()
@@ -533,21 +533,18 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   )
 
   const requestPasswordSignUp = useCallback(
-    async (email: string, password: string) => {
+    async (identifier: string, password: string) => {
       const response = await requestJson<{ message?: string }>(
         '/api/auth/password/sign-up',
         {
           method: 'POST',
-          body: JSON.stringify({ email, password }),
+          body: JSON.stringify({ identifier, password }),
         }
       )
 
       setAuthError(null)
 
-      return (
-        response.message ??
-        'Check your inbox and confirm your email before signing in with password.'
-      )
+      return response.message ?? 'Account created. You are now signed in.'
     },
     [requestJson]
   )

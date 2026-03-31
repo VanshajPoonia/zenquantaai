@@ -261,6 +261,7 @@ export interface UsageEstimate {
 
 export interface AuthUser {
   id: string
+  loginId: string | null
   email: string | null
 }
 

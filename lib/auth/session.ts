@@ -4,10 +4,16 @@ import { AuthUser } from '@/types'
 const ACCESS_TOKEN_COOKIE = 'zenquanta-access-token'
 const REFRESH_TOKEN_COOKIE = 'zenquanta-refresh-token'
 const COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 30
+const LOGIN_ID_EMAIL_DOMAIN = 'login.zenquanta.local'
+
+type SupabaseUserMetadata = {
+  login_id?: string | null
+}
 
 type SupabaseAuthUser = {
   id: string
   email?: string | null
+  user_metadata?: SupabaseUserMetadata | null
 }
 
 type SupabaseSessionResponse = {
@@ -34,11 +40,46 @@ function normalizeSupabaseUrl(value: string): string {
   return value.trim().replace(/\/$/, '')
 }
 
+function normalizeLoginId(value: string): string {
+  return value.trim().toLowerCase()
+}
+
+function loginIdToSyntheticEmail(loginId: string): string {
+  return `${loginId}@${LOGIN_ID_EMAIL_DOMAIN}`
+}
+
+function syntheticEmailToLoginId(email: string | null | undefined): string | null {
+  const normalizedEmail = email?.trim().toLowerCase()
+  const suffix = `@${LOGIN_ID_EMAIL_DOMAIN}`
+
+  if (!normalizedEmail || !normalizedEmail.endsWith(suffix)) {
+    return null
+  }
+
+  return normalizedEmail.slice(0, -suffix.length)
+}
+
+export function parseLoginId(value: string): string {
+  const loginId = normalizeLoginId(value)
+
+  if (!/^[a-z0-9](?:[a-z0-9._-]{1,30}[a-z0-9])?$/.test(loginId)) {
+    throw new Error(
+      'Use 3-32 characters with letters, numbers, ".", "_" or "-".'
+    )
+  }
+
+  return loginId
+}
+
 function toAuthUser(user: SupabaseAuthUser | null | undefined): AuthUser | null {
   if (!user?.id) return null
 
   return {
     id: user.id,
+    loginId:
+      user.user_metadata?.login_id?.trim()?.toLowerCase() ??
+      syntheticEmailToLoginId(user.email) ??
+      null,
     email: user.email ?? null,
   }
 }
@@ -65,25 +106,48 @@ export function hasSupabaseAuthConfig(): boolean {
   return Boolean(config.url && config.publishableKey)
 }
 
+function getSupabaseAdminAuthConfig() {
+  const url =
+    process.env.NEXT_PUBLIC_SUPABASE_URL?.trim() ??
+    process.env.SUPABASE_URL?.trim() ??
+    ''
+  const secretKey =
+    process.env.SUPABASE_SECRET_KEY?.trim() ??
+    process.env.SUPABASE_SERVICE_ROLE_KEY?.trim() ??
+    ''
+
+  return {
+    url: url ? normalizeSupabaseUrl(url) : '',
+    secretKey,
+  }
+}
+
+export function hasSupabaseAdminAuthConfig(): boolean {
+  const config = getSupabaseAdminAuthConfig()
+  return Boolean(config.url && config.secretKey)
+}
+
 async function requestSupabaseAuth<T>(
   path: string,
   init: {
     method?: 'GET' | 'POST' | 'PUT'
     accessToken?: string
     body?: unknown
+    apiKey?: string
   } = {}
 ): Promise<T> {
   const config = getSupabaseAuthConfig()
+  const apiKey = init.apiKey?.trim() ?? config.publishableKey
 
-  if (!config.url || !config.publishableKey) {
+  if (!config.url || !apiKey) {
     throw new Error('Supabase auth configuration is missing.')
   }
 
   const response = await fetch(`${config.url}/auth/v1${path}`, {
     method: init.method ?? 'GET',
     headers: {
-      apikey: config.publishableKey,
-      Authorization: `Bearer ${init.accessToken ?? config.publishableKey}`,
+      apikey: apiKey,
+      Authorization: `Bearer ${init.accessToken ?? apiKey}`,
       ...(typeof init.body !== 'undefined'
         ? { 'Content-Type': 'application/json' }
         : {}),
@@ -241,6 +305,40 @@ export async function signUpWithPassword(
   }
 }
 
+export async function createLoginIdAccount(
+  loginId: string,
+  password: string
+): Promise<void> {
+  const adminConfig = getSupabaseAdminAuthConfig()
+
+  if (!adminConfig.url || !adminConfig.secretKey) {
+    throw new Error('Supabase admin auth configuration is missing.')
+  }
+
+  try {
+    await requestSupabaseAuth('/admin/users', {
+      method: 'POST',
+      apiKey: adminConfig.secretKey,
+      body: {
+        email: loginIdToSyntheticEmail(loginId),
+        password,
+        email_confirm: true,
+        user_metadata: {
+          login_id: loginId,
+        },
+      },
+    })
+  } catch (error) {
+    const message = error instanceof Error ? error.message.toLowerCase() : ''
+
+    if (message.includes('already') || message.includes('registered')) {
+      throw new Error('That ID is already taken.')
+    }
+
+    throw error
+  }
+}
+
 export async function signInWithPassword(
   email: string,
   password: string
@@ -269,6 +367,13 @@ export async function signInWithPassword(
     accessToken,
     refreshToken,
   }
+}
+
+export async function signInWithLoginId(
+  loginId: string,
+  password: string
+): Promise<RequestAuthSession> {
+  return await signInWithPassword(loginIdToSyntheticEmail(loginId), password)
 }
 
 export async function updatePassword(

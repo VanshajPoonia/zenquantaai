@@ -58,7 +58,7 @@ export default function ResetPasswordPage() {
 
         <p className="mb-6 text-sm leading-7 text-muted-foreground">
           Choose a new password for your workspace. Once it is updated, you can
-          sign in with email and password or keep using magic links.
+          sign in with your ID and password.
         </p>
 
         <div className="space-y-4">

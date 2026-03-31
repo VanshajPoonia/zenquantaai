@@ -498,7 +498,7 @@ export function Sidebar({ onOpenSettings }: SidebarProps) {
                   Signed in
                 </p>
                 <p className="mt-1 truncate text-sm text-foreground">
-                  {authState.user?.email ?? 'Zenquanta user'}
+                  {authState.user?.loginId ?? authState.user?.email ?? 'Zenquanta user'}
                 </p>
               </div>
               <DropdownMenuItem onClick={() => void signOut()}>

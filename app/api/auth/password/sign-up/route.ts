@@ -1,13 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server'
 import {
+  appendAuthCookies,
+  createLoginIdAccount,
   hasSupabaseAuthConfig,
-  signUpWithPassword,
+  hasSupabaseAdminAuthConfig,
+  parseLoginId,
+  signInWithLoginId,
 } from '@/lib/auth/session'
 
 export const runtime = 'nodejs'
 
 export async function POST(request: NextRequest) {
-  if (!hasSupabaseAuthConfig()) {
+  if (!hasSupabaseAdminAuthConfig() || !hasSupabaseAuthConfig()) {
     return NextResponse.json(
       { error: 'Supabase auth is not configured.' },
       { status: 500 }
@@ -15,14 +19,14 @@ export async function POST(request: NextRequest) {
   }
 
   const body = (await request.json().catch(() => null)) as
-    | { email?: string; password?: string }
+    | { identifier?: string; password?: string }
     | null
-  const email = body?.email?.trim().toLowerCase()
+  const identifier = body?.identifier ?? ''
   const password = body?.password ?? ''
 
-  if (!email || !password) {
+  if (!identifier.trim() || !password) {
     return NextResponse.json(
-      { error: 'Email and password are required.' },
+      { error: 'ID and password are required.' },
       { status: 400 }
     )
   }
@@ -34,16 +38,16 @@ export async function POST(request: NextRequest) {
     )
   }
 
-  await signUpWithPassword(
-    email,
-    password,
-    `${request.nextUrl.origin}/auth/callback`
-  )
+  const loginId = parseLoginId(identifier)
+  await createLoginIdAccount(loginId, password)
+  const session = await signInWithLoginId(loginId, password)
 
-  return NextResponse.json({
+  const response = NextResponse.json({
     ok: true,
-    requiresVerification: true,
-    message:
-      'Check your inbox and confirm your email before using password sign-in.',
+    requiresVerification: false,
+    user: session.user,
+    message: 'Account created. You are now signed in.',
   })
+  appendAuthCookies(response.headers, session)
+  return response
 }

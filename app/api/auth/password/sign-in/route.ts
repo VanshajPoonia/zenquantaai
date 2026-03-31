@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import {
   appendAuthCookies,
   hasSupabaseAuthConfig,
-  signInWithPassword,
+  parseLoginId,
+  signInWithLoginId,
 } from '@/lib/auth/session'
 
 export const runtime = 'nodejs'
@@ -16,19 +17,20 @@ export async function POST(request: NextRequest) {
   }
 
   const body = (await request.json().catch(() => null)) as
-    | { email?: string; password?: string }
+    | { identifier?: string; password?: string }
     | null
-  const email = body?.email?.trim().toLowerCase()
+  const identifier = body?.identifier ?? ''
   const password = body?.password ?? ''
 
-  if (!email || !password) {
+  if (!identifier.trim() || !password) {
     return NextResponse.json(
-      { error: 'Email and password are required.' },
+      { error: 'ID and password are required.' },
       { status: 400 }
     )
   }
 
-  const session = await signInWithPassword(email, password)
+  const loginId = parseLoginId(identifier)
+  const session = await signInWithLoginId(loginId, password)
   const response = NextResponse.json({ ok: true, user: session.user })
   appendAuthCookies(response.headers, session)
   return response
