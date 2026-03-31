@@ -1,6 +1,6 @@
 import { MODEL_ROUTE_CONFIGS } from '@/lib/config'
-import { conversationStore } from '@/lib/storage'
 import {
+  createConversation,
   createMessage,
   getLastAssistantMessage,
   getLastUserMessage,
@@ -175,16 +175,16 @@ function resolveConversationMode(conversation: Conversation, mode: AIMode): Conv
 }
 
 async function resolveConversation(payload: ChatRequest): Promise<Conversation> {
-  if (payload.conversationId) {
-    const conversation = await conversationStore.get(payload.conversationId)
-    if (!conversation) {
-      throw new Error('Conversation not found.')
-    }
-
-    return conversation
+  if (payload.conversation) {
+    return updateConversationSnapshot(payload.conversation, {
+      mode: payload.mode,
+      sessionSettings: payload.settings,
+      updatedAt: payload.conversation.updatedAt,
+    })
   }
 
-  return conversationStore.create({
+  return createConversation({
+    id: payload.conversationId,
     mode: payload.mode,
     sessionSettings: payload.settings,
   })
@@ -339,10 +339,8 @@ export async function prepareConversationForChat(
       throw new Error('Unsupported chat action.')
   }
 
-  const persistedConversation = await conversationStore.save(prepared.conversation)
-
   return {
-    conversation: persistedConversation,
+    conversation: prepared.conversation,
     userMessage: prepared.userMessage,
     assistantPlaceholder: buildAssistantPlaceholder(payload.mode),
   }
@@ -360,11 +358,9 @@ export async function completeConversationWithAssistant(
     error: undefined,
   }
 
-  return conversationStore.save(
-    updateConversationSnapshot(conversation, {
-      messages: [...conversation.messages, finalAssistant],
-    })
-  )
+  return updateConversationSnapshot(conversation, {
+    messages: [...conversation.messages, finalAssistant],
+  })
 }
 
 export async function* streamConversationReply(

@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSessionSettings } from '@/lib/config'
-import { settingsStore } from '@/lib/storage'
 import { encodeStreamEvent } from '@/lib/utils/stream'
 import { ChatRequest } from '@/types'
 import { resolveSessionSettings, streamConversationReply } from '@/lib/ai/chat'
@@ -22,16 +21,16 @@ export async function POST(request: NextRequest) {
     )
   }
 
-  const appSettings = await settingsStore.get()
   const settings = resolveSessionSettings(
     body.mode,
     body.settings,
-    createSessionSettings(body.mode, appSettings.sessionDefaults)
+    createSessionSettings(body.mode)
   )
 
   const payload: ChatRequest = {
     action: body.action,
     conversationId: body.conversationId,
+    conversation: body.conversation,
     mode: body.mode,
     content: body.content,
     settings,

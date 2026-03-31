@@ -98,6 +98,7 @@ export interface ModeConfig extends ModelRouteConfig {
 export interface ChatRequest {
   action: ChatAction
   conversationId?: string
+  conversation?: Conversation
   mode: AIMode
   content?: string
   settings: SessionSettings

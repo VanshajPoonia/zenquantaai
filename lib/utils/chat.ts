@@ -127,6 +127,7 @@ export function getDefaultConversationTitle(mode: AIMode): string {
 }
 
 export function createConversation(input: {
+  id?: string
   mode: AIMode
   sessionSettings: SessionSettings
   title?: string
@@ -138,7 +139,7 @@ export function createConversation(input: {
   const createdAt = input.createdAt ?? nowIso()
 
   return updateConversationSnapshot({
-    id: createId('conv'),
+    id: input.id ?? createId('conv'),
     title: input.title ?? getDefaultConversationTitle(input.mode),
     mode: input.mode,
     createdAt,

@@ -26,6 +26,17 @@ import {
 } from '@/types'
 import { createSessionSettings, DEFAULT_APP_SETTINGS, MODE_CONFIGS } from '@/lib/config'
 import {
+  getSeededBrowserAppSettings,
+  getSeededBrowserConversations,
+  readBrowserAppSettings,
+  readBrowserConversations,
+  readBrowserCurrentChatId,
+  writeBrowserAppSettings,
+  writeBrowserConversations,
+  writeBrowserCurrentChatId,
+} from '@/lib/storage/browser'
+import {
+  createConversation,
   createMessage,
   getLastAssistantMessage,
   toConversationSummary,
@@ -75,6 +86,100 @@ function normalizeModeSessionSettings(
     memory: settings.memory,
     fileContext: settings.fileContext,
   })
+}
+
+function normalizeAppSettingsState(input: AppSettings): AppSettings {
+  return {
+    ...input,
+    sessionDefaults: createSessionSettings(input.defaultMode, {
+      webSearch: input.sessionDefaults.webSearch,
+      memory: input.sessionDefaults.memory,
+      fileContext: input.sessionDefaults.fileContext,
+    }),
+  }
+}
+
+function readLocalConversations(): Conversation[] {
+  return readBrowserConversations() ?? getSeededBrowserConversations()
+}
+
+function readLocalSettings(): AppSettings {
+  return normalizeAppSettingsState(
+    readBrowserAppSettings() ?? getSeededBrowserAppSettings()
+  )
+}
+
+function writeLocalConversations(conversations: Conversation[]): void {
+  writeBrowserConversations(conversations)
+}
+
+function writeLocalSettings(settings: AppSettings): void {
+  writeBrowserAppSettings(normalizeAppSettingsState(settings))
+}
+
+function upsertConversation(
+  conversations: Conversation[],
+  conversation: Conversation
+): Conversation[] {
+  const next = [conversation, ...conversations.filter((item) => item.id !== conversation.id)]
+
+  return next.sort((a, b) => {
+    if (a.isPinned !== b.isPinned) {
+      return a.isPinned ? -1 : 1
+    }
+
+    return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+  })
+}
+
+function sortConversationList(conversations: Conversation[]): Conversation[] {
+  return [...conversations].sort((a, b) => {
+    if (a.isPinned !== b.isPinned) {
+      return a.isPinned ? -1 : 1
+    }
+
+    return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+  })
+}
+
+function sortConversationSummaries(
+  summaries: ConversationSummary[]
+): ConversationSummary[] {
+  return [...summaries].sort((a, b) => {
+    if (a.isPinned !== b.isPinned) {
+      return a.isPinned ? -1 : 1
+    }
+
+    return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+  })
+}
+
+async function hydrateServerConversations(): Promise<Conversation[] | null> {
+  try {
+    const summaries = await fetchJson<ConversationSummary[]>('/api/conversations')
+    if (summaries.length === 0) {
+      return []
+    }
+
+    const conversations = await Promise.all(
+      summaries.map((summary) =>
+        fetchJson<Conversation>(`/api/conversations/${summary.id}`)
+      )
+    )
+
+    return sortConversationList(conversations)
+  } catch {
+    return null
+  }
+}
+
+async function hydrateServerSettings(): Promise<AppSettings | null> {
+  try {
+    const settings = await fetchJson<AppSettings>('/api/settings')
+    return normalizeAppSettingsState(settings)
+  } catch {
+    return null
+  }
 }
 
 async function fetchJson<T>(input: RequestInfo, init?: RequestInit): Promise<T> {
@@ -146,32 +251,58 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const persistCurrentChat = useCallback((conversation: Conversation | null) => {
     setCurrentChatState(conversation)
 
-    if (!conversation) return
+    if (!conversation) {
+      writeBrowserCurrentChatId(null)
+      return
+    }
 
-    setChats((previous) => upsertSummary(previous, toConversationSummary(conversation)))
+    const nextConversations = upsertConversation(readLocalConversations(), conversation)
+    writeLocalConversations(nextConversations)
+    writeBrowserCurrentChatId(conversation.id)
+    setChats(sortConversationSummaries(nextConversations.map(toConversationSummary)))
   }, [])
 
   const loadChat = useCallback(
     async (chatId: string) => {
-      const conversation = await fetchJson<Conversation>(`/api/conversations/${chatId}`)
+      const conversation = readLocalConversations().find((item) => item.id === chatId)
+      if (!conversation) {
+        setCurrentChatState(null)
+        writeBrowserCurrentChatId(null)
+        return
+      }
+
       setCurrentModeState(conversation.mode)
-      persistCurrentChat(conversation)
+      setCurrentChatState(conversation)
+      writeBrowserCurrentChatId(conversation.id)
     },
-    [persistCurrentChat]
+    []
   )
 
   const loadBootData = useCallback(async () => {
-    const [settings, summaries] = await Promise.all([
-      fetchJson<AppSettings>('/api/settings'),
-      fetchJson<ConversationSummary[]>('/api/conversations'),
-    ])
+    const storedSettings = readBrowserAppSettings()
+    const storedConversations = readBrowserConversations()
+    const settings =
+      normalizeAppSettingsState(
+        storedSettings ?? (await hydrateServerSettings()) ?? getSeededBrowserAppSettings()
+      )
+    const conversations = sortConversationList(
+      storedConversations ??
+        (await hydrateServerConversations()) ??
+        getSeededBrowserConversations()
+    )
+    const currentChatId = readBrowserCurrentChatId()
+    const activeConversation =
+      conversations.find((conversation) => conversation.id === currentChatId) ?? null
 
     setAppSettings(settings)
-    setCurrentModeState(settings.defaultMode)
+    writeLocalSettings(settings)
+    writeLocalConversations(conversations)
+    setCurrentModeState(activeConversation?.mode ?? settings.defaultMode)
     setDraftSessionSettings(
       createSessionSettings(settings.defaultMode, settings.sessionDefaults)
     )
-    setChats(summaries)
+    setChats(sortConversationSummaries(conversations.map(toConversationSummary)))
+    setCurrentChatState(activeConversation)
   }, [])
 
   useEffect(() => {
@@ -188,6 +319,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     (chat: ConversationSummary | Conversation | null) => {
       if (!chat) {
         setCurrentChatState(null)
+        writeBrowserCurrentChatId(null)
         return
       }
 
@@ -212,26 +344,28 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   )
 
   const createNewChat = useCallback(async () => {
-    const conversation = await fetchJson<Conversation>('/api/conversations', {
-      method: 'POST',
-      body: JSON.stringify({ mode: currentMode }),
+    const conversation = createConversation({
+      mode: currentMode,
+      sessionSettings,
     })
 
     setCurrentModeState(conversation.mode)
     setDraftSessionSettings(conversation.sessionSettings)
     persistCurrentChat(conversation)
-  }, [currentMode, persistCurrentChat])
+  }, [currentMode, persistCurrentChat, sessionSettings])
 
   const deleteChat = useCallback(
     async (chatId: string) => {
-      await fetchJson<{ ok: true }>(`/api/conversations/${chatId}`, {
-        method: 'DELETE',
-      })
+      const nextConversations = readLocalConversations().filter(
+        (conversation) => conversation.id !== chatId
+      )
+      writeLocalConversations(nextConversations)
 
-      setChats((previous) => previous.filter((chat) => chat.id !== chatId))
+      setChats(sortConversationSummaries(nextConversations.map(toConversationSummary)))
 
       if (currentChat?.id === chatId) {
         setCurrentChatState(null)
+        writeBrowserCurrentChatId(null)
       }
     },
     [currentChat?.id]
@@ -242,34 +376,42 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       const source =
         currentChat?.id === chatId
           ? currentChat
-          : chats.find((conversation) => conversation.id === chatId)
+          : readLocalConversations().find((conversation) => conversation.id === chatId)
 
       if (!source) return
 
-      const updated = await fetchJson<Conversation>(`/api/conversations/${chatId}`, {
-        method: 'PATCH',
-        body: JSON.stringify({
-          isPinned: !source.isPinned,
-        }),
+      const updated = updateConversationSnapshot(source, {
+        isPinned: !source.isPinned,
       })
+      const nextConversations = upsertConversation(readLocalConversations(), updated)
+      writeLocalConversations(nextConversations)
 
       if (currentChat?.id === chatId) {
         setCurrentChatState(updated)
       }
 
-      setChats((previous) => upsertSummary(previous, toConversationSummary(updated)))
+      setChats(sortConversationSummaries(nextConversations.map(toConversationSummary)))
     },
-    [chats, currentChat]
+    [currentChat]
   )
 
   const saveAppSettings = useCallback(
     async (settings: AppSettingsPatch) => {
-      const nextSettings = await fetchJson<AppSettings>('/api/settings', {
-        method: 'POST',
-        body: JSON.stringify(settings),
+      const nextSettings = normalizeAppSettingsState({
+        ...appSettings,
+        ...settings,
+        sessionDefaults: {
+          ...appSettings.sessionDefaults,
+          ...settings.sessionDefaults,
+        },
+        gatewayDrafts: {
+          ...appSettings.gatewayDrafts,
+          ...settings.gatewayDrafts,
+        },
       })
 
       setAppSettings(nextSettings)
+      writeLocalSettings(nextSettings)
 
       if (!currentChat) {
         setCurrentModeState(nextSettings.defaultMode)
@@ -283,7 +425,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
       return nextSettings
     },
-    [currentChat]
+    [appSettings, currentChat]
   )
 
   const updateApiSettings = useCallback(
@@ -326,22 +468,22 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const ensureConversation = useCallback(async () => {
     if (currentChat) return currentChat
 
-    const conversation = await fetchJson<Conversation>('/api/conversations', {
-      method: 'POST',
-      body: JSON.stringify({ mode: currentMode }),
+    const conversation = createConversation({
+      mode: currentMode,
+      sessionSettings,
     })
 
     persistCurrentChat(conversation)
     return conversation
-  }, [currentChat, currentMode, persistCurrentChat])
+  }, [currentChat, currentMode, persistCurrentChat, sessionSettings])
 
   const runChatAction = useCallback(
     async (payload: {
       action: ChatAction
       content?: string
       targetMessageId?: string
+      conversation: Conversation
       optimisticConversation: Conversation
-      conversationId: string
     }) => {
       persistCurrentChat(payload.optimisticConversation)
 
@@ -349,7 +491,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
       setStreamingState({
         status: 'streaming',
-        conversationId: payload.conversationId,
+        conversationId: payload.conversation.id,
         messageId: placeholder?.id,
       })
 
@@ -364,7 +506,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
           },
           body: JSON.stringify({
             action: payload.action,
-            conversationId: payload.conversationId,
+            conversationId: payload.conversation.id,
+            conversation: payload.conversation,
             mode: currentMode,
             content: payload.content,
             settings: sessionSettings,
@@ -449,10 +592,10 @@ export function ChatProvider({ children }: { children: ReactNode }) {
             ? error.message
             : 'Something went wrong while generating a response.'
 
-        applyLocalError(payload.optimisticConversation.messages.at(-1)?.id, message)
+          applyLocalError(payload.optimisticConversation.messages.at(-1)?.id, message)
         setStreamingState({
           status: 'error',
-          conversationId: payload.conversationId,
+          conversationId: payload.conversation.id,
           messageId: payload.optimisticConversation.messages.at(-1)?.id,
           error: message,
         })
@@ -489,7 +632,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       await runChatAction({
         action: 'send',
         content,
-        conversationId: conversation.id,
+        conversation,
         optimisticConversation,
       })
     },
@@ -519,7 +662,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
     await runChatAction({
       action: 'regenerate',
-      conversationId: currentChat.id,
+      conversation: currentChat,
       optimisticConversation,
     })
   }, [currentChat, currentMode, runChatAction, sessionSettings])
@@ -548,7 +691,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
     await runChatAction({
       action: 'retry',
-      conversationId: currentChat.id,
+      conversation: currentChat,
       optimisticConversation,
     })
   }, [currentChat, currentMode, runChatAction, sessionSettings])
@@ -595,7 +738,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         action: 'edit-last-user',
         content,
         targetMessageId: lastUser.id,
-        conversationId: currentChat.id,
+        conversation: currentChat,
         optimisticConversation,
       })
     },
@@ -624,19 +767,6 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       })
 
       persistCurrentChat(optimisticConversation)
-
-      void fetchJson<Conversation>(`/api/conversations/${currentChat.id}`, {
-        method: 'PATCH',
-        body: JSON.stringify({
-          sessionSettings: optimisticConversation.sessionSettings,
-        }),
-      })
-        .then((conversation) => {
-          persistCurrentChat(conversation)
-        })
-        .catch((error) => {
-          console.error('Failed to persist session settings.', error)
-        })
     },
     [currentChat, persistCurrentChat]
   )
