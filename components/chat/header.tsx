@@ -37,6 +37,7 @@ export function Header({ onOpenSettings }: HeaderProps) {
     currentMode,
     currentChat,
     exportCurrentChat,
+    goHome,
     toggleSidebar,
     isSidebarOpen,
     isSettingsPanelOpen,
@@ -55,12 +56,16 @@ export function Header({ onOpenSettings }: HeaderProps) {
             <Button variant="ghost" size="icon" onClick={toggleSidebar}>
               <MenuIcon className="size-5" />
             </Button>
-            <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={goHome}
+              className="flex items-center gap-2 rounded-xl px-2 py-1 transition-colors hover:bg-accent/40"
+            >
               <ZenquantaLogo className="size-6" />
               <span className="font-semibold text-foreground hidden sm:inline">
                 Zenquanta AI
               </span>
-            </div>
+            </button>
           </>
         )}
         {isSidebarOpen && (

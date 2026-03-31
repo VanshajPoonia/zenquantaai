@@ -191,6 +191,7 @@ export function Sidebar({ onOpenSettings }: SidebarProps) {
     conversations,
     chats,
     currentChat,
+    goHome,
     setCurrentChat,
     createNewChat,
     deleteChat,
@@ -250,7 +251,11 @@ export function Sidebar({ onOpenSettings }: SidebarProps) {
     <aside className="flex flex-col w-72 bg-sidebar border-r border-sidebar-border h-full">
       {/* Header with logo and new chat */}
       <div className="p-4 space-y-4">
-        <div className="flex items-center gap-3">
+        <button
+          type="button"
+          onClick={goHome}
+          className="flex items-center gap-3 rounded-2xl p-1 text-left transition-colors hover:bg-sidebar-accent/40"
+        >
           <ZenquantaLogo className="size-9" />
           <div>
             <span className="font-bold text-lg text-sidebar-foreground tracking-tight">
@@ -260,7 +265,7 @@ export function Sidebar({ onOpenSettings }: SidebarProps) {
               AI
             </span>
           </div>
-        </div>
+        </button>
 
         <Button
           onClick={createNewChat}

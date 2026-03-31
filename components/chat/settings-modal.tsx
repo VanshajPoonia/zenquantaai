@@ -46,20 +46,20 @@ function ModeSelectionCard({
     <button
       type="button"
       onClick={onClick}
-      className={`relative rounded-2xl border p-4 text-left transition-all ${
+      className={`group relative min-h-[168px] rounded-3xl border p-5 text-left transition-all duration-200 ${
         active
-          ? `${getModeTintClass(mode, 'strong')} border-current ${getModeAccentClass(mode, 'text')}`
-          : 'border-border bg-card hover:bg-card/80'
+          ? `${getModeTintClass(mode, 'strong')} border-current ${getModeAccentClass(mode, 'text')} shadow-xl shadow-black/20`
+          : 'border-border/70 bg-card/70 hover:-translate-y-0.5 hover:border-border hover:bg-card'
       }`}
     >
-      <div className={`absolute inset-0 rounded-2xl opacity-0 ${active ? 'opacity-100' : ''} ${getModeGradient(mode)}`} />
-      <div className="relative flex items-center gap-3">
-        <div className={`p-2 rounded-xl ${getModeTintClass(mode, 'strong')}`}>
+      <div className={`absolute inset-0 rounded-3xl opacity-0 ${active ? 'opacity-100' : ''} ${getModeGradient(mode)}`} />
+      <div className="relative flex h-full flex-col gap-5">
+        <div className={`flex size-14 items-center justify-center rounded-2xl ${getModeTintClass(mode, 'strong')}`}>
           <ModeIcon mode={mode} size="md" className={getModeAccentClass(mode, 'text')} />
         </div>
-        <div>
-          <p className="font-semibold text-foreground">{config.name}</p>
-          <p className="text-xs text-muted-foreground">{config.description}</p>
+        <div className="space-y-2">
+          <p className="text-lg font-semibold leading-tight text-foreground">{config.name}</p>
+          <p className="text-sm leading-6 text-muted-foreground">{config.description}</p>
         </div>
       </div>
     </button>
@@ -70,7 +70,6 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
   const { appSettings, saveAppSettings } = useChatContext()
   const [localSettings, setLocalSettings] = useState<AppSettings>(appSettings)
   const [saved, setSaved] = useState(false)
-  const defaultModeConfig = MODE_CONFIGS[localSettings.defaultMode]
 
   useEffect(() => {
     if (open) {
@@ -87,35 +86,35 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[85vh] max-w-4xl overflow-hidden p-0">
+      <DialogContent className="max-h-[88vh] max-w-5xl overflow-hidden rounded-[28px] border border-border/70 bg-background/95 p-0 shadow-2xl shadow-black/40">
         <div className="flex h-full max-h-[85vh] flex-col">
-        <DialogHeader className="border-b border-border px-6 py-5">
-          <DialogTitle className="text-xl">Settings</DialogTitle>
-          <DialogDescription>
+        <DialogHeader className="border-b border-border/70 bg-gradient-to-b from-card/80 to-background px-8 py-7 text-left">
+          <DialogTitle className="text-3xl tracking-tight">Settings</DialogTitle>
+          <DialogDescription className="max-w-2xl text-base leading-7">
             Save default behavior for Zenquanta AI while keeping OpenRouter credentials env-backed on the server.
           </DialogDescription>
         </DialogHeader>
 
-        <Tabs defaultValue="general" className="flex min-h-0 flex-1 flex-col px-6 py-4">
-          <TabsList className="grid w-full grid-cols-4">
-            <TabsTrigger value="general">General</TabsTrigger>
-            <TabsTrigger value="gateway">Gateway</TabsTrigger>
-            <TabsTrigger value="models">Models</TabsTrigger>
-            <TabsTrigger value="about">About</TabsTrigger>
+        <Tabs defaultValue="general" className="flex min-h-0 flex-1 flex-col gap-6 px-8 py-6">
+          <TabsList className="grid w-full max-w-3xl grid-cols-4 rounded-2xl bg-muted/40 p-1.5">
+            <TabsTrigger value="general" className="rounded-xl">General</TabsTrigger>
+            <TabsTrigger value="gateway" className="rounded-xl">Gateway</TabsTrigger>
+            <TabsTrigger value="models" className="rounded-xl">Models</TabsTrigger>
+            <TabsTrigger value="about" className="rounded-xl">About</TabsTrigger>
           </TabsList>
 
-          <TabsContent value="general" className="mt-6 min-h-0 flex-1 space-y-6 overflow-y-auto pb-6">
+          <TabsContent value="general" className="min-h-0 flex-1 space-y-8 overflow-y-auto pr-2 pb-6">
             <div className="space-y-3">
-              <div className="flex items-center justify-between">
+              <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
                 <div>
-                  <h3 className="font-semibold">Default Mode</h3>
-                  <p className="text-sm text-muted-foreground">
+                  <h3 className="text-xl font-semibold">Default Mode</h3>
+                  <p className="text-base text-muted-foreground">
                     Applies when you open a fresh chat session.
                   </p>
                 </div>
                 <Badge variant="secondary">Saved to settings</Badge>
               </div>
-              <div className="grid gap-3 md:grid-cols-3">
+              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
                 {MODE_ORDER.map((mode) => (
                   <ModeSelectionCard
                     key={mode}
@@ -135,8 +134,8 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
 
             <Separator />
 
-            <div className="grid gap-6 md:grid-cols-2">
-              <div className="space-y-3">
+            <div className="grid gap-5 xl:grid-cols-3">
+              <div className="space-y-3 rounded-2xl border border-border/70 bg-card/60 p-5">
                 <div className="flex items-center justify-between">
                   <Label htmlFor="defaultTemperature">Default Temperature</Label>
                   <span className="text-sm text-muted-foreground font-mono">
@@ -164,7 +163,7 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                 </p>
               </div>
 
-              <div className="space-y-3">
+              <div className="space-y-3 rounded-2xl border border-border/70 bg-card/60 p-5">
                 <div className="flex items-center justify-between">
                   <Label htmlFor="defaultMaxTokens">Default Max Tokens</Label>
                   <span className="text-sm text-muted-foreground font-mono">
@@ -193,7 +192,7 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
               </div>
             </div>
 
-            <div className="space-y-3">
+            <div className="space-y-3 rounded-2xl border border-border/70 bg-card/60 p-5">
               <div className="flex items-center justify-between">
                 <Label htmlFor="defaultTopP">Default Top P</Label>
                 <span className="text-sm text-muted-foreground font-mono">
@@ -221,11 +220,11 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
               </p>
             </div>
 
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="rounded-2xl border border-border p-4 space-y-3">
+            <div className="grid gap-4 xl:grid-cols-2">
+              <div className="rounded-2xl border border-border/70 bg-card/60 p-5 space-y-4">
                 <div>
-                  <h3 className="font-semibold">Response Style</h3>
-                  <p className="text-sm text-muted-foreground">
+                  <h3 className="text-lg font-semibold">Response Style</h3>
+                  <p className="text-sm leading-6 text-muted-foreground">
                     Shapes the overall tone of assistant output.
                   </p>
                 </div>
@@ -249,10 +248,10 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                 </div>
               </div>
 
-              <div className="rounded-2xl border border-border p-4 space-y-3">
+              <div className="rounded-2xl border border-border/70 bg-card/60 p-5 space-y-4">
                 <div>
-                  <h3 className="font-semibold">Visual Preferences</h3>
-                  <p className="text-sm text-muted-foreground">
+                  <h3 className="text-lg font-semibold">Visual Preferences</h3>
+                  <p className="text-sm leading-6 text-muted-foreground">
                     Stored now for future theming and accent routing.
                   </p>
                 </div>
@@ -277,8 +276,8 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
               </div>
             </div>
 
-            <div className="space-y-4 rounded-2xl border border-border p-4">
-              <h3 className="font-semibold">Default Feature Toggles</h3>
+            <div className="space-y-4 rounded-2xl border border-border/70 bg-card/60 p-5">
+              <h3 className="text-lg font-semibold">Default Feature Toggles</h3>
               <div className="grid gap-4 md:grid-cols-3">
                 <div className="flex items-center justify-between rounded-xl border border-border px-3 py-3">
                   <div>
@@ -340,14 +339,14 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
             </div>
           </TabsContent>
 
-          <TabsContent value="gateway" className="mt-6 min-h-0 flex-1 space-y-6 overflow-y-auto pb-6">
-            <div className="rounded-2xl border border-border bg-muted/20 p-4">
-              <p className="text-sm text-muted-foreground">
+          <TabsContent value="gateway" className="min-h-0 flex-1 space-y-6 overflow-y-auto pr-2 pb-6">
+            <div className="rounded-2xl border border-border/70 bg-card/60 p-5">
+              <p className="text-sm leading-6 text-muted-foreground">
                 OpenRouter is the only AI gateway in this app. These fields stay as local placeholders for convenience, but live requests use the server env vars.
               </p>
             </div>
 
-            <div className="relative rounded-2xl border border-border p-4 overflow-hidden">
+            <div className="relative overflow-hidden rounded-3xl border border-border/70 bg-card/60 p-5">
               <div className="absolute inset-0 opacity-20 bg-gradient-to-br from-logic/20 via-transparent to-code/20" />
               <div className="relative space-y-4">
                 <div className="flex items-center gap-3">
@@ -404,7 +403,7 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
             </div>
           </TabsContent>
 
-          <TabsContent value="models" className="mt-6 min-h-0 flex-1 space-y-4 overflow-y-auto pb-6">
+          <TabsContent value="models" className="min-h-0 flex-1 space-y-4 overflow-y-auto pr-2 pb-6">
             <div className="grid gap-4">
               {MODE_ORDER.map((mode) => {
                 const config = MODE_CONFIGS[mode]
@@ -453,8 +452,8 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
             </div>
           </TabsContent>
 
-          <TabsContent value="about" className="mt-6 min-h-0 flex-1 space-y-4 overflow-y-auto pb-6">
-            <div className="text-center py-8">
+          <TabsContent value="about" className="min-h-0 flex-1 space-y-4 overflow-y-auto pr-2 pb-6">
+            <div className="rounded-3xl border border-border/70 bg-card/60 py-10 text-center">
               <div className="inline-flex items-center gap-2 mb-4">
                 <div className="size-12 rounded-xl bg-gradient-to-br from-creative via-logic to-code flex items-center justify-center">
                   <span className="text-2xl font-bold text-white">Z</span>
@@ -471,7 +470,7 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
           </TabsContent>
         </Tabs>
 
-        <div className="border-t border-border px-6 py-4">
+        <div className="border-t border-border/70 bg-background/90 px-8 py-5">
         <div className="flex justify-end">
           <Button onClick={handleSave} className="gap-2">
             {saved ? (

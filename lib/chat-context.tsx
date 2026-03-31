@@ -28,7 +28,6 @@ import {
 import { createSessionSettings, DEFAULT_APP_SETTINGS, MODE_CONFIGS } from '@/lib/config'
 import {
   getSeededBrowserAppSettings,
-  getSeededBrowserConversations,
   readBrowserAppSettings,
   readBrowserConversations,
   readBrowserCurrentChatId,
@@ -60,6 +59,7 @@ interface ChatContextType {
   chats: ConversationSummary[]
   currentChat: Chat | null
   setCurrentChat: (chat: ConversationSummary | Conversation | null) => void
+  goHome: () => void
   createNewChat: () => Promise<void>
   deleteChat: (chatId: string) => Promise<void>
   togglePinChat: (chatId: string) => Promise<void>
@@ -113,9 +113,7 @@ function sortConversationList(conversations: Conversation[]): Conversation[] {
 }
 
 function readLocalConversations(): Conversation[] {
-  return sortConversationList(
-    readBrowserConversations() ?? getSeededBrowserConversations()
-  )
+  return sortConversationList(readBrowserConversations() ?? [])
 }
 
 function readLocalSettings(): AppSettings {
@@ -130,54 +128,6 @@ function writeLocalConversations(conversations: Conversation[]): void {
 
 function writeLocalSettings(settings: AppSettings): void {
   writeBrowserAppSettings(normalizeAppSettingsState(settings))
-}
-
-async function fetchJson<T>(input: RequestInfo, init?: RequestInit): Promise<T> {
-  const response = await fetch(input, {
-    ...init,
-    headers: {
-      'Content-Type': 'application/json',
-      ...(init?.headers ?? {}),
-    },
-  })
-
-  if (!response.ok) {
-    const body = (await response.json().catch(() => null)) as
-      | { error?: string }
-      | null
-
-    throw new Error(body?.error ?? `Request failed with ${response.status}`)
-  }
-
-  return (await response.json()) as T
-}
-
-async function hydrateServerConversations(): Promise<Conversation[] | null> {
-  try {
-    const summaries = await fetchJson<ConversationSummary[]>('/api/conversations')
-    if (summaries.length === 0) {
-      return []
-    }
-
-    const conversations = await Promise.all(
-      summaries.map((summary) =>
-        fetchJson<Conversation>(`/api/conversations/${summary.id}`)
-      )
-    )
-
-    return sortConversationList(conversations)
-  } catch {
-    return null
-  }
-}
-
-async function hydrateServerSettings(): Promise<AppSettings | null> {
-  try {
-    const settings = await fetchJson<AppSettings>('/api/settings')
-    return normalizeAppSettingsState(settings)
-  } catch {
-    return null
-  }
 }
 
 export function ChatProvider({ children }: { children: ReactNode }) {
@@ -289,17 +239,9 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   )
 
   const loadBootData = useCallback(async () => {
-    const storedSettings = readBrowserAppSettings()
     const storedConversations = readBrowserConversations()
-    const settings =
-      normalizeAppSettingsState(
-        storedSettings ?? (await hydrateServerSettings()) ?? getSeededBrowserAppSettings()
-      )
-    const nextConversations = sortConversationList(
-      storedConversations ??
-        (await hydrateServerConversations()) ??
-        getSeededBrowserConversations()
-    )
+    const settings = readLocalSettings()
+    const nextConversations = sortConversationList(storedConversations ?? [])
     const currentChatId = readBrowserCurrentChatId()
     const activeConversation =
       nextConversations.find((conversation) => conversation.id === currentChatId) ?? null
@@ -353,6 +295,20 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     },
     [currentChat, draftSessionSettings]
   )
+
+  const goHome = useCallback(() => {
+    streamAbortRef.current?.abort()
+    streamAbortRef.current = null
+    setStreamingState({ status: 'idle' })
+    setSearchQuery('')
+    setCurrentChatState(null)
+    currentChatRef.current = null
+    writeBrowserCurrentChatId(null)
+    setCurrentModeState(appSettings.defaultMode)
+    setDraftSessionSettings(
+      createSessionSettings(appSettings.defaultMode, appSettings.sessionDefaults)
+    )
+  }, [appSettings])
 
   const createNewChat = useCallback(async () => {
     const conversation = createConversation({
@@ -806,6 +762,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       chats,
       currentChat,
       setCurrentChat,
+      goHome,
       createNewChat,
       deleteChat,
       togglePinChat,
@@ -841,6 +798,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       deleteChat,
       editLastUserMessage,
       exportCurrentChat,
+      goHome,
       isSettingsPanelOpen,
       isSidebarOpen,
       isStreaming,
