@@ -19,6 +19,30 @@ export const PROJECT_COLOR_OPTIONS = [
   'amber',
 ] as const
 
+export const IMAGE_GENERATION_CONFIG = {
+  model: 'black-forest-labs/flux.2-pro',
+  label: 'Studio Visual',
+  description: 'Sharper image output for polished concept work at a moderate cost.',
+} as const
+
+export const RESPONSE_PROFILE_LABELS: Record<ModelOverrideOption, string> = {
+  auto: 'Smart Match',
+  gemini: 'Swift',
+  claude: 'Polished',
+  gpt: 'Clear',
+  deepseek: 'Analyst',
+  qwen: 'Builder',
+}
+
+export const RESPONSE_PROFILE_DESCRIPTIONS: Record<ModelOverrideOption, string> = {
+  auto: 'Matches the response profile to the active mode automatically.',
+  gemini: 'Fast and balanced for broad prompts, drafts, and everyday help.',
+  claude: 'Smooth, polished output for nuanced writing and thoughtful responses.',
+  gpt: 'Clear and structured output for organized explanations and practical guidance.',
+  deepseek: 'Analytical output for stepwise reasoning, tradeoffs, and breakdowns.',
+  qwen: 'Builder-focused output for implementation work, debugging, and code-heavy tasks.',
+}
+
 export const MODEL_OVERRIDE_CONFIGS: Record<
   Exclude<ModelOverrideOption, 'auto'>,
   ModelOverrideConfig

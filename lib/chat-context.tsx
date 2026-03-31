@@ -654,19 +654,15 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   }, [appSettings])
 
   const createNewChat = useCallback(async () => {
-    const conversation = await requestJson<Conversation>('/api/conversations', {
-      method: 'POST',
-      body: JSON.stringify({
-        mode: currentMode,
-        projectId:
-          selectedProjectId === 'all' ? DEFAULT_PROJECT_ID : selectedProjectId,
-        sessionSettings,
-      }),
-    })
-
-    setDraftSessionSettings(conversation.sessionSettings)
-    upsertConversation(conversation)
-  }, [currentMode, requestJson, selectedProjectId, sessionSettings, upsertConversation])
+    streamAbortRef.current?.abort()
+    streamAbortRef.current = null
+    setStreamingState({ status: 'idle' })
+    setSearchQuery('')
+    setCurrentChatState(null)
+    currentChatRef.current = null
+    writeBrowserCurrentChatId(null)
+    setDraftSessionSettings(createSessionSettings(currentMode, sessionSettings))
+  }, [currentMode, sessionSettings])
 
   const deleteChat = useCallback(
     async (chatId: string) => {

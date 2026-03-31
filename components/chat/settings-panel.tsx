@@ -1,12 +1,15 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { Info } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useChatContext } from '@/lib/chat-context'
 import {
   AIMode,
   MODE_CONFIGS,
   ModelOverrideOption,
+  RESPONSE_PROFILE_DESCRIPTIONS,
+  RESPONSE_PROFILE_LABELS,
   SYSTEM_PRESET_CONFIGS,
   createSessionSettings,
 } from '@/lib/types'
@@ -21,6 +24,11 @@ import { Label } from '@/components/ui/label'
 import { Separator } from '@/components/ui/separator'
 import { Badge } from '@/components/ui/badge'
 import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover'
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -28,6 +36,11 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { XIcon, GlobeIcon, DatabaseIcon, FileIcon } from '@/components/icons'
+import {
+  getMaxTokensQuantity,
+  getTemperatureQuantity,
+  getTopPQuantity,
+} from '@/lib/utils/session-display'
 
 function getSliderClass(mode: AIMode) {
   const colorClass = getModeAccentClass(mode, 'bg')
@@ -58,24 +71,6 @@ export function SettingsPanel() {
   if (!isSettingsPanelOpen) return null
 
   const modeConfig = MODE_CONFIGS[currentMode]
-
-  const ROUTING_PROFILE_LABELS: Record<ModelOverrideOption, string> = {
-    auto: 'Mode Default',
-    gemini: 'Balanced',
-    claude: 'Refined',
-    gpt: 'Structured',
-    deepseek: 'Analytical',
-    qwen: 'Technical',
-  }
-
-  const ROUTING_PROFILE_DESCRIPTIONS: Record<ModelOverrideOption, string> = {
-    auto: `Uses the standard ${modeConfig.name.toLowerCase()} behavior for this session.`,
-    gemini: 'A fast, balanced response profile for broad tasks.',
-    claude: 'A more polished profile for nuanced writing and careful reasoning.',
-    gpt: 'A structured profile for crisp answers and organized outputs.',
-    deepseek: 'A more analytical profile for breakdowns and stepwise reasoning.',
-    qwen: 'A more technical profile for implementation-heavy work.',
-  }
 
   return (
     <aside
@@ -151,9 +146,41 @@ export function SettingsPanel() {
             <p className="text-[11px] uppercase tracking-widest text-muted-foreground mb-1">
               Response Profile
             </p>
-            <p className="text-sm text-foreground">
-              {ROUTING_PROFILE_LABELS[sessionSettings.modelOverride]}
-            </p>
+            <div className="flex items-center gap-1.5">
+              <p className="text-sm text-foreground">
+                {RESPONSE_PROFILE_LABELS[sessionSettings.modelOverride]}
+              </p>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    className="size-6 rounded-full text-muted-foreground hover:text-foreground"
+                  >
+                    <Info className="size-3.5" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent
+                  align="start"
+                  className="w-72 rounded-2xl border-border/70 bg-background/95 p-4"
+                >
+                  <div className="space-y-2">
+                    <p className="text-sm font-semibold text-foreground">
+                      {RESPONSE_PROFILE_LABELS[sessionSettings.modelOverride]}
+                    </p>
+                    <p className="text-sm leading-6 text-muted-foreground">
+                      {RESPONSE_PROFILE_DESCRIPTIONS[sessionSettings.modelOverride]}
+                    </p>
+                    {sessionSettings.modelOverride === 'auto' ? (
+                      <p className="text-xs text-muted-foreground/80">
+                        Tuned automatically for {modeConfig.name.toLowerCase()}.
+                      </p>
+                    ) : null}
+                  </div>
+                </PopoverContent>
+              </Popover>
+            </div>
           </div>
         </div>
 
@@ -190,8 +217,8 @@ export function SettingsPanel() {
             <Label htmlFor="temperature" className="text-sm font-medium">
               Temperature
             </Label>
-            <span className="text-sm text-muted-foreground font-mono">
-              {sessionSettings.temperature.toFixed(2)}
+            <span className="text-sm text-muted-foreground">
+              {getTemperatureQuantity(sessionSettings.temperature)}
             </span>
           </div>
           <Slider
@@ -213,8 +240,8 @@ export function SettingsPanel() {
             <Label htmlFor="maxTokens" className="text-sm font-medium">
               Max Tokens
             </Label>
-            <span className="text-sm text-muted-foreground font-mono">
-              {sessionSettings.maxTokens}
+            <span className="text-sm text-muted-foreground">
+              {getMaxTokensQuantity(sessionSettings.maxTokens)}
             </span>
           </div>
           <Slider
@@ -236,8 +263,8 @@ export function SettingsPanel() {
             <Label htmlFor="topP" className="text-sm font-medium">
               Top P
             </Label>
-            <span className="text-sm text-muted-foreground font-mono">
-              {sessionSettings.topP.toFixed(2)}
+            <span className="text-sm text-muted-foreground">
+              {getTopPQuantity(sessionSettings.topP)}
             </span>
           </div>
           <Slider
@@ -286,21 +313,21 @@ export function SettingsPanel() {
                   }
                 >
                   <SelectTrigger id="modelOverride">
-                    <SelectValue placeholder="Auto" />
+                    <SelectValue placeholder="Smart Match" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="auto">Mode Default</SelectItem>
-                    <SelectItem value="gemini">Balanced</SelectItem>
-                    <SelectItem value="claude">Refined</SelectItem>
-                    <SelectItem value="gpt">Structured</SelectItem>
-                    <SelectItem value="deepseek">Analytical</SelectItem>
-                    <SelectItem value="qwen">Technical</SelectItem>
+                    <SelectItem value="auto">Smart Match</SelectItem>
+                    <SelectItem value="gemini">Swift</SelectItem>
+                    <SelectItem value="claude">Polished</SelectItem>
+                    <SelectItem value="gpt">Clear</SelectItem>
+                    <SelectItem value="deepseek">Analyst</SelectItem>
+                    <SelectItem value="qwen">Builder</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
-              <p className="text-xs leading-relaxed text-muted-foreground">
-                {ROUTING_PROFILE_DESCRIPTIONS[sessionSettings.modelOverride]}
-              </p>
+              <div className="rounded-xl border border-border/60 bg-card/40 px-3 py-2 text-xs leading-relaxed text-muted-foreground">
+                Use the info icon in the session summary to compare the profiles without cluttering the panel.
+              </div>
             </div>
           )}
         </div>

@@ -6,6 +6,10 @@ import { cn } from '@/lib/utils'
 import { useChatContext } from '@/lib/chat-context'
 import { ConversationSummary } from '@/lib/types'
 import { ModeIcon, getModeAccentClass } from '@/lib/mode-utils'
+import {
+  formatEstimatedCostUsd,
+  sumUsageEstimates,
+} from '@/lib/utils/cost'
 import { formatConversationDate } from '@/lib/utils/date'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -86,7 +90,18 @@ function ChatItem({
       </div>
 
       <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium truncate">{chat.title}</p>
+        <TooltipProvider delayDuration={300}>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <p className="cursor-pointer truncate text-sm font-medium" title={chat.title}>
+                {chat.title}
+              </p>
+            </TooltipTrigger>
+            <TooltipContent side="top" className="max-w-xs text-xs">
+              {chat.title}
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
         <p className="text-xs text-sidebar-foreground/50 truncate">
           {projectLabel} • {formatConversationDate(chat.updatedAt)}
         </p>
@@ -288,10 +303,21 @@ export function Sidebar({ onOpenSettings }: SidebarProps) {
     [filteredChats]
   )
 
+  const usageSummary = useMemo(
+    () => sumUsageEstimates(conversations.map((conversation) => conversation.usage)),
+    [conversations]
+  )
+
+  const currentChatUsage = currentChat?.usage
+  const totalMessageCount = useMemo(
+    () => conversations.reduce((count, conversation) => count + conversation.messageCount, 0),
+    [conversations]
+  )
+
   if (!isSidebarOpen) return null
 
   return (
-    <aside className="flex flex-col w-72 bg-sidebar border-r border-sidebar-border h-full">
+    <aside className="flex h-full min-h-0 w-72 flex-col bg-sidebar border-r border-sidebar-border">
       {/* Header with logo and new chat */}
       <div className="p-4 space-y-4">
         <button
@@ -433,7 +459,7 @@ export function Sidebar({ onOpenSettings }: SidebarProps) {
       </div>
 
       {/* Chat List */}
-      <ScrollArea className="flex-1 px-2">
+      <ScrollArea className="min-h-0 flex-1 px-2">
         <div className="py-2 space-y-6">
           <ChatSection
             title="Pinned"
@@ -500,6 +526,41 @@ export function Sidebar({ onOpenSettings }: SidebarProps) {
                 <p className="mt-1 truncate text-sm text-foreground">
                   {authState.user?.loginId ?? authState.user?.email ?? 'Zenquanta user'}
                 </p>
+              </div>
+              <div className="px-3 pb-2">
+                <div className="rounded-xl border border-border/70 bg-card/60 p-3">
+                  <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+                    Usage
+                  </p>
+                  <div className="mt-3 grid grid-cols-2 gap-3 text-sm">
+                    <div>
+                      <p className="text-xs text-muted-foreground">Estimated spend</p>
+                      <p className="mt-1 font-medium text-foreground">
+                        {formatEstimatedCostUsd(usageSummary.estimatedCostUsd)}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground">Chats</p>
+                      <p className="mt-1 font-medium text-foreground">
+                        {conversations.length}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground">Messages</p>
+                      <p className="mt-1 font-medium text-foreground">
+                        {totalMessageCount}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground">Current chat</p>
+                      <p className="mt-1 font-medium text-foreground">
+                        {currentChatUsage
+                          ? formatEstimatedCostUsd(currentChatUsage.estimatedCostUsd)
+                          : 'No active chat'}
+                      </p>
+                    </div>
+                  </div>
+                </div>
               </div>
               <DropdownMenuItem onClick={() => void signOut()}>
                 Sign out

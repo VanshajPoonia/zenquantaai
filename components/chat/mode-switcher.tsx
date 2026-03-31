@@ -1,54 +1,29 @@
 'use client'
 
-import { useRef, useEffect, useState } from 'react'
+import { useTransition } from 'react'
 import { cn } from '@/lib/utils'
 import { useChatContext } from '@/lib/chat-context'
 import { AIMode, MODE_CONFIGS, MODE_ORDER } from '@/lib/types'
-import { ModeIcon, getModeAccentClass, getModeGlow } from '@/lib/mode-utils'
+import {
+  ModeIcon,
+  getModeAccentClass,
+  getModeGlow,
+  getModeTintClass,
+} from '@/lib/mode-utils'
 
 export function ModeSwitcher() {
   const { currentMode, setCurrentMode } = useChatContext()
-  const [indicatorStyle, setIndicatorStyle] = useState({ left: 0, width: 0 })
-  const containerRef = useRef<HTMLDivElement>(null)
-  const buttonRefs = useRef<Map<AIMode, HTMLButtonElement>>(new Map())
-
-  useEffect(() => {
-    const button = buttonRefs.current.get(currentMode)
-    const container = containerRef.current
-    if (button && container) {
-      const containerRect = container.getBoundingClientRect()
-      const buttonRect = button.getBoundingClientRect()
-      setIndicatorStyle({
-        left: buttonRect.left - containerRect.left,
-        width: buttonRect.width,
-      })
-    }
-  }, [currentMode])
+  const [, startTransition] = useTransition()
 
   return (
     <div className="flex flex-col items-center gap-4">
-      {/* Premium mode switcher */}
       <div
-        ref={containerRef}
         className={cn(
-          'relative flex items-center gap-1 p-1.5 rounded-2xl backdrop-blur-xl',
+          'grid w-full max-w-4xl grid-cols-2 gap-1.5 p-1.5 sm:grid-cols-4 rounded-2xl backdrop-blur-xl',
           'bg-gradient-to-b from-secondary/80 to-secondary/40',
           'border border-border/50 shadow-xl shadow-black/20'
         )}
       >
-        {/* Animated background indicator */}
-        <div
-          className={cn(
-            'absolute top-1.5 bottom-1.5 rounded-xl transition-all duration-300 ease-out',
-            getModeAccentClass(currentMode, 'bg'),
-            getModeGlow(currentMode)
-          )}
-          style={{
-            left: indicatorStyle.left,
-            width: indicatorStyle.width,
-          }}
-        />
-
         {MODE_ORDER.map((mode) => {
           const config = MODE_CONFIGS[mode]
           const isActive = currentMode === mode
@@ -56,16 +31,21 @@ export function ModeSwitcher() {
           return (
             <button
               key={mode}
-              ref={(el) => {
-                if (el) buttonRefs.current.set(mode, el)
-              }}
-              onClick={() => setCurrentMode(mode)}
+              onClick={() => startTransition(() => setCurrentMode(mode))}
               className={cn(
-                'relative z-10 flex items-center gap-2.5 px-5 py-3 rounded-xl transition-all duration-300',
-                'text-sm font-semibold tracking-tight',
+                'relative flex items-center justify-center gap-2.5 rounded-xl px-4 py-3 transition-all duration-200',
+                'text-sm font-semibold tracking-tight will-change-transform',
                 isActive
-                  ? 'text-white'
-                  : 'text-muted-foreground hover:text-foreground'
+                  ? cn(
+                      'text-white shadow-lg',
+                      getModeAccentClass(mode, 'bg'),
+                      getModeGlow(mode)
+                    )
+                  : cn(
+                      'text-muted-foreground hover:text-foreground',
+                      getModeTintClass(mode, 'subtle'),
+                      'hover:bg-secondary/80'
+                    )
               )}
             >
               <ModeIcon
@@ -82,7 +62,6 @@ export function ModeSwitcher() {
         })}
       </div>
 
-      {/* Helper text with subtle animation */}
       <p className="text-sm text-muted-foreground animate-in fade-in duration-300">
         {MODE_CONFIGS[currentMode].description}
       </p>
@@ -93,6 +72,7 @@ export function ModeSwitcher() {
 // Compact horizontal switcher for header/inline use
 export function ModeSwitcherCompact() {
   const { currentMode, setCurrentMode } = useChatContext()
+  const [, startTransition] = useTransition()
 
   return (
     <div className="flex items-center gap-0.5 p-1 bg-secondary/50 rounded-xl border border-border/30">
@@ -102,7 +82,7 @@ export function ModeSwitcherCompact() {
         return (
           <button
             key={mode}
-            onClick={() => setCurrentMode(mode)}
+            onClick={() => startTransition(() => setCurrentMode(mode))}
             className={cn(
               'relative flex items-center justify-center p-2 rounded-lg transition-all duration-200',
               isActive
@@ -128,6 +108,7 @@ export function ModeSwitcherCompact() {
 // Premium vertical mode selector for sidebar or modal
 export function ModeSwitcherVertical() {
   const { currentMode, setCurrentMode } = useChatContext()
+  const [, startTransition] = useTransition()
 
   return (
     <div className="flex flex-col gap-2">
@@ -138,7 +119,7 @@ export function ModeSwitcherVertical() {
         return (
           <button
             key={mode}
-            onClick={() => setCurrentMode(mode)}
+            onClick={() => startTransition(() => setCurrentMode(mode))}
             className={cn(
               'group relative flex items-center gap-4 p-4 rounded-xl transition-all duration-300',
               'border',

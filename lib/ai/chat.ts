@@ -1,4 +1,9 @@
-import { MODE_CONFIGS, MODEL_ROUTE_CONFIGS, resolveModelConfig } from '@/lib/config'
+import {
+  IMAGE_GENERATION_CONFIG,
+  MODE_CONFIGS,
+  MODEL_ROUTE_CONFIGS,
+  resolveModelConfig,
+} from '@/lib/config'
 import {
   createConversation,
   createMessage,
@@ -11,6 +16,7 @@ import { toAttachmentContext } from '@/lib/utils/files'
 import {
   buildGeneratedImageCaption,
   createGeneratedImageAttachment,
+  createGeneratedImageAttachmentFromUrl,
 } from '@/lib/utils/generated-image'
 import {
   buildMemoryBlock,
@@ -20,6 +26,7 @@ import {
 import {
   AIMode,
   AttachmentContext,
+  Attachment,
   ChatAction,
   ChatRequest,
   Conversation,
@@ -28,7 +35,11 @@ import {
   StreamEvent,
 } from '@/types'
 import { buildSystemPrompt } from './prompts'
-import { hasOpenRouterConfig, streamOpenRouterTextResponse } from './openrouter'
+import {
+  createOpenRouterImage,
+  hasOpenRouterConfig,
+  streamOpenRouterTextResponse,
+} from './openrouter'
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
@@ -59,6 +70,32 @@ async function* streamText(text: string, delayMs = 24) {
   for (const chunk of chunkText(text)) {
     await sleep(delayMs)
     yield chunk
+  }
+}
+
+async function generateImageAttachment(
+  prompt: string,
+  mode: AIMode,
+  settings: SessionSettings
+): Promise<Attachment> {
+  if (!hasOpenRouterConfig()) {
+    return createGeneratedImageAttachment(prompt, mode)
+  }
+
+  try {
+    const image = await createOpenRouterImage({
+      model: IMAGE_GENERATION_CONFIG.model,
+      prompt,
+      systemPrompt: `${buildSystemPrompt(
+        mode,
+        settings.systemPreset
+      )}\n\nGenerate a single polished image that matches the user's request. Keep any companion text extremely brief and let the image do the work.`,
+    })
+
+    return createGeneratedImageAttachmentFromUrl(prompt, image.imageUrl)
+  } catch (error) {
+    console.error('Falling back to local generated image placeholder.', error)
+    return createGeneratedImageAttachment(prompt, mode)
   }
 }
 
@@ -193,7 +230,7 @@ export async function* generateAssistantStream(input: {
 
   if (input.action === 'generate-image') {
     for await (const chunk of streamText(
-      buildGeneratedImageCaption(latestPrompt),
+      'Creating a polished visual based on your prompt...',
       20
     )) {
       yield chunk
@@ -585,9 +622,10 @@ export async function completeConversationWithAssistant(
   const generatedAttachments =
     options?.action === 'generate-image' && options.userMessage
       ? [
-          createGeneratedImageAttachment(
+          await generateImageAttachment(
             options.userMessage.content,
-            generationMode
+            generationMode,
+            conversation.sessionSettings
           ),
         ]
       : []
@@ -610,7 +648,10 @@ export async function completeConversationWithAssistant(
   })
   const finalAssistant = {
     ...assistantMessage,
-    content,
+    content:
+      options?.action === 'generate-image' && options.userMessage
+        ? buildGeneratedImageCaption(options.userMessage.content)
+        : content,
     attachments: generatedAttachments,
     status: 'complete' as const,
     error: undefined,

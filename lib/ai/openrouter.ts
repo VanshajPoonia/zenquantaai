@@ -24,6 +24,12 @@ type OpenRouterCreateChatCompletionResponse = {
             type?: string
             text?: string
           }>
+      images?: Array<{
+        type?: string
+        image_url?: {
+          url?: string
+        }
+      }>
     }
   }>
   error?: {
@@ -239,5 +245,67 @@ export async function* streamOpenRouterTextResponse(input: {
     if (content) {
       yield content
     }
+  }
+}
+
+export async function createOpenRouterImage(input: {
+  model: string
+  prompt: string
+  systemPrompt?: string
+}): Promise<{
+  content: string
+  imageUrl: string
+}> {
+  const runtimeConfig = getOpenRouterRuntimeConfig()
+
+  if (!runtimeConfig.apiKey) {
+    throw new Error('OPENROUTER_API_KEY is not configured.')
+  }
+
+  const messages: OpenRouterMessage[] = [
+    ...(input.systemPrompt
+      ? [{ role: 'system' as const, content: input.systemPrompt }]
+      : []),
+    { role: 'user', content: input.prompt },
+  ]
+
+  const response = await fetch(`${runtimeConfig.baseUrl}/chat/completions`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${runtimeConfig.apiKey}`,
+      'HTTP-Referer': 'http://localhost:3000',
+      'X-Title': 'Zenquanta AI',
+    },
+    body: JSON.stringify({
+      model: input.model,
+      messages,
+      modalities: ['image', 'text'],
+    }),
+  })
+
+  const data = (await response.json().catch(() => null)) as
+    | OpenRouterCreateChatCompletionResponse
+    | null
+
+  if (!response.ok) {
+    throw new Error(
+      data?.error?.message ??
+        `OpenRouter image request failed with status ${response.status}.`
+    )
+  }
+
+  const message = data?.choices?.[0]?.message
+  const imageUrl = message?.images?.[0]?.image_url?.url?.trim()
+
+  if (!imageUrl) {
+    throw new Error('No image was returned from the image generation request.')
+  }
+
+  return {
+    content:
+      extractContent(message?.content) ||
+      "I've generated an image based on your prompt.",
+    imageUrl,
   }
 }

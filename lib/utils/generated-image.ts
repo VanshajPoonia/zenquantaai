@@ -135,3 +135,24 @@ export function createGeneratedImageAttachment(
     textExcerpt: prompt.trim().slice(0, 240),
   }
 }
+
+export function createGeneratedImageAttachmentFromUrl(
+  prompt: string,
+  imageUrl: string
+): Attachment {
+  return {
+    id: createId('att'),
+    kind: 'image',
+    name: 'generated-visual.png',
+    mimeType: imageUrl.startsWith('data:image/jpeg')
+      ? 'image/jpeg'
+      : imageUrl.startsWith('data:image/webp')
+        ? 'image/webp'
+        : 'image/png',
+    size: imageUrl.length,
+    createdAt: nowIso(),
+    previewUrl: imageUrl,
+    textContent: prompt.trim(),
+    textExcerpt: prompt.trim().slice(0, 240),
+  }
+}

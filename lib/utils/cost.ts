@@ -46,3 +46,39 @@ export function sumConversationUsage(conversation: Conversation): UsageEstimate 
     }
   )
 }
+
+export function sumUsageEstimates(
+  usages: Array<UsageEstimate | undefined>
+): UsageEstimate {
+  return usages.reduce<UsageEstimate>(
+    (totals, usage) => {
+      if (!usage) return totals
+
+      return {
+        promptTokens: totals.promptTokens + usage.promptTokens,
+        completionTokens: totals.completionTokens + usage.completionTokens,
+        totalTokens: totals.totalTokens + usage.totalTokens,
+        estimatedCostUsd: totals.estimatedCostUsd + usage.estimatedCostUsd,
+      }
+    },
+    {
+      promptTokens: 0,
+      completionTokens: 0,
+      totalTokens: 0,
+      estimatedCostUsd: 0,
+    }
+  )
+}
+
+export function formatEstimatedCostUsd(value: number): string {
+  if (value <= 0) return '$0.00'
+  if (value < 0.01) return '<$0.01'
+  if (value < 1) return `$${value.toFixed(2)}`
+  if (value < 100) return `$${value.toFixed(2)}`
+
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    maximumFractionDigits: 0,
+  }).format(value)
+}

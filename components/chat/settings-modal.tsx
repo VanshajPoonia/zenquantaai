@@ -39,6 +39,11 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { CheckIcon } from '@/components/icons'
+import {
+  getMaxTokensQuantity,
+  getTemperatureQuantity,
+  getTopPQuantity,
+} from '@/lib/utils/session-display'
 
 interface SettingsModalProps {
   open: boolean
@@ -150,8 +155,8 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
               <div className="space-y-3 rounded-2xl border border-border/70 bg-card/60 p-4 sm:p-5">
                 <div className="flex items-center justify-between">
                   <Label htmlFor="defaultTemperature">Default Temperature</Label>
-                  <span className="text-sm text-muted-foreground font-mono">
-                    {localSettings.sessionDefaults.temperature.toFixed(2)}
+                  <span className="text-sm text-muted-foreground">
+                    {getTemperatureQuantity(localSettings.sessionDefaults.temperature)}
                   </span>
                 </div>
                 <Slider
@@ -178,8 +183,8 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
               <div className="space-y-3 rounded-2xl border border-border/70 bg-card/60 p-4 sm:p-5">
                 <div className="flex items-center justify-between">
                   <Label htmlFor="defaultMaxTokens">Default Max Tokens</Label>
-                  <span className="text-sm text-muted-foreground font-mono">
-                    {localSettings.sessionDefaults.maxTokens}
+                  <span className="text-sm text-muted-foreground">
+                    {getMaxTokensQuantity(localSettings.sessionDefaults.maxTokens)}
                   </span>
                 </div>
                 <Slider
@@ -207,8 +212,8 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
             <div className="space-y-3 rounded-2xl border border-border/70 bg-card/60 p-4 sm:p-5">
               <div className="flex items-center justify-between">
                 <Label htmlFor="defaultTopP">Default Top P</Label>
-                <span className="text-sm text-muted-foreground font-mono">
-                  {localSettings.sessionDefaults.topP.toFixed(2)}
+                <span className="text-sm text-muted-foreground">
+                  {getTopPQuantity(localSettings.sessionDefaults.topP)}
                 </span>
               </div>
               <Slider

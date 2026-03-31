@@ -90,7 +90,19 @@ export function Composer({ onSend, disabled, initialValue = '' }: ComposerProps)
   }
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
+    if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+      e.preventDefault()
+      handleSubmit()
+      return
+    }
+
+    if (
+      e.key === 'Enter' &&
+      !e.shiftKey &&
+      !e.metaKey &&
+      !e.ctrlKey &&
+      !e.altKey
+    ) {
       e.preventDefault()
       handleSubmit()
     }
@@ -387,12 +399,13 @@ export function Composer({ onSend, disabled, initialValue = '' }: ComposerProps)
         <p className="text-xs text-muted-foreground text-center mt-3">
           {composerKind === 'image' ? (
             <>
-              Image mode creates a quick visual concept card from your prompt.
+              Image mode generates a polished visual from your prompt.
             </>
           ) : null}
           {composerKind === 'image' ? ' ' : null}
           Press <kbd className="px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-mono text-xs">Enter</kbd> to send,{' '}
-          <kbd className="px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-mono text-xs">Shift + Enter</kbd> for new line
+          <kbd className="px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-mono text-xs">Shift + Enter</kbd> for new line,{' '}
+          <kbd className="px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-mono text-xs">Ctrl/Cmd + Enter</kbd> to send from anywhere in the draft
         </p>
       </div>
     </div>

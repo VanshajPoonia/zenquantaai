@@ -1,8 +1,9 @@
 'use client'
 
+import { memo } from 'react'
 import { cn } from '@/lib/utils'
 import { useChatContext } from '@/lib/chat-context'
-import { MODE_CONFIGS } from '@/lib/types'
+import { AIMode, MODE_CONFIGS } from '@/lib/types'
 import { ModeIcon, getModeAccentClass, getModeGradient, getModeGlow } from '@/lib/mode-utils'
 import { ModeSwitcher } from './mode-switcher'
 import { ChevronRightIcon } from '@/components/icons'
@@ -11,11 +12,15 @@ interface SuggestedPromptCardProps {
   prompt: string
   onClick: () => void
   index: number
+  mode: AIMode
 }
 
-function SuggestedPromptCard({ prompt, onClick, index }: SuggestedPromptCardProps) {
-  const { currentMode } = useChatContext()
-
+const SuggestedPromptCard = memo(function SuggestedPromptCard({
+  prompt,
+  onClick,
+  index,
+  mode,
+}: SuggestedPromptCardProps) {
   return (
     <button
       onClick={onClick}
@@ -31,7 +36,7 @@ function SuggestedPromptCard({ prompt, onClick, index }: SuggestedPromptCardProp
       <div
         className={cn(
           'absolute inset-0 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-300',
-          getModeGradient(currentMode)
+          getModeGradient(mode)
         )}
       />
 
@@ -42,7 +47,7 @@ function SuggestedPromptCard({ prompt, onClick, index }: SuggestedPromptCardProp
         <div
           className={cn(
             'flex items-center gap-1.5 text-xs font-medium transition-all duration-300',
-            getModeAccentClass(currentMode, 'text'),
+            getModeAccentClass(mode, 'text'),
             'opacity-0 translate-x-[-4px] group-hover:opacity-100 group-hover:translate-x-0'
           )}
         >
@@ -52,7 +57,7 @@ function SuggestedPromptCard({ prompt, onClick, index }: SuggestedPromptCardProp
       </div>
     </button>
   )
-}
+})
 
 interface EmptyStateProps {
   onPromptSelect: (prompt: string) => void
@@ -133,6 +138,7 @@ export function EmptyState({ onPromptSelect }: EmptyStateProps) {
                 prompt={prompt}
                 onClick={() => onPromptSelect(prompt)}
                 index={index}
+                mode={currentMode}
               />
             ))}
           </div>
