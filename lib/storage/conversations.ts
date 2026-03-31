@@ -36,6 +36,7 @@ function migrateConversation(conversation: Conversation): Conversation {
       temperature: conversation.sessionSettings?.temperature,
       maxTokens: conversation.sessionSettings?.maxTokens,
       topP: conversation.sessionSettings?.topP,
+      modelOverride: conversation.sessionSettings?.modelOverride,
       webSearch: conversation.sessionSettings?.webSearch ?? false,
       memory: conversation.sessionSettings?.memory ?? true,
       fileContext: conversation.sessionSettings?.fileContext ?? false,

@@ -1,5 +1,4 @@
-import { Conversation, UsageEstimate } from '@/types'
-import { MODEL_ROUTE_CONFIGS } from '@/lib/config'
+import { Conversation, ModelRouteConfig, UsageEstimate } from '@/types'
 
 function estimateTokens(text: string): number {
   if (!text.trim()) return 0
@@ -7,17 +6,16 @@ function estimateTokens(text: string): number {
 }
 
 export function estimateUsage(input: {
-  mode: Conversation['mode']
+  config: ModelRouteConfig
   promptText: string
   completionText: string
 }): UsageEstimate {
-  const config = MODEL_ROUTE_CONFIGS[input.mode]
   const promptTokens = estimateTokens(input.promptText)
   const completionTokens = estimateTokens(input.completionText)
   const totalTokens = promptTokens + completionTokens
   const estimatedCostUsd =
-    (promptTokens / 1_000_000) * config.inputCostPerMillion +
-    (completionTokens / 1_000_000) * config.outputCostPerMillion
+    (promptTokens / 1_000_000) * input.config.inputCostPerMillion +
+    (completionTokens / 1_000_000) * input.config.outputCostPerMillion
 
   return {
     promptTokens,

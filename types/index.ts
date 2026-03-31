@@ -1,5 +1,13 @@
 export type AIMode = 'general' | 'creative' | 'logic' | 'code'
 
+export type ModelOverrideOption =
+  | 'auto'
+  | 'gemini'
+  | 'claude'
+  | 'gpt'
+  | 'deepseek'
+  | 'qwen'
+
 export type GatewayId = 'openrouter'
 
 export type MessageRole = 'system' | 'user' | 'assistant'
@@ -16,6 +24,7 @@ export interface SessionSettings {
   temperature: number
   maxTokens: number
   topP: number
+  modelOverride: ModelOverrideOption
   webSearch: boolean
   memory: boolean
   fileContext: boolean
@@ -86,6 +95,15 @@ export interface ModelRouteConfig {
   maxTokens: number
   topP: number
   systemPromptKey: AIMode
+  inputCostPerMillion: number
+  outputCostPerMillion: number
+}
+
+export interface ModelOverrideConfig {
+  id: Exclude<ModelOverrideOption, 'auto'>
+  label: string
+  description: string
+  model: string
   inputCostPerMillion: number
   outputCostPerMillion: number
 }

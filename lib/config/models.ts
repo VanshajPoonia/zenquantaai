@@ -1,6 +1,59 @@
-import { AIMode, AppSettings, ModelRouteConfig, SessionSettings } from '@/types'
+import {
+  AIMode,
+  AppSettings,
+  ModelOverrideConfig,
+  ModelOverrideOption,
+  ModelRouteConfig,
+  SessionSettings,
+} from '@/types'
 
 export const OPENROUTER_DEFAULT_BASE_URL = 'https://openrouter.ai/api/v1'
+
+export const MODEL_OVERRIDE_CONFIGS: Record<
+  Exclude<ModelOverrideOption, 'auto'>,
+  ModelOverrideConfig
+> = {
+  gemini: {
+    id: 'gemini',
+    label: 'Gemini',
+    description: 'Fast and balanced general-purpose model',
+    model: 'google/gemini-2.5-flash',
+    inputCostPerMillion: 0.15,
+    outputCostPerMillion: 0.6,
+  },
+  claude: {
+    id: 'claude',
+    label: 'Claude',
+    description: 'Strong for nuanced writing and reasoning',
+    model: 'anthropic/claude-sonnet-4.5',
+    inputCostPerMillion: 3,
+    outputCostPerMillion: 15,
+  },
+  gpt: {
+    id: 'gpt',
+    label: 'GPT',
+    description: 'OpenAI flagship general assistant',
+    model: 'openai/gpt-5',
+    inputCostPerMillion: 1.25,
+    outputCostPerMillion: 10,
+  },
+  deepseek: {
+    id: 'deepseek',
+    label: 'DeepSeek',
+    description: 'Strong structured reasoning and analytical output',
+    model: 'deepseek/deepseek-v3.2',
+    inputCostPerMillion: 0.3,
+    outputCostPerMillion: 0.9,
+  },
+  qwen: {
+    id: 'qwen',
+    label: 'Qwen',
+    description: 'Strong coding and implementation-oriented model',
+    model: 'qwen/qwen3-coder',
+    inputCostPerMillion: 0.45,
+    outputCostPerMillion: 1.2,
+  },
+}
 
 export const MODEL_ROUTE_CONFIGS: Record<AIMode, ModelRouteConfig> = {
   general: {
@@ -62,10 +115,31 @@ export const MODEL_ROUTE_CONFIGS: Record<AIMode, ModelRouteConfig> = {
 }
 
 export const DEFAULT_FEATURE_FLAGS = {
+  modelOverride: 'auto',
   webSearch: false,
   memory: true,
   fileContext: false,
-} satisfies Pick<SessionSettings, 'webSearch' | 'memory' | 'fileContext'>
+} satisfies Pick<SessionSettings, 'modelOverride' | 'webSearch' | 'memory' | 'fileContext'>
+
+export function resolveModelConfig(
+  mode: AIMode,
+  modelOverride: ModelOverrideOption = 'auto'
+): ModelRouteConfig {
+  if (modelOverride === 'auto') {
+    return MODEL_ROUTE_CONFIGS[mode]
+  }
+
+  const override = MODEL_OVERRIDE_CONFIGS[modelOverride]
+
+  return {
+    ...MODEL_ROUTE_CONFIGS[mode],
+    model: override.model,
+    label: override.label,
+    description: override.description,
+    inputCostPerMillion: override.inputCostPerMillion,
+    outputCostPerMillion: override.outputCostPerMillion,
+  }
+}
 
 export function createSessionSettings(
   mode: AIMode,
@@ -77,6 +151,7 @@ export function createSessionSettings(
     temperature: overrides.temperature ?? config.temperature,
     maxTokens: overrides.maxTokens ?? config.maxTokens,
     topP: overrides.topP ?? config.topP,
+    modelOverride: overrides.modelOverride ?? DEFAULT_FEATURE_FLAGS.modelOverride,
     webSearch: overrides.webSearch ?? DEFAULT_FEATURE_FLAGS.webSearch,
     memory: overrides.memory ?? DEFAULT_FEATURE_FLAGS.memory,
     fileContext: overrides.fileContext ?? DEFAULT_FEATURE_FLAGS.fileContext,

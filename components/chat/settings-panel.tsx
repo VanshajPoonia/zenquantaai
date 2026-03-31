@@ -1,8 +1,16 @@
 'use client'
 
+import { useEffect, useState } from 'react'
 import { cn } from '@/lib/utils'
 import { useChatContext } from '@/lib/chat-context'
-import { AIMode, MODE_CONFIGS, createSessionSettings } from '@/lib/types'
+import {
+  AIMode,
+  MODEL_OVERRIDE_CONFIGS,
+  MODE_CONFIGS,
+  ModelOverrideOption,
+  createSessionSettings,
+  resolveModelConfig,
+} from '@/lib/types'
 import {
   getModeAccentClass,
   getModeTintClass,
@@ -13,6 +21,13 @@ import { Switch } from '@/components/ui/switch'
 import { Label } from '@/components/ui/label'
 import { Separator } from '@/components/ui/separator'
 import { Badge } from '@/components/ui/badge'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { XIcon, GlobeIcon, DatabaseIcon, FileIcon } from '@/components/icons'
 
 function getSliderClass(mode: AIMode) {
@@ -31,10 +46,21 @@ export function SettingsPanel() {
     isSettingsPanelOpen,
     toggleSettingsPanel,
   } = useChatContext()
+  const [showAdvanced, setShowAdvanced] = useState(false)
+
+  useEffect(() => {
+    if (sessionSettings.modelOverride !== 'auto') {
+      setShowAdvanced(true)
+    }
+  }, [sessionSettings.modelOverride])
 
   if (!isSettingsPanelOpen) return null
 
   const modeConfig = MODE_CONFIGS[currentMode]
+  const activeModelConfig = resolveModelConfig(
+    currentMode,
+    sessionSettings.modelOverride
+  )
 
   return (
     <aside
@@ -84,6 +110,16 @@ export function SettingsPanel() {
             </p>
             <p className="text-sm text-foreground">
               {modeConfig.name}
+            </p>
+          </div>
+          <div className="rounded-xl border border-border/60 bg-background/60 px-3 py-2">
+            <p className="text-[11px] uppercase tracking-widest text-muted-foreground mb-1">
+              Model Routing
+            </p>
+            <p className="text-sm text-foreground">
+              {sessionSettings.modelOverride === 'auto'
+                ? `Auto · ${activeModelConfig.label}`
+                : activeModelConfig.label}
             </p>
           </div>
           {currentChat?.usage && (
@@ -175,6 +211,59 @@ export function SettingsPanel() {
           <p className="text-xs text-muted-foreground">
             Narrows or broadens token sampling for the current session.
           </p>
+        </div>
+
+        <Separator />
+
+        <div className="space-y-4">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <h3 className="text-sm font-medium text-foreground">Advanced Settings</h3>
+              <p className="text-xs text-muted-foreground">
+                Override the routed model without changing the active mode prompt.
+              </p>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowAdvanced((previous) => !previous)}
+            >
+              {showAdvanced ? 'Hide' : 'Show'}
+            </Button>
+          </div>
+
+          {showAdvanced && (
+            <div className="space-y-3 rounded-2xl border border-border/70 bg-background/50 p-4">
+              <div className="space-y-2">
+                <Label htmlFor="modelOverride" className="text-sm font-medium">
+                  Model
+                </Label>
+                <Select
+                  value={sessionSettings.modelOverride}
+                  onValueChange={(value: ModelOverrideOption) =>
+                    updateSessionSettings({ modelOverride: value })
+                  }
+                >
+                  <SelectTrigger id="modelOverride">
+                    <SelectValue placeholder="Auto" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="auto">Auto</SelectItem>
+                    <SelectItem value="gemini">Gemini</SelectItem>
+                    <SelectItem value="claude">Claude</SelectItem>
+                    <SelectItem value="gpt">GPT</SelectItem>
+                    <SelectItem value="deepseek">DeepSeek</SelectItem>
+                    <SelectItem value="qwen">Qwen</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <p className="text-xs leading-relaxed text-muted-foreground">
+                {sessionSettings.modelOverride === 'auto'
+                  ? `Auto uses the ${modeConfig.name.toLowerCase()} routing default: ${activeModelConfig.label}.`
+                  : MODEL_OVERRIDE_CONFIGS[sessionSettings.modelOverride].description}
+              </p>
+            </div>
+          )}
         </div>
 
         <Separator />

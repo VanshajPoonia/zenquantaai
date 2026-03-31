@@ -25,7 +25,11 @@ import {
   StreamEvent,
   StreamingState,
 } from '@/types'
-import { createSessionSettings, DEFAULT_APP_SETTINGS, MODE_CONFIGS } from '@/lib/config'
+import {
+  createSessionSettings,
+  DEFAULT_APP_SETTINGS,
+  resolveModelConfig,
+} from '@/lib/config'
 import {
   getSeededBrowserAppSettings,
   readBrowserAppSettings,
@@ -574,7 +578,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         content: '',
         mode: currentMode,
         status: 'streaming',
-        model: MODE_CONFIGS[currentMode].model,
+        model: resolveModelConfig(currentMode, sessionSettings.modelOverride).model,
         provider: 'openrouter',
       })
 
@@ -608,7 +612,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       content: '',
       mode: currentMode,
       status: 'streaming',
-      model: MODE_CONFIGS[currentMode].model,
+      model: resolveModelConfig(currentMode, sessionSettings.modelOverride).model,
       provider: 'openrouter',
     })
 
@@ -639,7 +643,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       content: '',
       mode: currentMode,
       status: 'streaming',
-      model: MODE_CONFIGS[currentMode].model,
+      model: resolveModelConfig(currentMode, sessionSettings.modelOverride).model,
       provider: 'openrouter',
     })
 
@@ -682,7 +686,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         content: '',
         mode: currentMode,
         status: 'streaming',
-        model: MODE_CONFIGS[currentMode].model,
+        model: resolveModelConfig(currentMode, sessionSettings.modelOverride).model,
         provider: 'openrouter',
       })
 

@@ -1,4 +1,4 @@
-import { MODEL_ROUTE_CONFIGS } from '@/lib/config'
+import { MODEL_ROUTE_CONFIGS, resolveModelConfig } from '@/lib/config'
 import {
   createConversation,
   createMessage,
@@ -21,7 +21,6 @@ import {
 } from '@/types'
 import { SYSTEM_PROMPTS } from './prompts'
 import {
-  createOpenRouterTextResponse,
   hasOpenRouterConfig,
   streamOpenRouterTextResponse,
 } from './openrouter'
@@ -166,33 +165,11 @@ function buildOpenRouterMessages(
   ]
 }
 
-async function generateAssistantText(
-  conversation: Conversation,
-  settings: SessionSettings
-): Promise<string> {
-  const config = MODEL_ROUTE_CONFIGS[conversation.mode]
-  const latestPrompt =
-    [...conversation.messages].reverse().find((message) => message.role === 'user')
-      ?.content ?? 'the user request'
-
-  if (!hasOpenRouterConfig()) {
-    return buildMockResponse(conversation.mode, latestPrompt)
-  }
-
-  return createOpenRouterTextResponse({
-    model: config.model,
-    messages: buildOpenRouterMessages(conversation, settings),
-    temperature: settings.temperature,
-    maxTokens: settings.maxTokens,
-    topP: settings.topP,
-  })
-}
-
 async function* generateAssistantStream(
   conversation: Conversation,
   settings: SessionSettings
 ): AsyncIterable<string> {
-  const config = MODEL_ROUTE_CONFIGS[conversation.mode]
+  const config = resolveModelConfig(conversation.mode, settings.modelOverride)
   const latestPrompt =
     [...conversation.messages].reverse().find((message) => message.role === 'user')
       ?.content ?? 'the user request'
@@ -264,8 +241,11 @@ async function resolveConversation(payload: ChatRequest): Promise<Conversation> 
   })
 }
 
-function buildAssistantPlaceholder(mode: AIMode): Message {
-  const config = MODEL_ROUTE_CONFIGS[mode]
+function buildAssistantPlaceholder(
+  mode: AIMode,
+  settings: SessionSettings
+): Message {
+  const config = resolveModelConfig(mode, settings.modelOverride)
 
   return createMessage({
     role: 'assistant',
@@ -417,7 +397,7 @@ export async function prepareConversationForChat(
   return {
     conversation: prepared.conversation,
     userMessage: prepared.userMessage,
-    assistantPlaceholder: buildAssistantPlaceholder(payload.mode),
+    assistantPlaceholder: buildAssistantPlaceholder(payload.mode, payload.settings),
   }
 }
 
@@ -426,6 +406,10 @@ export async function completeConversationWithAssistant(
   assistantMessage: Message,
   content: string
 ): Promise<Conversation> {
+  const activeConfig = resolveModelConfig(
+    conversation.mode,
+    conversation.sessionSettings.modelOverride
+  )
   const promptText = buildOpenRouterMessages(
     conversation,
     conversation.sessionSettings
@@ -433,7 +417,7 @@ export async function completeConversationWithAssistant(
     .map((message) => message.content)
     .join('\n\n')
   const usage = estimateUsage({
-    mode: conversation.mode,
+    config: activeConfig,
     promptText,
     completionText: content,
   })
@@ -505,6 +489,8 @@ export function resolveSessionSettings(
     maxTokens:
       provided?.maxTokens ?? fallback.maxTokens ?? MODEL_ROUTE_CONFIGS[mode].maxTokens,
     topP: provided?.topP ?? fallback.topP ?? MODEL_ROUTE_CONFIGS[mode].topP,
+    modelOverride:
+      provided?.modelOverride ?? fallback.modelOverride ?? 'auto',
     webSearch: provided?.webSearch ?? fallback.webSearch,
     memory: provided?.memory ?? fallback.memory,
     fileContext: provided?.fileContext ?? fallback.fileContext,
