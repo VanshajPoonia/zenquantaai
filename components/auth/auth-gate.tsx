@@ -12,6 +12,7 @@ export function AuthGate() {
     requestMagicLink,
     requestPasswordSignIn,
     requestPasswordSignUp,
+    requestPasswordReset,
     authError,
   } = useChatContext()
   const [email, setEmail] = useState('')
@@ -23,7 +24,13 @@ export function AuthGate() {
     'sign-in'
   )
   const [status, setStatus] = useState<
-    'idle' | 'sending' | 'sent' | 'signing-in' | 'signed-in' | 'error'
+    | 'idle'
+    | 'sending'
+    | 'sent'
+    | 'signing-in'
+    | 'signed-in'
+    | 'resetting'
+    | 'error'
   >('idle')
   const [message, setMessage] = useState('')
 
@@ -72,7 +79,11 @@ export function AuthGate() {
             onChange={(event) => setEmail(event.target.value)}
             placeholder="you@example.com"
             className="h-12 rounded-2xl"
-            disabled={status === 'sending' || status === 'signing-in'}
+            disabled={
+              status === 'sending' ||
+              status === 'signing-in' ||
+              status === 'resetting'
+            }
           />
 
           {authMethod === 'password' && (
@@ -102,8 +113,44 @@ export function AuthGate() {
                 onChange={(event) => setPassword(event.target.value)}
                 placeholder="Password"
                 className="h-12 rounded-2xl"
-                disabled={status === 'sending' || status === 'signing-in'}
+                disabled={
+                  status === 'sending' ||
+                  status === 'signing-in' ||
+                  status === 'resetting'
+                }
               />
+
+              {passwordMode === 'sign-in' && (
+                <div className="flex justify-end">
+                  <Button
+                    type="button"
+                    variant="link"
+                    className="h-auto px-0 text-xs text-muted-foreground"
+                    disabled={!email.trim() || status === 'resetting'}
+                    onClick={async () => {
+                      setStatus('resetting')
+                      setMessage('')
+
+                      try {
+                        const nextMessage = await requestPasswordReset(
+                          email.trim()
+                        )
+                        setStatus('sent')
+                        setMessage(nextMessage)
+                      } catch (error) {
+                        setStatus('error')
+                        setMessage(
+                          error instanceof Error
+                            ? error.message
+                            : 'Unable to send the password reset link.'
+                        )
+                      }
+                    }}
+                  >
+                    Forgot password?
+                  </Button>
+                </div>
+              )}
             </>
           )}
 
@@ -138,7 +185,8 @@ export function AuthGate() {
                 !email.trim() ||
                 !password.trim() ||
                 status === 'sending' ||
-                status === 'signing-in'
+                status === 'signing-in' ||
+                status === 'resetting'
               }
               onClick={async () => {
                 setStatus('signing-in')
@@ -172,6 +220,8 @@ export function AuthGate() {
                 ? passwordMode === 'sign-in'
                   ? 'Signing in…'
                   : 'Creating account…'
+                : status === 'resetting'
+                  ? 'Sending reset link…'
                 : passwordMode === 'sign-in'
                   ? 'Sign in with password'
                   : 'Create account'}

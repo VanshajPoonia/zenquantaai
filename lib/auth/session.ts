@@ -68,7 +68,7 @@ export function hasSupabaseAuthConfig(): boolean {
 async function requestSupabaseAuth<T>(
   path: string,
   init: {
-    method?: 'GET' | 'POST'
+    method?: 'GET' | 'POST' | 'PUT'
     accessToken?: string
     body?: unknown
   } = {}
@@ -202,6 +202,24 @@ export async function sendMagicLink(email: string, redirectTo: string): Promise<
   })
 }
 
+export async function sendPasswordResetEmail(
+  email: string,
+  redirectTo: string
+): Promise<void> {
+  await requestSupabaseAuth('/recover', {
+    method: 'POST',
+    body: {
+      email,
+      code_challenge: null,
+      code_challenge_method: null,
+      gotrue_meta_security: {},
+      options: {
+        email_redirect_to: redirectTo,
+      },
+    },
+  })
+}
+
 export async function signUpWithPassword(
   email: string,
   password: string,
@@ -251,6 +269,19 @@ export async function signInWithPassword(
     accessToken,
     refreshToken,
   }
+}
+
+export async function updatePassword(
+  accessToken: string,
+  password: string
+): Promise<void> {
+  await requestSupabaseAuth('/user', {
+    method: 'PUT',
+    accessToken,
+    body: {
+      password,
+    },
+  })
 }
 
 export async function verifyMagicLink(

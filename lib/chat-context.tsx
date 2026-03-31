@@ -89,6 +89,7 @@ interface ChatContextType {
   requestMagicLink: (email: string) => Promise<void>
   requestPasswordSignIn: (email: string, password: string) => Promise<void>
   requestPasswordSignUp: (email: string, password: string) => Promise<string>
+  requestPasswordReset: (email: string) => Promise<string>
   signOut: () => Promise<void>
   currentMode: AIMode
   setCurrentMode: (mode: AIMode) => void
@@ -547,6 +548,23 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         response.message ??
         'Check your inbox and confirm your email before signing in with password.'
       )
+    },
+    [requestJson]
+  )
+
+  const requestPasswordReset = useCallback(
+    async (email: string) => {
+      const response = await requestJson<{ message?: string }>(
+        '/api/auth/password/reset-request',
+        {
+          method: 'POST',
+          body: JSON.stringify({ email }),
+        }
+      )
+
+      setAuthError(null)
+
+      return response.message ?? 'Check your inbox for the password reset link.'
     },
     [requestJson]
   )
@@ -1299,6 +1317,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       requestMagicLink,
       requestPasswordSignIn,
       requestPasswordSignUp,
+      requestPasswordReset,
       signOut,
       currentMode,
       setCurrentMode,
@@ -1367,6 +1386,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       requestMagicLink,
       requestPasswordSignIn,
       requestPasswordSignUp,
+      requestPasswordReset,
       retryLastMessage,
       saveAppSettings,
       savePrompt,
