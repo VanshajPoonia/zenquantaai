@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { useChatContext } from '@/lib/chat-context'
+import { ModeIcon, getModeAccentClass, getModeGradient } from '@/lib/mode-utils'
 import {
   Dialog,
   DialogContent,
@@ -15,7 +16,7 @@ import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
-import { SparklesIcon, BrainIcon, CodeIcon, CheckIcon } from '@/components/icons'
+import { CheckIcon, KeyIcon } from '@/components/icons'
 
 interface SettingsModalProps {
   open: boolean
@@ -56,8 +57,8 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
               {/* Qwen API Key */}
               <div className="space-y-2">
                 <div className="flex items-center gap-2">
-                  <div className="p-1.5 rounded-lg bg-creative/10">
-                    <SparklesIcon className="size-4 text-creative" />
+                  <div className={`p-1.5 rounded-lg ${getModeGradient('creative')}`}>
+                    <ModeIcon mode="creative" size="sm" className={getModeAccentClass('creative', 'text')} />
                   </div>
                   <Label htmlFor="qwenApiKey" className="font-medium">
                     Qwen API Key
@@ -97,8 +98,8 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
               {/* DeepSeek API Key */}
               <div className="space-y-2">
                 <div className="flex items-center gap-2">
-                  <div className="p-1.5 rounded-lg bg-logic/10">
-                    <BrainIcon className="size-4 text-logic" />
+                  <div className={`p-1.5 rounded-lg ${getModeGradient('logic')}`}>
+                    <ModeIcon mode="logic" size="sm" className={getModeAccentClass('logic', 'text')} />
                   </div>
                   <Label htmlFor="deepseekApiKey" className="font-medium">
                     DeepSeek API Key
@@ -138,8 +139,8 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
               {/* Qwen Coder API Key */}
               <div className="space-y-2">
                 <div className="flex items-center gap-2">
-                  <div className="p-1.5 rounded-lg bg-code/10">
-                    <CodeIcon className="size-4 text-code" />
+                  <div className={`p-1.5 rounded-lg ${getModeGradient('code')}`}>
+                    <ModeIcon mode="code" size="sm" className={getModeAccentClass('code', 'text')} />
                   </div>
                   <Label htmlFor="qwenCoderApiKey" className="font-medium">
                     Qwen Coder API Key
@@ -193,62 +194,71 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
           <TabsContent value="models" className="space-y-4 mt-6">
             <div className="grid gap-4">
               {/* Creative Writer */}
-              <div className="p-4 rounded-xl border border-border bg-card">
-                <div className="flex items-center gap-3 mb-3">
-                  <div className="p-2 rounded-lg bg-creative/10">
-                    <SparklesIcon className="size-5 text-creative" />
+              <div className={`relative p-4 rounded-xl border border-border bg-card overflow-hidden group hover:border-creative/30 transition-colors`}>
+                <div className={`absolute inset-0 ${getModeGradient('creative')} opacity-0 group-hover:opacity-100 transition-opacity`} />
+                <div className="relative">
+                  <div className="flex items-center gap-3 mb-3">
+                    <div className="p-2 rounded-lg bg-creative/20">
+                      <ModeIcon mode="creative" size="md" className="text-creative" />
+                    </div>
+                    <div>
+                      <h3 className="font-semibold">Creative Writer</h3>
+                      <p className="text-sm text-muted-foreground">
+                        Qwen-Max / Qwen-Plus
+                      </p>
+                    </div>
                   </div>
-                  <div>
-                    <h3 className="font-semibold">Creative Writer</h3>
-                    <p className="text-sm text-muted-foreground">
-                      Qwen-Max / Qwen-Plus
-                    </p>
-                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    Optimized for creative writing, storytelling, brainstorming,
+                    and artistic content generation. Excels at narrative flow and
+                    emotional expression.
+                  </p>
                 </div>
-                <p className="text-sm text-muted-foreground">
-                  Optimized for creative writing, storytelling, brainstorming,
-                  and artistic content generation. Excels at narrative flow and
-                  emotional expression.
-                </p>
               </div>
 
               {/* Logic Focused */}
-              <div className="p-4 rounded-xl border border-border bg-card">
-                <div className="flex items-center gap-3 mb-3">
-                  <div className="p-2 rounded-lg bg-logic/10">
-                    <BrainIcon className="size-5 text-logic" />
+              <div className={`relative p-4 rounded-xl border border-border bg-card overflow-hidden group hover:border-logic/30 transition-colors`}>
+                <div className={`absolute inset-0 ${getModeGradient('logic')} opacity-0 group-hover:opacity-100 transition-opacity`} />
+                <div className="relative">
+                  <div className="flex items-center gap-3 mb-3">
+                    <div className="p-2 rounded-lg bg-logic/20">
+                      <ModeIcon mode="logic" size="md" className="text-logic" />
+                    </div>
+                    <div>
+                      <h3 className="font-semibold">Logic Focused</h3>
+                      <p className="text-sm text-muted-foreground">
+                        DeepSeek-V3 / DeepSeek-R1
+                      </p>
+                    </div>
                   </div>
-                  <div>
-                    <h3 className="font-semibold">Logic Focused</h3>
-                    <p className="text-sm text-muted-foreground">
-                      DeepSeek-V3 / DeepSeek-R1
-                    </p>
-                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    Designed for analytical thinking, mathematical reasoning,
+                    problem solving, and structured analysis. Shows step-by-step
+                    reasoning.
+                  </p>
                 </div>
-                <p className="text-sm text-muted-foreground">
-                  Designed for analytical thinking, mathematical reasoning,
-                  problem solving, and structured analysis. Shows step-by-step
-                  reasoning.
-                </p>
               </div>
 
               {/* Code Assistant */}
-              <div className="p-4 rounded-xl border border-border bg-card">
-                <div className="flex items-center gap-3 mb-3">
-                  <div className="p-2 rounded-lg bg-code/10">
-                    <CodeIcon className="size-5 text-code" />
+              <div className={`relative p-4 rounded-xl border border-border bg-card overflow-hidden group hover:border-code/30 transition-colors`}>
+                <div className={`absolute inset-0 ${getModeGradient('code')} opacity-0 group-hover:opacity-100 transition-opacity`} />
+                <div className="relative">
+                  <div className="flex items-center gap-3 mb-3">
+                    <div className="p-2 rounded-lg bg-code/20">
+                      <ModeIcon mode="code" size="md" className="text-code" />
+                    </div>
+                    <div>
+                      <h3 className="font-semibold">Code Assistant</h3>
+                      <p className="text-sm text-muted-foreground">
+                        Qwen-Coder-Plus / Qwen-Coder-Turbo
+                      </p>
+                    </div>
                   </div>
-                  <div>
-                    <h3 className="font-semibold">Code Assistant</h3>
-                    <p className="text-sm text-muted-foreground">
-                      Qwen-Coder-Plus / Qwen-Coder-Turbo
-                    </p>
-                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    Specialized for code generation, debugging, code review, and
+                    technical documentation. Supports 100+ programming languages.
+                  </p>
                 </div>
-                <p className="text-sm text-muted-foreground">
-                  Specialized for code generation, debugging, code review, and
-                  technical documentation. Supports 100+ programming languages.
-                </p>
               </div>
             </div>
           </TabsContent>

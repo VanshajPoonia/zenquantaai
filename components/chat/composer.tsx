@@ -4,6 +4,7 @@ import { useState, useRef, useEffect } from 'react'
 import { cn } from '@/lib/utils'
 import { useChatContext } from '@/lib/chat-context'
 import { MODE_CONFIGS } from '@/lib/types'
+import { getModeAccentClass, getModeGlow } from '@/lib/mode-utils'
 import { Button } from '@/components/ui/button'
 import {
   Tooltip,
@@ -69,11 +70,11 @@ export function Composer({ onSend, disabled, initialValue = '' }: ComposerProps)
       <div className="max-w-4xl mx-auto">
         <div
           className={cn(
-            'relative rounded-2xl border bg-card transition-all duration-200',
+            'relative rounded-2xl border bg-card/80 backdrop-blur-sm transition-all duration-300',
             'focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-offset-background',
-            currentMode === 'creative' && 'focus-within:ring-creative/50 focus-within:border-creative/50',
-            currentMode === 'logic' && 'focus-within:ring-logic/50 focus-within:border-logic/50',
-            currentMode === 'code' && 'focus-within:ring-code/50 focus-within:border-code/50'
+            'focus-within:border-opacity-50',
+            getModeAccentClass(currentMode, 'ring').replace('ring-', 'focus-within:ring-') + '/50',
+            getModeAccentClass(currentMode, 'border').replace('border-', 'focus-within:border-') + '/50'
           )}
         >
           {/* Textarea */}
@@ -129,11 +130,10 @@ export function Composer({ onSend, disabled, initialValue = '' }: ComposerProps)
                   onClick={handleSubmit}
                   disabled={!value.trim() || disabled}
                   className={cn(
-                    'transition-all',
-                    currentMode === 'creative' && 'bg-creative hover:bg-creative/90',
-                    currentMode === 'logic' && 'bg-logic hover:bg-logic/90',
-                    currentMode === 'code' && 'bg-code hover:bg-code/90',
-                    'text-white disabled:opacity-50'
+                    'transition-all duration-300 text-white disabled:opacity-50',
+                    getModeAccentClass(currentMode, 'bg'),
+                    `hover:opacity-90`,
+                    getModeGlow(currentMode)
                   )}
                 >
                   <SendIcon className="size-4 mr-2" />

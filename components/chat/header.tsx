@@ -3,6 +3,7 @@
 import { cn } from '@/lib/utils'
 import { useChatContext } from '@/lib/chat-context'
 import { MODE_CONFIGS } from '@/lib/types'
+import { ModeIcon, getModeAccentClass } from '@/lib/mode-utils'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import {
@@ -25,26 +26,10 @@ import {
   DownloadIcon,
   SettingsIcon,
   SlidersIcon,
-  SparklesIcon,
-  BrainIcon,
-  CodeIcon,
 } from '@/components/icons'
 
 interface HeaderProps {
   onOpenSettings: () => void
-}
-
-function getModeIcon(mode: string, className?: string) {
-  switch (mode) {
-    case 'creative':
-      return <SparklesIcon className={cn('size-5', className)} />
-    case 'logic':
-      return <BrainIcon className={cn('size-5', className)} />
-    case 'code':
-      return <CodeIcon className={cn('size-5', className)} />
-    default:
-      return null
-  }
 }
 
 export function Header({ onOpenSettings }: HeaderProps) {
@@ -86,20 +71,18 @@ export function Header({ onOpenSettings }: HeaderProps) {
       <div className="flex items-center gap-3">
         <div
           className={cn(
-            'flex items-center gap-2 px-3 py-1.5 rounded-full border transition-colors',
-            currentMode === 'creative' &&
-              'border-creative/30 bg-creative/10 text-creative',
-            currentMode === 'logic' &&
-              'border-logic/30 bg-logic/10 text-logic',
-            currentMode === 'code' && 'border-code/30 bg-code/10 text-code'
+            'flex items-center gap-2 px-3 py-1.5 rounded-full border transition-all duration-300',
+            getModeAccentClass(currentMode, 'text'),
+            getModeAccentClass(currentMode, 'border').replace('border-', 'border-') + '/30',
+            `bg-${currentMode}/10`
           )}
         >
-          {getModeIcon(currentMode)}
+          <ModeIcon mode={currentMode} size="sm" />
           <span className="text-sm font-medium hidden sm:inline">
             {modeConfig.name}
           </span>
         </div>
-        <Badge variant="secondary" className="text-xs font-mono">
+        <Badge variant="secondary" className="text-xs font-mono px-2.5">
           {modeConfig.model}
         </Badge>
       </div>

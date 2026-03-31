@@ -1,8 +1,10 @@
 'use client'
 
 import { useRef, useEffect, useState } from 'react'
+import { cn } from '@/lib/utils'
 import { useChatContext } from '@/lib/chat-context'
 import { MODE_CONFIGS } from '@/lib/types'
+import { getModeAccentClass } from '@/lib/mode-utils'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { ChatMessage } from './message'
 import { EmptyState } from './empty-state'
@@ -274,7 +276,10 @@ export function ChatArea() {
 
             {/* Streaming indicator */}
             {isStreaming && (
-              <div className="flex items-center gap-2 text-muted-foreground mb-6">
+              <div className={cn(
+                "flex items-center gap-3 mb-6 pl-11",
+                getModeAccentClass(currentMode, 'text')
+              )}>
                 <div className="flex gap-1">
                   <span
                     className="size-2 rounded-full bg-current animate-bounce"
@@ -289,7 +294,7 @@ export function ChatArea() {
                     style={{ animationDelay: '300ms' }}
                   />
                 </div>
-                <span className="text-sm">
+                <span className="text-sm font-medium">
                   {MODE_CONFIGS[currentMode].model} is thinking...
                 </span>
               </div>
