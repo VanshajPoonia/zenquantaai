@@ -11,9 +11,13 @@ type SupabaseAuthUser = {
 }
 
 type SupabaseSessionResponse = {
-  access_token: string
-  refresh_token: string
-  user: SupabaseAuthUser
+  access_token?: string
+  refresh_token?: string
+  user?: SupabaseAuthUser | null
+  session?: {
+    access_token?: string
+    refresh_token?: string
+  } | null
 }
 
 type SupabaseAuthType = 'magiclink' | 'recovery' | 'invite' | 'signup' | 'email'
@@ -198,6 +202,57 @@ export async function sendMagicLink(email: string, redirectTo: string): Promise<
   })
 }
 
+export async function signUpWithPassword(
+  email: string,
+  password: string,
+  redirectTo: string
+): Promise<{ needsEmailVerification: boolean }> {
+  const response = await requestSupabaseAuth<SupabaseSessionResponse>('/signup', {
+    method: 'POST',
+    body: {
+      email,
+      password,
+      options: {
+        email_redirect_to: redirectTo,
+      },
+    },
+  })
+
+  return {
+    needsEmailVerification: true,
+  }
+}
+
+export async function signInWithPassword(
+  email: string,
+  password: string
+): Promise<RequestAuthSession> {
+  const session = await requestSupabaseAuth<SupabaseSessionResponse>(
+    '/token?grant_type=password',
+    {
+      method: 'POST',
+      body: {
+        email,
+        password,
+      },
+    }
+  )
+
+  const accessToken = session.access_token ?? session.session?.access_token ?? ''
+  const refreshToken = session.refresh_token ?? session.session?.refresh_token ?? ''
+  const user = toAuthUser(session.user)
+
+  if (!accessToken || !refreshToken || !user) {
+    throw new Error('Supabase did not return a valid password session.')
+  }
+
+  return {
+    user,
+    accessToken,
+    refreshToken,
+  }
+}
+
 export async function verifyMagicLink(
   tokenHash: string,
   type: SupabaseAuthType
@@ -212,8 +267,8 @@ export async function verifyMagicLink(
 
   return {
     user: toAuthUser(session.user),
-    accessToken: session.access_token,
-    refreshToken: session.refresh_token,
+    accessToken: session.access_token ?? session.session?.access_token,
+    refreshToken: session.refresh_token ?? session.session?.refresh_token,
   }
 }
 

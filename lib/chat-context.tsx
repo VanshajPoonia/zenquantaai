@@ -87,6 +87,8 @@ interface ChatContextType {
   authState: AuthState
   authError: string | null
   requestMagicLink: (email: string) => Promise<void>
+  requestPasswordSignIn: (email: string, password: string) => Promise<void>
+  requestPasswordSignUp: (email: string, password: string) => Promise<string>
   signOut: () => Promise<void>
   currentMode: AIMode
   setCurrentMode: (mode: AIMode) => void
@@ -513,6 +515,38 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         body: JSON.stringify({ email }),
       })
       setAuthError(null)
+    },
+    [requestJson]
+  )
+
+  const requestPasswordSignIn = useCallback(
+    async (email: string, password: string) => {
+      await requestJson('/api/auth/password/sign-in', {
+        method: 'POST',
+        body: JSON.stringify({ email, password }),
+      })
+      setAuthError(null)
+      await restoreSession()
+    },
+    [requestJson, restoreSession]
+  )
+
+  const requestPasswordSignUp = useCallback(
+    async (email: string, password: string) => {
+      const response = await requestJson<{ message?: string }>(
+        '/api/auth/password/sign-up',
+        {
+          method: 'POST',
+          body: JSON.stringify({ email, password }),
+        }
+      )
+
+      setAuthError(null)
+
+      return (
+        response.message ??
+        'Check your inbox and confirm your email before signing in with password.'
+      )
     },
     [requestJson]
   )
@@ -1263,6 +1297,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       authState,
       authError,
       requestMagicLink,
+      requestPasswordSignIn,
+      requestPasswordSignUp,
       signOut,
       currentMode,
       setCurrentMode,
@@ -1329,6 +1365,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       promptLibrary,
       regenerateLastResponse,
       requestMagicLink,
+      requestPasswordSignIn,
+      requestPasswordSignUp,
       retryLastMessage,
       saveAppSettings,
       savePrompt,
