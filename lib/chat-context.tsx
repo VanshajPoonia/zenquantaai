@@ -66,6 +66,17 @@ interface ChatContextType {
 
 const ChatContext = createContext<ChatContextType | undefined>(undefined)
 
+function normalizeModeSessionSettings(
+  mode: AIMode,
+  settings: SessionSettings
+): SessionSettings {
+  return createSessionSettings(mode, {
+    webSearch: settings.webSearch,
+    memory: settings.memory,
+    fileContext: settings.fileContext,
+  })
+}
+
 async function fetchJson<T>(input: RequestInfo, init?: RequestInit): Promise<T> {
   const response = await fetch(input, {
     ...init,
@@ -121,7 +132,10 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
   const isStreaming = streamingState.status === 'streaming'
 
-  const sessionSettings = currentChat?.sessionSettings ?? draftSessionSettings
+  const sessionSettings = normalizeModeSessionSettings(
+    currentChat?.mode ?? currentMode,
+    currentChat?.sessionSettings ?? draftSessionSettings
+  )
 
   const statusLabel: 'Ready' | 'Streaming' | 'Idle' = isStreaming
     ? 'Streaming'
@@ -591,18 +605,22 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const updateSessionSettings = useCallback(
     (settings: Partial<SessionSettings>) => {
       if (!currentChat) {
-        setDraftSessionSettings((previous) => ({
-          ...previous,
-          ...settings,
-        }))
+        setDraftSessionSettings((previous) =>
+          normalizeModeSessionSettings(currentMode, {
+            ...previous,
+            ...settings,
+          })
+        )
         return
       }
 
+      const nextSessionSettings = normalizeModeSessionSettings(currentChat.mode, {
+        ...currentChat.sessionSettings,
+        ...settings,
+      })
+
       const optimisticConversation = updateConversationSnapshot(currentChat, {
-        sessionSettings: {
-          ...currentChat.sessionSettings,
-          ...settings,
-        },
+        sessionSettings: nextSessionSettings,
       })
 
       persistCurrentChat(optimisticConversation)

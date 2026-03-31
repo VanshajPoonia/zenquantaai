@@ -49,6 +49,10 @@ function migrateConversation(conversation: Conversation): Conversation {
   })
 }
 
+function normalizeConversation(conversation: Conversation): Conversation {
+  return migrateConversation(conversation)
+}
+
 async function readConversations(): Promise<Conversation[]> {
   const fileAlreadyExists = await fileExists(CONVERSATIONS_FILE)
   if (!fileAlreadyExists) {
@@ -87,7 +91,7 @@ class JsonConversationStore implements ConversationStore {
     sessionSettings: Conversation['sessionSettings']
   }): Promise<Conversation> {
     const conversations = await readConversations()
-    const conversation = createConversation(input)
+    const conversation = normalizeConversation(createConversation(input))
 
     await writeConversations([conversation, ...conversations])
 
@@ -96,7 +100,9 @@ class JsonConversationStore implements ConversationStore {
 
   async save(conversation: Conversation): Promise<Conversation> {
     const conversations = await readConversations()
-    const nextConversation = updateConversationSnapshot(conversation)
+    const nextConversation = normalizeConversation(
+      updateConversationSnapshot(conversation)
+    )
     const remaining = conversations.filter((item) => item.id !== conversation.id)
 
     await writeConversations([nextConversation, ...remaining])
@@ -113,7 +119,9 @@ class JsonConversationStore implements ConversationStore {
 
     if (!existing) return null
 
-    const updated = updateConversationSnapshot(existing, mutation)
+    const updated = normalizeConversation(
+      updateConversationSnapshot(existing, mutation)
+    )
     const remaining = conversations.filter((conversation) => conversation.id !== id)
 
     await writeConversations([updated, ...remaining])

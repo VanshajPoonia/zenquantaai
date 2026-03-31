@@ -93,11 +93,11 @@ export function SettingsPanel() {
 
         <div className="space-y-3">
           <div className="flex items-center justify-between">
-            <Label htmlFor="temperature" className="text-sm font-medium">
+                  <Label htmlFor="temperature" className="text-sm font-medium">
               Temperature
             </Label>
             <span className="text-sm text-muted-foreground font-mono">
-              {sessionSettings.temperature.toFixed(1)}
+              {modeConfig.temperature.toFixed(2)}
             </span>
           </div>
           <Slider
@@ -105,24 +105,22 @@ export function SettingsPanel() {
             min={0}
             max={2}
             step={0.1}
-            value={[sessionSettings.temperature]}
-            onValueChange={([value]) =>
-              updateSessionSettings({ temperature: value })
-            }
+            value={[modeConfig.temperature]}
+            disabled
             className={getSliderClass(currentMode)}
           />
           <p className="text-xs text-muted-foreground">
-            Higher values make outputs more exploratory. Lower values keep them tighter.
+            Locked to the active mode so the UI matches the exact sampling used by `/api/chat`.
           </p>
         </div>
 
         <div className="space-y-3">
           <div className="flex items-center justify-between">
-            <Label htmlFor="maxTokens" className="text-sm font-medium">
+                  <Label htmlFor="maxTokens" className="text-sm font-medium">
               Max Tokens
             </Label>
             <span className="text-sm text-muted-foreground font-mono">
-              {sessionSettings.maxTokens}
+              {modeConfig.maxTokens}
             </span>
           </div>
           <Slider
@@ -130,14 +128,12 @@ export function SettingsPanel() {
             min={256}
             max={8192}
             step={256}
-            value={[sessionSettings.maxTokens]}
-            onValueChange={([value]) =>
-              updateSessionSettings({ maxTokens: value })
-            }
+            value={[modeConfig.maxTokens]}
+            disabled
             className={getSliderClass(currentMode)}
           />
           <p className="text-xs text-muted-foreground">
-            Upper bound for the generated response length.
+            Mode-managed response length ceiling from the shared routing config.
           </p>
         </div>
 

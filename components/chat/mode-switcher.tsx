@@ -84,7 +84,7 @@ export function ModeSwitcher() {
 
       {/* Helper text with subtle animation */}
       <p className="text-sm text-muted-foreground animate-in fade-in duration-300">
-        {MODE_CONFIGS[currentMode].helperText}
+        {MODE_CONFIGS[currentMode].description}
       </p>
     </div>
   )

@@ -23,11 +23,7 @@ async function ensureSeededSettings(): Promise<AppSettings> {
   return SEEDED_APP_SETTINGS
 }
 
-function migrateSettings(raw: unknown): AppSettings {
-  const input = (raw ?? {}) as Partial<AppSettings> & {
-    // Legacy runtime JSON may still carry the pre-OpenRouter settings shape.
-    providerDrafts?: Record<string, string | undefined>
-  }
+function normalizeSettings(input: Partial<AppSettings>): AppSettings {
   const defaultMode = input.defaultMode ?? DEFAULT_APP_SETTINGS.defaultMode
 
   return {
@@ -55,6 +51,23 @@ function migrateSettings(raw: unknown): AppSettings {
   }
 }
 
+function migrateSettings(raw: unknown): AppSettings {
+  const input = (raw ?? {}) as Partial<AppSettings> & {
+    // Legacy runtime JSON may still carry the pre-OpenRouter settings shape.
+    providerDrafts?: Record<string, string | undefined>
+  }
+
+  return normalizeSettings({
+    ...input,
+    gatewayDrafts: {
+      openRouterApiKey: input.gatewayDrafts?.openRouterApiKey ?? '',
+      openRouterBaseUrl:
+        input.gatewayDrafts?.openRouterBaseUrl ??
+        OPENROUTER_DEFAULT_BASE_URL,
+    },
+  })
+}
+
 class JsonSettingsStore implements SettingsStore {
   async get(): Promise<AppSettings> {
     const exists = await fileExists(SETTINGS_FILE)
@@ -74,13 +87,14 @@ class JsonSettingsStore implements SettingsStore {
   }
 
   async save(settings: AppSettings): Promise<AppSettings> {
-    await writeJsonFile(SETTINGS_FILE, settings)
-    return settings
+    const normalized = normalizeSettings(settings)
+    await writeJsonFile(SETTINGS_FILE, normalized)
+    return normalized
   }
 
   async patch(settings: AppSettingsPatch): Promise<AppSettings> {
     const current = await this.get()
-    const next = {
+    const next = normalizeSettings({
       ...current,
       ...settings,
       sessionDefaults: {
@@ -91,7 +105,7 @@ class JsonSettingsStore implements SettingsStore {
         ...current.gatewayDrafts,
         ...settings.gatewayDrafts,
       },
-    }
+    })
 
     await writeJsonFile(SETTINGS_FILE, next)
 

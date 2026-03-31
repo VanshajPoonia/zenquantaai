@@ -416,10 +416,8 @@ export function resolveSessionSettings(
   fallback: SessionSettings
 ): SessionSettings {
   return {
-    temperature:
-      provided?.temperature ?? fallback.temperature ?? MODEL_ROUTE_CONFIGS[mode].temperature,
-    maxTokens:
-      provided?.maxTokens ?? fallback.maxTokens ?? MODEL_ROUTE_CONFIGS[mode].maxTokens,
+    temperature: MODEL_ROUTE_CONFIGS[mode].temperature,
+    maxTokens: MODEL_ROUTE_CONFIGS[mode].maxTokens,
     webSearch: provided?.webSearch ?? fallback.webSearch,
     memory: provided?.memory ?? fallback.memory,
     fileContext: provided?.fileContext ?? fallback.fileContext,

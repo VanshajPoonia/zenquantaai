@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useChatContext } from '@/lib/chat-context'
-import { AIMode, AppSettings, MODE_CONFIGS } from '@/lib/types'
+import { AIMode, AppSettings, MODE_CONFIGS, createSessionSettings } from '@/lib/types'
 import {
   ModeIcon,
   getModeAccentClass,
@@ -70,6 +70,7 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
   const { appSettings, saveAppSettings } = useChatContext()
   const [localSettings, setLocalSettings] = useState<AppSettings>(appSettings)
   const [saved, setSaved] = useState(false)
+  const defaultModeConfig = MODE_CONFIGS[localSettings.defaultMode]
 
   useEffect(() => {
     if (open) {
@@ -123,6 +124,7 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                       setLocalSettings((previous) => ({
                         ...previous,
                         defaultMode: mode,
+                        sessionDefaults: createSessionSettings(mode, previous.sessionDefaults),
                       }))
                     }
                   />
@@ -137,7 +139,7 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                 <div className="flex items-center justify-between">
                   <Label htmlFor="defaultTemperature">Default Temperature</Label>
                   <span className="text-sm text-muted-foreground font-mono">
-                    {localSettings.sessionDefaults.temperature.toFixed(1)}
+                    {defaultModeConfig.temperature.toFixed(2)}
                   </span>
                 </div>
                 <Slider
@@ -145,24 +147,19 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                   min={0}
                   max={2}
                   step={0.1}
-                  value={[localSettings.sessionDefaults.temperature]}
-                  onValueChange={([value]) =>
-                    setLocalSettings((previous) => ({
-                      ...previous,
-                      sessionDefaults: {
-                        ...previous.sessionDefaults,
-                        temperature: value,
-                      },
-                    }))
-                  }
+                  value={[defaultModeConfig.temperature]}
+                  disabled
                 />
+                <p className="text-xs text-muted-foreground">
+                  Locked to the selected mode so defaults match the shared model routing config.
+                </p>
               </div>
 
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <Label htmlFor="defaultMaxTokens">Default Max Tokens</Label>
                   <span className="text-sm text-muted-foreground font-mono">
-                    {localSettings.sessionDefaults.maxTokens}
+                    {defaultModeConfig.maxTokens}
                   </span>
                 </div>
                 <Slider
@@ -170,17 +167,12 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                   min={256}
                   max={8192}
                   step={256}
-                  value={[localSettings.sessionDefaults.maxTokens]}
-                  onValueChange={([value]) =>
-                    setLocalSettings((previous) => ({
-                      ...previous,
-                      sessionDefaults: {
-                        ...previous.sessionDefaults,
-                        maxTokens: value,
-                      },
-                    }))
-                  }
+                  value={[defaultModeConfig.maxTokens]}
+                  disabled
                 />
+                <p className="text-xs text-muted-foreground">
+                  Managed by the mode mapping so API defaults and UI stay aligned.
+                </p>
               </div>
             </div>
 

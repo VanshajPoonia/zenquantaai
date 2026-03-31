@@ -56,8 +56,9 @@ export function createSessionSettings(
   return {
     temperature: config.temperature,
     maxTokens: config.maxTokens,
-    ...DEFAULT_FEATURE_FLAGS,
-    ...overrides,
+    webSearch: overrides.webSearch ?? DEFAULT_FEATURE_FLAGS.webSearch,
+    memory: overrides.memory ?? DEFAULT_FEATURE_FLAGS.memory,
+    fileContext: overrides.fileContext ?? DEFAULT_FEATURE_FLAGS.fileContext,
   }
 }
 
