@@ -37,6 +37,7 @@ function migrateConversation(conversation: Conversation): Conversation {
       maxTokens: conversation.sessionSettings?.maxTokens,
       topP: conversation.sessionSettings?.topP,
       modelOverride: conversation.sessionSettings?.modelOverride,
+      systemPreset: conversation.sessionSettings?.systemPreset,
       webSearch: conversation.sessionSettings?.webSearch ?? false,
       memory: conversation.sessionSettings?.memory ?? true,
       fileContext: conversation.sessionSettings?.fileContext ?? false,

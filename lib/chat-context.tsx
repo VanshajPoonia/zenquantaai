@@ -21,6 +21,8 @@ import {
   ChatRequest,
   Conversation,
   ConversationSummary,
+  Project,
+  PromptLibraryItem,
   SessionSettings,
   StreamEvent,
   StreamingState,
@@ -28,27 +30,42 @@ import {
 import {
   createSessionSettings,
   DEFAULT_APP_SETTINGS,
+  DEFAULT_PROJECT_ID,
+  PROJECT_COLOR_OPTIONS,
   resolveModelConfig,
 } from '@/lib/config'
 import {
+  ensureBrowserWorkspaceId,
+  getDefaultBrowserProjects,
   getSeededBrowserAppSettings,
   readBrowserAppSettings,
   readBrowserConversations,
   readBrowserCurrentChatId,
+  readBrowserProjects,
+  readBrowserPromptLibrary,
+  readBrowserSelectedProjectId,
   writeBrowserAppSettings,
   writeBrowserConversations,
   writeBrowserCurrentChatId,
+  writeBrowserProjects,
+  writeBrowserPromptLibrary,
+  writeBrowserSelectedProjectId,
 } from '@/lib/storage/browser'
 import {
   createConversation,
   createMessage,
   getLastAssistantMessage,
+  getLastUserMessage,
   sortConversationSummaries,
-  toConversationSummary,
   updateConversationSnapshot,
+  toConversationSummary,
 } from '@/lib/utils/chat'
 import { readNdjsonStream } from '@/lib/utils/stream'
-import { conversationToJson, conversationToMarkdown, downloadTextFile } from '@/lib/utils/export'
+import {
+  conversationToJson,
+  conversationToMarkdown,
+  downloadTextFile,
+} from '@/lib/utils/export'
 import { toAttachmentContext } from '@/lib/utils/files'
 
 interface SendMessageInput {
@@ -56,7 +73,16 @@ interface SendMessageInput {
   attachments?: Attachment[]
 }
 
+type ProjectFilterId = 'all' | string
+
+interface SavePromptInput {
+  title: string
+  content: string
+  mode: AIMode | 'any'
+}
+
 interface ChatContextType {
+  workspaceId: string
   currentMode: AIMode
   setCurrentMode: (mode: AIMode) => void
   conversations: Conversation[]
@@ -71,6 +97,7 @@ interface ChatContextType {
   regenerateLastResponse: () => Promise<void>
   retryLastMessage: () => Promise<void>
   editLastUserMessage: (content: string, targetMessageId?: string) => Promise<void>
+  askAnotherMode: (mode: AIMode) => Promise<void>
   exportCurrentChat: (format: 'markdown' | 'json') => void
   isStreaming: boolean
   stopStreaming: () => void
@@ -88,6 +115,14 @@ interface ChatContextType {
   searchQuery: string
   setSearchQuery: (query: string) => void
   statusLabel: 'Ready' | 'Streaming' | 'Idle'
+  projects: Project[]
+  selectedProjectId: ProjectFilterId
+  setSelectedProjectId: (projectId: ProjectFilterId) => void
+  createProject: (name: string) => Promise<Project | null>
+  moveCurrentChatToProject: (projectId: string) => Promise<void>
+  promptLibrary: PromptLibraryItem[]
+  savePrompt: (input: SavePromptInput) => Promise<PromptLibraryItem | null>
+  deletePrompt: (promptId: string) => Promise<void>
 }
 
 const ChatContext = createContext<ChatContextType | undefined>(undefined)
@@ -116,8 +151,30 @@ function sortConversationList(conversations: Conversation[]): Conversation[] {
   })
 }
 
+function sortProjects(projects: Project[]): Project[] {
+  return [...projects].sort((a, b) => {
+    if (a.isDefault !== b.isDefault) {
+      return a.isDefault ? -1 : 1
+    }
+
+    return a.name.localeCompare(b.name)
+  })
+}
+
+function sortPrompts(prompts: PromptLibraryItem[]): PromptLibraryItem[] {
+  return [...prompts].sort(
+    (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+  )
+}
+
 function readLocalConversations(): Conversation[] {
-  return sortConversationList(readBrowserConversations() ?? [])
+  return sortConversationList(
+    (readBrowserConversations() ?? []).map((conversation) =>
+      updateConversationSnapshot(conversation, {
+        projectId: conversation.projectId ?? DEFAULT_PROJECT_ID,
+      })
+    )
+  )
 }
 
 function readLocalSettings(): AppSettings {
@@ -134,7 +191,38 @@ function writeLocalSettings(settings: AppSettings): void {
   writeBrowserAppSettings(normalizeAppSettingsState(settings))
 }
 
+async function fetchProjects(workspaceId: string): Promise<Project[]> {
+  const response = await fetch(
+    `/api/projects?workspaceId=${encodeURIComponent(workspaceId)}`,
+    {
+      cache: 'no-store',
+    }
+  )
+
+  if (!response.ok) {
+    throw new Error('Unable to load projects.')
+  }
+
+  return (await response.json()) as Project[]
+}
+
+async function fetchPrompts(workspaceId: string): Promise<PromptLibraryItem[]> {
+  const response = await fetch(
+    `/api/prompts?workspaceId=${encodeURIComponent(workspaceId)}`,
+    {
+      cache: 'no-store',
+    }
+  )
+
+  if (!response.ok) {
+    throw new Error('Unable to load prompt library.')
+  }
+
+  return (await response.json()) as PromptLibraryItem[]
+}
+
 export function ChatProvider({ children }: { children: ReactNode }) {
+  const [workspaceId, setWorkspaceId] = useState('')
   const [currentMode, setCurrentModeState] = useState<AIMode>(
     DEFAULT_APP_SETTINGS.defaultMode
   )
@@ -150,6 +238,10 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true)
   const [isSettingsPanelOpen, setIsSettingsPanelOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
+  const [projects, setProjects] = useState<Project[]>([])
+  const [selectedProjectIdState, setSelectedProjectIdState] =
+    useState<ProjectFilterId>('all')
+  const [promptLibrary, setPromptLibrary] = useState<PromptLibraryItem[]>([])
   const streamAbortRef = useRef<AbortController | null>(null)
   const conversationsRef = useRef<Conversation[]>([])
   const currentChatRef = useRef<Conversation | null>(null)
@@ -170,7 +262,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   }, [currentChat])
 
   const sessionSettings = normalizeModeSessionSettings(
-    currentChat?.mode ?? currentMode,
+    currentMode,
     currentChat?.sessionSettings ?? draftSessionSettings
   )
 
@@ -179,6 +271,12 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     : currentChat
       ? 'Ready'
       : 'Idle'
+
+  const selectedProjectId =
+    selectedProjectIdState !== 'all' &&
+    !projects.some((project) => project.id === selectedProjectIdState)
+      ? 'all'
+      : selectedProjectIdState
 
   const commitState = useCallback(
     (nextConversations: Conversation[], nextCurrentChat: Conversation | null) => {
@@ -199,14 +297,17 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
   const upsertConversation = useCallback(
     (conversation: Conversation, makeCurrent = true) => {
+      const nextConversation = updateConversationSnapshot(conversation, {
+        projectId: conversation.projectId ?? DEFAULT_PROJECT_ID,
+      })
       const nextConversations = [
-        conversation,
+        nextConversation,
         ...conversationsRef.current.filter((item) => item.id !== conversation.id),
       ]
 
       commitState(
         nextConversations,
-        makeCurrent ? conversation : currentChatRef.current
+        makeCurrent ? nextConversation : currentChatRef.current
       )
     },
     [commitState]
@@ -242,14 +343,34 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     [commitState]
   )
 
+  const setSelectedProjectId = useCallback((projectId: ProjectFilterId) => {
+    setSelectedProjectIdState(projectId)
+    writeBrowserSelectedProjectId(projectId === 'all' ? null : projectId)
+  }, [])
+
   const loadBootData = useCallback(async () => {
-    const storedConversations = readBrowserConversations()
+    const nextWorkspaceId = ensureBrowserWorkspaceId()
     const settings = readLocalSettings()
-    const nextConversations = sortConversationList(storedConversations ?? [])
+    const nextProjects = sortProjects(
+      readBrowserProjects(nextWorkspaceId) ?? getDefaultBrowserProjects(nextWorkspaceId)
+    )
+    const storedPrompts = sortPrompts(readBrowserPromptLibrary() ?? [])
+    const nextConversations = readLocalConversations()
     const currentChatId = readBrowserCurrentChatId()
     const activeConversation =
       nextConversations.find((conversation) => conversation.id === currentChatId) ?? null
+    const storedProjectId = readBrowserSelectedProjectId()
 
+    setWorkspaceId(nextWorkspaceId)
+    setProjects(nextProjects)
+    writeBrowserProjects(nextProjects)
+    setPromptLibrary(storedPrompts)
+    writeBrowserPromptLibrary(storedPrompts)
+    setSelectedProjectIdState(
+      storedProjectId && nextProjects.some((project) => project.id === storedProjectId)
+        ? storedProjectId
+        : 'all'
+    )
     setAppSettings(settings)
     writeLocalSettings(settings)
     commitState(nextConversations, activeConversation)
@@ -257,6 +378,21 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     setDraftSessionSettings(
       createSessionSettings(settings.defaultMode, settings.sessionDefaults)
     )
+
+    void Promise.all([
+      fetchProjects(nextWorkspaceId).then((remoteProjects) => {
+        const normalized = sortProjects(remoteProjects)
+        setProjects(normalized)
+        writeBrowserProjects(normalized)
+      }),
+      fetchPrompts(nextWorkspaceId).then((remotePrompts) => {
+        const normalized = sortPrompts(remotePrompts)
+        setPromptLibrary(normalized)
+        writeBrowserPromptLibrary(normalized)
+      }),
+    ]).catch((error) => {
+      console.error('Failed to refresh workspace data.', error)
+    })
   }, [commitState])
 
   useEffect(() => {
@@ -294,10 +430,20 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       setCurrentModeState(mode)
 
       if (!currentChat) {
-        setDraftSessionSettings(createSessionSettings(mode, draftSessionSettings))
+        setDraftSessionSettings((previous) =>
+          createSessionSettings(mode, previous)
+        )
+        return
       }
+
+      applyConversationPatch(currentChat.id, (conversation) =>
+        updateConversationSnapshot(conversation, {
+          mode,
+          sessionSettings: createSessionSettings(mode, conversation.sessionSettings),
+        })
+      )
     },
-    [currentChat, draftSessionSettings]
+    [applyConversationPatch, currentChat]
   )
 
   const goHome = useCallback(() => {
@@ -317,12 +463,13 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const createNewChat = useCallback(async () => {
     const conversation = createConversation({
       mode: currentMode,
+      projectId: selectedProjectId === 'all' ? DEFAULT_PROJECT_ID : selectedProjectId,
       sessionSettings,
     })
 
     setDraftSessionSettings(conversation.sessionSettings)
     upsertConversation(conversation)
-  }, [currentMode, sessionSettings, upsertConversation])
+  }, [currentMode, selectedProjectId, sessionSettings, upsertConversation])
 
   const deleteChat = useCallback(
     async (chatId: string) => {
@@ -388,6 +535,126 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     [saveAppSettings]
   )
 
+  const createProject = useCallback(
+    async (name: string) => {
+      const trimmedName = name.trim()
+      if (!trimmedName || !workspaceId) return null
+
+      const color =
+        PROJECT_COLOR_OPTIONS[
+          Math.min(projects.length, PROJECT_COLOR_OPTIONS.length - 1)
+        ]
+
+      try {
+        const response = await fetch('/api/projects', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            workspaceId,
+            name: trimmedName,
+            color,
+          }),
+        })
+
+        if (!response.ok) {
+          throw new Error('Unable to create project.')
+        }
+
+        const project = (await response.json()) as Project
+        const nextProjects = sortProjects([...projects, project])
+        setProjects(nextProjects)
+        writeBrowserProjects(nextProjects)
+        setSelectedProjectId(project.id)
+        return project
+      } catch (error) {
+        console.error('Failed to create project.', error)
+        return null
+      }
+    },
+    [projects, setSelectedProjectId, workspaceId]
+  )
+
+  const moveCurrentChatToProject = useCallback(
+    async (projectId: string) => {
+      if (!currentChat) return
+
+      applyConversationPatch(currentChat.id, (conversation) =>
+        updateConversationSnapshot(conversation, {
+          projectId,
+        })
+      )
+    },
+    [applyConversationPatch, currentChat]
+  )
+
+  const savePrompt = useCallback(
+    async ({ title, content, mode }: SavePromptInput) => {
+      const trimmedTitle = title.trim()
+      const trimmedContent = content.trim()
+
+      if (!workspaceId || !trimmedTitle || !trimmedContent) {
+        return null
+      }
+
+      try {
+        const response = await fetch('/api/prompts', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            workspaceId,
+            title: trimmedTitle,
+            content: trimmedContent,
+            mode,
+          }),
+        })
+
+        if (!response.ok) {
+          throw new Error('Unable to save prompt.')
+        }
+
+        const prompt = (await response.json()) as PromptLibraryItem
+        const nextPrompts = sortPrompts([
+          prompt,
+          ...promptLibrary.filter((item) => item.id !== prompt.id),
+        ])
+        setPromptLibrary(nextPrompts)
+        writeBrowserPromptLibrary(nextPrompts)
+        return prompt
+      } catch (error) {
+        console.error('Failed to save prompt.', error)
+        return null
+      }
+    },
+    [promptLibrary, workspaceId]
+  )
+
+  const deletePrompt = useCallback(
+    async (promptId: string) => {
+      if (!workspaceId) return
+
+      try {
+        await fetch(`/api/prompts/${promptId}`, {
+          method: 'DELETE',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ workspaceId }),
+        })
+      } catch (error) {
+        console.error('Failed to delete prompt.', error)
+      }
+
+      const nextPrompts = promptLibrary.filter((prompt) => prompt.id !== promptId)
+      setPromptLibrary(nextPrompts)
+      writeBrowserPromptLibrary(nextPrompts)
+    },
+    [promptLibrary, workspaceId]
+  )
+
   const applyLocalError = useCallback(
     (conversationId: string | undefined, messageId: string | undefined, error: string) => {
       if (!conversationId || !messageId) return
@@ -421,18 +688,20 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
     const conversation = createConversation({
       mode: currentMode,
+      projectId: selectedProjectId === 'all' ? DEFAULT_PROJECT_ID : selectedProjectId,
       sessionSettings,
     })
 
     upsertConversation(conversation)
     return conversation
-  }, [currentChat, currentMode, sessionSettings, upsertConversation])
+  }, [currentChat, currentMode, selectedProjectId, sessionSettings, upsertConversation])
 
   const runChatAction = useCallback(
     async (payload: {
       action: ChatAction
       content?: string
       targetMessageId?: string
+      targetMode?: AIMode
       conversation: Conversation
       optimisticConversation: Conversation
       attachments?: Attachment[]
@@ -461,6 +730,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
             conversationId: payload.conversation.id,
             conversation: payload.conversation,
             mode: currentMode,
+            targetMode: payload.targetMode,
             content: payload.content,
             settings: sessionSettings,
             targetMessageId: payload.targetMessageId,
@@ -580,6 +850,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         status: 'streaming',
         model: resolveModelConfig(currentMode, sessionSettings.modelOverride).model,
         provider: 'openrouter',
+        parentUserMessageId: userMessage.id,
       })
 
       const optimisticConversation = updateConversationSnapshot(conversation, {
@@ -607,6 +878,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         ? currentChat.messages.slice(0, -1)
         : currentChat.messages
 
+    const lastUser = getLastUserMessage(currentChat)
     const placeholder = createMessage({
       role: 'assistant',
       content: '',
@@ -614,6 +886,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       status: 'streaming',
       model: resolveModelConfig(currentMode, sessionSettings.modelOverride).model,
       provider: 'openrouter',
+      parentUserMessageId: lastUser?.id,
     })
 
     const optimisticConversation = updateConversationSnapshot(currentChat, {
@@ -633,6 +906,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     if (!currentChat) return
 
     const lastAssistant = getLastAssistantMessage(currentChat)
+    const lastUser = getLastUserMessage(currentChat)
     const baseMessages =
       lastAssistant && currentChat.messages.at(-1)?.id === lastAssistant.id
         ? currentChat.messages.slice(0, -1)
@@ -645,6 +919,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       status: 'streaming',
       model: resolveModelConfig(currentMode, sessionSettings.modelOverride).model,
       provider: 'openrouter',
+      parentUserMessageId: lastUser?.id,
     })
 
     const optimisticConversation = updateConversationSnapshot(currentChat, {
@@ -688,6 +963,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         status: 'streaming',
         model: resolveModelConfig(currentMode, sessionSettings.modelOverride).model,
         provider: 'openrouter',
+        parentUserMessageId: editedUser.id,
       })
 
       const optimisticConversation = updateConversationSnapshot(currentChat, {
@@ -712,6 +988,40 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     [currentChat, currentMode, runChatAction, sessionSettings]
   )
 
+  const askAnotherMode = useCallback(
+    async (mode: AIMode) => {
+      if (!currentChat) return
+
+      const lastUser = getLastUserMessage(currentChat)
+      if (!lastUser) return
+
+      const placeholder = createMessage({
+        role: 'assistant',
+        content: '',
+        mode,
+        status: 'streaming',
+        model: resolveModelConfig(mode, sessionSettings.modelOverride).model,
+        provider: 'openrouter',
+        parentUserMessageId: lastUser.id,
+        branchLabel: `Asked in ${mode}`,
+      })
+
+      const optimisticConversation = updateConversationSnapshot(currentChat, {
+        mode: currentMode,
+        sessionSettings,
+        messages: [...currentChat.messages, placeholder],
+      })
+
+      await runChatAction({
+        action: 'ask-another-mode',
+        conversation: currentChat,
+        optimisticConversation,
+        targetMode: mode,
+      })
+    },
+    [currentChat, currentMode, runChatAction, sessionSettings]
+  )
+
   const updateSessionSettings = useCallback(
     (settings: Partial<SessionSettings>) => {
       if (!currentChat) {
@@ -726,7 +1036,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
       applyConversationPatch(currentChat.id, (conversation) =>
         updateConversationSnapshot(conversation, {
-          sessionSettings: normalizeModeSessionSettings(conversation.mode, {
+          sessionSettings: normalizeModeSessionSettings(currentMode, {
             ...conversation.sessionSettings,
             ...settings,
           }),
@@ -760,6 +1070,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo<ChatContextType>(
     () => ({
+      workspaceId,
       currentMode,
       setCurrentMode,
       conversations,
@@ -774,6 +1085,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       regenerateLastResponse,
       retryLastMessage,
       editLastUserMessage,
+      askAnotherMode,
       exportCurrentChat,
       isStreaming,
       stopStreaming,
@@ -791,35 +1103,53 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       searchQuery,
       setSearchQuery,
       statusLabel,
+      projects,
+      selectedProjectId,
+      setSelectedProjectId,
+      createProject,
+      moveCurrentChatToProject,
+      promptLibrary,
+      savePrompt,
+      deletePrompt,
     }),
     [
       appSettings,
+      askAnotherMode,
       chats,
       conversations,
       createNewChat,
+      createProject,
       currentChat,
       currentMode,
       deleteChat,
+      deletePrompt,
       editLastUserMessage,
       exportCurrentChat,
       goHome,
       isSettingsPanelOpen,
       isSidebarOpen,
       isStreaming,
+      moveCurrentChatToProject,
+      projects,
+      promptLibrary,
       regenerateLastResponse,
       retryLastMessage,
       saveAppSettings,
+      savePrompt,
       searchQuery,
+      selectedProjectId,
       sendMessage,
       sessionSettings,
       setCurrentChat,
       setCurrentMode,
+      setSelectedProjectId,
       statusLabel,
       stopStreaming,
       streamingState,
       togglePinChat,
       updateApiSettings,
       updateSessionSettings,
+      workspaceId,
     ]
   )
 

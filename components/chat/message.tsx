@@ -1,9 +1,9 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import { PencilLine } from 'lucide-react'
+import { ChevronDown, PencilLine } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { AIMode, Message } from '@/lib/types'
+import { AIMode, Message, MODE_CONFIGS, MODE_ORDER } from '@/lib/types'
 import {
   getModeAccentClass,
   getModeTintClass,
@@ -19,6 +19,12 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip'
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import {
   CheckIcon,
   CopyIcon,
   RefreshIcon,
@@ -31,6 +37,7 @@ interface ChatMessageProps {
   onRegenerate?: () => void
   onRetry?: () => void
   onEdit?: (content: string, targetMessageId?: string) => void
+  onAskAnotherMode?: (mode: AIMode) => void
   isLastAssistant?: boolean
   isLastUser?: boolean
 }
@@ -299,6 +306,7 @@ export function ChatMessage({
   onRegenerate,
   onRetry,
   onEdit,
+  onAskAnotherMode,
   isLastAssistant,
   isLastUser,
 }: ChatMessageProps) {
@@ -411,6 +419,12 @@ export function ChatMessage({
         </div>
         <div className="flex-1">
           <div className="bg-card border border-border rounded-2xl rounded-tl-md px-4 py-3">
+            {message.branchLabel ? (
+              <div className="mb-3 inline-flex items-center gap-1 rounded-full border border-border/60 bg-background/60 px-2.5 py-1 text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+                <ModeIcon mode={message.mode} size="sm" />
+                {message.branchLabel}
+              </div>
+            ) : null}
             {message.status === 'streaming' ? (
               renderStreamingState(message.content)
             ) : (
@@ -465,6 +479,30 @@ export function ChatMessage({
                 </Tooltip>
               </TooltipProvider>
             )}
+
+            {isLastAssistant && onAskAnotherMode ? (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="sm" className="h-7 gap-1 rounded-full px-2.5 text-xs">
+                    Another mode
+                    <ChevronDown className="size-3" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="w-44">
+                  {MODE_ORDER.filter((mode) => mode !== message.mode).map((mode) => (
+                    <DropdownMenuItem
+                      key={mode}
+                      onClick={() => onAskAnotherMode(mode)}
+                    >
+                      <span className={cn('mr-2 inline-flex', getModeAccentClass(mode, 'text'))}>
+                        <ModeIcon mode={mode} size="sm" />
+                      </span>
+                      {MODE_CONFIGS[mode].name}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            ) : null}
 
             {(isLastAssistant || message.status === 'error') && (
               <TooltipProvider delayDuration={300}>

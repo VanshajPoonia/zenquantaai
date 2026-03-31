@@ -1,4 +1,4 @@
-import { MODEL_ROUTE_CONFIGS, resolveModelConfig } from '@/lib/config'
+import { MODE_CONFIGS, MODEL_ROUTE_CONFIGS, resolveModelConfig } from '@/lib/config'
 import {
   createConversation,
   createMessage,
@@ -10,7 +10,6 @@ import { estimateUsage } from '@/lib/utils/cost'
 import { toAttachmentContext } from '@/lib/utils/files'
 import {
   AIMode,
-  Attachment,
   AttachmentContext,
   ChatAction,
   ChatRequest,
@@ -19,11 +18,8 @@ import {
   SessionSettings,
   StreamEvent,
 } from '@/types'
-import { SYSTEM_PROMPTS } from './prompts'
-import {
-  hasOpenRouterConfig,
-  streamOpenRouterTextResponse,
-} from './openrouter'
+import { buildSystemPrompt } from './prompts'
+import { hasOpenRouterConfig, streamOpenRouterTextResponse } from './openrouter'
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
@@ -142,12 +138,13 @@ function formatAttachmentBlock(
 
 function buildOpenRouterMessages(
   conversation: Conversation,
-  settings: SessionSettings
+  settings: SessionSettings,
+  mode: AIMode
 ): Array<{
   role: 'system' | 'user' | 'assistant'
   content: string
 }> {
-  const systemPrompt = SYSTEM_PROMPTS[conversation.mode]
+  const systemPrompt = buildSystemPrompt(mode, settings.systemPreset)
 
   return [
     { role: 'system', content: systemPrompt },
@@ -165,17 +162,19 @@ function buildOpenRouterMessages(
   ]
 }
 
-async function* generateAssistantStream(
-  conversation: Conversation,
+async function* generateAssistantStream(input: {
+  conversation: Conversation
   settings: SessionSettings
-): AsyncIterable<string> {
-  const config = resolveModelConfig(conversation.mode, settings.modelOverride)
+  mode: AIMode
+}): AsyncIterable<string> {
+  const config = resolveModelConfig(input.mode, input.settings.modelOverride)
   const latestPrompt =
-    [...conversation.messages].reverse().find((message) => message.role === 'user')
-      ?.content ?? 'the user request'
+    [...input.conversation.messages]
+      .reverse()
+      .find((message) => message.role === 'user')?.content ?? 'the user request'
 
   if (!hasOpenRouterConfig()) {
-    for await (const chunk of streamText(buildMockResponse(conversation.mode, latestPrompt), 16)) {
+    for await (const chunk of streamText(buildMockResponse(input.mode, latestPrompt), 16)) {
       yield chunk
     }
     return
@@ -183,10 +182,14 @@ async function* generateAssistantStream(
 
   const stream = streamOpenRouterTextResponse({
     model: config.model,
-    messages: buildOpenRouterMessages(conversation, settings),
-    temperature: settings.temperature,
-    maxTokens: settings.maxTokens,
-    topP: settings.topP,
+    messages: buildOpenRouterMessages(
+      input.conversation,
+      input.settings,
+      input.mode
+    ),
+    temperature: input.settings.temperature,
+    maxTokens: input.settings.maxTokens,
+    topP: input.settings.topP,
   })
 
   for await (const chunk of stream) {
@@ -221,7 +224,10 @@ function findLastUserIndex(conversation: Conversation): number {
   return conversation.messages.findLastIndex((message) => message.role === 'user')
 }
 
-function resolveConversationMode(conversation: Conversation, mode: AIMode): Conversation {
+function resolveConversationMode(
+  conversation: Conversation,
+  mode: AIMode
+): Conversation {
   return updateConversationSnapshot(conversation, { mode })
 }
 
@@ -243,7 +249,9 @@ async function resolveConversation(payload: ChatRequest): Promise<Conversation> 
 
 function buildAssistantPlaceholder(
   mode: AIMode,
-  settings: SessionSettings
+  settings: SessionSettings,
+  parentUserMessageId?: string,
+  branchLabel?: string
 ): Message {
   const config = resolveModelConfig(mode, settings.modelOverride)
 
@@ -254,13 +262,20 @@ function buildAssistantPlaceholder(
     status: 'streaming',
     model: config.model,
     provider: 'openrouter',
+    parentUserMessageId,
+    branchLabel,
   })
 }
 
 function applySend(
   conversation: Conversation,
   payload: ChatRequest
-): { conversation: Conversation; userMessage: Message } {
+): {
+  conversation: Conversation
+  generationConversation: Conversation
+  userMessage: Message
+  assistantMode: AIMode
+} {
   const content = assertContent(payload.content, payload.action)
   const userMessage = createMessage({
     role: 'user',
@@ -269,22 +284,31 @@ function applySend(
     attachments: payload.attachments,
   })
 
+  const nextConversation = updateConversationSnapshot(
+    resolveConversationMode(conversation, payload.mode),
+    {
+      sessionSettings: payload.settings,
+      messages: [...conversation.messages, userMessage],
+    }
+  )
+
   return {
-    conversation: updateConversationSnapshot(
-      resolveConversationMode(conversation, payload.mode),
-      {
-        sessionSettings: payload.settings,
-        messages: [...conversation.messages, userMessage],
-      }
-    ),
+    conversation: nextConversation,
+    generationConversation: nextConversation,
     userMessage,
+    assistantMode: payload.mode,
   }
 }
 
 function applyRegenerate(
   conversation: Conversation,
   payload: ChatRequest
-): { conversation: Conversation; userMessage: Message } {
+): {
+  conversation: Conversation
+  generationConversation: Conversation
+  userMessage: Message
+  assistantMode: AIMode
+} {
   const withoutAssistant = removeLastAssistantTurn(conversation)
   const lastUser = getLastUserMessage(withoutAssistant)
 
@@ -292,21 +316,30 @@ function applyRegenerate(
     throw new Error('There is no user message to regenerate from.')
   }
 
+  const nextConversation = updateConversationSnapshot(
+    resolveConversationMode(withoutAssistant, payload.mode),
+    {
+      sessionSettings: payload.settings,
+    }
+  )
+
   return {
-    conversation: updateConversationSnapshot(
-      resolveConversationMode(withoutAssistant, payload.mode),
-      {
-        sessionSettings: payload.settings,
-      }
-    ),
+    conversation: nextConversation,
+    generationConversation: nextConversation,
     userMessage: lastUser,
+    assistantMode: payload.mode,
   }
 }
 
 function applyRetry(
   conversation: Conversation,
   payload: ChatRequest
-): { conversation: Conversation; userMessage: Message } {
+): {
+  conversation: Conversation
+  generationConversation: Conversation
+  userMessage: Message
+  assistantMode: AIMode
+} {
   const normalized = removeLastAssistantTurn(conversation)
   const lastUser = getLastUserMessage(normalized)
 
@@ -314,21 +347,30 @@ function applyRetry(
     throw new Error('There is no user message to retry.')
   }
 
+  const nextConversation = updateConversationSnapshot(
+    resolveConversationMode(normalized, payload.mode),
+    {
+      sessionSettings: payload.settings,
+    }
+  )
+
   return {
-    conversation: updateConversationSnapshot(
-      resolveConversationMode(normalized, payload.mode),
-      {
-        sessionSettings: payload.settings,
-      }
-    ),
+    conversation: nextConversation,
+    generationConversation: nextConversation,
     userMessage: lastUser,
+    assistantMode: payload.mode,
   }
 }
 
 function applyEditLastUser(
   conversation: Conversation,
   payload: ChatRequest
-): { conversation: Conversation; userMessage: Message } {
+): {
+  conversation: Conversation
+  generationConversation: Conversation
+  userMessage: Message
+  assistantMode: AIMode
+} {
   const lastUserIndex = findLastUserIndex(conversation)
 
   if (lastUserIndex === -1) {
@@ -346,34 +388,83 @@ function applyEditLastUser(
     mode: payload.mode,
   }
 
+  const nextConversation = updateConversationSnapshot(
+    resolveConversationMode(conversation, payload.mode),
+    {
+      sessionSettings: payload.settings,
+      messages: [
+        ...conversation.messages.slice(0, lastUserIndex),
+        editedUserMessage,
+      ],
+    }
+  )
+
   return {
-    conversation: updateConversationSnapshot(
-      resolveConversationMode(conversation, payload.mode),
-      {
-        sessionSettings: payload.settings,
-        messages: [
-          ...conversation.messages.slice(0, lastUserIndex),
-          editedUserMessage,
-        ],
-      }
-    ),
+    conversation: nextConversation,
+    generationConversation: nextConversation,
     userMessage: editedUserMessage,
+    assistantMode: payload.mode,
   }
+}
+
+function applyAskAnotherMode(
+  conversation: Conversation,
+  payload: ChatRequest
+): {
+  conversation: Conversation
+  generationConversation: Conversation
+  userMessage: Message
+  assistantMode: AIMode
+} {
+  const targetMode = payload.targetMode
+
+  if (!targetMode) {
+    throw new Error('A target mode is required to ask another mode.')
+  }
+
+  const lastUserIndex = findLastUserIndex(conversation)
+
+  if (lastUserIndex === -1) {
+    throw new Error('There is no recent user message to re-run.')
+  }
+
+  const lastUser = conversation.messages[lastUserIndex]
+  const uiConversation = updateConversationSnapshot(conversation, {
+    mode: payload.mode,
+    sessionSettings: payload.settings,
+  })
+
+  const generationConversation = updateConversationSnapshot(uiConversation, {
+    messages: uiConversation.messages.slice(0, lastUserIndex + 1),
+  })
+
+  return {
+    conversation: uiConversation,
+    generationConversation,
+    userMessage: lastUser,
+    assistantMode: targetMode,
+  }
+}
+
+type PreparedConversation = {
+  conversation: Conversation
+  generationConversation: Conversation
+  assistantPlaceholder: Message
+  userMessage: Message
+  assistantMode: AIMode
 }
 
 export async function prepareConversationForChat(
   payload: ChatRequest
-): Promise<{
-  conversation: Conversation
-  assistantPlaceholder: Message
-  userMessage: Message
-}> {
+): Promise<PreparedConversation> {
   const baseConversation = await resolveConversation(payload)
 
   let prepared:
     | {
         conversation: Conversation
+        generationConversation: Conversation
         userMessage: Message
+        assistantMode: AIMode
       }
     | undefined
 
@@ -390,29 +481,47 @@ export async function prepareConversationForChat(
     case 'edit-last-user':
       prepared = applyEditLastUser(baseConversation, payload)
       break
+    case 'ask-another-mode':
+      prepared = applyAskAnotherMode(baseConversation, payload)
+      break
     default:
       throw new Error('Unsupported chat action.')
   }
 
+  const branchLabel =
+    payload.action === 'ask-another-mode'
+      ? `Asked in ${MODE_CONFIGS[prepared.assistantMode].name}`
+      : undefined
+
   return {
     conversation: prepared.conversation,
+    generationConversation: prepared.generationConversation,
     userMessage: prepared.userMessage,
-    assistantPlaceholder: buildAssistantPlaceholder(payload.mode, payload.settings),
+    assistantMode: prepared.assistantMode,
+    assistantPlaceholder: buildAssistantPlaceholder(
+      prepared.assistantMode,
+      payload.settings,
+      prepared.userMessage.id,
+      branchLabel
+    ),
   }
 }
 
 export async function completeConversationWithAssistant(
   conversation: Conversation,
   assistantMessage: Message,
-  content: string
+  content: string,
+  generationConversation: Conversation,
+  generationMode: AIMode
 ): Promise<Conversation> {
   const activeConfig = resolveModelConfig(
-    conversation.mode,
+    generationMode,
     conversation.sessionSettings.modelOverride
   )
   const promptText = buildOpenRouterMessages(
-    conversation,
-    conversation.sessionSettings
+    generationConversation,
+    conversation.sessionSettings,
+    generationMode
   )
     .map((message) => message.content)
     .join('\n\n')
@@ -437,39 +546,44 @@ export async function completeConversationWithAssistant(
 export async function* streamConversationReply(
   payload: ChatRequest
 ): AsyncIterable<StreamEvent> {
-  const { conversation, assistantPlaceholder } =
-    await prepareConversationForChat(payload)
+  const prepared = await prepareConversationForChat(payload)
 
   yield {
     type: 'start',
-    conversation,
-    message: assistantPlaceholder,
+    conversation: prepared.conversation,
+    message: prepared.assistantPlaceholder,
   }
 
   let accumulated = ''
 
-  for await (const chunk of generateAssistantStream(conversation, payload.settings)) {
+  for await (const chunk of generateAssistantStream({
+    conversation: prepared.generationConversation,
+    settings: payload.settings,
+    mode: prepared.assistantMode,
+  })) {
     accumulated += chunk
 
     yield {
       type: 'delta',
-      conversationId: conversation.id,
-      messageId: assistantPlaceholder.id,
+      conversationId: prepared.conversation.id,
+      messageId: prepared.assistantPlaceholder.id,
       delta: chunk,
     }
   }
 
   const savedConversation = await completeConversationWithAssistant(
-    conversation,
-    assistantPlaceholder,
-    accumulated || 'No response returned.'
+    prepared.conversation,
+    prepared.assistantPlaceholder,
+    accumulated || 'No response returned.',
+    prepared.generationConversation,
+    prepared.assistantMode
   )
 
   yield {
     type: 'done',
     conversation: savedConversation,
     message: {
-      ...assistantPlaceholder,
+      ...prepared.assistantPlaceholder,
       content: accumulated || 'No response returned.',
       status: 'complete',
       usage: savedConversation.messages.at(-1)?.usage,
@@ -491,6 +605,8 @@ export function resolveSessionSettings(
     topP: provided?.topP ?? fallback.topP ?? MODEL_ROUTE_CONFIGS[mode].topP,
     modelOverride:
       provided?.modelOverride ?? fallback.modelOverride ?? 'auto',
+    systemPreset:
+      provided?.systemPreset ?? fallback.systemPreset ?? 'default',
     webSearch: provided?.webSearch ?? fallback.webSearch,
     memory: provided?.memory ?? fallback.memory,
     fileContext: provided?.fileContext ?? fallback.fileContext,

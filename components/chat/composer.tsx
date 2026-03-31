@@ -1,12 +1,19 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
+import { BookText, BookmarkPlus, Trash2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useChatContext } from '@/lib/chat-context'
 import { Attachment, MODE_CONFIGS, PendingAttachment } from '@/lib/types'
 import { createPendingAttachment, serializeAttachment } from '@/lib/utils/files'
 import { getModeAccentClass, getModeGlow } from '@/lib/mode-utils'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover'
 import {
   Tooltip,
   TooltipContent,
@@ -22,9 +29,18 @@ interface ComposerProps {
 }
 
 export function Composer({ onSend, disabled, initialValue = '' }: ComposerProps) {
-  const { currentMode, isStreaming, stopStreaming } = useChatContext()
+  const {
+    currentMode,
+    promptLibrary,
+    savePrompt,
+    deletePrompt,
+    isStreaming,
+    stopStreaming,
+  } = useChatContext()
   const [value, setValue] = useState(initialValue)
   const [pendingAttachments, setPendingAttachments] = useState<PendingAttachment[]>([])
+  const [promptTitle, setPromptTitle] = useState('')
+  const [isPromptPopoverOpen, setIsPromptPopoverOpen] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -89,6 +105,10 @@ export function Composer({ onSend, disabled, initialValue = '' }: ComposerProps)
     setPendingAttachments((previous) => [...previous, ...nextAttachments])
     event.target.value = ''
   }
+
+  const visiblePrompts = promptLibrary.filter(
+    (prompt) => prompt.mode === 'any' || prompt.mode === currentMode
+  )
 
   return (
     <div className="sticky bottom-0 z-20 border-t border-border bg-gradient-to-t from-background via-background/95 to-background/70 backdrop-blur-xl px-4 pb-4 pt-6">
@@ -164,6 +184,111 @@ export function Composer({ onSend, disabled, initialValue = '' }: ComposerProps)
             {/* Left Actions */}
             <div className="flex items-center gap-2">
               <ModeSwitcherCompact />
+              <Popover
+                open={isPromptPopoverOpen}
+                onOpenChange={setIsPromptPopoverOpen}
+              >
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    className="text-muted-foreground hover:text-foreground"
+                    disabled={disabled || isStreaming}
+                  >
+                    <BookText className="size-4" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent
+                  align="start"
+                  className="w-[360px] rounded-2xl border-border/70 bg-background/95 p-4"
+                >
+                  <div className="space-y-4">
+                    <div>
+                      <h3 className="text-sm font-semibold text-foreground">
+                        Prompt Library
+                      </h3>
+                      <p className="text-xs text-muted-foreground">
+                        Save reusable prompts and inject them into this chat.
+                      </p>
+                    </div>
+
+                    <div className="space-y-2 rounded-2xl border border-border/60 bg-card/50 p-3">
+                      <Input
+                        value={promptTitle}
+                        onChange={(event) => setPromptTitle(event.target.value)}
+                        placeholder="Prompt title"
+                        className="h-9"
+                      />
+                      <Button
+                        type="button"
+                        size="sm"
+                        className="w-full"
+                        disabled={!promptTitle.trim() || !value.trim()}
+                        onClick={async () => {
+                          const prompt = await savePrompt({
+                            title: promptTitle,
+                            content: value,
+                            mode: currentMode,
+                          })
+                          if (!prompt) return
+                          setPromptTitle('')
+                        }}
+                      >
+                        <BookmarkPlus className="mr-2 size-4" />
+                        Save current draft
+                      </Button>
+                    </div>
+
+                    <div className="max-h-72 space-y-2 overflow-y-auto pr-1">
+                      {visiblePrompts.length > 0 ? (
+                        visiblePrompts.map((prompt) => (
+                          <div
+                            key={prompt.id}
+                            className="rounded-2xl border border-border/60 bg-card/50 p-3"
+                          >
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="min-w-0">
+                                <p className="truncate text-sm font-medium text-foreground">
+                                  {prompt.title}
+                                </p>
+                                <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">
+                                  {prompt.content}
+                                </p>
+                              </div>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon-sm"
+                                className="size-7 shrink-0"
+                                onClick={() => deletePrompt(prompt.id)}
+                              >
+                                <Trash2 className="size-3.5" />
+                              </Button>
+                            </div>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="mt-3 w-full rounded-xl"
+                              onClick={() => {
+                                setValue(prompt.content)
+                                setIsPromptPopoverOpen(false)
+                                requestAnimationFrame(() => textareaRef.current?.focus())
+                              }}
+                            >
+                              Use prompt
+                            </Button>
+                          </div>
+                        ))
+                      ) : (
+                        <div className="rounded-2xl border border-dashed border-border/60 bg-card/30 px-3 py-6 text-center text-sm text-muted-foreground">
+                          No saved prompts for this mode yet.
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </PopoverContent>
+              </Popover>
               <TooltipProvider delayDuration={300}>
                 <Tooltip>
                   <TooltipTrigger asChild>

@@ -2,7 +2,14 @@
 
 import { useEffect, useState } from 'react'
 import { useChatContext } from '@/lib/chat-context'
-import { AIMode, AppSettings, MODE_CONFIGS, MODE_ORDER, createSessionSettings } from '@/lib/types'
+import {
+  AIMode,
+  AppSettings,
+  MODE_CONFIGS,
+  MODE_ORDER,
+  SYSTEM_PRESET_CONFIGS,
+  createSessionSettings,
+} from '@/lib/types'
 import {
   ModeIcon,
   getModeAccentClass,
@@ -24,6 +31,13 @@ import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import { Slider } from '@/components/ui/slider'
 import { Switch } from '@/components/ui/switch'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { CheckIcon } from '@/components/icons'
 
 interface SettingsModalProps {
@@ -217,6 +231,45 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
               />
               <p className="text-xs text-muted-foreground">
                 Controls how broad token sampling should be in freshly started chats.
+              </p>
+            </div>
+
+            <div className="space-y-3 rounded-2xl border border-border/70 bg-card/60 p-5">
+              <div>
+                <Label htmlFor="defaultSystemPreset">Default System Preset</Label>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Applies tone and response framing to new chats by default.
+                </p>
+              </div>
+              <Select
+                value={localSettings.sessionDefaults.systemPreset}
+                onValueChange={(value) =>
+                  setLocalSettings((previous) => ({
+                    ...previous,
+                    sessionDefaults: {
+                      ...previous.sessionDefaults,
+                      systemPreset:
+                        value as AppSettings['sessionDefaults']['systemPreset'],
+                    },
+                  }))
+                }
+              >
+                <SelectTrigger id="defaultSystemPreset">
+                  <SelectValue placeholder="Balanced" />
+                </SelectTrigger>
+                <SelectContent>
+                  {Object.values(SYSTEM_PRESET_CONFIGS).map((preset) => (
+                    <SelectItem key={preset.id} value={preset.id}>
+                      {preset.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                {
+                  SYSTEM_PRESET_CONFIGS[localSettings.sessionDefaults.systemPreset]
+                    .description
+                }
               </p>
             </div>
 

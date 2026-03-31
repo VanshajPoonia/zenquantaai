@@ -44,6 +44,9 @@ function normalizeSettings(input: Partial<AppSettings>): AppSettings {
       modelOverride:
         input.sessionDefaults?.modelOverride ??
         DEFAULT_APP_SETTINGS.sessionDefaults.modelOverride,
+      systemPreset:
+        input.sessionDefaults?.systemPreset ??
+        DEFAULT_APP_SETTINGS.sessionDefaults.systemPreset,
       webSearch:
         input.sessionDefaults?.webSearch ??
         DEFAULT_APP_SETTINGS.sessionDefaults.webSearch,

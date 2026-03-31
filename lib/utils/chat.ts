@@ -7,6 +7,7 @@ import {
   MessageRole,
   SessionSettings,
 } from '@/types'
+import { DEFAULT_PROJECT_ID } from '@/lib/config'
 import { sumConversationUsage } from './cost'
 
 export function createId(prefix = ''): string {
@@ -47,6 +48,8 @@ export function createMessage(input: {
   error?: string
   attachments?: Attachment[]
   usage?: Message['usage']
+  parentUserMessageId?: string
+  branchLabel?: string
 }): Message {
   return {
     id: createId('msg'),
@@ -67,6 +70,7 @@ export function toConversationSummary(
     id: conversation.id,
     title: conversation.title,
     mode: conversation.mode,
+    projectId: conversation.projectId,
     createdAt: conversation.createdAt,
     updatedAt: conversation.updatedAt,
     isPinned: conversation.isPinned,
@@ -93,6 +97,7 @@ export function updateConversationSnapshot(
     ...conversation,
     ...next,
     messages: mergedMessages,
+    projectId: next.projectId ?? conversation.projectId ?? DEFAULT_PROJECT_ID,
     sessionSettings: next.sessionSettings ?? conversation.sessionSettings,
     attachments,
     updatedAt: next.updatedAt ?? nowIso(),
@@ -153,6 +158,7 @@ export function getDefaultConversationTitle(mode: AIMode): string {
 export function createConversation(input: {
   id?: string
   mode: AIMode
+  projectId?: string
   sessionSettings: SessionSettings
   title?: string
   messages?: Message[]
@@ -168,6 +174,7 @@ export function createConversation(input: {
     id: input.id ?? createId('conv'),
     title: input.title ?? getDefaultConversationTitle(input.mode),
     mode: input.mode,
+    projectId: input.projectId ?? DEFAULT_PROJECT_ID,
     createdAt,
     updatedAt: input.updatedAt ?? createdAt,
     isPinned: input.isPinned ?? false,

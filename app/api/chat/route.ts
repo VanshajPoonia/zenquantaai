@@ -32,9 +32,12 @@ export async function POST(request: NextRequest) {
     conversationId: body.conversationId,
     conversation: body.conversation,
     mode: body.mode,
+    targetMode: body.targetMode,
     content: body.content,
     settings,
     targetMessageId: body.targetMessageId,
+    attachments: body.attachments,
+    attachmentContext: body.attachmentContext,
   }
 
   const stream = new TransformStream()

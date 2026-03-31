@@ -16,6 +16,7 @@ export function ChatArea() {
     regenerateLastResponse,
     retryLastMessage,
     editLastUserMessage,
+    askAnotherMode,
     streamingState,
   } = useChatContext()
   const [selectedPrompt, setSelectedPrompt] = useState('')
@@ -83,6 +84,7 @@ export function ChatArea() {
                 onRegenerate={regenerateLastResponse}
                 onRetry={retryLastMessage}
                 onEdit={editLastUserMessage}
+                onAskAnotherMode={askAnotherMode}
               />
             ))}
 

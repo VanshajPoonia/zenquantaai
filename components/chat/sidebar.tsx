@@ -1,6 +1,7 @@
 'use client'
 
 import { useMemo, useState } from 'react'
+import { FolderPlus, FolderTree } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useChatContext } from '@/lib/chat-context'
 import { ConversationSummary } from '@/lib/types'
@@ -9,6 +10,13 @@ import { formatConversationDate } from '@/lib/utils/date'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { ScrollArea } from '@/components/ui/scroll-area'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import {
   Tooltip,
   TooltipContent,
@@ -37,12 +45,14 @@ function ChatItem({
   onSelect,
   onPin,
   onDelete,
+  projectLabel,
 }: {
   chat: ConversationSummary
   isActive: boolean
   onSelect: () => void
   onPin: () => void
   onDelete: () => void
+  projectLabel: string
 }) {
   const [showActions, setShowActions] = useState(false)
 
@@ -72,7 +82,7 @@ function ChatItem({
       <div className="flex-1 min-w-0">
         <p className="text-sm font-medium truncate">{chat.title}</p>
         <p className="text-xs text-sidebar-foreground/50 truncate">
-          {formatConversationDate(chat.updatedAt)}
+          {projectLabel} • {formatConversationDate(chat.updatedAt)}
         </p>
       </div>
 
@@ -141,6 +151,7 @@ function ChatSection({
   onSelectChat,
   onPinChat,
   onDeleteChat,
+  projectLabelById,
 }: {
   title: string
   chats: ConversationSummary[]
@@ -148,6 +159,7 @@ function ChatSection({
   onSelectChat: (chat: ConversationSummary) => void
   onPinChat: (id: string) => void
   onDeleteChat: (id: string) => void
+  projectLabelById: Record<string, string>
 }) {
   if (chats.length === 0) return null
 
@@ -164,6 +176,7 @@ function ChatSection({
           onSelect={() => onSelectChat(chat)}
           onPin={() => onPinChat(chat.id)}
           onDelete={() => onDeleteChat(chat.id)}
+          projectLabel={projectLabelById[chat.projectId] ?? 'Inbox'}
         />
       ))}
     </div>
@@ -196,13 +209,32 @@ export function Sidebar({ onOpenSettings }: SidebarProps) {
     createNewChat,
     deleteChat,
     togglePinChat,
+    projects,
+    selectedProjectId,
+    setSelectedProjectId,
+    createProject,
     searchQuery,
     setSearchQuery,
     isSidebarOpen,
   } = useChatContext()
+  const [isCreatingProject, setIsCreatingProject] = useState(false)
+  const [newProjectName, setNewProjectName] = useState('')
+
+  const projectLabelById = useMemo(
+    () =>
+      Object.fromEntries(
+        projects.map((project) => [project.id, project.name] as const)
+      ),
+    [projects]
+  )
 
   const filteredChats = useMemo(() => {
-    if (!searchQuery.trim()) return chats
+    const projectScopedChats =
+      selectedProjectId === 'all'
+        ? chats
+        : chats.filter((chat) => chat.projectId === selectedProjectId)
+
+    if (!searchQuery.trim()) return projectScopedChats
     const query = searchQuery.toLowerCase()
     const matchingIds = new Set(
       conversations
@@ -215,19 +247,22 @@ export function Sidebar({ onOpenSettings }: SidebarProps) {
             .map((attachment) => attachment.name)
             .join(' ')
             .toLowerCase()
+          const projectName = (projectLabelById[conversation.projectId] ?? 'Inbox')
+            .toLowerCase()
 
           return (
             conversation.title.toLowerCase().includes(query) ||
             conversation.preview.toLowerCase().includes(query) ||
             messageText.includes(query) ||
-            attachmentNames.includes(query)
+            attachmentNames.includes(query) ||
+            projectName.includes(query)
           )
         })
         .map((conversation) => conversation.id)
     )
 
-    return chats.filter((chat) => matchingIds.has(chat.id))
-  }, [chats, conversations, searchQuery])
+    return projectScopedChats.filter((chat) => matchingIds.has(chat.id))
+  }, [chats, conversations, projectLabelById, searchQuery, selectedProjectId])
 
   const pinnedChats = useMemo(
     () => filteredChats.filter((c) => c.isPinned),
@@ -282,7 +317,87 @@ export function Sidebar({ onOpenSettings }: SidebarProps) {
       </div>
 
       {/* Search */}
-      <div className="px-4 pb-3">
+      <div className="px-4 pb-3 space-y-3">
+        <div className="flex items-center gap-2">
+          <div className="relative flex-1">
+            <FolderTree className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-sidebar-foreground/40" />
+            <Select
+              value={selectedProjectId}
+              onValueChange={(value) => setSelectedProjectId(value)}
+            >
+              <SelectTrigger
+                className={cn(
+                  'h-9 rounded-xl border-sidebar-border/50 bg-sidebar-accent/50 pl-9',
+                  'text-sidebar-foreground/80'
+                )}
+              >
+                <SelectValue placeholder="All Projects" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Projects</SelectItem>
+                {projects.map((project) => (
+                  <SelectItem key={project.id} value={project.id}>
+                    {project.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="size-9 rounded-xl bg-sidebar-accent/40 text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground"
+            onClick={() => setIsCreatingProject((previous) => !previous)}
+          >
+            <FolderPlus className="size-4" />
+          </Button>
+        </div>
+
+        {isCreatingProject && (
+          <div className="rounded-2xl border border-sidebar-border/60 bg-sidebar-accent/30 p-3 space-y-2">
+            <Input
+              value={newProjectName}
+              onChange={(event) => setNewProjectName(event.target.value)}
+              placeholder="New project name"
+              className="h-9 rounded-xl border-sidebar-border/50 bg-sidebar/60"
+              onKeyDown={async (event) => {
+                if (event.key !== 'Enter') return
+                const project = await createProject(newProjectName)
+                if (!project) return
+                setNewProjectName('')
+                setIsCreatingProject(false)
+              }}
+            />
+            <div className="flex justify-end gap-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-8 rounded-lg"
+                onClick={() => {
+                  setIsCreatingProject(false)
+                  setNewProjectName('')
+                }}
+              >
+                Cancel
+              </Button>
+              <Button
+                size="sm"
+                className="h-8 rounded-lg"
+                disabled={!newProjectName.trim()}
+                onClick={async () => {
+                  const project = await createProject(newProjectName)
+                  if (!project) return
+                  setNewProjectName('')
+                  setIsCreatingProject(false)
+                }}
+              >
+                Create
+              </Button>
+            </div>
+          </div>
+        )}
+
         <div className="relative">
           <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-sidebar-foreground/40 size-4" />
           <Input
@@ -319,6 +434,7 @@ export function Sidebar({ onOpenSettings }: SidebarProps) {
             onSelectChat={setCurrentChat}
             onPinChat={togglePinChat}
             onDeleteChat={deleteChat}
+            projectLabelById={projectLabelById}
           />
 
           <ChatSection
@@ -328,6 +444,7 @@ export function Sidebar({ onOpenSettings }: SidebarProps) {
             onSelectChat={setCurrentChat}
             onPinChat={togglePinChat}
             onDeleteChat={deleteChat}
+            projectLabelById={projectLabelById}
           />
 
           {filteredChats.length === 0 && (

@@ -8,6 +8,16 @@ import {
 } from '@/types'
 
 export const OPENROUTER_DEFAULT_BASE_URL = 'https://openrouter.ai/api/v1'
+export const DEFAULT_PROJECT_ID = 'project-inbox'
+export const DEFAULT_PROJECT_NAME = 'Inbox'
+export const PROJECT_COLOR_OPTIONS = [
+  'general',
+  'creative',
+  'logic',
+  'code',
+  'slate',
+  'amber',
+] as const
 
 export const MODEL_OVERRIDE_CONFIGS: Record<
   Exclude<ModelOverrideOption, 'auto'>,
@@ -116,10 +126,14 @@ export const MODEL_ROUTE_CONFIGS: Record<AIMode, ModelRouteConfig> = {
 
 export const DEFAULT_FEATURE_FLAGS = {
   modelOverride: 'auto',
+  systemPreset: 'default',
   webSearch: false,
   memory: true,
   fileContext: false,
-} satisfies Pick<SessionSettings, 'modelOverride' | 'webSearch' | 'memory' | 'fileContext'>
+} satisfies Pick<
+  SessionSettings,
+  'modelOverride' | 'systemPreset' | 'webSearch' | 'memory' | 'fileContext'
+>
 
 export function resolveModelConfig(
   mode: AIMode,
@@ -152,6 +166,7 @@ export function createSessionSettings(
     maxTokens: overrides.maxTokens ?? config.maxTokens,
     topP: overrides.topP ?? config.topP,
     modelOverride: overrides.modelOverride ?? DEFAULT_FEATURE_FLAGS.modelOverride,
+    systemPreset: overrides.systemPreset ?? DEFAULT_FEATURE_FLAGS.systemPreset,
     webSearch: overrides.webSearch ?? DEFAULT_FEATURE_FLAGS.webSearch,
     memory: overrides.memory ?? DEFAULT_FEATURE_FLAGS.memory,
     fileContext: overrides.fileContext ?? DEFAULT_FEATURE_FLAGS.fileContext,

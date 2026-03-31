@@ -8,6 +8,7 @@ import {
   MODEL_OVERRIDE_CONFIGS,
   MODE_CONFIGS,
   ModelOverrideOption,
+  SYSTEM_PRESET_CONFIGS,
   createSessionSettings,
   resolveModelConfig,
 } from '@/lib/types'
@@ -40,9 +41,11 @@ export function SettingsPanel() {
   const {
     currentMode,
     currentChat,
+    projects,
     sessionSettings,
     statusLabel,
     updateSessionSettings,
+    moveCurrentChatToProject,
     isSettingsPanelOpen,
     toggleSettingsPanel,
   } = useChatContext()
@@ -112,6 +115,26 @@ export function SettingsPanel() {
               {modeConfig.name}
             </p>
           </div>
+          <div className="rounded-xl border border-border/60 bg-background/60 px-3 py-2 space-y-2">
+            <p className="text-[11px] uppercase tracking-widest text-muted-foreground">
+              Project
+            </p>
+            <Select
+              value={currentChat?.projectId ?? projects[0]?.id}
+              onValueChange={moveCurrentChatToProject}
+            >
+              <SelectTrigger className="h-9">
+                <SelectValue placeholder="Choose project" />
+              </SelectTrigger>
+              <SelectContent>
+                {projects.map((project) => (
+                  <SelectItem key={project.id} value={project.id}>
+                    {project.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
           <div className="rounded-xl border border-border/60 bg-background/60 px-3 py-2">
             <p className="text-[11px] uppercase tracking-widest text-muted-foreground mb-1">
               Model Routing
@@ -145,6 +168,34 @@ export function SettingsPanel() {
         </div>
 
         <div className="space-y-3">
+          <div className="space-y-2">
+            <Label htmlFor="systemPreset" className="text-sm font-medium">
+              System Preset
+            </Label>
+            <Select
+              value={sessionSettings.systemPreset}
+              onValueChange={(value) =>
+                updateSessionSettings({
+                  systemPreset: value as keyof typeof SYSTEM_PRESET_CONFIGS,
+                })
+              }
+            >
+              <SelectTrigger id="systemPreset">
+                <SelectValue placeholder="Balanced" />
+              </SelectTrigger>
+              <SelectContent>
+                {Object.values(SYSTEM_PRESET_CONFIGS).map((preset) => (
+                  <SelectItem key={preset.id} value={preset.id}>
+                    {preset.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              {SYSTEM_PRESET_CONFIGS[sessionSettings.systemPreset].description}
+            </p>
+          </div>
+
           <div className="flex items-center justify-between">
             <Label htmlFor="temperature" className="text-sm font-medium">
               Temperature
@@ -327,7 +378,7 @@ export function SettingsPanel() {
                   File Context
                 </Label>
                 <p className="text-xs text-muted-foreground">
-                  Reserve file-aware routing for future attachment support
+                  Include extracted attachment text in the model context for this chat
                 </p>
               </div>
             </div>

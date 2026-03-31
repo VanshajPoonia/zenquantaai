@@ -12,7 +12,12 @@ export type GatewayId = 'openrouter'
 
 export type MessageRole = 'system' | 'user' | 'assistant'
 
-export type ChatAction = 'send' | 'regenerate' | 'retry' | 'edit-last-user'
+export type ChatAction =
+  | 'send'
+  | 'regenerate'
+  | 'retry'
+  | 'edit-last-user'
+  | 'ask-another-mode'
 
 export type StreamingStatus = 'idle' | 'streaming' | 'error'
 
@@ -20,11 +25,19 @@ export type AccentStyle = 'mode' | 'glass'
 
 export type ResponseStyle = 'balanced' | 'concise' | 'detailed'
 
+export type SystemPresetId =
+  | 'default'
+  | 'concise'
+  | 'detailed'
+  | 'startup'
+  | 'academic'
+
 export interface SessionSettings {
   temperature: number
   maxTokens: number
   topP: number
   modelOverride: ModelOverrideOption
+  systemPreset: SystemPresetId
   webSearch: boolean
   memory: boolean
   fileContext: boolean
@@ -62,12 +75,15 @@ export interface Message {
   error?: string
   attachments?: Attachment[]
   usage?: UsageEstimate
+  parentUserMessageId?: string
+  branchLabel?: string
 }
 
 export interface ConversationSummary {
   id: string
   title: string
   mode: AIMode
+  projectId: string
   createdAt: string
   updatedAt: string
   isPinned: boolean
@@ -120,11 +136,40 @@ export interface ModeConfig extends ModelRouteConfig {
   icon: 'sparkles' | 'brain' | 'code'
 }
 
+export interface SystemPresetConfig {
+  id: SystemPresetId
+  label: string
+  description: string
+  promptSuffix: string
+}
+
+export interface Project {
+  id: string
+  workspaceId: string
+  name: string
+  description?: string
+  color: string
+  createdAt: string
+  updatedAt: string
+  isDefault?: boolean
+}
+
+export interface PromptLibraryItem {
+  id: string
+  workspaceId: string
+  title: string
+  content: string
+  mode: AIMode | 'any'
+  createdAt: string
+  updatedAt: string
+}
+
 export interface ChatRequest {
   action: ChatAction
   conversationId?: string
   conversation?: Conversation
   mode: AIMode
+  targetMode?: AIMode
   content?: string
   settings: SessionSettings
   targetMessageId?: string
@@ -234,6 +279,7 @@ export interface AIModelGateway {
 export interface ConversationMutation {
   title?: string
   mode?: AIMode
+  projectId?: string
   isPinned?: boolean
   sessionSettings?: SessionSettings
 }
