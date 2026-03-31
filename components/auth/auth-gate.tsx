@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useChatContext } from '@/lib/chat-context'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -33,6 +33,66 @@ export function AuthGate() {
     | 'error'
   >('idle')
   const [message, setMessage] = useState('')
+  const [magicLinkCooldownUntil, setMagicLinkCooldownUntil] = useState<number | null>(
+    null
+  )
+  const [resetCooldownUntil, setResetCooldownUntil] = useState<number | null>(null)
+  const [now, setNow] = useState(() => Date.now())
+
+  useEffect(() => {
+    if (!magicLinkCooldownUntil && !resetCooldownUntil) return
+
+    const timer = window.setInterval(() => {
+      setNow(Date.now())
+    }, 1000)
+
+    return () => {
+      window.clearInterval(timer)
+    }
+  }, [magicLinkCooldownUntil, resetCooldownUntil])
+
+  const magicLinkCooldownRemaining = useMemo(() => {
+    if (!magicLinkCooldownUntil) return 0
+    return Math.max(0, Math.ceil((magicLinkCooldownUntil - now) / 1000))
+  }, [magicLinkCooldownUntil, now])
+
+  const resetCooldownRemaining = useMemo(() => {
+    if (!resetCooldownUntil) return 0
+    return Math.max(0, Math.ceil((resetCooldownUntil - now) / 1000))
+  }, [resetCooldownUntil, now])
+
+  useEffect(() => {
+    if (magicLinkCooldownUntil && magicLinkCooldownRemaining === 0) {
+      setMagicLinkCooldownUntil(null)
+    }
+  }, [magicLinkCooldownRemaining, magicLinkCooldownUntil])
+
+  useEffect(() => {
+    if (resetCooldownUntil && resetCooldownRemaining === 0) {
+      setResetCooldownUntil(null)
+    }
+  }, [resetCooldownRemaining, resetCooldownUntil])
+
+  const isMagicLinkCoolingDown = magicLinkCooldownRemaining > 0
+  const isResetCoolingDown = resetCooldownRemaining > 0
+
+  function toAuthErrorMessage(error: unknown, fallback: string): string {
+    if (!(error instanceof Error)) return fallback
+
+    const message = error.message.trim()
+    const normalized = message.toLowerCase()
+
+    if (
+      normalized.includes('60 seconds') ||
+      normalized.includes('wait') ||
+      normalized.includes('rate limit') ||
+      normalized.includes('security purposes')
+    ) {
+      return 'Please wait about a minute before requesting another email.'
+    }
+
+    return message || fallback
+  }
 
   return (
     <div className="flex h-screen w-full items-center justify-center bg-background px-6">
@@ -126,7 +186,11 @@ export function AuthGate() {
                     type="button"
                     variant="link"
                     className="h-auto px-0 text-xs text-muted-foreground"
-                    disabled={!email.trim() || status === 'resetting'}
+                    disabled={
+                      !email.trim() ||
+                      status === 'resetting' ||
+                      isResetCoolingDown
+                    }
                     onClick={async () => {
                       setStatus('resetting')
                       setMessage('')
@@ -135,19 +199,23 @@ export function AuthGate() {
                         const nextMessage = await requestPasswordReset(
                           email.trim()
                         )
+                        setResetCooldownUntil(Date.now() + 60_000)
                         setStatus('sent')
                         setMessage(nextMessage)
                       } catch (error) {
                         setStatus('error')
                         setMessage(
-                          error instanceof Error
-                            ? error.message
-                            : 'Unable to send the password reset link.'
+                          toAuthErrorMessage(
+                            error,
+                            'Unable to send the password reset link.'
+                          )
                         )
                       }
                     }}
                   >
-                    Forgot password?
+                    {isResetCoolingDown
+                      ? `Reset link sent (${resetCooldownRemaining}s)`
+                      : 'Forgot password?'}
                   </Button>
                 </div>
               )}
@@ -157,26 +225,34 @@ export function AuthGate() {
           {authMethod === 'magic-link' ? (
             <Button
               className="h-12 w-full rounded-2xl"
-              disabled={!email.trim() || status === 'sending'}
+              disabled={
+                !email.trim() || status === 'sending' || isMagicLinkCoolingDown
+              }
               onClick={async () => {
                 setStatus('sending')
                 setMessage('')
 
                 try {
                   await requestMagicLink(email.trim())
+                  setMagicLinkCooldownUntil(Date.now() + 60_000)
                   setStatus('sent')
                   setMessage('Check your inbox for the sign-in link.')
                 } catch (error) {
                   setStatus('error')
                   setMessage(
-                    error instanceof Error
-                      ? error.message
-                      : 'Unable to send the magic link right now.'
+                    toAuthErrorMessage(
+                      error,
+                      'Unable to send the magic link right now.'
+                    )
                   )
                 }
               }}
             >
-              {status === 'sending' ? 'Sending link…' : 'Email me a magic link'}
+              {status === 'sending'
+                ? 'Sending link…'
+                : isMagicLinkCoolingDown
+                  ? `Magic link sent (${magicLinkCooldownRemaining}s)`
+                  : 'Email me a magic link'}
             </Button>
           ) : (
             <Button
