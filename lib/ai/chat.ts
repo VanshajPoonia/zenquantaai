@@ -134,6 +134,13 @@ async function generateAssistantText(
     return buildMockResponse(conversation.mode, latestPrompt)
   }
 
+  if (conversation.mode === 'creative') {
+    return createOpenRouterTextResponse({
+      model: config.model,
+      messages: buildOpenRouterMessages(conversation),
+    })
+  }
+
   return createOpenRouterTextResponse({
     model: config.model,
     messages: buildOpenRouterMessages(conversation),

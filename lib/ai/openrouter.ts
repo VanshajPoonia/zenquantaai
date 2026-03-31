@@ -9,9 +9,9 @@ type OpenRouterMessage = {
 type OpenRouterCreateChatCompletionParams = {
   model: string
   messages: OpenRouterMessage[]
-  temperature: number
-  max_tokens: number
-  top_p: number
+  temperature?: number
+  max_tokens?: number
+  top_p?: number
   stream?: boolean
 }
 
@@ -116,16 +116,22 @@ export const openRouterClient = {
 export async function createOpenRouterTextResponse(input: {
   model: string
   messages: OpenRouterMessage[]
-  temperature: number
-  maxTokens: number
-  topP: number
+  temperature?: number
+  maxTokens?: number
+  topP?: number
 }): Promise<string> {
   const response = await openRouterClient.chat.completions.create({
     model: input.model,
     messages: input.messages,
-    temperature: input.temperature,
-    max_tokens: input.maxTokens,
-    top_p: input.topP,
+    ...(typeof input.temperature === 'number'
+      ? { temperature: input.temperature }
+      : {}),
+    ...(typeof input.maxTokens === 'number'
+      ? { max_tokens: input.maxTokens }
+      : {}),
+    ...(typeof input.topP === 'number'
+      ? { top_p: input.topP }
+      : {}),
     stream: false,
   })
 
