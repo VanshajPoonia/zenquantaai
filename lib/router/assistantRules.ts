@@ -19,22 +19,30 @@ export interface AssistantSignal {
 type Rule = (context: PromptSignalContext) => AssistantSignal[]
 
 const IMAGE_PATTERN =
-  /\b(generate|create|make|design|render|illustrate|edit|retouch|remove background|upscale|mockup)\b[\s\S]{0,40}\b(image|photo|poster|logo|banner|illustration|icon|thumbnail|visual|picture)\b/i
+  /\b(generate|create|make|design|render|illustrate|draw|edit|retouch|upscale|mockup|craft)\b[\s\S]{0,50}\b(image|photo|poster|logo|banner|illustration|icon|thumbnail|portrait|visual|picture|artwork|scene|wallpaper)\b/i
 const IMAGE_EDIT_PATTERN =
-  /\b(edit this image|edit this photo|remove the background|retouch this|turn this into an illustration|make this look like)\b/i
+  /\b(edit this image|edit this photo|remove the background|retouch this|turn this into an illustration|make this look like|touch up this image)\b/i
+const IMAGE_OBJECT_PATTERN =
+  /\b(cinematic poster|logo concept|banner design|cover art|thumbnail|concept art|illustration|portrait|hero image|product render)\b/i
 const CODE_FENCE_PATTERN = /```[\s\S]*```/
 const STACK_TRACE_PATTERN =
-  /\b(traceback|stack trace|typeerror:|referenceerror:|syntaxerror:|exception:|npm err!|error:\s|at\s+[^\n]+\([^)]+\))\b/i
+  /\b(traceback|stack trace|typeerror:|referenceerror:|syntaxerror:|exception:|npm err!|error:\s|at\s+[^\n]+\([^)]+\)|failed to compile|build failed|runtime error)\b/i
 const FILE_NAME_PATTERN =
   /\b[\w./-]+\.(ts|tsx|js|jsx|mjs|cjs|py|go|java|rb|rs|php|html|css|scss|sql|json|yaml|yml)\b/i
 const CODE_INTENT_PATTERN =
-  /\b(debug|fix|refactor|implement|write code|api route|endpoint|function|component|hook|typescript|javascript|python|next\.?js|react|node|schema|query|class|stack trace)\b/i
+  /\b(debug|fix|refactor|implement|write code|api route|endpoint|function|component|hook|typescript|javascript|python|next\.?js|react|node|schema|query|class|stack trace|bug|compile|deployment error|database migration|orm|sql query)\b/i
 const CURRENT_INFO_PATTERN =
-  /\b(latest|today|current|recent|recently|news|market update|what happened|breaking|this week|right now|up to date)\b/i
+  /\b(latest|today|current|recent|recently|news|market update|what happened|breaking|this week|right now|up to date|current events|live update|as of today)\b/i
+const CURRENT_RESEARCH_PATTERN =
+  /\b(research the latest|look up current|what's new in|recent launch|recent update|market news|industry update)\b/i
 const CREATIVE_PATTERN =
-  /\b(story|storytelling|brand story|rewrite|rephrase|tone|voice|script|screenplay|slogan|tagline|headline|ad copy|campaign|poem|lyrics|creative)\b/i
+  /\b(story|storytelling|brand story|rewrite|rephrase|tone|voice|script|screenplay|slogan|tagline|headline|ad copy|campaign|poem|lyrics|creative|brand voice|naming|positioning)\b/i
+const CREATIVE_STRONG_PATTERN =
+  /\b(rewrite this|rephrase this|brand story|brand voice|tone of voice|tagline|slogan|naming ideas|write a story|write copy)\b/i
 const LOGIC_PATTERN =
-  /\b(compare|comparison|pros and cons|tradeoffs?|framework|decision|analy[sz]e|analysis|evaluate|versus|vs\.?|choose between|break down|reason through)\b/i
+  /\b(compare|comparison|pros and cons|tradeoffs?|framework|decision|analy[sz]e|analysis|evaluate|versus|vs\.?|choose between|break down|reason through|weigh options|decision matrix)\b/i
+const LOGIC_STRONG_PATTERN =
+  /\b(pros and cons|tradeoffs?|decision framework|compare .*?(with|vs\.?|and)|evaluate these options|choose between .* and .*|reason through)\b/i
 const GENERAL_PATTERN =
   /\b(explain|summary|summarize|help me understand|what is|how does|walk me through|overview)\b/i
 const CURRENT_LOCK_PATTERN =
@@ -58,7 +66,8 @@ const RULES: Rule[] = [
 
     if (
       IMAGE_PATTERN.test(context.prompt) ||
-      IMAGE_EDIT_PATTERN.test(context.prompt)
+      IMAGE_EDIT_PATTERN.test(context.prompt) ||
+      IMAGE_OBJECT_PATTERN.test(context.prompt)
     ) {
       signals.push({
         assistant: 'prism',
@@ -111,7 +120,7 @@ const RULES: Rule[] = [
       signals.push({
         assistant: 'forge',
         label: 'code-intent',
-        weight: 6,
+        weight: 7,
         reason: 'it is asking for debugging, implementation, or programming help',
       })
     }
@@ -119,7 +128,7 @@ const RULES: Rule[] = [
     return signals
   },
   (context) =>
-    CURRENT_INFO_PATTERN.test(context.prompt)
+    CURRENT_INFO_PATTERN.test(context.prompt) || CURRENT_RESEARCH_PATTERN.test(context.prompt)
       ? [
           {
             assistant: 'pulse',
@@ -139,6 +148,17 @@ const RULES: Rule[] = [
             weight: 6,
             reason: 'it asks for storytelling, rewriting, or brand-language work',
           },
+          ...(CREATIVE_STRONG_PATTERN.test(context.prompt)
+            ? [
+                {
+                  assistant: 'velora' as const,
+                  label: 'creative-strong',
+                  weight: 8,
+                  reason: 'it explicitly asks for rewriting, branding, or creative writing work',
+                  strong: true,
+                },
+              ]
+            : []),
         ]
       : [],
   (context) =>
@@ -150,6 +170,17 @@ const RULES: Rule[] = [
             weight: 6,
             reason: 'it asks for comparison, analysis, tradeoffs, or decision support',
           },
+          ...(LOGIC_STRONG_PATTERN.test(context.prompt)
+            ? [
+                {
+                  assistant: 'axiom' as const,
+                  label: 'analysis-strong',
+                  weight: 8,
+                  reason: 'it explicitly asks for structured comparison or reasoning',
+                  strong: true,
+                },
+              ]
+            : []),
         ]
       : [],
   (context) =>

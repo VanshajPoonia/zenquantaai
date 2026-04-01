@@ -45,81 +45,64 @@ export function AssistantRecommendationDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-[calc(100vw-1rem)] max-w-2xl rounded-[26px] border border-border/70 bg-background/95 p-0 shadow-2xl shadow-black/40">
+      <DialogContent className="w-[calc(100vw-1rem)] max-w-xl rounded-[24px] border border-border/70 bg-background/95 p-0 shadow-2xl shadow-black/40">
         <div className="overflow-hidden rounded-[26px]">
           <div className="border-b border-border/70 bg-gradient-to-b from-card/80 to-background px-5 py-5 sm:px-6">
             <DialogHeader className="space-y-3 text-left">
               <div className="inline-flex w-fit rounded-full border border-border/60 bg-card/60 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.22em] text-muted-foreground sm:text-[11px]">
                 Assistant recommendation
               </div>
-              <DialogTitle className="text-xl font-semibold tracking-tight sm:text-2xl">
-                This prompt looks like a better fit for {getFamilyLabel(recommendation.predictedAssistant)}
+              <DialogTitle className="text-lg font-semibold tracking-tight sm:text-xl">
+                Better fit: {getFamilyLabel(recommendation.predictedAssistant)}
               </DialogTitle>
-              <DialogDescription className="max-w-xl text-xs leading-6 sm:text-sm">
-                Zenquanta can switch you before sending so the request lands on the
-                assistant that is more likely to handle it well.
+              <DialogDescription className="max-w-lg text-xs leading-6 sm:text-sm">
+                This prompt is likely to do better on a different assistant.
               </DialogDescription>
             </DialogHeader>
           </div>
 
-          <div className="space-y-5 px-5 py-5 sm:px-6">
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div
-                className={`rounded-2xl border border-border/70 bg-card/60 p-4 ${getModeTintClass(currentMode, 'subtle')}`}
-              >
-                <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                  Current assistant
-                </p>
-                <div className="mt-3 flex items-center gap-3">
-                  <div
-                    className={`flex size-10 items-center justify-center rounded-2xl border border-white/10 bg-background/70 ${getModeAccentClass(currentMode, 'text')}`}
-                  >
-                    <ModeIcon mode={currentMode} size="md" />
-                  </div>
-                  <div>
-                    <p className="font-medium text-foreground">
-                      {getFamilyLabel(recommendation.currentAssistant)}
-                    </p>
-                    <p className="text-xs text-muted-foreground">Selected now</p>
-                  </div>
+          <div className="space-y-4 px-5 py-5 sm:px-6">
+            <div
+              className={`rounded-2xl border border-border/70 bg-card/60 p-4 ${getModeTintClass(recommendedMode, 'subtle')}`}
+            >
+              <div className="flex flex-wrap items-center gap-3">
+                <div
+                  className={`flex size-10 items-center justify-center rounded-2xl border border-white/10 bg-background/70 ${getModeAccentClass(recommendedMode, 'text')}`}
+                >
+                  <ModeIcon mode={recommendedMode} size="md" />
                 </div>
-              </div>
-
-              <div
-                className={`rounded-2xl border border-border/70 bg-card/60 p-4 ${getModeTintClass(recommendedMode, 'subtle')}`}
-              >
-                <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                  Recommended assistant
-                </p>
-                <div className="mt-3 flex items-center gap-3">
-                  <div
-                    className={`flex size-10 items-center justify-center rounded-2xl border border-white/10 bg-background/70 ${getModeAccentClass(recommendedMode, 'text')}`}
-                  >
-                    <ModeIcon mode={recommendedMode} size="md" />
-                  </div>
-                  <div>
-                    <p className="font-medium text-foreground">
-                      {getFamilyLabel(recommendation.predictedAssistant)}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      Confidence {Math.round(recommendation.confidence * 100)}%
-                    </p>
-                  </div>
+                <div className="min-w-0 flex-1">
+                  <p className="font-medium text-foreground">
+                    Switch from {getFamilyLabel(recommendation.currentAssistant)} to{' '}
+                    {getFamilyLabel(recommendation.predictedAssistant)}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    Confidence {Math.round(recommendation.confidence * 100)}%
+                  </p>
+                </div>
+                <div
+                  className={`inline-flex items-center gap-1 rounded-full border border-border/60 bg-background/60 px-2.5 py-1 text-[11px] ${getModeAccentClass(currentMode, 'text')}`}
+                >
+                  <ModeIcon mode={currentMode} size="sm" />
+                  <span>{getFamilyLabel(recommendation.currentAssistant)}</span>
+                </div>
+                <div
+                  className={`inline-flex items-center gap-1 rounded-full border border-border/60 bg-background/60 px-2.5 py-1 text-[11px] ${getModeAccentClass(recommendedMode, 'text')}`}
+                >
+                  <ModeIcon mode={recommendedMode} size="sm" />
+                  <span>{getFamilyLabel(recommendation.predictedAssistant)}</span>
                 </div>
               </div>
             </div>
 
             <div className="rounded-2xl border border-border/70 bg-card/50 p-4">
               <p className="text-sm leading-7 text-foreground/90">
-                This prompt looks more like a{' '}
-                <span className="font-medium text-foreground">
-                  {getFamilyLabel(recommendation.predictedAssistant)}
-                </span>{' '}
-                request because {recommendation.reason}.
+                Recommend {getFamilyLabel(recommendation.predictedAssistant)} because{' '}
+                {recommendation.reason}.
               </p>
             </div>
 
-            <label className="flex items-start gap-3 rounded-2xl border border-border/60 bg-background/40 px-4 py-3">
+            <label className="flex items-start gap-3 rounded-2xl border border-border/50 bg-background/30 px-4 py-3">
               <Checkbox
                 checked={suppressForMessage}
                 onCheckedChange={(checked) =>
@@ -128,11 +111,11 @@ export function AssistantRecommendationDialog({
                 className="mt-0.5"
               />
               <div>
-                <p className="text-sm font-medium text-foreground">
+                <p className="text-sm font-medium text-foreground/90">
                   Don’t show this again for this message
                 </p>
-                <p className="text-xs leading-5 text-muted-foreground">
-                  Zenquanta will remember this exact prompt only until you change it.
+                <p className="text-[11px] leading-5 text-muted-foreground">
+                  Only for this exact draft.
                 </p>
               </div>
             </label>

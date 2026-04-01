@@ -1,7 +1,7 @@
 import { AIMode, AssistantRecommendationResult } from '@/types'
 import { classifyPrompt } from './promptClassifier'
 
-export const ASSISTANT_RECOMMENDATION_THRESHOLD = 0.68
+export const ASSISTANT_RECOMMENDATION_STRICT_THRESHOLD = 0.8
 
 export function getAssistantRecommendation(input: {
   prompt: string
@@ -23,7 +23,8 @@ export function getAssistantRecommendation(input: {
   const shouldRecommendSwitch =
     !result.lockedToCurrentAssistant &&
     result.predictedAssistant !== result.currentAssistant &&
-    result.confidence >= ASSISTANT_RECOMMENDATION_THRESHOLD
+    result.matchedSignals.length > 0 &&
+    result.confidence >= ASSISTANT_RECOMMENDATION_STRICT_THRESHOLD
 
   return {
     ...result,
