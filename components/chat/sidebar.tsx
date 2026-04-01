@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   FolderInput,
   FolderPlus,
@@ -17,7 +17,6 @@ import {
   formatEstimatedCostUsd,
   sumUsageEstimates,
 } from '@/lib/utils/cost'
-import { formatConversationDate } from '@/lib/utils/date'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -64,6 +63,23 @@ function getSidebarChatTitle(title: string): string {
   return title.trim()
 }
 
+function getFittedSidebarTitle(title: string, availableWidth: number): string {
+  const trimmed = title.trim()
+
+  if (!trimmed) return ''
+  if (availableWidth <= 0) return ''
+
+  const averageCharacterWidth = 7.2
+  const safeWidth = Math.max(0, availableWidth - 6)
+  const estimatedCharacters = Math.floor(safeWidth / averageCharacterWidth)
+
+  if (estimatedCharacters >= trimmed.length) return trimmed
+  if (estimatedCharacters <= 2) return ''
+
+  const visibleCharacters = Math.max(1, estimatedCharacters - 1)
+  return `${trimmed.slice(0, visibleCharacters).trimEnd()}…`
+}
+
 function ChatItem({
   chat,
   isActive,
@@ -71,9 +87,7 @@ function ChatItem({
   onPin,
   onDelete,
   onMoveToProject,
-  projectLabel,
   projects,
-  hideTitle,
 }: {
   chat: ConversationSummary
   isActive: boolean
@@ -81,17 +95,39 @@ function ChatItem({
   onPin: () => void
   onDelete: () => void
   onMoveToProject: (projectId: string) => void
-  projectLabel: string
   projects: Project[]
-  hideTitle: boolean
 }) {
+  const titleLaneRef = useRef<HTMLDivElement | null>(null)
+  const [availableTitleWidth, setAvailableTitleWidth] = useState(0)
+
+  useEffect(() => {
+    const element = titleLaneRef.current
+    if (!element) return
+
+    const updateWidth = () => {
+      setAvailableTitleWidth(element.getBoundingClientRect().width)
+    }
+
+    updateWidth()
+
+    const observer = new ResizeObserver(() => {
+      updateWidth()
+    })
+
+    observer.observe(element)
+
+    return () => observer.disconnect()
+  }, [])
+
+  const fittedTitle = getFittedSidebarTitle(chat.title, availableTitleWidth)
+
   return (
     <div
       className={cn(
-        'group relative flex items-start gap-3 rounded-xl px-3 py-2.5 cursor-pointer transition-all duration-200',
+        'group relative flex items-start gap-3 rounded-xl border border-transparent px-3 py-3 cursor-pointer transition-all duration-200',
         isActive
-          ? 'bg-sidebar-accent text-sidebar-accent-foreground'
-          : 'hover:bg-sidebar-accent/50 text-sidebar-foreground/70 hover:text-sidebar-foreground'
+          ? 'border-sidebar-border/70 bg-sidebar-accent text-sidebar-accent-foreground shadow-sm'
+          : 'border-sidebar-border/40 hover:border-sidebar-border/70 hover:bg-sidebar-accent/50 text-sidebar-foreground/70 hover:text-sidebar-foreground'
       )}
       onClick={onSelect}
     >
@@ -108,22 +144,22 @@ function ChatItem({
 
       <div className="min-w-0 flex-1 overflow-hidden">
         <div className="flex items-start gap-2">
-          <div className="min-w-0 flex-1">
-            {!hideTitle && (
+          <div ref={titleLaneRef} className="min-w-0 flex-1">
+            {fittedTitle && (
               <TooltipProvider delayDuration={300}>
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <p
-                      className="cursor-pointer truncate pr-2 text-sm font-medium"
+                      className="cursor-pointer truncate pr-2 text-[13px] font-medium leading-5"
                       title={chat.title}
                       style={{
                         WebkitMaskImage:
-                          'linear-gradient(to right, black 76%, transparent 100%)',
+                          'linear-gradient(to right, black 84%, transparent 100%)',
                         maskImage:
-                          'linear-gradient(to right, black 76%, transparent 100%)',
+                          'linear-gradient(to right, black 84%, transparent 100%)',
                       }}
                     >
-                      {getSidebarChatTitle(chat.title)}
+                      {fittedTitle}
                     </p>
                   </TooltipTrigger>
                   <TooltipContent side="top" className="max-w-xs text-xs">
@@ -196,16 +232,14 @@ function ChatItem({
           </div>
         </div>
 
-        <div className={cn('mt-1 flex items-center gap-2 text-xs text-sidebar-foreground/50', hideTitle && 'mt-0')}>
-          {chat.isPinned && (
+        {chat.isPinned && (
+          <div className="mt-1 flex items-center gap-2 text-[11px] text-sidebar-foreground/50">
             <span className="inline-flex shrink-0 items-center">
               <PinIcon className="size-3 text-sidebar-primary" />
             </span>
-          )}
-          <p className="truncate">
-            {projectLabel} • {formatConversationDate(chat.updatedAt)}
-          </p>
-        </div>
+            <p>Pinned</p>
+          </div>
+        )}
       </div>
     </div>
   )
@@ -221,7 +255,6 @@ function ChatSection({
   onMoveChatToProject,
   projectLabelById,
   projects,
-  hideTitle,
 }: {
   title: string
   chats: ConversationSummary[]
@@ -232,7 +265,6 @@ function ChatSection({
   onMoveChatToProject: (chatId: string, projectId: string) => void
   projectLabelById: Record<string, string>
   projects: Project[]
-  hideTitle: boolean
 }) {
   if (chats.length === 0) return null
 
@@ -250,9 +282,7 @@ function ChatSection({
           onPin={() => onPinChat(chat.id)}
           onDelete={() => onDeleteChat(chat.id)}
           onMoveToProject={(projectId) => onMoveChatToProject(chat.id, projectId)}
-          projectLabel={projectLabelById[chat.projectId] ?? 'Inbox'}
           projects={projects}
-          hideTitle={hideTitle}
         />
       ))}
     </div>
@@ -310,8 +340,6 @@ export function Sidebar({ onOpenSettings }: SidebarProps) {
       ),
     [projects]
   )
-
-  const hideSidebarChatTitle = sidebarWidth <= 320
 
   const filteredChats = useMemo(() => {
     const projectScopedChats =
@@ -575,7 +603,6 @@ export function Sidebar({ onOpenSettings }: SidebarProps) {
             onMoveChatToProject={moveChatToProject}
             projectLabelById={projectLabelById}
             projects={projects}
-            hideTitle={hideSidebarChatTitle}
           />
 
           <ChatSection
@@ -588,7 +615,6 @@ export function Sidebar({ onOpenSettings }: SidebarProps) {
             onMoveChatToProject={moveChatToProject}
             projectLabelById={projectLabelById}
             projects={projects}
-            hideTitle={hideSidebarChatTitle}
           />
 
           {filteredChats.length === 0 && (
