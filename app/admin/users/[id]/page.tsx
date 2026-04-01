@@ -33,9 +33,14 @@ export default async function AdminUserDetailPage({
               {detail.profile?.email ?? detail.profile?.loginId ?? detail.subscription.userId}
             </h1>
           </div>
-          <Button asChild variant="secondary" className="rounded-xl">
-            <Link href="/admin">Back to admin</Link>
-          </Button>
+          <div className="flex gap-3">
+            <Button asChild variant="secondary" className="rounded-xl">
+              <Link href="/">Back to home</Link>
+            </Button>
+            <Button asChild variant="outline" className="rounded-xl">
+              <Link href="/admin">Back to admin</Link>
+            </Button>
+          </div>
         </div>
 
         <div className="grid gap-5 lg:grid-cols-[0.9fr_1.1fr]">

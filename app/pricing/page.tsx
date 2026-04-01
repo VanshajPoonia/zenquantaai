@@ -47,13 +47,18 @@ export default async function PricingPage({
               and activated by the admin team.
             </p>
           </div>
-          <div className="rounded-2xl border border-border/70 bg-background/60 px-4 py-3 text-sm">
-            <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
-              Current plan
-            </p>
-            <p className="mt-1 font-medium text-foreground">
-              {subscription.tier.toUpperCase()}
-            </p>
+          <div className="flex flex-col items-start gap-3 sm:items-end">
+            <div className="rounded-2xl border border-border/70 bg-background/60 px-4 py-3 text-sm">
+              <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
+                Current plan
+              </p>
+              <p className="mt-1 font-medium text-foreground">
+                {subscription.tier.toUpperCase()}
+              </p>
+            </div>
+            <Button asChild variant="secondary" className="rounded-xl">
+              <Link href="/">Back to home</Link>
+            </Button>
           </div>
         </div>
 
