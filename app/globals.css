@@ -33,6 +33,10 @@
   --logic-foreground: oklch(0.98 0 0);
   --code: oklch(0.7 0.2 145);
   --code-foreground: oklch(0.98 0 0);
+  --live: oklch(0.72 0.18 225);
+  --live-foreground: oklch(0.98 0 0);
+  --image: oklch(0.78 0.19 38);
+  --image-foreground: oklch(0.98 0 0);
   
   --chart-1: oklch(0.7 0.18 330);
   --chart-2: oklch(0.65 0.2 250);
@@ -81,6 +85,10 @@
   --logic-foreground: oklch(0.98 0 0);
   --code: oklch(0.7 0.2 145);
   --code-foreground: oklch(0.98 0 0);
+  --live: oklch(0.72 0.18 225);
+  --live-foreground: oklch(0.98 0 0);
+  --image: oklch(0.78 0.19 38);
+  --image-foreground: oklch(0.98 0 0);
   
   --sidebar: oklch(0.1 0.005 260);
   --sidebar-foreground: oklch(0.9 0 0);
@@ -122,6 +130,10 @@
   --color-logic-foreground: var(--logic-foreground);
   --color-code: var(--code);
   --color-code-foreground: var(--code-foreground);
+  --color-live: var(--live);
+  --color-live-foreground: var(--live-foreground);
+  --color-image: var(--image);
+  --color-image-foreground: var(--image-foreground);
   --color-chart-1: var(--chart-1);
   --color-chart-2: var(--chart-2);
   --color-chart-3: var(--chart-3);
@@ -212,6 +224,14 @@
 
 .glow-code {
   box-shadow: 0 0 40px -10px oklch(0.7 0.2 145 / 0.4);
+}
+
+.glow-live {
+  box-shadow: 0 0 40px -10px oklch(0.72 0.18 225 / 0.4);
+}
+
+.glow-image {
+  box-shadow: 0 0 40px -10px oklch(0.78 0.19 38 / 0.4);
 }
 
 /* Subtle shimmer animation */

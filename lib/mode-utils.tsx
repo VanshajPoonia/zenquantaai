@@ -58,6 +58,23 @@ export function ModeIcon({
           <line x1="14" y1="4" x2="10" y2="20" />
         </svg>
       )
+    case 'live':
+      return (
+        <svg className={iconClass} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M3 12a9 9 0 0 1 18 0" />
+          <path d="M6 12a6 6 0 0 1 12 0" />
+          <path d="M9 12a3 3 0 0 1 6 0" />
+          <circle cx="12" cy="16" r="1.5" fill="currentColor" stroke="none" />
+        </svg>
+      )
+    case 'image':
+      return (
+        <svg className={iconClass} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+          <rect x="3.5" y="4.5" width="17" height="15" rx="2.5" />
+          <circle cx="8.5" cy="9.5" r="1.5" />
+          <path d="M20.5 15.5L15 10L6 19.5" />
+        </svg>
+      )
   }
 }
 
@@ -88,6 +105,18 @@ export function getModeAccentClass(mode: AIMode, type: 'bg' | 'text' | 'border' 
       border: 'border-code',
       ring: 'ring-code',
     },
+    live: {
+      bg: 'bg-live',
+      text: 'text-live',
+      border: 'border-live',
+      ring: 'ring-live',
+    },
+    image: {
+      bg: 'bg-image',
+      text: 'text-image',
+      border: 'border-image',
+      ring: 'ring-image',
+    },
   }
   return classes[mode][type]
 }
@@ -117,6 +146,16 @@ export function getModeTintClass(
       soft: 'bg-code/15',
       strong: 'bg-code/20',
     },
+    live: {
+      subtle: 'bg-live/10',
+      soft: 'bg-live/15',
+      strong: 'bg-live/20',
+    },
+    image: {
+      subtle: 'bg-image/10',
+      soft: 'bg-image/15',
+      strong: 'bg-image/20',
+    },
   }
 
   return classes[mode][intensity]
@@ -133,6 +172,10 @@ export function getModeGradient(mode: AIMode) {
       return 'bg-gradient-to-br from-logic/20 via-logic/5 to-transparent'
     case 'code':
       return 'bg-gradient-to-br from-code/20 via-code/5 to-transparent'
+    case 'live':
+      return 'bg-gradient-to-br from-live/20 via-live/5 to-transparent'
+    case 'image':
+      return 'bg-gradient-to-br from-image/20 via-image/5 to-transparent'
   }
 }
 
@@ -147,5 +190,9 @@ export function getModeGlow(mode: AIMode) {
       return 'shadow-[0_0_30px_-5px] shadow-logic/30'
     case 'code':
       return 'shadow-[0_0_30px_-5px] shadow-code/30'
+    case 'live':
+      return 'shadow-[0_0_30px_-5px] shadow-live/30'
+    case 'image':
+      return 'shadow-[0_0_30px_-5px] shadow-image/30'
   }
 }

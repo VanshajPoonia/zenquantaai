@@ -1,28 +1,22 @@
 import { Conversation, ModelRouteConfig, UsageEstimate } from '@/types'
-
-function estimateTokens(text: string): number {
-  if (!text.trim()) return 0
-  return Math.max(1, Math.ceil(text.length / 4))
-}
+import { calculateTextUsageEstimate, estimateTokens } from '@/lib/billing/costs'
 
 export function estimateUsage(input: {
-  config: ModelRouteConfig
+  config: Pick<ModelRouteConfig, 'model' | 'walletType'>
   promptText: string
   completionText: string
 }): UsageEstimate {
-  const promptTokens = estimateTokens(input.promptText)
-  const completionTokens = estimateTokens(input.completionText)
-  const totalTokens = promptTokens + completionTokens
-  const estimatedCostUsd =
-    (promptTokens / 1_000_000) * input.config.inputCostPerMillion +
-    (completionTokens / 1_000_000) * input.config.outputCostPerMillion
+  return calculateTextUsageEstimate({
+    tier: 'free',
+    walletType: input.config.walletType,
+    model: input.config.model,
+    promptText: input.promptText,
+    completionText: input.completionText,
+  })
+}
 
-  return {
-    promptTokens,
-    completionTokens,
-    totalTokens,
-    estimatedCostUsd,
-  }
+export function estimatePromptTokens(text: string): number {
+  return estimateTokens(text)
 }
 
 export function sumConversationUsage(conversation: Conversation): UsageEstimate {
@@ -34,15 +28,27 @@ export function sumConversationUsage(conversation: Conversation): UsageEstimate 
         promptTokens: totals.promptTokens + message.usage.promptTokens,
         completionTokens: totals.completionTokens + message.usage.completionTokens,
         totalTokens: totals.totalTokens + message.usage.totalTokens,
+        rawCostUsd: totals.rawCostUsd + message.usage.rawCostUsd,
+        displayedCostUsd:
+          totals.displayedCostUsd + message.usage.displayedCostUsd,
         estimatedCostUsd:
           totals.estimatedCostUsd + message.usage.estimatedCostUsd,
+        displayMultiplier: message.usage.displayMultiplier,
+        marginUsd: totals.marginUsd + message.usage.marginUsd,
+        creditsConsumed:
+          (totals.creditsConsumed ?? 0) + (message.usage.creditsConsumed ?? 0),
       }
     },
     {
       promptTokens: 0,
       completionTokens: 0,
       totalTokens: 0,
+      rawCostUsd: 0,
+      displayedCostUsd: 0,
       estimatedCostUsd: 0,
+      displayMultiplier: 1,
+      marginUsd: 0,
+      creditsConsumed: 0,
     }
   )
 }
@@ -58,14 +64,25 @@ export function sumUsageEstimates(
         promptTokens: totals.promptTokens + usage.promptTokens,
         completionTokens: totals.completionTokens + usage.completionTokens,
         totalTokens: totals.totalTokens + usage.totalTokens,
+        rawCostUsd: totals.rawCostUsd + usage.rawCostUsd,
+        displayedCostUsd: totals.displayedCostUsd + usage.displayedCostUsd,
         estimatedCostUsd: totals.estimatedCostUsd + usage.estimatedCostUsd,
+        displayMultiplier: usage.displayMultiplier,
+        marginUsd: totals.marginUsd + usage.marginUsd,
+        creditsConsumed:
+          (totals.creditsConsumed ?? 0) + (usage.creditsConsumed ?? 0),
       }
     },
     {
       promptTokens: 0,
       completionTokens: 0,
       totalTokens: 0,
+      rawCostUsd: 0,
+      displayedCostUsd: 0,
       estimatedCostUsd: 0,
+      displayMultiplier: 1,
+      marginUsd: 0,
+      creditsConsumed: 0,
     }
   )
 }
@@ -73,7 +90,6 @@ export function sumUsageEstimates(
 export function formatEstimatedCostUsd(value: number): string {
   if (value <= 0) return '$0.00'
   if (value < 0.01) return '<$0.01'
-  if (value < 1) return `$${value.toFixed(2)}`
   if (value < 100) return `$${value.toFixed(2)}`
 
   return new Intl.NumberFormat('en-US', {

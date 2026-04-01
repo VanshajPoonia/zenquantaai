@@ -29,6 +29,18 @@ const MODE_IMAGE_PALETTES: Record<
     accent: '#4ade80',
     glow: '#bbf7d0',
   },
+  live: {
+    from: '#071b35',
+    to: '#2563eb',
+    accent: '#60a5fa',
+    glow: '#bfdbfe',
+  },
+  image: {
+    from: '#2d1209',
+    to: '#ea580c',
+    accent: '#fb923c',
+    glow: '#fed7aa',
+  },
 }
 
 function escapeXml(input: string): string {
@@ -86,6 +98,10 @@ export function buildImageGenerationPrompt(
       'Favor clarity, clean structure, readable layout, and precise visual hierarchy over decorative flourish.',
     code:
       'Favor crisp interface-like presentation, clear geometry, product realism, and implementation-ready visual clarity.',
+    live:
+      'Favor editorial clarity, modern visual relevance, and current high-signal composition that feels report-ready.',
+    image:
+      'Favor dramatic polish, premium art direction, strong subject separation, and visually rich final renders.',
   }
 
   return [

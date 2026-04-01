@@ -19,7 +19,7 @@ export function ModeSwitcher() {
     <div className="flex flex-col items-center gap-4">
       <div
         className={cn(
-          'grid w-full max-w-4xl grid-cols-2 gap-1.5 p-1.5 sm:grid-cols-4 rounded-2xl backdrop-blur-xl',
+          'grid w-full max-w-5xl grid-cols-2 gap-1.5 rounded-2xl p-1.5 backdrop-blur-xl sm:grid-cols-3 xl:grid-cols-6',
           'bg-gradient-to-b from-secondary/80 to-secondary/40',
           'border border-border/50 shadow-xl shadow-black/20'
         )}
@@ -75,7 +75,7 @@ export function ModeSwitcherCompact() {
   const [, startTransition] = useTransition()
 
   return (
-    <div className="flex items-center gap-0.5 p-1 bg-secondary/50 rounded-xl border border-border/30">
+    <div className="flex flex-wrap items-center gap-0.5 rounded-xl border border-border/30 bg-secondary/50 p-1">
       {MODE_ORDER.map((mode) => {
         const isActive = currentMode === mode
 

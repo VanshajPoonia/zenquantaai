@@ -1,81 +1,76 @@
 import { AIMode, ModeConfig } from '@/types'
+import { ASSISTANT_FAMILY_COPY, getAssistantFamilyFromMode } from './assistants'
 import { MODEL_ROUTE_CONFIGS } from './models'
 
 const MODE_DISPLAY_CONFIGS: Record<
   AIMode,
-  Omit<ModeConfig, keyof typeof MODEL_ROUTE_CONFIGS.creative | 'description'>
+  Omit<ModeConfig, keyof typeof MODEL_ROUTE_CONFIGS.general | 'description'>
 > = {
   general: {
     id: 'general',
     name: 'Nova',
-    placeholder: 'Ask anything: recipes, travel, planning, research, or everyday help...',
-    helperText:
-      'Flexible everyday assistance for general questions, planning, summarizing, and practical tasks.',
-    emptyStateTitle: 'Start Anywhere, Then Go Deeper',
-    emptyStateDescription:
-      'Use a balanced general assistant for open-ended questions, planning, summaries, research notes, and everyday help.',
-    suggestedPrompts: [
-      'Plan a 3-day Kyoto itinerary with food, temples, and a relaxed pace',
-      'Give me a quick mushroom pasta recipe with substitutions and timing',
-      'Summarize the pros and cons of moving from freelance to agency work',
-      'Help me turn a messy notes dump into a structured action plan',
-    ],
-    accentColor: 'general',
-    icon: 'sparkles',
+    placeholder: ASSISTANT_FAMILY_COPY.nova.placeholder,
+    helperText: ASSISTANT_FAMILY_COPY.nova.helperText,
+    emptyStateTitle: ASSISTANT_FAMILY_COPY.nova.emptyStateTitle,
+    emptyStateDescription: ASSISTANT_FAMILY_COPY.nova.emptyStateDescription,
+    suggestedPrompts: ASSISTANT_FAMILY_COPY.nova.suggestedPrompts,
+    accentColor: ASSISTANT_FAMILY_COPY.nova.accentColor,
+    icon: ASSISTANT_FAMILY_COPY.nova.icon,
   },
   creative: {
     id: 'creative',
     name: 'Velora',
-    placeholder: 'Draft a story, campaign, script, or idea...',
-    helperText:
-      'Imaginative, expressive, elegant writing for storytelling, copy, and rewording.',
-    emptyStateTitle: 'Create With A Specialist Story Engine',
-    emptyStateDescription:
-      'Shape campaigns, stories, scripts, and brand language with a mode tuned for originality, rhythm, and tone.',
-    suggestedPrompts: [
-      'Write launch copy for a premium productivity app aimed at solo founders',
-      'Turn this product blurb into a sharper, more luxurious landing page hero',
-      'Outline a short film about memory, ambition, and second chances',
-      'Brainstorm distinctive names for an AI studio focused on creative strategy',
-    ],
-    accentColor: 'creative',
-    icon: 'sparkles',
+    placeholder: ASSISTANT_FAMILY_COPY.velora.placeholder,
+    helperText: ASSISTANT_FAMILY_COPY.velora.helperText,
+    emptyStateTitle: ASSISTANT_FAMILY_COPY.velora.emptyStateTitle,
+    emptyStateDescription: ASSISTANT_FAMILY_COPY.velora.emptyStateDescription,
+    suggestedPrompts: ASSISTANT_FAMILY_COPY.velora.suggestedPrompts,
+    accentColor: ASSISTANT_FAMILY_COPY.velora.accentColor,
+    icon: ASSISTANT_FAMILY_COPY.velora.icon,
   },
   logic: {
     id: 'logic',
     name: 'Axiom',
-    placeholder: 'Ask for precise reasoning, analysis, or breakdown...',
-    helperText:
-      'Precise, structured analysis for breakdowns, comparisons, and decision support.',
-    emptyStateTitle: 'Reason Through The Hard Parts',
-    emptyStateDescription:
-      'Work through tradeoffs, assumptions, and decisions with a mode optimized for correctness and clarity.',
-    suggestedPrompts: [
-      'Compare usage-based pricing vs seat-based pricing for a B2B SaaS product',
-      'Explain event sourcing in plain English with pros, cons, and tradeoffs',
-      'Break down whether we should hire engineering first or sales first',
-      'Create a decision framework for choosing between three go-to-market channels',
-    ],
-    accentColor: 'logic',
-    icon: 'brain',
+    placeholder: ASSISTANT_FAMILY_COPY.axiom.placeholder,
+    helperText: ASSISTANT_FAMILY_COPY.axiom.helperText,
+    emptyStateTitle: ASSISTANT_FAMILY_COPY.axiom.emptyStateTitle,
+    emptyStateDescription: ASSISTANT_FAMILY_COPY.axiom.emptyStateDescription,
+    suggestedPrompts: ASSISTANT_FAMILY_COPY.axiom.suggestedPrompts,
+    accentColor: ASSISTANT_FAMILY_COPY.axiom.accentColor,
+    icon: ASSISTANT_FAMILY_COPY.axiom.icon,
   },
   code: {
     id: 'code',
     name: 'Forge',
-    placeholder: 'Describe the feature, bug, or code you need...',
-    helperText:
-      'Developer-first implementation help for debugging, architecture, and backend tasks.',
-    emptyStateTitle: 'Ship With A Technical Co-Pilot',
-    emptyStateDescription:
-      'Debug issues, scaffold features, and turn product ideas into implementation-ready code with a specialist coding model.',
-    suggestedPrompts: [
-      'Build a reusable settings drawer component in Next.js and Tailwind',
-      'Debug why this React effect causes duplicate requests',
-      'Explain the architecture of a streaming chat API in practical terms',
-      'Write a typed route handler for a server action with Zod validation',
-    ],
-    accentColor: 'code',
-    icon: 'code',
+    placeholder: ASSISTANT_FAMILY_COPY.forge.placeholder,
+    helperText: ASSISTANT_FAMILY_COPY.forge.helperText,
+    emptyStateTitle: ASSISTANT_FAMILY_COPY.forge.emptyStateTitle,
+    emptyStateDescription: ASSISTANT_FAMILY_COPY.forge.emptyStateDescription,
+    suggestedPrompts: ASSISTANT_FAMILY_COPY.forge.suggestedPrompts,
+    accentColor: ASSISTANT_FAMILY_COPY.forge.accentColor,
+    icon: ASSISTANT_FAMILY_COPY.forge.icon,
+  },
+  live: {
+    id: 'live',
+    name: 'Pulse',
+    placeholder: ASSISTANT_FAMILY_COPY.pulse.placeholder,
+    helperText: ASSISTANT_FAMILY_COPY.pulse.helperText,
+    emptyStateTitle: ASSISTANT_FAMILY_COPY.pulse.emptyStateTitle,
+    emptyStateDescription: ASSISTANT_FAMILY_COPY.pulse.emptyStateDescription,
+    suggestedPrompts: ASSISTANT_FAMILY_COPY.pulse.suggestedPrompts,
+    accentColor: ASSISTANT_FAMILY_COPY.pulse.accentColor,
+    icon: ASSISTANT_FAMILY_COPY.pulse.icon,
+  },
+  image: {
+    id: 'image',
+    name: 'Prism',
+    placeholder: ASSISTANT_FAMILY_COPY.prism.placeholder,
+    helperText: ASSISTANT_FAMILY_COPY.prism.helperText,
+    emptyStateTitle: ASSISTANT_FAMILY_COPY.prism.emptyStateTitle,
+    emptyStateDescription: ASSISTANT_FAMILY_COPY.prism.emptyStateDescription,
+    suggestedPrompts: ASSISTANT_FAMILY_COPY.prism.suggestedPrompts,
+    accentColor: ASSISTANT_FAMILY_COPY.prism.accentColor,
+    icon: ASSISTANT_FAMILY_COPY.prism.icon,
   },
 }
 
@@ -96,6 +91,25 @@ export const MODE_CONFIGS: Record<AIMode, ModeConfig> = {
     ...MODEL_ROUTE_CONFIGS.code,
     ...MODE_DISPLAY_CONFIGS.code,
   },
+  live: {
+    ...MODEL_ROUTE_CONFIGS.live,
+    ...MODE_DISPLAY_CONFIGS.live,
+  },
+  image: {
+    ...MODEL_ROUTE_CONFIGS.image,
+    ...MODE_DISPLAY_CONFIGS.image,
+  },
 }
 
-export const MODE_ORDER: AIMode[] = ['general', 'creative', 'logic', 'code']
+export const MODE_ORDER: AIMode[] = [
+  'general',
+  'creative',
+  'logic',
+  'code',
+  'live',
+  'image',
+]
+
+export function getModeBrandName(mode: AIMode): string {
+  return ASSISTANT_FAMILY_COPY[getAssistantFamilyFromMode(mode)].shortName
+}

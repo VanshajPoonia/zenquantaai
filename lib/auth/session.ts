@@ -204,6 +204,15 @@ function readCookieValue(
   return request.cookies.get(name)?.value?.trim() ?? ''
 }
 
+function readCookieStoreValue(
+  cookieStore: {
+    get(name: string): { value?: string } | undefined
+  },
+  name: string
+): string {
+  return cookieStore.get(name)?.value?.trim() ?? ''
+}
+
 export function appendAuthCookies(
   headers: Headers,
   session: Pick<RequestAuthSession, 'accessToken' | 'refreshToken'>
@@ -449,6 +458,31 @@ export async function readRequestAuthSession(
 ): Promise<RequestAuthSession> {
   const accessToken = readCookieValue(request, ACCESS_TOKEN_COOKIE)
   const refreshToken = readCookieValue(request, REFRESH_TOKEN_COOKIE)
+
+  return await readAccessAndRefreshTokenSession({
+    accessToken,
+    refreshToken,
+  })
+}
+
+export async function readCookieStoreAuthSession(cookieStore: {
+  get(name: string): { value?: string } | undefined
+}): Promise<RequestAuthSession> {
+  const accessToken = readCookieStoreValue(cookieStore, ACCESS_TOKEN_COOKIE)
+  const refreshToken = readCookieStoreValue(cookieStore, REFRESH_TOKEN_COOKIE)
+
+  return await readAccessAndRefreshTokenSession({
+    accessToken,
+    refreshToken,
+  })
+}
+
+async function readAccessAndRefreshTokenSession(input: {
+  accessToken: string
+  refreshToken: string
+}): Promise<RequestAuthSession> {
+  const accessToken = input.accessToken
+  const refreshToken = input.refreshToken
 
   if (!accessToken && !refreshToken) {
     return { user: null }

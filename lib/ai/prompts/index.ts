@@ -4,12 +4,16 @@ import { generalSystemPrompt } from './general'
 import { creativeSystemPrompt } from './creative'
 import { logicSystemPrompt } from './logic'
 import { codeSystemPrompt } from './code'
+import { liveSystemPrompt } from './live'
+import { imageSystemPrompt } from './image'
 
 export const SYSTEM_PROMPTS: Record<AIMode, string> = {
   general: generalSystemPrompt,
   creative: creativeSystemPrompt,
   logic: logicSystemPrompt,
   code: codeSystemPrompt,
+  live: liveSystemPrompt,
+  image: imageSystemPrompt,
 }
 
 export function buildSystemPrompt(

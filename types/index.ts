@@ -1,4 +1,30 @@
-export type AIMode = 'general' | 'creative' | 'logic' | 'code'
+export type AIMode =
+  | 'general'
+  | 'creative'
+  | 'logic'
+  | 'code'
+  | 'live'
+  | 'image'
+
+export type AssistantFamily =
+  | 'nova'
+  | 'velora'
+  | 'axiom'
+  | 'forge'
+  | 'pulse'
+  | 'prism'
+
+export type AssistantKind = 'text' | 'image'
+
+export type SubscriptionTier = 'free' | 'basic' | 'pro' | 'ultra' | 'prime'
+
+export type SubscriptionStatus = 'active' | 'paused' | 'cancelled'
+
+export type Role = 'user' | 'admin'
+
+export type PlanRequestStatus = 'pending' | 'approved' | 'rejected' | 'activated'
+
+export type UsageWallet = 'core_tokens' | 'tier_tokens' | 'image_credits'
 
 export type ModelOverrideOption =
   | 'auto'
@@ -66,6 +92,35 @@ export interface AppSettingsPatch
   gatewayDrafts?: Partial<OpenRouterSettingsDraft>
 }
 
+export interface WalletBalances {
+  coreTokensIncluded: number
+  coreTokensUsed: number
+  tierTokensIncluded: number
+  tierTokensUsed: number
+  imageCreditsIncluded: number
+  imageCreditsUsed: number
+}
+
+export interface WalletUsage {
+  wallet: UsageWallet
+  amountUsed: number
+  amountRemaining: number
+}
+
+export interface UsageEstimate {
+  promptTokens: number
+  completionTokens: number
+  totalTokens: number
+  rawCostUsd: number
+  displayedCostUsd: number
+  estimatedCostUsd: number
+  displayMultiplier: number
+  marginUsd: number
+  walletType?: UsageWallet
+  creditsConsumed?: number
+  imageCount?: number
+}
+
 export interface Message {
   id: string
   role: MessageRole
@@ -80,6 +135,7 @@ export interface Message {
   usage?: UsageEstimate
   parentUserMessageId?: string
   branchLabel?: string
+  assistantFamily?: AssistantFamily
 }
 
 export interface ConversationSummary {
@@ -107,6 +163,9 @@ export type Chat = Conversation
 
 export interface ModelRouteConfig {
   mode: AIMode
+  family: AssistantFamily
+  assistantKind: AssistantKind
+  tier: SubscriptionTier
   gateway: GatewayId
   gatewayName: 'OpenRouter'
   model: string
@@ -118,6 +177,9 @@ export interface ModelRouteConfig {
   systemPromptKey: AIMode
   inputCostPerMillion: number
   outputCostPerMillion: number
+  imageCostPerUnit?: number
+  walletType: UsageWallet
+  planName: string
 }
 
 export interface ModelOverrideConfig {
@@ -127,6 +189,8 @@ export interface ModelOverrideConfig {
   model: string
   inputCostPerMillion: number
   outputCostPerMillion: number
+  imageCostPerUnit?: number
+  assistantKind?: AssistantKind
 }
 
 export interface ModeConfig extends ModelRouteConfig {
@@ -138,7 +202,7 @@ export interface ModeConfig extends ModelRouteConfig {
   emptyStateDescription: string
   suggestedPrompts: string[]
   accentColor: AIMode
-  icon: 'sparkles' | 'brain' | 'code'
+  icon: 'sparkles' | 'brain' | 'code' | 'pulse' | 'image'
 }
 
 export interface SystemPresetConfig {
@@ -184,6 +248,7 @@ export interface ChatResponse {
   conversation: Conversation
   message: Message
   usage?: UsageEstimate
+  subscriptionTier?: SubscriptionTier
 }
 
 export type StreamEvent =
@@ -203,6 +268,7 @@ export type StreamEvent =
       conversation: Conversation
       message: Message
       usage?: UsageEstimate
+      displayedUsageMessage?: string
     }
   | {
       type: 'error'
@@ -255,17 +321,11 @@ export interface AttachmentContext {
   textContent?: string
 }
 
-export interface UsageEstimate {
-  promptTokens: number
-  completionTokens: number
-  totalTokens: number
-  estimatedCostUsd: number
-}
-
 export interface AuthUser {
   id: string
   loginId: string | null
   email: string | null
+  role?: Role | null
 }
 
 export interface AuthState {
@@ -303,3 +363,194 @@ export interface ConversationMutation {
 }
 
 export type APISettings = OpenRouterSettingsDraft
+
+export interface TierBudgetConfig {
+  coreTokens: number
+  tierTokens: number
+  imageCredits: number
+  dailyMessageLimit: number
+  maxInputTokensPerRequest: number
+  maxOutputTokensPerRequest: number
+  maxImagesPerDay: number
+}
+
+export interface TierPlanConfig extends TierBudgetConfig {
+  tier: SubscriptionTier
+  priceUsd: number
+  displayMultiplier: number
+  assistantNames: Record<AssistantFamily, string>
+}
+
+export interface AssistantModelConfig {
+  family: AssistantFamily
+  tier: SubscriptionTier
+  mode: AIMode
+  assistantKind: AssistantKind
+  displayName: string
+  model: string
+  inputCostPerMillion: number
+  outputCostPerMillion: number
+  imageCostPerUnit?: number
+  walletType: UsageWallet
+  temperature: number
+  maxTokens: number
+  topP: number
+  description: string
+}
+
+export interface ImageModelConfig {
+  family: 'prism'
+  tier: SubscriptionTier
+  displayName: string
+  model: string
+  rawCostPerImageUsd: number
+  defaultImageCreditsPerImage: number
+}
+
+export interface PricingConfig {
+  textModels: Record<string, { inputCostPerMillion: number; outputCostPerMillion: number }>
+  imageModels: Record<
+    string,
+    { rawCostPerImageUsd: number; defaultImageCreditsPerImage: number }
+  >
+}
+
+export interface Profile {
+  userId: string
+  loginId: string | null
+  email: string | null
+  role: Role
+  createdAt: string
+  updatedAt: string
+}
+
+export interface Subscription {
+  id: string
+  userId: string
+  tier: SubscriptionTier
+  status: SubscriptionStatus
+  displayMultiplier: number
+  planPriceUsd: number
+  coreTokensIncluded: number
+  coreTokensUsed: number
+  tierTokensIncluded: number
+  tierTokensUsed: number
+  imageCreditsIncluded: number
+  imageCreditsUsed: number
+  dailyMessageLimit: number
+  dailyMessageCount: number
+  maxInputTokensPerRequest: number
+  maxOutputTokensPerRequest: number
+  maxImagesPerDay: number
+  dailyImageCount: number
+  currentPeriodStartedAt: string
+  currentPeriodEndsAt: string
+  lastDailyResetAt: string
+  notes?: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export interface UsageLimitOverride {
+  id: string
+  userId: string
+  coreTokensIncluded?: number | null
+  tierTokensIncluded?: number | null
+  imageCreditsIncluded?: number | null
+  dailyMessageLimit?: number | null
+  maxInputTokensPerRequest?: number | null
+  maxOutputTokensPerRequest?: number | null
+  maxImagesPerDay?: number | null
+  allowedModelOverrides?: string[] | null
+  notes?: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export interface UsageEvent {
+  id: string
+  userId: string
+  subscriptionId: string
+  conversationId?: string | null
+  messageId?: string | null
+  assistantFamily: AssistantFamily
+  mode: AIMode
+  model: string
+  walletType: UsageWallet
+  promptTokens: number
+  completionTokens: number
+  totalTokens: number
+  rawCostUsd: number
+  displayedCostUsd: number
+  displayMultiplier: number
+  marginUsd: number
+  creditsConsumed: number
+  createdAt: string
+}
+
+export interface ImageGenerationEvent {
+  id: string
+  userId: string
+  subscriptionId: string
+  conversationId?: string | null
+  messageId?: string | null
+  assistantFamily: 'prism'
+  model: string
+  prompt: string
+  negativePrompt?: string | null
+  size?: string | null
+  aspectRatio?: string | null
+  imageCount: number
+  imageCreditsConsumed: number
+  rawCostUsd: number
+  displayedCostUsd: number
+  displayMultiplier: number
+  marginUsd: number
+  outputUrls: string[]
+  createdAt: string
+}
+
+export interface PlanChangeRequest {
+  id: string
+  userId: string
+  currentTier: SubscriptionTier
+  requestedTier: Exclude<SubscriptionTier, 'free'>
+  note?: string | null
+  contact?: string | null
+  adminNote?: string | null
+  status: PlanRequestStatus
+  approvedAt?: string | null
+  rejectedAt?: string | null
+  activatedAt?: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export interface AdminAuditLog {
+  id: string
+  adminUserId: string
+  targetUserId: string
+  action: string
+  details: Record<string, unknown>
+  createdAt: string
+}
+
+export interface DashboardUsageSummary {
+  currentPlan: SubscriptionTier
+  subscriptionStatus: SubscriptionStatus
+  displayedCreditsTotal: number
+  displayedCreditsUsed: number
+  displayedCreditsRemaining: number
+  textDisplayedCostUsd: number
+  imageDisplayedCostUsd: number
+  textRawCostUsd?: number
+  imageRawCostUsd?: number
+  totalDisplayedCostUsd: number
+  totalRawCostUsd?: number
+  assistantBreakdown: Array<{
+    family: AssistantFamily
+    events: number
+    displayedCostUsd: number
+    rawCostUsd?: number
+  }>
+}

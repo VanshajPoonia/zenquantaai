@@ -1165,6 +1165,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         projectId: string
       }
     ) => {
+      const resolvedKind =
+        kind === 'image' || options.mode === 'image' ? 'image' : 'chat'
       const conversation = await ensureConversationForMessage(options)
       const uploadedAttachments = await uploadAttachments(attachments)
       const userMessage = createMessage({
@@ -1190,7 +1192,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       })
 
       await runChatAction({
-        action: kind === 'image' ? 'generate-image' : 'send',
+        action: resolvedKind === 'image' ? 'generate-image' : 'send',
         content,
         mode: options.mode,
         settings: options.settings,

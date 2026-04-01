@@ -156,6 +156,10 @@ export function getDefaultConversationTitle(mode: AIMode): string {
       return 'New Axiom Chat'
     case 'code':
       return 'New Forge Chat'
+    case 'live':
+      return 'New Pulse Chat'
+    case 'image':
+      return 'New Prism Chat'
   }
 }
 

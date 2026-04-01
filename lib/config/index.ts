@@ -1,3 +1,6 @@
 export * from './models'
 export * from './modes'
 export * from './presets'
+export * from './assistants'
+export * from './pricing'
+export * from './image-models'

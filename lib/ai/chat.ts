@@ -33,7 +33,9 @@ import {
   Conversation,
   Message,
   SessionSettings,
+  SubscriptionTier,
   StreamEvent,
+  UsageEstimate,
 } from '@/types'
 import { buildSystemPrompt } from './prompts'
 import {
@@ -101,6 +103,50 @@ async function generateImageAttachment(
   }
 }
 
+export async function generateImageFromPrompt(input: {
+  prompt: string
+  mode: AIMode
+  settings: SessionSettings
+  model?: string
+}): Promise<{
+  attachment: Attachment
+  content: string
+  imageUrl?: string
+}> {
+  const model = input.model ?? IMAGE_GENERATION_CONFIG.model
+
+  if (!hasOpenRouterConfig()) {
+    return {
+      attachment: createGeneratedImageAttachment(input.prompt, input.mode),
+      content: "I've created a visual concept based on your prompt.",
+    }
+  }
+
+  try {
+    const image = await createOpenRouterImage({
+      model,
+      prompt: buildImageGenerationPrompt(input.prompt, input.mode),
+      systemPrompt: `${buildSystemPrompt(
+        input.mode,
+        input.settings.systemPreset
+      )}\n\nGenerate a single premium image that matches the user's request with strong composition, clean subject focus, and minimal companion text.`,
+      modalities: [...IMAGE_GENERATION_CONFIG.modalities],
+    })
+
+    return {
+      attachment: createGeneratedImageAttachmentFromUrl(input.prompt, image.imageUrl),
+      content: image.content,
+      imageUrl: image.imageUrl,
+    }
+  } catch (error) {
+    console.error('Falling back to local generated image placeholder.', error)
+    return {
+      attachment: createGeneratedImageAttachment(input.prompt, input.mode),
+      content: "I've created a visual concept based on your prompt.",
+    }
+  }
+}
+
 function buildMockResponse(mode: AIMode, prompt: string): string {
   switch (mode) {
     case 'general':
@@ -163,6 +209,26 @@ type NextStep = {
 - keep the UI presentational
 - route all model calls through one OpenRouter client
 - structure the response flow so real streaming can slot in later`
+    case 'live':
+      return `# Fast Research Readout
+
+## Request
+${prompt}
+
+## What matters most
+- identify the current signal
+- highlight likely changes or risks
+- separate confirmed facts from inference
+- end with the next practical action`
+    case 'image':
+      return `# Visual Direction
+
+I can turn that into a polished image prompt and generate a finished visual with:
+
+- strong composition
+- clean subject focus
+- premium lighting and detail
+- minimal unnecessary text in-frame`
   }
 }
 
@@ -218,13 +284,28 @@ function buildOpenRouterMessages(
   ]
 }
 
+export function buildPromptTextForUsage(
+  conversation: Conversation,
+  settings: SessionSettings,
+  mode: AIMode
+): string {
+  return buildOpenRouterMessages(conversation, settings, mode)
+    .map((message) => message.content)
+    .join('\n\n')
+}
+
 export async function* generateAssistantStream(input: {
   conversation: Conversation
   settings: SessionSettings
   mode: AIMode
   action?: ChatAction
+  tier?: SubscriptionTier
 }): AsyncIterable<string> {
-  const config = resolveModelConfig(input.mode, input.settings.modelOverride)
+  const config = resolveModelConfig(
+    input.mode,
+    input.settings.modelOverride,
+    input.tier ?? 'free'
+  )
   const latestPrompt =
     [...input.conversation.messages]
       .reverse()
@@ -317,10 +398,11 @@ async function resolveConversation(payload: ChatRequest): Promise<Conversation> 
 function buildAssistantPlaceholder(
   mode: AIMode,
   settings: SessionSettings,
+  tier: SubscriptionTier = 'free',
   parentUserMessageId?: string,
   branchLabel?: string
 ): Message {
-  const config = resolveModelConfig(mode, settings.modelOverride)
+  const config = resolveModelConfig(mode, settings.modelOverride, tier)
 
   return createMessage({
     role: 'assistant',
@@ -604,6 +686,7 @@ export async function prepareConversationForChat(
     assistantPlaceholder: buildAssistantPlaceholder(
       prepared.assistantMode,
       payload.settings,
+      'free',
       prepared.userMessage.id,
       branchLabel
     ),
@@ -619,30 +702,34 @@ export async function completeConversationWithAssistant(
   options?: {
     action?: ChatAction
     userMessage?: Message
+    tier?: SubscriptionTier
+    usageOverride?: UsageEstimate
+    modelOverride?: string
   }
 ): Promise<Conversation> {
-  const generatedAttachments =
+  const generatedImageResult =
     options?.action === 'generate-image' && options.userMessage
-      ? [
-          await generateImageAttachment(
-            options.userMessage.content,
-            generationMode,
-            conversation.sessionSettings
-          ),
-        ]
-      : []
+      ? await generateImageFromPrompt({
+          prompt: options.userMessage.content,
+          mode: generationMode,
+          settings: conversation.sessionSettings,
+          model: options.modelOverride,
+        })
+      : null
+  const generatedAttachments = generatedImageResult
+    ? [generatedImageResult.attachment]
+    : []
 
   const activeConfig = resolveModelConfig(
     generationMode,
-    conversation.sessionSettings.modelOverride
+    conversation.sessionSettings.modelOverride,
+    options?.tier ?? 'free'
   )
-  const promptText = buildOpenRouterMessages(
+  const promptText = buildPromptTextForUsage(
     generationConversation,
     conversation.sessionSettings,
     generationMode
   )
-    .map((message) => message.content)
-    .join('\n\n')
   const usage = estimateUsage({
     config: activeConfig,
     promptText,
@@ -657,7 +744,7 @@ export async function completeConversationWithAssistant(
     attachments: generatedAttachments,
     status: 'complete' as const,
     error: undefined,
-    usage: options?.action === 'generate-image' ? undefined : usage,
+    usage: options?.usageOverride ?? usage,
   }
 
   const completedConversation = updateConversationSnapshot(conversation, {
@@ -691,6 +778,7 @@ export async function* streamConversationReply(
     settings: payload.settings,
     mode: prepared.assistantMode,
     action: payload.action,
+    tier: 'free',
   })) {
     accumulated += chunk
 

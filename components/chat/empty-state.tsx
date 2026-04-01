@@ -78,7 +78,9 @@ export function EmptyState({ onPromptSelect }: EmptyStateProps) {
           currentMode === 'general' && 'bg-general',
           currentMode === 'creative' && 'bg-creative',
           currentMode === 'logic' && 'bg-logic',
-          currentMode === 'code' && 'bg-code'
+          currentMode === 'code' && 'bg-code',
+          currentMode === 'live' && 'bg-live',
+          currentMode === 'image' && 'bg-image'
         )}
       />
 
