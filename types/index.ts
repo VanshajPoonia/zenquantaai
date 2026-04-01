@@ -264,6 +264,13 @@ export type StreamEvent =
       delta: string
     }
   | {
+      type: 'working'
+      conversationId: string
+      messageId: string
+      title?: string
+      notes: string[]
+    }
+  | {
       type: 'done'
       conversation: Conversation
       message: Message
@@ -282,6 +289,8 @@ export interface StreamingState {
   status: StreamingStatus
   conversationId?: string
   messageId?: string
+  workingTitle?: string
+  workingNotes?: string[]
   error?: string
 }
 

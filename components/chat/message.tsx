@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   ChevronDown,
   Download,
@@ -59,6 +59,9 @@ interface ChatMessageProps {
   onAskAnotherMode?: (mode: AIMode) => void
   isLastAssistant?: boolean
   isLastUser?: boolean
+  isStreamingMessage?: boolean
+  workingTitle?: string
+  workingNotes?: string[]
 }
 
 function getModeColorClasses(mode: AIMode) {
@@ -99,6 +102,64 @@ function renderStreamingState(content: string) {
         <span className="size-1.5 rounded-full bg-current animate-pulse" />
         Streaming
       </div>
+    </div>
+  )
+}
+
+function WorkingNotesPanel({
+  title,
+  notes,
+  expanded,
+  onToggle,
+}: {
+  title?: string
+  notes: string[]
+  expanded: boolean
+  onToggle: () => void
+}) {
+  if (notes.length === 0) return null
+
+  return (
+    <div className="mt-3 rounded-2xl border border-border/60 bg-background/40">
+      <button
+        type="button"
+        className="flex w-full items-center justify-between gap-3 px-3 py-2.5 text-left transition-colors hover:bg-background/40 sm:px-4"
+        onClick={(event) => {
+          event.stopPropagation()
+          onToggle()
+        }}
+      >
+        <div className="min-w-0">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+            {title ?? 'Working notes'}
+          </p>
+          <p className="mt-1 text-xs text-foreground/85 sm:text-sm">
+            Click to view live response progress
+          </p>
+        </div>
+        <ChevronDown
+          className={cn(
+            'size-4 shrink-0 text-muted-foreground transition-transform',
+            expanded && 'rotate-180'
+          )}
+        />
+      </button>
+
+      {expanded ? (
+        <div className="border-t border-border/60 px-3 py-3 sm:px-4">
+          <ul className="space-y-2">
+            {notes.map((note) => (
+              <li
+                key={note}
+                className="flex items-start gap-2 text-xs leading-6 text-foreground/90 sm:text-sm"
+              >
+                <span className="mt-2 size-1.5 shrink-0 rounded-full bg-foreground/70" />
+                <span>{note}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
     </div>
   )
 }
@@ -452,6 +513,9 @@ export function ChatMessage({
   onAskAnotherMode,
   isLastAssistant,
   isLastUser,
+  isStreamingMessage = false,
+  workingTitle,
+  workingNotes = [],
 }: ChatMessageProps) {
   const [copied, setCopied] = useState(false)
   const [isEditing, setIsEditing] = useState(false)
@@ -460,6 +524,13 @@ export function ChatMessage({
     null
   )
   const [draftValue, setDraftValue] = useState(message.content)
+  const [isWorkingExpanded, setIsWorkingExpanded] = useState(false)
+
+  useEffect(() => {
+    if (!isStreamingMessage) {
+      setIsWorkingExpanded(false)
+    }
+  }, [isStreamingMessage])
 
   const handleCopy = async () => {
     await navigator.clipboard.writeText(message.content)
@@ -584,7 +655,19 @@ export function ChatMessage({
             <ModeIcon mode={message.mode} size="sm" />
           </div>
           <div className="flex-1">
-            <div className="bg-card border border-border rounded-2xl rounded-tl-md px-4 py-3">
+            <div
+              className={cn(
+                'bg-card border border-border rounded-2xl rounded-tl-md px-4 py-3 transition-colors',
+                isStreamingMessage &&
+                  workingNotes.length > 0 &&
+                  'cursor-pointer hover:border-border/80 hover:bg-card/95'
+              )}
+              onClick={() => {
+                if (isStreamingMessage && workingNotes.length > 0) {
+                  setIsWorkingExpanded((value) => !value)
+                }
+              }}
+            >
               {message.branchLabel ? (
                 <div className="mb-3 inline-flex items-center gap-1 rounded-full border border-border/60 bg-background/60 px-2.5 py-1 text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
                   <ModeIcon mode={message.mode} size="sm" />
@@ -603,6 +686,14 @@ export function ChatMessage({
                 onOpenImage={handleOpenImage}
                 onDownloadImage={handleDownloadImage}
               />
+              {isStreamingMessage ? (
+                <WorkingNotesPanel
+                  title={workingTitle}
+                  notes={workingNotes}
+                  expanded={isWorkingExpanded}
+                  onToggle={() => setIsWorkingExpanded((value) => !value)}
+                />
+              ) : null}
             </div>
 
             <div

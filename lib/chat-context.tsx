@@ -1030,6 +1030,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         status: 'streaming',
         conversationId: payload.optimisticConversation.id,
         messageId: placeholder?.id,
+        workingTitle: 'Working notes',
+        workingNotes: [],
       })
 
       const controller = new AbortController()
@@ -1083,6 +1085,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
                 status: 'streaming',
                 conversationId: startedConversation.id,
                 messageId: event.message.id,
+                workingTitle: 'Working notes',
+                workingNotes: [],
               })
               break
             }
@@ -1100,6 +1104,17 @@ export function ChatProvider({ children }: { children: ReactNode }) {
                   ),
                 })
               )
+              break
+            }
+            case 'working': {
+              setStreamingState((previous) => ({
+                ...previous,
+                status: 'streaming',
+                conversationId: event.conversationId,
+                messageId: event.messageId,
+                workingTitle: event.title ?? previous.workingTitle ?? 'Working notes',
+                workingNotes: event.notes,
+              }))
               break
             }
             case 'done': {

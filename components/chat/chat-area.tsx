@@ -103,6 +103,20 @@ export function ChatArea() {
               <ChatMessage
                 key={message.id}
                 message={message}
+                isStreamingMessage={
+                  message.id === streamingState.messageId &&
+                  streamingState.status === 'streaming'
+                }
+                workingTitle={
+                  message.id === streamingState.messageId
+                    ? streamingState.workingTitle
+                    : undefined
+                }
+                workingNotes={
+                  message.id === streamingState.messageId
+                    ? streamingState.workingNotes
+                    : undefined
+                }
                 isLastAssistant={message.id === lastAssistantId}
                 isLastUser={message.id === lastUserId}
                 onRegenerate={regenerateLastResponse}

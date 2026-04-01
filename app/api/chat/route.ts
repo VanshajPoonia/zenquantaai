@@ -30,6 +30,62 @@ import { estimatePromptTokens } from '@/lib/utils/cost'
 
 export const runtime = 'nodejs'
 
+const WORKING_NOTES_TITLE = 'Working notes'
+
+function buildWorkingNotes(
+  action: ChatRequest['action'],
+  phase: 'understanding' | 'organizing' | 'drafting' | 'refining' | 'finalizing'
+): string[] {
+  const imageNotes = {
+    understanding: [
+      'Reading the visual request and identifying the main subject.',
+      'Pulling out the style, mood, and composition cues that should shape the image.',
+    ],
+    organizing: [
+      'Translating the prompt into an image-ready direction.',
+      'Locking in the details that matter most before generating the visual.',
+    ],
+    drafting: [
+      'Generating the image response now.',
+      'Keeping the output aligned with the requested look and subject.',
+    ],
+    refining: [
+      'Checking the generated result for clarity and prompt alignment.',
+      'Preparing the image response and usage details for the chat.',
+    ],
+    finalizing: [
+      'Finalizing the image result.',
+      'Wrapping up the response so it is ready to view and download.',
+    ],
+  } as const
+
+  const textNotes = {
+    understanding: [
+      'Reading the request and identifying the outcome you are asking for.',
+      'Picking the right response shape before drafting the answer.',
+    ],
+    organizing: [
+      'Organizing the answer so the most useful parts come first.',
+      'Choosing the level of detail and structure that best fits the task.',
+    ],
+    drafting: [
+      'Drafting the response in the selected assistant style.',
+      'Turning the plan into a clear first pass for the final answer.',
+    ],
+    refining: [
+      'Refining wording, clarity, and flow while the response streams.',
+      'Tightening the answer so it stays direct and useful.',
+    ],
+    finalizing: [
+      'Finalizing the response and wrapping up the last details.',
+      'Preparing the completed answer for the conversation history.',
+    ],
+  } as const
+
+  const phaseMap = action === 'generate-image' ? imageNotes : textNotes
+  return [...phaseMap[phase]]
+}
+
 function toErrorMessage(error: unknown): string {
   if (error instanceof Error) return error.message
   return 'An unknown chat error occurred.'
@@ -156,7 +212,29 @@ export async function POST(request: NextRequest) {
         })
       )
 
+      await writer.write(
+        encodeStreamEvent({
+          type: 'working',
+          conversationId: persistedConversation.id,
+          messageId: placeholder.id,
+          title: WORKING_NOTES_TITLE,
+          notes: buildWorkingNotes(payload.action, 'understanding'),
+        })
+      )
+
+      await writer.write(
+        encodeStreamEvent({
+          type: 'working',
+          conversationId: persistedConversation.id,
+          messageId: placeholder.id,
+          title: WORKING_NOTES_TITLE,
+          notes: buildWorkingNotes(payload.action, 'organizing'),
+        })
+      )
+
       let accumulated = ''
+      let lastWorkingPhase: 'understanding' | 'organizing' | 'drafting' | 'refining' | 'finalizing' =
+        'organizing'
 
       for await (const chunk of generateAssistantStream({
         conversation: prepared.generationConversation,
@@ -171,11 +249,41 @@ export async function POST(request: NextRequest) {
           encodeStreamEvent({
             type: 'delta',
             conversationId: persistedConversation.id,
-            messageId: placeholder.id,
-            delta: chunk,
-          })
-        )
+          messageId: placeholder.id,
+          delta: chunk,
+        })
+      )
+
+        const phase =
+          accumulated.length < 80
+            ? 'drafting'
+              : accumulated.length < 260
+              ? 'refining'
+              : null
+
+        if (phase && phase !== lastWorkingPhase) {
+          lastWorkingPhase = phase
+          await writer.write(
+            encodeStreamEvent({
+              type: 'working',
+              conversationId: persistedConversation.id,
+              messageId: placeholder.id,
+              title: WORKING_NOTES_TITLE,
+              notes: buildWorkingNotes(payload.action, phase),
+            })
+          )
+        }
       }
+
+      await writer.write(
+        encodeStreamEvent({
+          type: 'working',
+          conversationId: persistedConversation.id,
+          messageId: placeholder.id,
+          title: WORKING_NOTES_TITLE,
+          notes: buildWorkingNotes(payload.action, 'finalizing'),
+        })
+      )
 
       const usage =
         payload.action === 'generate-image'
