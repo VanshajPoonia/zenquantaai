@@ -26,23 +26,23 @@ export function AssistantHelpDialog({
 }: AssistantHelpDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[88vh] max-w-5xl overflow-hidden rounded-[2rem] border-border/70 bg-background/95 p-0 shadow-2xl shadow-black/40 backdrop-blur-xl">
-        <div className="overflow-y-auto p-6 sm:p-8">
+      <DialogContent className="w-[calc(100vw-1rem)] max-h-[92vh] max-w-[1320px] overflow-hidden rounded-[24px] border-border/70 bg-background/95 p-0 shadow-2xl shadow-black/40 backdrop-blur-xl sm:w-[min(1320px,calc(100vw-2rem))] sm:rounded-[28px]">
+        <div className="max-h-[92vh] overflow-y-auto px-4 py-5 sm:px-6 sm:py-6 lg:px-8 lg:py-8">
           <DialogHeader className="space-y-3 text-left">
-            <div className="inline-flex w-fit rounded-full border border-border/60 bg-card/60 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+            <div className="inline-flex w-fit rounded-full border border-border/60 bg-card/60 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.22em] text-muted-foreground sm:text-[11px]">
               Assistant Guide
             </div>
-            <DialogTitle className="text-3xl font-semibold tracking-tight text-foreground">
+            <DialogTitle className="max-w-4xl text-2xl font-semibold tracking-tight text-foreground sm:text-3xl lg:text-[2.6rem]">
               Pick the right assistant for the work
             </DialogTitle>
-            <DialogDescription className="max-w-3xl text-sm leading-6 text-muted-foreground">
+            <DialogDescription className="max-w-4xl text-xs leading-6 text-muted-foreground sm:text-sm">
               Zenquanta routes each assistant toward a different kind of outcome.
               Use this guide when you want a faster match between the task and the
               assistant family.
             </DialogDescription>
           </DialogHeader>
 
-          <div className="mt-8 grid gap-4 lg:grid-cols-2">
+          <div className="mt-6 grid gap-4 pb-4 md:grid-cols-2 xl:grid-cols-3">
             {FAMILY_ORDER.map((family) => {
               const publicPage = ASSISTANT_PUBLIC_PAGES[family]
               const copy = ASSISTANT_FAMILY_COPY[family]
@@ -51,54 +51,54 @@ export function AssistantHelpDialog({
               return (
                 <article
                   key={family}
-                  className={`rounded-[1.75rem] border border-border/70 bg-card/60 p-5 shadow-xl shadow-black/10 ${getModeTintClass(mode, 'subtle')}`}
+                  className={`rounded-[1.5rem] border border-border/70 bg-card/60 p-4 shadow-xl shadow-black/10 sm:p-5 ${getModeTintClass(mode, 'subtle')}`}
                 >
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="flex items-start gap-3">
+                  <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="flex min-w-0 items-start gap-3">
                       <div
-                        className={`flex size-12 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-background/70 ${getModeAccentClass(mode, 'text')}`}
+                        className={`flex size-11 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-background/70 sm:size-12 ${getModeAccentClass(mode, 'text')}`}
                       >
                         <ModeIcon mode={mode} size="md" />
                       </div>
-                      <div className="space-y-1">
-                        <h3 className="text-xl font-semibold text-foreground">
+                      <div className="min-w-0 space-y-1">
+                        <h3 className="text-lg font-semibold text-foreground sm:text-xl">
                           {copy.shortName}
                         </h3>
-                        <p className="text-sm text-muted-foreground">
+                        <p className="text-xs leading-6 text-muted-foreground sm:text-sm">
                           {copy.helperText}
                         </p>
                       </div>
                     </div>
-                    <Button asChild variant="secondary" size="sm" className="rounded-xl">
+                    <Button asChild variant="secondary" size="sm" className="w-full shrink-0 rounded-xl sm:w-auto">
                       <Link href={`/${publicPage.slug}`}>Learn more</Link>
                     </Button>
                   </div>
 
                   <div className="mt-4 rounded-2xl border border-border/60 bg-background/40 p-4">
-                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground sm:text-xs">
                       Use this when
                     </p>
-                    <p className="mt-2 text-sm leading-6 text-foreground/90">
+                    <p className="mt-2 text-xs leading-6 text-foreground/90 sm:text-sm">
                       {publicPage.subheadline}
                     </p>
                   </div>
 
                   <div className="mt-4 grid gap-3 sm:grid-cols-2">
                     <div className="rounded-2xl border border-border/60 bg-background/40 p-4">
-                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                      <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground sm:text-xs">
                         Best for
                       </p>
-                      <ul className="mt-2 space-y-2 text-sm text-foreground/85">
+                      <ul className="mt-2 space-y-2 text-xs leading-6 text-foreground/85 sm:text-sm">
                         {publicPage.bestFor.slice(0, 3).map((item) => (
                           <li key={item}>{item}</li>
                         ))}
                       </ul>
                     </div>
                     <div className="rounded-2xl border border-border/60 bg-background/40 p-4">
-                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                      <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground sm:text-xs">
                         Try asking
                       </p>
-                      <p className="mt-2 text-sm leading-6 text-foreground/85">
+                      <p className="mt-2 text-xs leading-6 text-foreground/85 sm:text-sm">
                         {copy.suggestedPrompts[0]}
                       </p>
                     </div>

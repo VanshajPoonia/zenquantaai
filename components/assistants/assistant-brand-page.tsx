@@ -14,6 +14,7 @@ import {
   getModeGlow,
   getModeTintClass,
 } from '@/lib/mode-utils'
+import { ZenquantaLogo } from '@/components/icons'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -30,6 +31,21 @@ export function AssistantBrandPage({
   return (
     <main className="min-h-screen bg-background px-4 py-8 sm:px-6 lg:px-10">
       <div className="mx-auto flex max-w-7xl flex-col gap-8">
+        <div className="flex items-center justify-start">
+          <Link
+            href="/"
+            className="inline-flex cursor-pointer items-center gap-3 rounded-2xl border border-border/70 bg-card/60 px-4 py-2.5 text-left shadow-sm shadow-black/10 transition-colors hover:bg-card/90"
+          >
+            <ZenquantaLogo className="size-8" />
+            <div>
+              <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-muted-foreground">
+                Back to app
+              </p>
+              <p className="text-sm font-semibold text-foreground">Zenquanta AI</p>
+            </div>
+          </Link>
+        </div>
+
         <section
           className={`relative overflow-hidden rounded-[2rem] border border-border/70 bg-card/70 p-6 shadow-xl shadow-black/20 backdrop-blur-sm sm:p-8 ${getModeGlow(mode)}`}
         >
