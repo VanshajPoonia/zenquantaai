@@ -6,7 +6,7 @@ import {
   FolderPlus,
   FolderTree,
   GripVertical,
-  MoreHorizontal,
+  MoreVertical,
   PanelLeftClose,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -129,17 +129,17 @@ function ChatItem({
               <TooltipTrigger asChild>
                 <DropdownMenuTrigger asChild>
                   <Button
-                    variant="ghost"
+                    variant="outline"
                     size="icon"
                     className={cn(
-                      'size-7 cursor-pointer rounded-lg text-sidebar-foreground/45 transition-all hover:bg-sidebar-accent hover:text-sidebar-foreground',
+                      'size-8 cursor-pointer rounded-lg border-sidebar-border/70 bg-sidebar-accent/50 text-sidebar-foreground/75 shadow-none transition-all hover:border-sidebar-primary/30 hover:bg-sidebar-accent hover:text-sidebar-foreground',
                       isActive
                         ? 'opacity-100'
                         : 'opacity-70 group-hover:opacity-100 group-focus-within:opacity-100'
                     )}
                     onClick={(event) => event.stopPropagation()}
                   >
-                    <MoreHorizontal className="size-3.5" />
+                    <MoreVertical className="size-4" />
                   </Button>
                 </DropdownMenuTrigger>
               </TooltipTrigger>
