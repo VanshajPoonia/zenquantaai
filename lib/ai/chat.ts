@@ -705,17 +705,23 @@ export async function completeConversationWithAssistant(
     tier?: SubscriptionTier
     usageOverride?: UsageEstimate
     modelOverride?: string
+    generatedImageResultOverride?: {
+      attachment: Attachment
+      content: string
+      imageUrl?: string
+    } | null
   }
 ): Promise<Conversation> {
   const generatedImageResult =
-    options?.action === 'generate-image' && options.userMessage
+    options?.generatedImageResultOverride ??
+    (options?.action === 'generate-image' && options.userMessage
       ? await generateImageFromPrompt({
           prompt: options.userMessage.content,
           mode: generationMode,
           settings: conversation.sessionSettings,
           model: options.modelOverride,
         })
-      : null
+      : null)
   const generatedAttachments = generatedImageResult
     ? [generatedImageResult.attachment]
     : []

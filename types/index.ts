@@ -48,6 +48,17 @@ export type ChatAction =
 
 export type StreamingStatus = 'idle' | 'streaming' | 'error'
 
+export type SendTransport = 'text' | 'image'
+
+export type SendLifecycleStatus =
+  | 'idle'
+  | 'prechecking'
+  | 'awaiting_recommendation'
+  | 'dispatching_text'
+  | 'dispatching_image'
+  | 'streaming_text'
+  | 'failed'
+
 export type AccentStyle = 'mode' | 'glass'
 
 export type ResponseStyle = 'balanced' | 'concise' | 'detailed'
@@ -261,6 +272,22 @@ export interface ChatRequest {
   attachmentContext?: AttachmentContext[]
 }
 
+export interface PendingSend {
+  sendId: string
+  content: string
+  attachments?: Array<Attachment | PendingAttachment>
+  kind: 'chat' | 'image'
+  originalMode: AIMode
+  resolvedMode: AIMode
+  conversationId?: string
+  projectId: string
+  settings: SessionSettings
+}
+
+export interface ResolvedSend extends PendingSend {
+  transport: SendTransport
+}
+
 export interface AssistantRecommendationResult {
   currentAssistant: AssistantFamily
   predictedAssistant: AssistantFamily
@@ -277,6 +304,27 @@ export interface ChatResponse {
   message: Message
   usage?: UsageEstimate
   subscriptionTier?: SubscriptionTier
+}
+
+export interface ImageGenerateRequest {
+  action?: ChatAction
+  conversationId?: string
+  conversation?: Conversation
+  mode: AIMode
+  targetMode?: AIMode
+  prompt?: string
+  content?: string
+  settings: SessionSettings
+  targetMessageId?: string
+  attachments?: Attachment[]
+  negativePrompt?: string | null
+  size?: string | null
+  aspectRatio?: string | null
+  imageCount?: number
+}
+
+export interface ImageGenerateResponse extends ChatResponse {
+  displayedUsageMessage?: string
 }
 
 export type StreamEvent =

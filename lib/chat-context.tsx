@@ -19,12 +19,16 @@ import {
   AuthState,
   Chat,
   ChatAction,
+  ChatResponse,
   ChatRequest,
   Conversation,
   ConversationSummary,
+  ImageGenerateRequest,
+  ImageGenerateResponse,
   PendingAttachment,
   Project,
   PromptLibraryItem,
+  SendLifecycleStatus,
   SessionSettings,
   StreamEvent,
   StreamingState,
@@ -60,6 +64,12 @@ import {
   toConversationSummary,
 } from '@/lib/utils/chat'
 import { readNdjsonStream } from '@/lib/utils/stream'
+import {
+  createAssistantPlaceholder,
+  createPendingSend,
+  debugSendPipeline,
+  resolveSend,
+} from '@/lib/chat/sendMessage'
 import {
   conversationToJson,
   conversationToMarkdown,
@@ -224,6 +234,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const [draftSessionSettings, setDraftSessionSettings] = useState<SessionSettings>(
     DEFAULT_APP_SETTINGS.sessionDefaults
   )
+  const [sendLifecycleStatus, setSendLifecycleStatus] =
+    useState<SendLifecycleStatus>('idle')
   const [streamingState, setStreamingState] = useState<StreamingState>({
     status: 'idle',
   })
@@ -239,6 +251,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const [promptLibrary, setPromptLibrary] = useState<PromptLibraryItem[]>([])
   const [queuedPrompts, setQueuedPrompts] = useState<QueuedPrompt[]>([])
   const streamAbortRef = useRef<AbortController | null>(null)
+  const activeSendIdRef = useRef<string | null>(null)
   const conversationsRef = useRef<Conversation[]>([])
   const currentChatRef = useRef<Conversation | null>(null)
   const queuedPromptsRef = useRef<QueuedPrompt[]>([])
@@ -249,7 +262,11 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     [conversations]
   )
 
-  const isStreaming = streamingState.status === 'streaming'
+  const isStreaming =
+    streamingState.status === 'streaming' ||
+    sendLifecycleStatus === 'dispatching_text' ||
+    sendLifecycleStatus === 'dispatching_image' ||
+    sendLifecycleStatus === 'streaming_text'
 
   useEffect(() => {
     conversationsRef.current = conversations
@@ -283,6 +300,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const clearAuthedState = useCallback(() => {
     streamAbortRef.current?.abort()
     streamAbortRef.current = null
+    activeSendIdRef.current = null
+    setSendLifecycleStatus('idle')
     setStreamingState({ status: 'idle' })
     setConversations([])
     setCurrentChatState(null)
@@ -686,6 +705,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const goHome = useCallback(() => {
     streamAbortRef.current?.abort()
     streamAbortRef.current = null
+    activeSendIdRef.current = null
+    setSendLifecycleStatus('idle')
     setStreamingState({ status: 'idle' })
     setSearchQuery('')
     setCurrentChatState(null)
@@ -700,6 +721,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const createNewChat = useCallback(async () => {
     streamAbortRef.current?.abort()
     streamAbortRef.current = null
+    activeSendIdRef.current = null
+    setSendLifecycleStatus('idle')
     setStreamingState({ status: 'idle' })
     setSearchQuery('')
     setCurrentChatState(null)
@@ -916,9 +939,23 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     [applyConversationPatch]
   )
 
+  const finalizeSendLifecycle = useCallback(
+    (sendId?: string, nextStatus: SendLifecycleStatus = 'idle') => {
+      if (sendId && activeSendIdRef.current !== sendId) {
+        return
+      }
+
+      activeSendIdRef.current = null
+      setSendLifecycleStatus(nextStatus)
+    },
+    []
+  )
+
   const stopStreaming = useCallback(() => {
     streamAbortRef.current?.abort()
     streamAbortRef.current = null
+    activeSendIdRef.current = null
+    setSendLifecycleStatus('idle')
     setStreamingState({ status: 'idle' })
   }, [])
 
@@ -1016,7 +1053,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     [handleUnauthorized]
   )
 
-  const runChatAction = useCallback(
+  const runTextAction = useCallback(
     async (payload: {
       action: ChatAction
       content?: string
@@ -1027,11 +1064,28 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       conversation: Conversation
       optimisticConversation: Conversation
       attachments?: Attachment[]
+      sendId?: string
     }) => {
+      if (
+        payload.action === 'generate-image' ||
+        payload.mode === 'image' ||
+        payload.targetMode === 'image'
+      ) {
+        throw new Error('Image requests must use the dedicated image route.')
+      }
+
+      debugSendPipeline('request-start', {
+        action: payload.action,
+        assistant: payload.targetMode ?? payload.mode,
+        route: '/api/chat',
+        sendId: payload.sendId,
+      })
+
       upsertConversation(payload.optimisticConversation)
 
       const placeholder = payload.optimisticConversation.messages.at(-1)
 
+      setSendLifecycleStatus('dispatching_text')
       setStreamingState({
         status: 'streaming',
         conversationId: payload.optimisticConversation.id,
@@ -1073,10 +1127,22 @@ export function ChatProvider({ children }: { children: ReactNode }) {
           const body = (await response.json().catch(() => null)) as
             | { error?: string }
             | null
+          debugSendPipeline('request-failure', {
+            action: payload.action,
+            route: '/api/chat',
+            error: body?.error ?? 'Unable to send chat request.',
+            sendId: payload.sendId,
+          })
           throw new Error(body?.error ?? 'Unable to send chat request.')
         }
 
+        setSendLifecycleStatus('streaming_text')
+
         await readNdjsonStream<StreamEvent>(response, (event) => {
+          if (payload.sendId && activeSendIdRef.current !== payload.sendId) {
+            return
+          }
+
           switch (event.type) {
             case 'start': {
               const startedConversation = updateConversationSnapshot(
@@ -1141,13 +1207,25 @@ export function ChatProvider({ children }: { children: ReactNode }) {
           }
         })
 
+        debugSendPipeline('request-success', {
+          action: payload.action,
+          route: '/api/chat',
+          sendId: payload.sendId,
+        })
         setStreamingState({ status: 'idle' })
+        finalizeSendLifecycle(payload.sendId)
       } catch (error) {
         const lastMessageId = payload.optimisticConversation.messages.at(-1)?.id
 
         if (error instanceof DOMException && error.name === 'AbortError') {
+          debugSendPipeline('request-cancelled', {
+            action: payload.action,
+            route: '/api/chat',
+            sendId: payload.sendId,
+          })
           applyLocalError(payload.optimisticConversation.id, lastMessageId, 'Generation stopped.')
           setStreamingState({ status: 'idle' })
+          finalizeSendLifecycle(payload.sendId)
           return
         }
 
@@ -1156,6 +1234,12 @@ export function ChatProvider({ children }: { children: ReactNode }) {
             ? error.message
             : 'Something went wrong while generating a response.'
 
+        debugSendPipeline('request-failure', {
+          action: payload.action,
+          route: '/api/chat',
+          error: message,
+          sendId: payload.sendId,
+        })
         applyLocalError(payload.optimisticConversation.id, lastMessageId, message)
         setStreamingState({
           status: 'error',
@@ -1163,6 +1247,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
           messageId: lastMessageId,
           error: message,
         })
+        finalizeSendLifecycle(payload.sendId, 'failed')
       } finally {
         streamAbortRef.current = null
       }
@@ -1170,6 +1255,149 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     [
       applyConversationPatch,
       applyLocalError,
+      finalizeSendLifecycle,
+      handleUnauthorized,
+      upsertConversation,
+    ]
+  )
+
+  const runImageAction = useCallback(
+    async (payload: {
+      action: Exclude<ChatAction, 'generate-image'>
+      content?: string
+      targetMessageId?: string
+      targetMode?: AIMode
+      mode: AIMode
+      settings: SessionSettings
+      conversation: Conversation
+      optimisticConversation: Conversation
+      attachments?: Attachment[]
+      sendId?: string
+    }) => {
+      debugSendPipeline('request-start', {
+        action: payload.action,
+        assistant: payload.targetMode ?? payload.mode,
+        route: '/api/images/generate',
+        sendId: payload.sendId,
+      })
+
+      upsertConversation(payload.optimisticConversation)
+
+      const placeholder = payload.optimisticConversation.messages.at(-1)
+      setSendLifecycleStatus('dispatching_image')
+      setStreamingState({
+        status: 'streaming',
+        conversationId: payload.optimisticConversation.id,
+        messageId: placeholder?.id,
+        workingTitle: 'Generating image',
+        workingNotes: [],
+      })
+
+      const controller = new AbortController()
+      streamAbortRef.current = controller
+
+      try {
+        const response = await fetch('/api/images/generate', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            action: payload.action,
+            conversationId: payload.conversation.id,
+            conversation: payload.conversation,
+            mode: payload.mode,
+            targetMode: payload.targetMode,
+            prompt: payload.content,
+            content: payload.content,
+            settings: payload.settings,
+            targetMessageId: payload.targetMessageId,
+            attachments: payload.attachments,
+            imageCount: 1,
+          } satisfies ImageGenerateRequest),
+          signal: controller.signal,
+        })
+
+        if (response.status === 401) {
+          handleUnauthorized()
+          throw new Error('Authentication required.')
+        }
+
+        if (!response.ok) {
+          const body = (await response.json().catch(() => null)) as
+            | { error?: string }
+            | null
+          debugSendPipeline('request-failure', {
+            action: payload.action,
+            route: '/api/images/generate',
+            error: body?.error ?? 'Unable to generate image.',
+            sendId: payload.sendId,
+          })
+          throw new Error(body?.error ?? 'Unable to generate image.')
+        }
+
+        const data = (await response.json()) as ImageGenerateResponse
+
+        if (payload.sendId && activeSendIdRef.current !== payload.sendId) {
+          return
+        }
+
+        debugSendPipeline('response-parsed', {
+          action: payload.action,
+          route: '/api/images/generate',
+          conversationId: data.conversation.id,
+          messageId: data.message.id,
+          sendId: payload.sendId,
+        })
+
+        upsertConversation(data.conversation)
+        setStreamingState({ status: 'idle' })
+        finalizeSendLifecycle(payload.sendId)
+      } catch (error) {
+        const lastMessageId = payload.optimisticConversation.messages.at(-1)?.id
+
+        if (error instanceof DOMException && error.name === 'AbortError') {
+          debugSendPipeline('request-cancelled', {
+            action: payload.action,
+            route: '/api/images/generate',
+            sendId: payload.sendId,
+          })
+          applyLocalError(
+            payload.optimisticConversation.id,
+            lastMessageId,
+            'Image generation stopped.'
+          )
+          setStreamingState({ status: 'idle' })
+          finalizeSendLifecycle(payload.sendId)
+          return
+        }
+
+        const message =
+          error instanceof Error
+            ? error.message
+            : 'Something went wrong while generating the image.'
+
+        debugSendPipeline('request-failure', {
+          action: payload.action,
+          route: '/api/images/generate',
+          error: message,
+          sendId: payload.sendId,
+        })
+        applyLocalError(payload.optimisticConversation.id, lastMessageId, message)
+        setStreamingState({
+          status: 'error',
+          conversationId: payload.optimisticConversation.id,
+          messageId: lastMessageId,
+          error: message,
+        })
+        finalizeSendLifecycle(payload.sendId, 'failed')
+      } finally {
+        streamAbortRef.current = null
+      }
+    },
+    [
+      applyLocalError,
+      finalizeSendLifecycle,
       handleUnauthorized,
       upsertConversation,
     ]
@@ -1185,27 +1413,47 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         projectId: string
       }
     ) => {
-      const resolvedKind =
-        kind === 'image' || options.mode === 'image' ? 'image' : 'chat'
-      const conversation = await ensureConversationForMessage(options)
+      const pendingSend = createPendingSend({
+        content,
+        attachments,
+        kind,
+        originalMode: options.mode,
+        resolvedMode: options.mode,
+        conversationId: options.conversationId,
+        projectId: options.projectId,
+        settings: options.settings,
+      })
+      const resolvedSend = resolveSend(pendingSend)
+
+      activeSendIdRef.current = resolvedSend.sendId
+      setSendLifecycleStatus(
+        resolvedSend.transport === 'image' ? 'dispatching_image' : 'dispatching_text'
+      )
+
+      debugSendPipeline('resolved-send', {
+        sendId: resolvedSend.sendId,
+        mode: resolvedSend.resolvedMode,
+        transport: resolvedSend.transport,
+      })
+
+      const conversation = await ensureConversationForMessage({
+        ...options,
+        mode: resolvedSend.resolvedMode,
+      })
       const userMessage = createMessage({
         role: 'user',
         content,
-        mode: options.mode,
+        mode: resolvedSend.resolvedMode,
         attachments,
       })
-      const placeholder = createMessage({
-        role: 'assistant',
-        content: '',
-        mode: options.mode,
-        status: 'streaming',
-        model: resolveModelConfig(options.mode, options.settings.modelOverride).model,
-        provider: 'openrouter',
+      const placeholder = createAssistantPlaceholder({
+        mode: resolvedSend.resolvedMode,
+        settings: options.settings,
         parentUserMessageId: userMessage.id,
       })
 
       const optimisticConversation = updateConversationSnapshot(conversation, {
-        mode: options.mode,
+        mode: resolvedSend.resolvedMode,
         sessionSettings: options.settings,
         messages: [...conversation.messages, userMessage, placeholder],
       })
@@ -1234,11 +1482,12 @@ export function ChatProvider({ children }: { children: ReactNode }) {
           messageId: placeholder.id,
           error: message,
         })
+        finalizeSendLifecycle(resolvedSend.sendId, 'failed')
         return
       }
 
       const preparedOptimisticConversation = updateConversationSnapshot(conversation, {
-        mode: options.mode,
+        mode: resolvedSend.resolvedMode,
         sessionSettings: options.settings,
         messages: [
           ...conversation.messages,
@@ -1250,20 +1499,37 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         ],
       })
 
-      await runChatAction({
-        action: resolvedKind === 'image' ? 'generate-image' : 'send',
+      if (resolvedSend.transport === 'image') {
+        await runImageAction({
+          action: 'send',
+          content,
+          mode: resolvedSend.resolvedMode,
+          settings: options.settings,
+          conversation,
+          optimisticConversation: preparedOptimisticConversation,
+          attachments: uploadedAttachments,
+          sendId: resolvedSend.sendId,
+        })
+        return
+      }
+
+      await runTextAction({
+        action: 'send',
         content,
-        mode: options.mode,
+        mode: resolvedSend.resolvedMode,
         settings: options.settings,
         conversation,
         optimisticConversation: preparedOptimisticConversation,
         attachments: uploadedAttachments,
+        sendId: resolvedSend.sendId,
       })
     },
     [
       applyLocalError,
       ensureConversationForMessage,
-      runChatAction,
+      finalizeSendLifecycle,
+      runImageAction,
+      runTextAction,
       uploadAttachments,
       upsertConversation,
     ]
@@ -1347,14 +1613,39 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       messages: [...trimmedMessages, placeholder],
     })
 
-    await runChatAction({
+    const sendId = createPendingSend({
+      content: lastUser?.content ?? '',
+      kind: currentMode === 'image' ? 'image' : 'chat',
+      originalMode: currentMode,
+      resolvedMode: currentMode,
+      conversationId: currentChat.id,
+      projectId: currentChat.projectId,
+      settings: sessionSettings,
+    }).sendId
+
+    activeSendIdRef.current = sendId
+
+    if (currentMode === 'image') {
+      await runImageAction({
+        action: 'regenerate',
+        mode: currentMode,
+        settings: sessionSettings,
+        conversation: currentChat,
+        optimisticConversation,
+        sendId,
+      })
+      return
+    }
+
+    await runTextAction({
       action: 'regenerate',
       mode: currentMode,
       settings: sessionSettings,
       conversation: currentChat,
       optimisticConversation,
+      sendId,
     })
-  }, [currentChat, currentMode, runChatAction, sessionSettings])
+  }, [currentChat, currentMode, runImageAction, runTextAction, sessionSettings])
 
   const retryLastMessage = useCallback(async () => {
     if (!currentChat) return
@@ -1382,14 +1673,39 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       messages: [...baseMessages, placeholder],
     })
 
-    await runChatAction({
+    const sendId = createPendingSend({
+      content: lastUser?.content ?? '',
+      kind: currentMode === 'image' ? 'image' : 'chat',
+      originalMode: currentMode,
+      resolvedMode: currentMode,
+      conversationId: currentChat.id,
+      projectId: currentChat.projectId,
+      settings: sessionSettings,
+    }).sendId
+
+    activeSendIdRef.current = sendId
+
+    if (currentMode === 'image') {
+      await runImageAction({
+        action: 'retry',
+        mode: currentMode,
+        settings: sessionSettings,
+        conversation: currentChat,
+        optimisticConversation,
+        sendId,
+      })
+      return
+    }
+
+    await runTextAction({
       action: 'retry',
       mode: currentMode,
       settings: sessionSettings,
       conversation: currentChat,
       optimisticConversation,
+      sendId,
     })
-  }, [currentChat, currentMode, runChatAction, sessionSettings])
+  }, [currentChat, currentMode, runImageAction, runTextAction, sessionSettings])
 
   const editLastUserMessage = useCallback(
     async (content: string, targetMessageId?: string) => {
@@ -1432,7 +1748,35 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         ],
       })
 
-      await runChatAction({
+      const sendId = createPendingSend({
+        content,
+        attachments: editedUser.attachments,
+        kind: currentMode === 'image' ? 'image' : 'chat',
+        originalMode: currentMode,
+        resolvedMode: currentMode,
+        conversationId: currentChat.id,
+        projectId: currentChat.projectId,
+        settings: sessionSettings,
+      }).sendId
+
+      activeSendIdRef.current = sendId
+
+      if (currentMode === 'image') {
+        await runImageAction({
+          action: 'edit-last-user',
+          content,
+          targetMessageId: lastUser.id,
+          mode: currentMode,
+          settings: sessionSettings,
+          conversation: currentChat,
+          optimisticConversation,
+          attachments: editedUser.attachments,
+          sendId,
+        })
+        return
+      }
+
+      await runTextAction({
         action: 'edit-last-user',
         content,
         targetMessageId: lastUser.id,
@@ -1441,9 +1785,10 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         conversation: currentChat,
         optimisticConversation,
         attachments: editedUser.attachments,
+        sendId,
       })
     },
-    [currentChat, currentMode, runChatAction, sessionSettings]
+    [currentChat, currentMode, runImageAction, runTextAction, sessionSettings]
   )
 
   const askAnotherMode = useCallback(
@@ -1470,16 +1815,42 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         messages: [...currentChat.messages, placeholder],
       })
 
-      await runChatAction({
+      const sendId = createPendingSend({
+        content: lastUser.content,
+        kind: mode === 'image' ? 'image' : 'chat',
+        originalMode: currentMode,
+        resolvedMode: mode,
+        conversationId: currentChat.id,
+        projectId: currentChat.projectId,
+        settings: sessionSettings,
+      }).sendId
+
+      activeSendIdRef.current = sendId
+
+      if (mode === 'image') {
+        await runImageAction({
+          action: 'ask-another-mode',
+          mode: currentMode,
+          settings: sessionSettings,
+          conversation: currentChat,
+          optimisticConversation,
+          targetMode: mode,
+          sendId,
+        })
+        return
+      }
+
+      await runTextAction({
         action: 'ask-another-mode',
         mode: currentMode,
         settings: sessionSettings,
         conversation: currentChat,
         optimisticConversation,
         targetMode: mode,
+        sendId,
       })
     },
-    [currentChat, currentMode, runChatAction, sessionSettings]
+    [currentChat, currentMode, runImageAction, runTextAction, sessionSettings]
   )
 
   const updateSessionSettings = useCallback(

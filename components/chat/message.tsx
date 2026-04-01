@@ -50,6 +50,7 @@ import {
   downloadAttachmentImage,
   openAttachmentImageInNewTab,
 } from '@/lib/utils/image-download'
+import { ChatImageMessage } from './chat-image-message'
 
 interface ChatMessageProps {
   message: Message
@@ -73,7 +74,7 @@ function getModeColorClasses(mode: AIMode) {
   )
 }
 
-function renderStreamingState(content: string) {
+function renderStreamingState(content: string, mode: AIMode) {
   if (!content.trim()) {
     return (
       <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -88,7 +89,7 @@ function renderStreamingState(content: string) {
             style={{ animationDelay: '240ms' }}
           />
         </div>
-        <span>Generating response...</span>
+        <span>{mode === 'image' ? 'Generating image...' : 'Generating response...'}</span>
       </div>
     )
   }
@@ -398,42 +399,11 @@ function AttachmentList({
             ) : null}
           </div>
           {attachment.kind === 'image' && attachment.previewUrl ? (
-            <div className="mt-3 overflow-hidden rounded-xl border border-border/60 bg-background/80">
-              <button
-                type="button"
-                className="block w-full cursor-pointer"
-                onClick={() => onOpenImage(attachment)}
-              >
-                <img
-                  src={attachment.previewUrl}
-                  alt={attachment.name}
-                  className="max-h-[360px] w-full object-cover"
-                />
-              </button>
-              <div className="flex items-center justify-between gap-3 px-3 py-2 text-xs text-muted-foreground">
-                <span>{attachment.textContent ? 'Generated visual' : 'Image attachment'}</span>
-                <div className="flex items-center gap-2">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-7 gap-1 rounded-full px-2.5 text-xs text-foreground"
-                    onClick={() => onOpenImage(attachment)}
-                  >
-                    View
-                    <ExternalLink className="size-3.5" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-7 gap-1 rounded-full px-2.5 text-xs text-foreground"
-                    onClick={() => onDownloadImage(attachment)}
-                  >
-                    Download
-                    <Download className="size-3.5" />
-                  </Button>
-                </div>
-              </div>
-            </div>
+            <ChatImageMessage
+              attachment={attachment}
+              onOpen={onOpenImage}
+              onDownload={onDownloadImage}
+            />
           ) : null}
         </div>
       ))}
@@ -675,7 +645,7 @@ export function ChatMessage({
                 </div>
               ) : null}
               {message.status === 'streaming' ? (
-                renderStreamingState(message.content)
+                renderStreamingState(message.content, message.mode)
               ) : (
                 <div className="prose prose-sm prose-invert max-w-none text-foreground">
                   {renderedContent}
@@ -821,7 +791,9 @@ export function ChatMessage({
 
               <span className="ml-1 text-xs text-muted-foreground">
                 {message.status === 'streaming'
-                  ? 'Streaming'
+                  ? message.mode === 'image'
+                    ? 'Generating image'
+                    : 'Streaming'
                   : message.status === 'error'
                     ? 'Needs retry'
                     : formatMessageTime(message.createdAt)}

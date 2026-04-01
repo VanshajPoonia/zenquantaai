@@ -32,6 +32,11 @@ export const runtime = 'nodejs'
 
 const WORKING_NOTES_TITLE = 'Working notes'
 
+function debugChatRoute(stage: string, details?: Record<string, unknown>) {
+  if (process.env.NODE_ENV === 'production') return
+  console.debug(`[zenquanta/chat] ${stage}`, details ?? {})
+}
+
 function buildWorkingNotes(
   action: ChatRequest['action'],
   phase: 'understanding' | 'organizing' | 'drafting' | 'refining' | 'finalizing'
@@ -100,6 +105,17 @@ export async function POST(request: NextRequest) {
   if (!body?.action || !body.mode) {
     return NextResponse.json(
       { error: 'Chat action and mode are required.' },
+      { status: 400 }
+    )
+  }
+
+  if (
+    body.action === 'generate-image' ||
+    body.mode === 'image' ||
+    body.targetMode === 'image'
+  ) {
+    return NextResponse.json(
+      { error: 'Prism requests must be sent through /api/images/generate.' },
       { status: 400 }
     )
   }
@@ -194,6 +210,13 @@ export async function POST(request: NextRequest) {
         auth.user.id,
         prepared.conversation
       )
+
+      debugChatRoute('request-start', {
+        action: payload.action,
+        conversationId: persistedConversation.id,
+        assistantMode: prepared.assistantMode,
+        model: routeConfig.model,
+      })
 
       conversationId = persistedConversation.id
       messageId = prepared.assistantPlaceholder.id
@@ -391,7 +414,19 @@ export async function POST(request: NextRequest) {
               : undefined,
         })
       )
+
+      debugChatRoute('request-success', {
+        action: payload.action,
+        conversationId: savedConversation.id,
+        messageId: savedConversation.messages.at(-1)?.id,
+      })
     } catch (error) {
+      debugChatRoute('request-failure', {
+        action: payload.action,
+        conversationId,
+        messageId,
+        error: toErrorMessage(error),
+      })
       await writer.write(
         encodeStreamEvent({
           type: 'error',

@@ -10,6 +10,7 @@ import {
 } from '@/types'
 import { useChatContext } from '@/lib/chat-context'
 import { getAssistantRecommendation } from '@/lib/router/assistantRecommendation'
+import { debugSendPipeline } from '@/lib/chat/sendMessage'
 
 type SubmissionInput = {
   content: string
@@ -103,6 +104,14 @@ export function usePromptPrecheck(input: {
         })),
       })
 
+      debugSendPipeline('precheck-result', {
+        currentMode,
+        predictedAssistant: recommendation.predictedAssistant,
+        confidence: recommendation.confidence,
+        shouldRecommendSwitch: recommendation.shouldRecommendSwitch,
+        matchedSignals: recommendation.matchedSignals,
+      })
+
       const shouldBypassPrompt =
         suppressedSubmissionKey === submissionKey || !appSettings.assistantRecommendations.enabled
 
@@ -121,6 +130,10 @@ export function usePromptPrecheck(input: {
 
       if (appSettings.assistantRecommendations.autoSwitchOnHighConfidence) {
         setCurrentMode(recommendation.recommendedMode)
+        debugSendPipeline('precheck-autoswitch', {
+          from: currentMode,
+          to: recommendation.recommendedMode,
+        })
         await logRecommendationEvent(
           recommendation,
           'autoswitched',
@@ -135,6 +148,10 @@ export function usePromptPrecheck(input: {
       }
 
       await logRecommendationEvent(recommendation, 'shown', currentChat?.id)
+      debugSendPipeline('precheck-modal-opened', {
+        from: currentMode,
+        to: recommendation.recommendedMode,
+      })
       setPendingRecommendation({
         submission,
         recommendation,
@@ -163,6 +180,10 @@ export function usePromptPrecheck(input: {
     }
 
     setCurrentMode(pendingRecommendation.recommendation.recommendedMode)
+    debugSendPipeline('precheck-switch-accepted', {
+      from: pendingRecommendation.recommendation.currentAssistant,
+      to: pendingRecommendation.recommendation.predictedAssistant,
+    })
     await logRecommendationEvent(
       pendingRecommendation.recommendation,
       'accepted',
@@ -202,6 +223,10 @@ export function usePromptPrecheck(input: {
       'continued',
       currentChat?.id
     )
+    debugSendPipeline('precheck-continued-current', {
+      current: pendingRecommendation.recommendation.currentAssistant,
+      recommended: pendingRecommendation.recommendation.predictedAssistant,
+    })
     const submission = pendingRecommendation.submission
     clearPendingRecommendation()
     await continueWithSubmission(submission)
@@ -226,6 +251,10 @@ export function usePromptPrecheck(input: {
       'cancelled',
       currentChat?.id
     )
+    debugSendPipeline('precheck-cancelled', {
+      current: pendingRecommendation.recommendation.currentAssistant,
+      recommended: pendingRecommendation.recommendation.predictedAssistant,
+    })
     clearPendingRecommendation()
   }, [
     clearPendingRecommendation,
