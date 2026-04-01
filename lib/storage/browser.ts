@@ -13,6 +13,7 @@ const CURRENT_CHAT_ID_KEY = 'zenquanta:current-chat-id:v1'
 const PROJECTS_KEY = 'zenquanta:projects:v1'
 const PROMPTS_KEY = 'zenquanta:prompts:v1'
 const SELECTED_PROJECT_ID_KEY = 'zenquanta:selected-project-id:v1'
+const SIDEBAR_WIDTH_KEY = 'zenquanta:sidebar-width:v1'
 const IMPORT_MARKER_PREFIX = 'zenquanta:supabase-imported:v1:'
 
 function canUseBrowserStorage(): boolean {
@@ -206,6 +207,20 @@ export function writeBrowserSelectedProjectId(projectId: string | null): void {
   }
 
   window.localStorage.setItem(SELECTED_PROJECT_ID_KEY, projectId)
+}
+
+export function readBrowserSidebarWidth(): number | null {
+  if (!canUseBrowserStorage()) return null
+  const raw = window.localStorage.getItem(SIDEBAR_WIDTH_KEY)
+  if (!raw) return null
+
+  const width = Number(raw)
+  return Number.isFinite(width) ? width : null
+}
+
+export function writeBrowserSidebarWidth(width: number): void {
+  if (!canUseBrowserStorage()) return
+  window.localStorage.setItem(SIDEBAR_WIDTH_KEY, String(width))
 }
 
 function importMarkerKey(userId: string): string {
