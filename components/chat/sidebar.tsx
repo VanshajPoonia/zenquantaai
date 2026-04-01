@@ -6,7 +6,7 @@ import {
   FolderPlus,
   FolderTree,
   GripVertical,
-  MoreVertical,
+  MoreHorizontal,
   PanelLeftClose,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -60,6 +60,12 @@ interface SidebarProps {
   onOpenSettings: () => void
 }
 
+function getSidebarChatTitle(title: string): string {
+  const trimmed = title.trim()
+  if (trimmed.length <= 34) return trimmed
+  return `${trimmed.slice(0, 34).trimEnd()}…`
+}
+
 function ChatItem({
   chat,
   isActive,
@@ -82,7 +88,7 @@ function ChatItem({
   return (
     <div
       className={cn(
-        'group relative flex items-center gap-3 rounded-xl px-3 py-2.5 pr-13 cursor-pointer transition-all duration-200',
+        'group relative flex items-start gap-3 rounded-xl px-3 py-2.5 cursor-pointer transition-all duration-200',
         isActive
           ? 'bg-sidebar-accent text-sidebar-accent-foreground'
           : 'hover:bg-sidebar-accent/50 text-sidebar-foreground/70 hover:text-sidebar-foreground'
@@ -100,12 +106,12 @@ function ChatItem({
         <ModeIcon mode={chat.mode} size="sm" />
       </div>
 
-      <div className="flex-1 min-w-0">
+      <div className="min-w-0 flex-1 overflow-hidden">
         <TooltipProvider delayDuration={300}>
           <Tooltip>
             <TooltipTrigger asChild>
               <p className="cursor-pointer truncate text-sm font-medium" title={chat.title}>
-                {chat.title}
+                {getSidebarChatTitle(chat.title)}
               </p>
             </TooltipTrigger>
             <TooltipContent side="top" className="max-w-xs text-xs">
@@ -113,41 +119,36 @@ function ChatItem({
             </TooltipContent>
           </Tooltip>
         </TooltipProvider>
-        <p className="text-xs text-sidebar-foreground/50 truncate">
-          {projectLabel} • {formatConversationDate(chat.updatedAt)}
-        </p>
+        <div className="mt-1 flex items-center gap-2 text-xs text-sidebar-foreground/50">
+          {chat.isPinned && (
+            <span className="inline-flex shrink-0 items-center">
+              <PinIcon className="size-3 text-sidebar-primary" />
+            </span>
+          )}
+          <p className="truncate">
+            {projectLabel} • {formatConversationDate(chat.updatedAt)}
+          </p>
+        </div>
       </div>
 
-      <div className="absolute right-3 top-1/2 flex -translate-y-1/2 items-center gap-1">
-        {chat.isPinned && (
-          <PinIcon className="size-3 text-sidebar-foreground/40 shrink-0" />
-        )}
-
+      <div className="flex h-8 w-10 shrink-0 items-start justify-end pl-2">
         <DropdownMenu>
-          <TooltipProvider delayDuration={300}>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    className={cn(
-                      'size-8 cursor-pointer rounded-lg border-sidebar-border/80 bg-sidebar/95 text-sidebar-foreground/85 shadow-sm transition-all hover:border-sidebar-primary/40 hover:bg-sidebar-accent hover:text-sidebar-foreground',
-                      isActive
-                        ? 'opacity-100'
-                        : 'opacity-95 group-hover:opacity-100 group-focus-within:opacity-100'
-                    )}
-                    onClick={(event) => event.stopPropagation()}
-                  >
-                    <MoreVertical className="size-4" />
-                  </Button>
-                </DropdownMenuTrigger>
-              </TooltipTrigger>
-              <TooltipContent side="top" className="text-xs">
-                Chat actions
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
+          <DropdownMenuTrigger asChild>
+            <Button
+              type="button"
+              variant="outline"
+              size="icon-sm"
+              title="Chat actions"
+              aria-label="Chat actions"
+              className={cn(
+                'size-8 cursor-pointer rounded-lg border-sidebar-border/90 bg-sidebar/95 text-sidebar-foreground/85 shadow-sm transition-all hover:border-sidebar-primary/50 hover:bg-sidebar-accent hover:text-sidebar-foreground',
+                isActive && 'border-sidebar-primary/30 bg-sidebar-accent/70'
+              )}
+              onClick={(event) => event.stopPropagation()}
+            >
+              <MoreHorizontal className="size-4" />
+            </Button>
+          </DropdownMenuTrigger>
           <DropdownMenuContent
             align="end"
             className="w-52 rounded-xl border-sidebar-border/70 bg-sidebar p-1.5 text-sidebar-foreground"
@@ -542,7 +543,7 @@ export function Sidebar({ onOpenSettings }: SidebarProps) {
 
       {/* Chat List */}
       <ScrollArea className="min-h-0 flex-1 px-2">
-        <div className="py-2 space-y-6">
+        <div className="space-y-6 py-2 pr-4">
           <ChatSection
             title="Pinned"
             chats={pinnedChats}
