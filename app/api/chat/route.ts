@@ -14,17 +14,15 @@ import { encodeStreamEvent } from '@/lib/utils/stream'
 import { ChatRequest } from '@/types'
 import {
   buildPromptTextForUsage,
+  clampSessionSettingsMaxTokens,
   completeConversationWithAssistant,
   generateAssistantStream,
   prepareConversationForChat,
   resolveSessionSettings,
 } from '@/lib/ai/chat'
-import { calculateImageUsageEstimate, calculateTextUsageEstimate } from '@/lib/billing/costs'
-import {
-  enforceImageUsage,
-  enforceTextUsage,
-} from '@/lib/billing/enforce'
-import { logImageUsage, logTextUsage } from '@/lib/billing/log-usage'
+import { calculateTextUsageEstimate } from '@/lib/billing/costs'
+import { enforceTextUsage, getEffectiveSubscription } from '@/lib/billing/enforce'
+import { logTextUsage } from '@/lib/billing/log-usage'
 import { getAssistantFamilyFromMode } from '@/lib/config/assistants'
 import { estimatePromptTokens } from '@/lib/utils/cost'
 
@@ -38,32 +36,8 @@ function debugChatRoute(stage: string, details?: Record<string, unknown>) {
 }
 
 function buildWorkingNotes(
-  action: ChatRequest['action'],
   phase: 'understanding' | 'organizing' | 'drafting' | 'refining' | 'finalizing'
 ): string[] {
-  const imageNotes = {
-    understanding: [
-      'Reading the visual request and identifying the main subject.',
-      'Pulling out the style, mood, and composition cues that should shape the image.',
-    ],
-    organizing: [
-      'Translating the prompt into an image-ready direction.',
-      'Locking in the details that matter most before generating the visual.',
-    ],
-    drafting: [
-      'Generating the image response now.',
-      'Keeping the output aligned with the requested look and subject.',
-    ],
-    refining: [
-      'Checking the generated result for clarity and prompt alignment.',
-      'Preparing the image response and usage details for the chat.',
-    ],
-    finalizing: [
-      'Finalizing the image result.',
-      'Wrapping up the response so it is ready to view and download.',
-    ],
-  } as const
-
   const textNotes = {
     understanding: [
       'Reading the request and identifying the outcome you are asking for.',
@@ -87,8 +61,7 @@ function buildWorkingNotes(
     ],
   } as const
 
-  const phaseMap = action === 'generate-image' ? imageNotes : textNotes
-  return [...phaseMap[phase]]
+  return [...textNotes[phase]]
 }
 
 function toErrorMessage(error: unknown): string {
@@ -120,16 +93,31 @@ export async function POST(request: NextRequest) {
     )
   }
 
+  const storedConversation = body.conversationId
+    ? await conversationStore.get(auth.user.id, body.conversationId)
+    : null
+
   const appSettings = await settingsStore.get(auth.user.id)
-  const settings = resolveSessionSettings(
+  const subscription = await subscriptionsStore.ensureForUser(auth.user)
+  const override = await usageLimitOverridesStore.getByUserId(auth.user.id)
+  const effectiveSubscription = getEffectiveSubscription(subscription, override)
+  const resolvedSettings = resolveSessionSettings(
     body.mode,
     body.settings,
     createSessionSettings(body.mode, appSettings.sessionDefaults)
   )
+  const settings = clampSessionSettingsMaxTokens(
+    resolvedSettings,
+    effectiveSubscription.maxOutputTokensPerRequest
+  )
 
-  const storedConversation = body.conversationId
-    ? await conversationStore.get(auth.user.id, body.conversationId)
-    : null
+  if (settings.maxTokens !== resolvedSettings.maxTokens) {
+    debugChatRoute('settings-clamped', {
+      requestedMaxTokens: resolvedSettings.maxTokens,
+      appliedMaxTokens: settings.maxTokens,
+      tier: effectiveSubscription.tier,
+    })
+  }
 
   const payload: ChatRequest = {
     action: body.action,
@@ -152,11 +140,8 @@ export async function POST(request: NextRequest) {
     let messageId: string | undefined
 
     try {
-      const subscription = await subscriptionsStore.ensureForUser(auth.user)
-      const override = await usageLimitOverridesStore.getByUserId(auth.user.id)
       const prepared = await prepareConversationForChat(payload)
-      const billingMode =
-        payload.action === 'generate-image' ? 'image' : prepared.assistantMode
+      const billingMode = prepared.assistantMode
       const routeConfig = resolveModelConfig(
         billingMode,
         payload.settings.modelOverride,
@@ -176,35 +161,13 @@ export async function POST(request: NextRequest) {
         throw new Error('That assistant profile is not available on your current plan.')
       }
 
-      if (payload.action === 'generate-image') {
-        const imageUsage = calculateImageUsageEstimate({
-          tier: subscription.tier,
-          modelConfig: {
-            family: 'prism',
-            tier: subscription.tier,
-            displayName: routeConfig.label,
-            model: routeConfig.model,
-            rawCostPerImageUsd: routeConfig.imageCostPerUnit ?? 0.035,
-            defaultImageCreditsPerImage: 10,
-          },
-          imageCount: 1,
-        })
-
-        enforceImageUsage({
-          subscription,
-          override,
-          imageCount: 1,
-          imageCreditsRequired: imageUsage.creditsConsumed ?? 0,
-        })
-      } else {
-        enforceTextUsage({
-          subscription,
-          override,
-          estimatedPromptTokens: estimatePromptTokens(promptText),
-          requestedMaxOutputTokens: payload.settings.maxTokens,
-          walletType: routeConfig.walletType,
-        })
-      }
+      enforceTextUsage({
+        subscription,
+        override,
+        estimatedPromptTokens: estimatePromptTokens(promptText),
+        requestedMaxOutputTokens: payload.settings.maxTokens,
+        walletType: routeConfig.walletType,
+      })
 
       const persistedConversation = await conversationStore.save(
         auth.user.id,
@@ -241,7 +204,7 @@ export async function POST(request: NextRequest) {
           conversationId: persistedConversation.id,
           messageId: placeholder.id,
           title: WORKING_NOTES_TITLE,
-          notes: buildWorkingNotes(payload.action, 'understanding'),
+          notes: buildWorkingNotes('understanding'),
         })
       )
 
@@ -251,13 +214,21 @@ export async function POST(request: NextRequest) {
           conversationId: persistedConversation.id,
           messageId: placeholder.id,
           title: WORKING_NOTES_TITLE,
-          notes: buildWorkingNotes(payload.action, 'organizing'),
+          notes: buildWorkingNotes('organizing'),
         })
       )
 
       let accumulated = ''
+      let receivedChunkCount = 0
       let lastWorkingPhase: 'understanding' | 'organizing' | 'drafting' | 'refining' | 'finalizing' =
         'organizing'
+
+      debugChatRoute('provider-stream-start', {
+        action: payload.action,
+        conversationId: persistedConversation.id,
+        messageId: placeholder.id,
+        model: routeConfig.model,
+      })
 
       for await (const chunk of generateAssistantStream({
         conversation: prepared.generationConversation,
@@ -267,6 +238,16 @@ export async function POST(request: NextRequest) {
         tier: subscription.tier,
       })) {
         accumulated += chunk
+        receivedChunkCount += 1
+
+        if (receivedChunkCount === 1) {
+          debugChatRoute('provider-first-chunk', {
+            action: payload.action,
+            conversationId: persistedConversation.id,
+            messageId: placeholder.id,
+            model: routeConfig.model,
+          })
+        }
 
         await writer.write(
           encodeStreamEvent({
@@ -292,7 +273,7 @@ export async function POST(request: NextRequest) {
               conversationId: persistedConversation.id,
               messageId: placeholder.id,
               title: WORKING_NOTES_TITLE,
-              notes: buildWorkingNotes(payload.action, phase),
+              notes: buildWorkingNotes(phase),
             })
           )
         }
@@ -304,31 +285,17 @@ export async function POST(request: NextRequest) {
           conversationId: persistedConversation.id,
           messageId: placeholder.id,
           title: WORKING_NOTES_TITLE,
-          notes: buildWorkingNotes(payload.action, 'finalizing'),
+          notes: buildWorkingNotes('finalizing'),
         })
       )
 
-      const usage =
-        payload.action === 'generate-image'
-          ? calculateImageUsageEstimate({
-              tier: subscription.tier,
-              modelConfig: {
-                family: 'prism',
-                tier: subscription.tier,
-                displayName: routeConfig.label,
-                model: routeConfig.model,
-                rawCostPerImageUsd: routeConfig.imageCostPerUnit ?? 0.035,
-                defaultImageCreditsPerImage: 10,
-              },
-              imageCount: 1,
-            })
-          : calculateTextUsageEstimate({
-              tier: subscription.tier,
-              walletType: routeConfig.walletType,
-              model: routeConfig.model,
-              promptText,
-              completionText: accumulated || 'No response returned.',
-            })
+      const usage = calculateTextUsageEstimate({
+        tier: subscription.tier,
+        walletType: routeConfig.walletType,
+        model: routeConfig.model,
+        promptText,
+        completionText: accumulated || 'No response returned.',
+      })
       const clientUsage = {
         ...usage,
         rawCostUsd: 0,
@@ -355,47 +322,19 @@ export async function POST(request: NextRequest) {
         completedConversation
       )
 
-      if (payload.action === 'generate-image') {
-        await logImageUsage({
-          subscription,
-          event: {
-            userId: auth.user.id,
-            conversationId: savedConversation.id,
-            messageId: savedConversation.messages.at(-1)?.id ?? null,
-            assistantFamily: 'prism',
-            model: routeConfig.model,
-            prompt: prepared.userMessage.content,
-            negativePrompt: null,
-            size: null,
-            aspectRatio: null,
-            imageCount: 1,
-            imageCreditsConsumed: usage.creditsConsumed ?? 0,
-            rawCostUsd: usage.rawCostUsd,
-            displayedCostUsd: usage.displayedCostUsd,
-            displayMultiplier: usage.displayMultiplier,
-            marginUsd: usage.marginUsd,
-            outputUrls:
-              savedConversation.messages
-                .at(-1)
-                ?.attachments?.map((attachment) => attachment.previewUrl)
-                .filter((value): value is string => Boolean(value)) ?? [],
-          },
-        })
-      } else {
-        await logTextUsage({
-          subscription,
-          event: {
-            userId: auth.user.id,
-            conversationId: savedConversation.id,
-            messageId: savedConversation.messages.at(-1)?.id ?? null,
-            assistantFamily: getAssistantFamilyFromMode(billingMode),
-            mode: billingMode,
-            model: routeConfig.model,
-            walletType: routeConfig.walletType,
-            usage,
-          },
-        })
-      }
+      await logTextUsage({
+        subscription,
+        event: {
+          userId: auth.user.id,
+          conversationId: savedConversation.id,
+          messageId: savedConversation.messages.at(-1)?.id ?? null,
+          assistantFamily: getAssistantFamilyFromMode(billingMode),
+          mode: billingMode,
+          model: routeConfig.model,
+          walletType: routeConfig.walletType,
+          usage,
+        },
+      })
 
       await writer.write(
         encodeStreamEvent({
@@ -408,12 +347,15 @@ export async function POST(request: NextRequest) {
             usage: savedConversation.messages.at(-1)?.usage,
           },
           usage: savedConversation.messages.at(-1)?.usage,
-          displayedUsageMessage:
-            payload.action === 'generate-image'
-              ? `Used ${usage.creditsConsumed ?? 0} image credits.`
-              : undefined,
         })
       )
+
+      debugChatRoute('done-event-emitted', {
+        action: payload.action,
+        conversationId: savedConversation.id,
+        messageId: savedConversation.messages.at(-1)?.id,
+        receivedChunks: receivedChunkCount,
+      })
 
       debugChatRoute('request-success', {
         action: payload.action,
@@ -436,6 +378,12 @@ export async function POST(request: NextRequest) {
           recoverable: true,
         })
       )
+      debugChatRoute('error-event-emitted', {
+        action: payload.action,
+        conversationId,
+        messageId,
+        error: toErrorMessage(error),
+      })
     } finally {
       await writer.close()
     }

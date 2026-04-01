@@ -61,6 +61,7 @@ interface ChatMessageProps {
   isLastAssistant?: boolean
   isLastUser?: boolean
   isStreamingMessage?: boolean
+  errorOverride?: string
   workingTitle?: string
   workingNotes?: string[]
 }
@@ -484,6 +485,7 @@ export function ChatMessage({
   isLastAssistant,
   isLastUser,
   isStreamingMessage = false,
+  errorOverride,
   workingTitle,
   workingNotes = [],
 }: ChatMessageProps) {
@@ -518,13 +520,21 @@ export function ChatMessage({
 
   const firstImageAttachment = getFirstImageAttachment(message)
 
+  const effectiveStatus =
+    errorOverride && message.status === 'streaming' ? 'error' : message.status
+  const effectiveError = errorOverride ?? message.error
+  const displayContent =
+    effectiveStatus === 'error' && !message.content.trim()
+      ? effectiveError ?? ''
+      : message.content
+
   const renderedContent = useMemo(
-    () => renderContent(message.content),
-    [message.content]
+    () => renderContent(displayContent),
+    [displayContent]
   )
   const previewDocument = useMemo(
-    () => getWebPreviewDocument(message.content),
-    [message.content]
+    () => getWebPreviewDocument(displayContent),
+    [displayContent]
   )
 
   if (message.role === 'user') {
@@ -644,8 +654,8 @@ export function ChatMessage({
                   {message.branchLabel}
                 </div>
               ) : null}
-              {message.status === 'streaming' ? (
-                renderStreamingState(message.content, message.mode)
+              {effectiveStatus === 'streaming' ? (
+                renderStreamingState(displayContent, message.mode)
               ) : (
                 <div className="prose prose-sm prose-invert max-w-none text-foreground">
                   {renderedContent}
@@ -669,7 +679,7 @@ export function ChatMessage({
             <div
               className={cn(
                 'flex flex-wrap items-center gap-1 mt-2 transition-opacity',
-                isLastAssistant || message.status === 'error'
+                isLastAssistant || effectiveStatus === 'error'
                   ? 'opacity-100'
                   : 'opacity-0 group-hover:opacity-100'
               )}
@@ -771,7 +781,7 @@ export function ChatMessage({
                 </DropdownMenu>
               ) : null}
 
-              {(isLastAssistant || message.status === 'error') && (
+              {(isLastAssistant || effectiveStatus === 'error') && (
                 <TooltipProvider delayDuration={300}>
                   <Tooltip>
                     <TooltipTrigger asChild>
@@ -790,18 +800,18 @@ export function ChatMessage({
               )}
 
               <span className="ml-1 text-xs text-muted-foreground">
-                {message.status === 'streaming'
+                {effectiveStatus === 'streaming'
                   ? message.mode === 'image'
                     ? 'Generating image'
                     : 'Streaming'
-                  : message.status === 'error'
+                  : effectiveStatus === 'error'
                     ? 'Needs retry'
                     : formatMessageTime(message.createdAt)}
               </span>
             </div>
 
-            {message.error && (
-              <p className="mt-2 text-xs text-destructive">{message.error}</p>
+            {effectiveError && (
+              <p className="mt-2 text-xs text-destructive">{effectiveError}</p>
             )}
           </div>
         </div>

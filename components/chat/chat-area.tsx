@@ -118,6 +118,12 @@ export function ChatArea() {
                     ? streamingState.workingNotes
                     : undefined
                 }
+                errorOverride={
+                  message.id === streamingState.messageId &&
+                  streamingState.status === 'error'
+                    ? streamingState.error
+                    : undefined
+                }
                 isLastAssistant={message.id === lastAssistantId}
                 isLastUser={message.id === lastUserId}
                 onRegenerate={regenerateLastResponse}

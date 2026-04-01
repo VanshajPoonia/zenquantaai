@@ -85,22 +85,17 @@ async function generateImageAttachment(
     return createGeneratedImageAttachment(prompt, mode)
   }
 
-  try {
-    const image = await createOpenRouterImage({
-      model: IMAGE_GENERATION_CONFIG.model,
-      prompt: buildImageGenerationPrompt(prompt, mode),
-      systemPrompt: `${buildSystemPrompt(
-        mode,
-        settings.systemPreset
-      )}\n\nGenerate a single premium image that matches the user's request with strong composition, clean subject focus, and minimal companion text.`,
-      modalities: [...IMAGE_GENERATION_CONFIG.modalities],
-    })
+  const image = await createOpenRouterImage({
+    model: IMAGE_GENERATION_CONFIG.model,
+    prompt: buildImageGenerationPrompt(prompt, mode),
+    systemPrompt: `${buildSystemPrompt(
+      mode,
+      settings.systemPreset
+    )}\n\nGenerate a single premium image that matches the user's request with strong composition, clean subject focus, and minimal companion text.`,
+    modalities: [...IMAGE_GENERATION_CONFIG.modalities],
+  })
 
-    return createGeneratedImageAttachmentFromUrl(prompt, image.imageUrl)
-  } catch (error) {
-    console.error('Falling back to local generated image placeholder.', error)
-    return createGeneratedImageAttachment(prompt, mode)
-  }
+  return createGeneratedImageAttachmentFromUrl(prompt, image.imageUrl)
 }
 
 export async function generateImageFromPrompt(input: {
@@ -122,28 +117,20 @@ export async function generateImageFromPrompt(input: {
     }
   }
 
-  try {
-    const image = await createOpenRouterImage({
-      model,
-      prompt: buildImageGenerationPrompt(input.prompt, input.mode),
-      systemPrompt: `${buildSystemPrompt(
-        input.mode,
-        input.settings.systemPreset
-      )}\n\nGenerate a single premium image that matches the user's request with strong composition, clean subject focus, and minimal companion text.`,
-      modalities: [...IMAGE_GENERATION_CONFIG.modalities],
-    })
+  const image = await createOpenRouterImage({
+    model,
+    prompt: buildImageGenerationPrompt(input.prompt, input.mode),
+    systemPrompt: `${buildSystemPrompt(
+      input.mode,
+      input.settings.systemPreset
+    )}\n\nGenerate a single premium image that matches the user's request with strong composition, clean subject focus, and minimal companion text.`,
+    modalities: [...IMAGE_GENERATION_CONFIG.modalities],
+  })
 
-    return {
-      attachment: createGeneratedImageAttachmentFromUrl(input.prompt, image.imageUrl),
-      content: image.content,
-      imageUrl: image.imageUrl,
-    }
-  } catch (error) {
-    console.error('Falling back to local generated image placeholder.', error)
-    return {
-      attachment: createGeneratedImageAttachment(input.prompt, input.mode),
-      content: "I've created a visual concept based on your prompt.",
-    }
+  return {
+    attachment: createGeneratedImageAttachmentFromUrl(input.prompt, image.imageUrl),
+    content: image.content,
+    imageUrl: image.imageUrl,
   }
 }
 
@@ -301,6 +288,10 @@ export async function* generateAssistantStream(input: {
   action?: ChatAction
   tier?: SubscriptionTier
 }): AsyncIterable<string> {
+  if (input.mode === 'image' || input.action === 'generate-image') {
+    throw new Error('Image generation must use the dedicated image route.')
+  }
+
   const config = resolveModelConfig(
     input.mode,
     input.settings.modelOverride,
@@ -310,16 +301,6 @@ export async function* generateAssistantStream(input: {
     [...input.conversation.messages]
       .reverse()
       .find((message) => message.role === 'user')?.content ?? 'the user request'
-
-  if (input.action === 'generate-image') {
-    for await (const chunk of streamText(
-      'Creating a polished visual based on your prompt...',
-      20
-    )) {
-      yield chunk
-    }
-    return
-  }
 
   if (!hasOpenRouterConfig()) {
     for await (const chunk of streamText(buildMockResponse(input.mode, latestPrompt), 16)) {
@@ -712,16 +693,12 @@ export async function completeConversationWithAssistant(
     } | null
   }
 ): Promise<Conversation> {
-  const generatedImageResult =
-    options?.generatedImageResultOverride ??
-    (options?.action === 'generate-image' && options.userMessage
-      ? await generateImageFromPrompt({
-          prompt: options.userMessage.content,
-          mode: generationMode,
-          settings: conversation.sessionSettings,
-          model: options.modelOverride,
-        })
-      : null)
+  const generatedImageResult = options?.generatedImageResultOverride ?? null
+
+  if (options?.action === 'generate-image' && options.userMessage && !generatedImageResult) {
+    throw new Error('Image replies must provide a finalized generated image result.')
+  }
+
   const generatedAttachments = generatedImageResult
     ? [generatedImageResult.attachment]
     : []
@@ -839,5 +816,24 @@ export function resolveSessionSettings(
     webSearch: provided?.webSearch ?? fallback.webSearch,
     memory: provided?.memory ?? fallback.memory,
     fileContext: provided?.fileContext ?? fallback.fileContext,
+  }
+}
+
+export function clampSessionSettingsMaxTokens(
+  settings: SessionSettings,
+  maxOutputTokensPerRequest: number
+): SessionSettings {
+  const boundedMaxTokens = Math.max(
+    256,
+    Math.min(settings.maxTokens, maxOutputTokensPerRequest)
+  )
+
+  if (boundedMaxTokens === settings.maxTokens) {
+    return settings
+  }
+
+  return {
+    ...settings,
+    maxTokens: boundedMaxTokens,
   }
 }

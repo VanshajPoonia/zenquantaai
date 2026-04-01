@@ -70,6 +70,7 @@ import {
   debugSendPipeline,
   resolveSend,
 } from '@/lib/chat/sendMessage'
+import { useSendMessage } from '@/hooks/useSendMessage'
 import {
   conversationToJson,
   conversationToMarkdown,
@@ -158,6 +159,9 @@ interface ChatContextType {
   promptLibrary: PromptLibraryItem[]
   savePrompt: (input: SavePromptInput) => Promise<PromptLibraryItem | null>
   deletePrompt: (promptId: string) => Promise<void>
+  beginPromptPrecheck: () => void
+  awaitRecommendationDecision: () => void
+  clearPromptPrecheck: () => void
 }
 
 const ChatContext = createContext<ChatContextType | undefined>(undefined)
@@ -939,6 +943,23 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     [applyConversationPatch]
   )
 
+  const markSendAsSuperseded = useCallback(
+    (conversationId: string | undefined, messageId: string | undefined) => {
+      if (!conversationId || !messageId) return
+
+      debugSendPipeline('stale-response-ignored', {
+        conversationId,
+        messageId,
+      })
+      applyLocalError(
+        conversationId,
+        messageId,
+        'This response was superseded by a newer request.'
+      )
+    },
+    [applyLocalError]
+  )
+
   const finalizeSendLifecycle = useCallback(
     (sendId?: string, nextStatus: SendLifecycleStatus = 'idle') => {
       if (sendId && activeSendIdRef.current !== sendId) {
@@ -950,6 +971,28 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     },
     []
   )
+
+  const beginPromptPrecheck = useCallback(() => {
+    setSendLifecycleStatus((current) =>
+      current === 'idle' ? 'prechecking' : current
+    )
+  }, [])
+
+  const awaitRecommendationDecision = useCallback(() => {
+    setSendLifecycleStatus((current) =>
+      current === 'prechecking' || current === 'idle'
+        ? 'awaiting_recommendation'
+        : current
+    )
+  }, [])
+
+  const clearPromptPrecheck = useCallback(() => {
+    setSendLifecycleStatus((current) =>
+      current === 'prechecking' || current === 'awaiting_recommendation'
+        ? 'idle'
+        : current
+    )
+  }, [])
 
   const stopStreaming = useCallback(() => {
     streamAbortRef.current?.abort()
@@ -1096,6 +1139,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
       const controller = new AbortController()
       streamAbortRef.current = controller
+      let terminalEvent: 'done' | 'error' | null = null
 
       try {
         const response = await fetch('/api/chat', {
@@ -1190,11 +1234,13 @@ export function ChatProvider({ children }: { children: ReactNode }) {
               break
             }
             case 'done': {
+              terminalEvent = 'done'
               upsertConversation(event.conversation)
               setStreamingState({ status: 'idle' })
               break
             }
             case 'error': {
+              terminalEvent = 'error'
               applyLocalError(event.conversationId, event.messageId, event.error)
               setStreamingState({
                 status: 'error',
@@ -1206,6 +1252,23 @@ export function ChatProvider({ children }: { children: ReactNode }) {
             }
           }
         })
+
+        if (payload.sendId && activeSendIdRef.current !== payload.sendId) {
+          markSendAsSuperseded(
+            payload.optimisticConversation.id,
+            payload.optimisticConversation.messages.at(-1)?.id
+          )
+          return
+        }
+
+        if (terminalEvent === 'error') {
+          finalizeSendLifecycle(payload.sendId, 'failed')
+          return
+        }
+
+        if (terminalEvent !== 'done') {
+          throw new Error('The response ended before completion.')
+        }
 
         debugSendPipeline('request-success', {
           action: payload.action,
@@ -1257,6 +1320,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       applyLocalError,
       finalizeSendLifecycle,
       handleUnauthorized,
+      markSendAsSuperseded,
       upsertConversation,
     ]
   )
@@ -1338,7 +1402,15 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
         const data = (await response.json()) as ImageGenerateResponse
 
+        if (!data?.conversation || !data?.message) {
+          throw new Error('Image response was incomplete.')
+        }
+
         if (payload.sendId && activeSendIdRef.current !== payload.sendId) {
+          markSendAsSuperseded(
+            payload.optimisticConversation.id,
+            payload.optimisticConversation.messages.at(-1)?.id
+          )
           return
         }
 
@@ -1399,6 +1471,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       applyLocalError,
       finalizeSendLifecycle,
       handleUnauthorized,
+      markSendAsSuperseded,
       upsertConversation,
     ]
   )
@@ -1435,72 +1508,71 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         mode: resolvedSend.resolvedMode,
         transport: resolvedSend.transport,
       })
-
-      const conversation = await ensureConversationForMessage({
-        ...options,
-        mode: resolvedSend.resolvedMode,
-      })
-      const userMessage = createMessage({
-        role: 'user',
-        content,
-        mode: resolvedSend.resolvedMode,
-        attachments,
-      })
-      const placeholder = createAssistantPlaceholder({
-        mode: resolvedSend.resolvedMode,
-        settings: options.settings,
-        parentUserMessageId: userMessage.id,
-      })
-
-      const optimisticConversation = updateConversationSnapshot(conversation, {
-        mode: resolvedSend.resolvedMode,
-        sessionSettings: options.settings,
-        messages: [...conversation.messages, userMessage, placeholder],
-      })
-
-      upsertConversation(optimisticConversation)
-      setStreamingState({
-        status: 'streaming',
-        conversationId: optimisticConversation.id,
-        messageId: placeholder.id,
-      })
-
-      let uploadedAttachments: Attachment[]
+      let optimisticConversationId: string | undefined
+      let placeholderId: string | undefined
 
       try {
-        uploadedAttachments = await uploadAttachments(attachments)
-      } catch (error) {
-        const message =
-          error instanceof Error
-            ? error.message
-            : 'Unable to prepare attachments for this message.'
+        const conversation = await ensureConversationForMessage({
+          ...options,
+          mode: resolvedSend.resolvedMode,
+        })
+        const userMessage = createMessage({
+          role: 'user',
+          content,
+          mode: resolvedSend.resolvedMode,
+          attachments,
+        })
+        const placeholder = createAssistantPlaceholder({
+          mode: resolvedSend.resolvedMode,
+          settings: options.settings,
+          parentUserMessageId: userMessage.id,
+        })
+        placeholderId = placeholder.id
 
-        applyLocalError(optimisticConversation.id, placeholder.id, message)
+        const optimisticConversation = updateConversationSnapshot(conversation, {
+          mode: resolvedSend.resolvedMode,
+          sessionSettings: options.settings,
+          messages: [...conversation.messages, userMessage, placeholder],
+        })
+        optimisticConversationId = optimisticConversation.id
+
+        upsertConversation(optimisticConversation)
         setStreamingState({
-          status: 'error',
+          status: 'streaming',
           conversationId: optimisticConversation.id,
           messageId: placeholder.id,
-          error: message,
         })
-        finalizeSendLifecycle(resolvedSend.sendId, 'failed')
-        return
-      }
 
-      const preparedOptimisticConversation = updateConversationSnapshot(conversation, {
-        mode: resolvedSend.resolvedMode,
-        sessionSettings: options.settings,
-        messages: [
-          ...conversation.messages,
-          {
-            ...userMessage,
+        const uploadedAttachments = await uploadAttachments(attachments)
+
+        const preparedOptimisticConversation = updateConversationSnapshot(conversation, {
+          mode: resolvedSend.resolvedMode,
+          sessionSettings: options.settings,
+          messages: [
+            ...conversation.messages,
+            {
+              ...userMessage,
+              attachments: uploadedAttachments,
+            },
+            placeholder,
+          ],
+        })
+
+        if (resolvedSend.transport === 'image') {
+          await runImageAction({
+            action: 'send',
+            content,
+            mode: resolvedSend.resolvedMode,
+            settings: options.settings,
+            conversation,
+            optimisticConversation: preparedOptimisticConversation,
             attachments: uploadedAttachments,
-          },
-          placeholder,
-        ],
-      })
+            sendId: resolvedSend.sendId,
+          })
+          return
+        }
 
-      if (resolvedSend.transport === 'image') {
-        await runImageAction({
+        await runTextAction({
           action: 'send',
           content,
           mode: resolvedSend.resolvedMode,
@@ -1510,19 +1582,37 @@ export function ChatProvider({ children }: { children: ReactNode }) {
           attachments: uploadedAttachments,
           sendId: resolvedSend.sendId,
         })
-        return
-      }
+      } catch (error) {
+        const message =
+          error instanceof Error
+            ? error.message
+            : 'Something went wrong while sending your message.'
 
-      await runTextAction({
-        action: 'send',
-        content,
-        mode: resolvedSend.resolvedMode,
-        settings: options.settings,
-        conversation,
-        optimisticConversation: preparedOptimisticConversation,
-        attachments: uploadedAttachments,
-        sendId: resolvedSend.sendId,
-      })
+        debugSendPipeline('execute-send-failure', {
+          sendId: resolvedSend.sendId,
+          mode: resolvedSend.resolvedMode,
+          transport: resolvedSend.transport,
+          error: message,
+        })
+
+        if (optimisticConversationId && placeholderId) {
+          applyLocalError(optimisticConversationId, placeholderId, message)
+          setStreamingState({
+            status: 'error',
+            conversationId: optimisticConversationId,
+            messageId: placeholderId,
+            error: message,
+          })
+        } else {
+          setStreamingState({
+            status: 'error',
+            error: message,
+          })
+        }
+
+        finalizeSendLifecycle(resolvedSend.sendId, 'failed')
+        throw (error instanceof Error ? error : new Error(message))
+      }
     },
     [
       applyLocalError,
@@ -1535,58 +1625,30 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     ]
   )
 
-  const sendMessage = useCallback(
-    async ({
-      content,
-      attachments = [],
-      kind = 'chat',
-      modeOverride,
-    }: SendMessageInput) => {
-      const resolvedMode = modeOverride ?? currentMode
-      const resolvedSettings = normalizeModeSessionSettings(
-        resolvedMode,
-        currentChat?.sessionSettings ?? draftSessionSettings
-      )
-      const projectId =
-        selectedProjectId === 'all' ? DEFAULT_PROJECT_ID : selectedProjectId
-
-      if (streamAbortRef.current || streamingState.status === 'streaming') {
-        enqueuePrompt({
-          id: crypto.randomUUID(),
-          input: {
-            content,
-            attachments,
-            kind,
-          },
-          mode: resolvedMode,
-          settings: resolvedSettings,
-          projectId,
-          conversationId: currentChat?.id,
-        })
-        return
-      }
-
-      await executeSendMessage(
-        { content, attachments, kind },
-        {
-          conversationId: currentChat?.id,
-          mode: resolvedMode,
-          settings: resolvedSettings,
-          projectId,
-        }
-      )
-    },
-    [
-      currentChat?.id,
-      currentChat?.sessionSettings,
-      currentMode,
-      draftSessionSettings,
-      enqueuePrompt,
-      executeSendMessage,
-      selectedProjectId,
-      streamingState.status,
-    ]
+  const hasActiveSend = useCallback(
+    () =>
+      Boolean(
+        activeSendIdRef.current ||
+          streamAbortRef.current ||
+          isProcessingQueueRef.current ||
+          sendLifecycleStatus === 'dispatching_text' ||
+          sendLifecycleStatus === 'dispatching_image' ||
+          sendLifecycleStatus === 'streaming_text'
+      ),
+    [sendLifecycleStatus]
   )
+
+  const { sendMessage } = useSendMessage({
+    currentMode,
+    currentChatId: currentChat?.id,
+    currentChatSessionSettings: currentChat?.sessionSettings ?? null,
+    draftSessionSettings,
+    selectedProjectId,
+    normalizeModeSessionSettings,
+    hasActiveSend,
+    enqueuePrompt,
+    executeSendMessage,
+  })
 
   const regenerateLastResponse = useCallback(async () => {
     if (!currentChat) return
@@ -1918,6 +1980,14 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     isProcessingQueueRef.current = true
     setQueuedPrompts((previous) => previous.slice(1))
 
+    debugSendPipeline('queue-restored', {
+      queueId: nextPrompt.id,
+      mode: nextPrompt.mode,
+      kind: nextPrompt.input.kind,
+      modeOverride: nextPrompt.input.modeOverride,
+      conversationId: nextPrompt.conversationId,
+    })
+
     void executeSendMessage(nextPrompt.input, {
       conversationId: nextPrompt.conversationId,
       mode: nextPrompt.mode,
@@ -1981,13 +2051,19 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       promptLibrary,
       savePrompt,
       deletePrompt,
+      beginPromptPrecheck,
+      awaitRecommendationDecision,
+      clearPromptPrecheck,
     }),
     [
       appSettings,
       askAnotherMode,
       authError,
       authState,
+      awaitRecommendationDecision,
+      beginPromptPrecheck,
       chats,
+      clearPromptPrecheck,
       conversations,
       createNewChat,
       createProject,

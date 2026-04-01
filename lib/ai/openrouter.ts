@@ -1,6 +1,10 @@
 import { MessageRole } from '@/types'
 import { OPENROUTER_DEFAULT_BASE_URL } from '@/lib/config'
 
+const OPENROUTER_REQUEST_TIMEOUT_MS = 45_000
+const OPENROUTER_STREAM_IDLE_TIMEOUT_MS = 30_000
+const OPENROUTER_TIMEOUT_MESSAGE = 'The model request timed out. Please try again.'
+
 type OpenRouterMessage = {
   role: MessageRole
   content: string
@@ -76,6 +80,44 @@ function extractContent(content: OpenRouterContent): string {
   return ''
 }
 
+function debugOpenRouter(stage: string, details?: Record<string, unknown>) {
+  if (process.env.NODE_ENV === 'production') return
+  console.debug(`[zenquanta/openrouter] ${stage}`, details ?? {})
+}
+
+function toTimeoutError(stage: string): Error {
+  return new Error(`${OPENROUTER_TIMEOUT_MESSAGE} (${stage})`)
+}
+
+function createTimeoutSignal(timeoutMs: number, stage: string) {
+  const controller = new AbortController()
+  let timeoutId = setTimeout(() => {
+    controller.abort(toTimeoutError(stage))
+  }, timeoutMs)
+
+  return {
+    signal: controller.signal,
+    cancel: () => clearTimeout(timeoutId),
+    reset: (nextTimeoutMs = timeoutMs, nextStage = stage) => {
+      clearTimeout(timeoutId)
+      timeoutId = setTimeout(() => {
+        controller.abort(toTimeoutError(nextStage))
+      }, nextTimeoutMs)
+    },
+  }
+}
+
+function normalizeAbortError(error: unknown): never {
+  if (error instanceof Error) {
+    const name = (error as Error & { name?: string }).name
+    if (name === 'AbortError' || error.message.includes(OPENROUTER_TIMEOUT_MESSAGE)) {
+      throw new Error(OPENROUTER_TIMEOUT_MESSAGE)
+    }
+  }
+
+  throw error
+}
+
 export function getOpenRouterRuntimeConfig() {
   return {
     apiKey: process.env.OPENROUTER_API_KEY?.trim() ?? '',
@@ -101,32 +143,68 @@ export const openRouterClient = {
           throw new Error('OPENROUTER_API_KEY is not configured.')
         }
 
-        const response = await fetch(
-          `${runtimeConfig.baseUrl}/chat/completions`,
-          {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${runtimeConfig.apiKey}`,
-              'HTTP-Referer': 'http://localhost:3000',
-              'X-Title': 'Zenquanta AI',
-            },
-            body: JSON.stringify(params),
-          }
+        const timeout = createTimeoutSignal(
+          OPENROUTER_REQUEST_TIMEOUT_MS,
+          'chat-completion'
         )
 
-        const data = (await response.json().catch(() => null)) as
-          | OpenRouterCreateChatCompletionResponse
-          | null
+        try {
+          debugOpenRouter('request-start', {
+            route: 'chat/completions',
+            model: params.model,
+            stream: params.stream ?? false,
+          })
 
-        if (!response.ok) {
-          throw new Error(
-            data?.error?.message ??
-              `OpenRouter request failed with status ${response.status}.`
+          const response = await fetch(
+            `${runtimeConfig.baseUrl}/chat/completions`,
+            {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${runtimeConfig.apiKey}`,
+                'HTTP-Referer': 'http://localhost:3000',
+                'X-Title': 'Zenquanta AI',
+              },
+              body: JSON.stringify(params),
+              signal: timeout.signal,
+            }
           )
-        }
 
-        return data ?? {}
+          const data = (await response.json().catch(() => null)) as
+            | OpenRouterCreateChatCompletionResponse
+            | null
+
+          if (!response.ok) {
+            throw new Error(
+              data?.error?.message ??
+                `OpenRouter request failed with status ${response.status}.`
+            )
+          }
+
+          debugOpenRouter('request-success', {
+            route: 'chat/completions',
+            model: params.model,
+            stream: params.stream ?? false,
+          })
+
+          return data ?? {}
+        } catch (error) {
+          if (
+            error instanceof Error &&
+            (error.name === 'AbortError' ||
+              error.message.includes(OPENROUTER_TIMEOUT_MESSAGE))
+          ) {
+            debugOpenRouter('request-timeout', {
+              route: 'chat/completions',
+              model: params.model,
+              stream: params.stream ?? false,
+            })
+          }
+
+          normalizeAbortError(error)
+        } finally {
+          timeout.cancel()
+        }
       },
     },
   },
@@ -137,26 +215,58 @@ async function* parseSseLines(stream: ReadableStream<Uint8Array>) {
   const decoder = new TextDecoder()
   let buffer = ''
 
+  const extractSsePayload = (rawEvent: string): string | null => {
+    if (!rawEvent.trim()) return null
+
+    const dataLines = rawEvent
+      .split('\n')
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0 && !line.startsWith(':'))
+      .flatMap((line) => {
+        if (!line.startsWith('data:')) return []
+        return [line.slice(5).trimStart()]
+      })
+
+    if (dataLines.length === 0) return null
+
+    const payload = dataLines.join('\n').trim()
+    return payload.length > 0 ? payload : null
+  }
+
   while (true) {
     const { done, value } = await reader.read()
-    if (done) break
+    if (done) {
+      buffer += decoder.decode()
+      break
+    }
 
-    buffer += decoder.decode(value, { stream: true })
-    const chunks = buffer.split('\n\n')
-    buffer = chunks.pop() ?? ''
+    buffer += decoder
+      .decode(value, { stream: true })
+      .replace(/\r\n/g, '\n')
+      .replace(/\r/g, '\n')
 
-    for (const chunk of chunks) {
-      const dataLines = chunk
-        .split('\n')
-        .map((line) => line.trim())
-        .filter((line) => line.startsWith('data: '))
+    let boundaryIndex = buffer.indexOf('\n\n')
 
-      for (const line of dataLines) {
-        const payload = line.slice(6).trim()
-        if (!payload || payload === '[DONE]') continue
+    while (boundaryIndex !== -1) {
+      const rawEvent = buffer.slice(0, boundaryIndex)
+      buffer = buffer.slice(boundaryIndex + 2)
+
+      const payload = extractSsePayload(rawEvent)
+      if (payload === '[DONE]') {
+        return
+      }
+
+      if (payload) {
         yield payload
       }
+
+      boundaryIndex = buffer.indexOf('\n\n')
     }
+  }
+
+  const trailingPayload = extractSsePayload(buffer)
+  if (trailingPayload && trailingPayload !== '[DONE]') {
+    yield trailingPayload
   }
 }
 
@@ -204,47 +314,110 @@ export async function* streamOpenRouterTextResponse(input: {
     throw new Error('OPENROUTER_API_KEY is not configured.')
   }
 
-  const response = await fetch(`${runtimeConfig.baseUrl}/chat/completions`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${runtimeConfig.apiKey}`,
-      'HTTP-Referer': 'http://localhost:3000',
-      'X-Title': 'Zenquanta AI',
-    },
-    body: JSON.stringify({
+  const timeout = createTimeoutSignal(
+    OPENROUTER_REQUEST_TIMEOUT_MS,
+    'streaming-request'
+  )
+
+  try {
+    debugOpenRouter('stream-start', {
+      route: 'chat/completions',
       model: input.model,
-      messages: input.messages,
-      ...(typeof input.temperature === 'number'
-        ? { temperature: input.temperature }
-        : {}),
-      ...(typeof input.maxTokens === 'number'
-        ? { max_tokens: input.maxTokens }
-        : {}),
-      ...(typeof input.topP === 'number'
-        ? { top_p: input.topP }
-        : {}),
-      stream: true,
-    }),
-  })
+    })
 
-  if (!response.ok || !response.body) {
-    const data = (await response.json().catch(() => null)) as
-      | OpenRouterCreateChatCompletionResponse
-      | null
+    const response = await fetch(`${runtimeConfig.baseUrl}/chat/completions`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${runtimeConfig.apiKey}`,
+        'HTTP-Referer': 'http://localhost:3000',
+        'X-Title': 'Zenquanta AI',
+      },
+      body: JSON.stringify({
+        model: input.model,
+        messages: input.messages,
+        ...(typeof input.temperature === 'number'
+          ? { temperature: input.temperature }
+          : {}),
+        ...(typeof input.maxTokens === 'number'
+          ? { max_tokens: input.maxTokens }
+          : {}),
+        ...(typeof input.topP === 'number'
+          ? { top_p: input.topP }
+          : {}),
+        stream: true,
+      }),
+      signal: timeout.signal,
+    })
 
-    throw new Error(
-      data?.error?.message ??
-        `OpenRouter streaming request failed with status ${response.status}.`
-    )
-  }
+    if (!response.ok || !response.body) {
+      const data = (await response.json().catch(() => null)) as
+        | OpenRouterCreateChatCompletionResponse
+        | null
 
-  for await (const payload of parseSseLines(response.body)) {
-    const parsed = JSON.parse(payload) as OpenRouterStreamChunk
-    const content = extractContent(parsed.choices?.[0]?.delta?.content)
-    if (content) {
-      yield content
+      throw new Error(
+        data?.error?.message ??
+          `OpenRouter streaming request failed with status ${response.status}.`
+      )
     }
+
+    let receivedChunkCount = 0
+
+    try {
+      for await (const payload of parseSseLines(response.body)) {
+        timeout.reset(OPENROUTER_STREAM_IDLE_TIMEOUT_MS, 'stream-idle')
+        let parsed: OpenRouterStreamChunk
+
+        try {
+          parsed = JSON.parse(payload) as OpenRouterStreamChunk
+        } catch (error) {
+          debugOpenRouter('stream-parse-failure', {
+            route: 'chat/completions',
+            model: input.model,
+            payload,
+            error: error instanceof Error ? error.message : 'Unknown parse error',
+          })
+          throw new Error('The model stream returned an unreadable response.')
+        }
+
+        const content = extractContent(parsed.choices?.[0]?.delta?.content)
+        if (content) {
+          receivedChunkCount += 1
+          if (receivedChunkCount === 1) {
+            debugOpenRouter('stream-first-chunk', {
+              route: 'chat/completions',
+              model: input.model,
+            })
+          }
+          yield content
+        }
+      }
+    } finally {
+      timeout.cancel()
+    }
+
+    debugOpenRouter('stream-success', {
+      route: 'chat/completions',
+      model: input.model,
+      receivedChunks: receivedChunkCount,
+    })
+  } catch (error) {
+    if (
+      error instanceof Error &&
+      (error.name === 'AbortError' ||
+        error.message.includes(OPENROUTER_TIMEOUT_MESSAGE) ||
+        error.message.includes('stream-idle'))
+    ) {
+      debugOpenRouter('stream-timeout', {
+        route: 'chat/completions',
+        model: input.model,
+      })
+      throw new Error(OPENROUTER_TIMEOUT_MESSAGE)
+    }
+
+    throw error
+  } finally {
+    timeout.cancel()
   }
 }
 
@@ -270,43 +443,77 @@ export async function createOpenRouterImage(input: {
     { role: 'user', content: input.prompt },
   ]
 
-  const response = await fetch(`${runtimeConfig.baseUrl}/chat/completions`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${runtimeConfig.apiKey}`,
-      'HTTP-Referer': 'http://localhost:3000',
-      'X-Title': 'Zenquanta AI',
-    },
-    body: JSON.stringify({
+  const timeout = createTimeoutSignal(
+    OPENROUTER_REQUEST_TIMEOUT_MS,
+    'image-generation'
+  )
+
+  try {
+    debugOpenRouter('image-start', {
+      route: 'chat/completions',
       model: input.model,
-      messages,
-      modalities: input.modalities ?? ['image'],
-    }),
-  })
+    })
 
-  const data = (await response.json().catch(() => null)) as
-    | OpenRouterCreateChatCompletionResponse
-    | null
+    const response = await fetch(`${runtimeConfig.baseUrl}/chat/completions`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${runtimeConfig.apiKey}`,
+        'HTTP-Referer': 'http://localhost:3000',
+        'X-Title': 'Zenquanta AI',
+      },
+      body: JSON.stringify({
+        model: input.model,
+        messages,
+        modalities: input.modalities ?? ['image'],
+      }),
+      signal: timeout.signal,
+    })
 
-  if (!response.ok) {
-    throw new Error(
-      data?.error?.message ??
-        `OpenRouter image request failed with status ${response.status}.`
-    )
-  }
+    const data = (await response.json().catch(() => null)) as
+      | OpenRouterCreateChatCompletionResponse
+      | null
 
-  const message = data?.choices?.[0]?.message
-  const imageUrl = message?.images?.[0]?.image_url?.url?.trim()
+    if (!response.ok) {
+      throw new Error(
+        data?.error?.message ??
+          `OpenRouter image request failed with status ${response.status}.`
+      )
+    }
 
-  if (!imageUrl) {
-    throw new Error('No image was returned from the image generation request.')
-  }
+    const message = data?.choices?.[0]?.message
+    const imageUrl = message?.images?.[0]?.image_url?.url?.trim()
 
-  return {
-    content:
-      extractContent(message?.content) ||
-      "I've generated an image based on your prompt.",
-    imageUrl,
+    if (!imageUrl) {
+      throw new Error('No image was returned from the image generation request.')
+    }
+
+    debugOpenRouter('image-success', {
+      route: 'chat/completions',
+      model: input.model,
+    })
+
+    return {
+      content:
+        extractContent(message?.content) ||
+        "I've generated an image based on your prompt.",
+      imageUrl,
+    }
+  } catch (error) {
+    if (
+      error instanceof Error &&
+      (error.name === 'AbortError' ||
+        error.message.includes(OPENROUTER_TIMEOUT_MESSAGE))
+    ) {
+      debugOpenRouter('image-timeout', {
+        route: 'chat/completions',
+        model: input.model,
+      })
+      throw new Error(OPENROUTER_TIMEOUT_MESSAGE)
+    }
+
+    throw error
+  } finally {
+    timeout.cancel()
   }
 }

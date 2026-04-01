@@ -53,10 +53,10 @@ export function AssistantRecommendationDialog({
                 Assistant recommendation
               </div>
               <DialogTitle className="text-lg font-semibold tracking-tight sm:text-xl">
-                Better fit: {getFamilyLabel(recommendation.predictedAssistant)}
+                Try {getFamilyLabel(recommendation.predictedAssistant)}
               </DialogTitle>
               <DialogDescription className="max-w-lg text-xs leading-6 sm:text-sm">
-                This prompt is likely to do better on a different assistant.
+                This prompt looks like a stronger fit for another assistant.
               </DialogDescription>
             </DialogHeader>
           </div>
@@ -97,7 +97,7 @@ export function AssistantRecommendationDialog({
 
             <div className="rounded-2xl border border-border/70 bg-card/50 p-4">
               <p className="text-sm leading-7 text-foreground/90">
-                Recommend {getFamilyLabel(recommendation.predictedAssistant)} because{' '}
+                Best match: {getFamilyLabel(recommendation.predictedAssistant)} because{' '}
                 {recommendation.reason}.
               </p>
             </div>

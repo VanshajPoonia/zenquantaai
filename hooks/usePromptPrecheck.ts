@@ -35,7 +35,15 @@ export function usePromptPrecheck(input: {
   onContinue: (submission: SubmissionInput) => Promise<void>
   onSubmitted?: () => void
 }) {
-  const { currentMode, currentChat, appSettings, setCurrentMode } = useChatContext()
+  const {
+    currentMode,
+    currentChat,
+    appSettings,
+    setCurrentMode,
+    beginPromptPrecheck,
+    awaitRecommendationDecision,
+    clearPromptPrecheck,
+  } = useChatContext()
   const [pendingRecommendation, setPendingRecommendation] = useState<{
     submission: SubmissionInput
     recommendation: AssistantRecommendationResult
@@ -83,86 +91,114 @@ export function usePromptPrecheck(input: {
 
   const continueWithSubmission = useCallback(
     async (submission: SubmissionInput) => {
-      await input.onContinue(submission)
-      setSuppressedSubmissionKey(null)
-      input.onSubmitted?.()
+      clearPromptPrecheck()
+      debugSendPipeline('submission-approved', {
+        kind: submission.kind ?? 'chat',
+        modeOverride: submission.modeOverride ?? null,
+      })
+
+      try {
+        await input.onContinue(submission)
+        debugSendPipeline('submission-dispatched', {
+          kind: submission.kind ?? 'chat',
+          modeOverride: submission.modeOverride ?? null,
+        })
+        setSuppressedSubmissionKey(null)
+        input.onSubmitted?.()
+      } catch (error) {
+        debugSendPipeline('submission-dispatch-failed', {
+          kind: submission.kind ?? 'chat',
+          modeOverride: submission.modeOverride ?? null,
+          error: error instanceof Error ? error.message : 'Unknown submission error',
+        })
+        throw error
+      }
     },
-    [input]
+    [clearPromptPrecheck, input]
   )
 
   const precheckAndSend = useCallback(
     async (submission: SubmissionInput) => {
-      const submissionKey = getSubmissionKey(submission, currentMode)
-      const recommendation = getAssistantRecommendation({
-        prompt: submission.content,
-        currentMode,
-        kind: submission.kind,
-        attachments: (submission.attachments ?? []).map((attachment) => ({
-          name: attachment.name,
-          kind: attachment.kind,
-          previewUrl: attachment.previewUrl,
-        })),
-      })
+      beginPromptPrecheck()
 
-      debugSendPipeline('precheck-result', {
-        currentMode,
-        predictedAssistant: recommendation.predictedAssistant,
-        confidence: recommendation.confidence,
-        shouldRecommendSwitch: recommendation.shouldRecommendSwitch,
-        matchedSignals: recommendation.matchedSignals,
-      })
+      try {
+        const submissionKey = getSubmissionKey(submission, currentMode)
+        const recommendation = getAssistantRecommendation({
+          prompt: submission.content,
+          currentMode,
+          kind: submission.kind,
+          attachments: (submission.attachments ?? []).map((attachment) => ({
+            name: attachment.name,
+            kind: attachment.kind,
+            previewUrl: attachment.previewUrl,
+          })),
+        })
 
-      const shouldBypassPrompt =
-        suppressedSubmissionKey === submissionKey || !appSettings.assistantRecommendations.enabled
+        debugSendPipeline('precheck-result', {
+          currentMode,
+          predictedAssistant: recommendation.predictedAssistant,
+          confidence: recommendation.confidence,
+          shouldRecommendSwitch: recommendation.shouldRecommendSwitch,
+          matchedSignals: recommendation.matchedSignals,
+        })
 
-      if (
-        !recommendation.shouldRecommendSwitch ||
-        shouldBypassPrompt
-      ) {
-        await logRecommendationEvent(
-          recommendation,
-          'not_shown',
-          currentChat?.id
-        )
-        await continueWithSubmission(submission)
-        return true
-      }
+        const shouldBypassPrompt =
+          suppressedSubmissionKey === submissionKey ||
+          !appSettings.assistantRecommendations.enabled
 
-      if (appSettings.assistantRecommendations.autoSwitchOnHighConfidence) {
-        setCurrentMode(recommendation.recommendedMode)
-        debugSendPipeline('precheck-autoswitch', {
+        if (!recommendation.shouldRecommendSwitch || shouldBypassPrompt) {
+          await logRecommendationEvent(
+            recommendation,
+            'not_shown',
+            currentChat?.id
+          )
+          await continueWithSubmission(submission)
+          return true
+        }
+
+        if (appSettings.assistantRecommendations.autoSwitchOnHighConfidence) {
+          setCurrentMode(recommendation.recommendedMode)
+          debugSendPipeline('precheck-autoswitch', {
+            from: currentMode,
+            to: recommendation.recommendedMode,
+          })
+          await logRecommendationEvent(
+            recommendation,
+            'autoswitched',
+            currentChat?.id
+          )
+          await continueWithSubmission({
+            ...submission,
+            kind: recommendation.recommendedMode === 'image' ? 'image' : 'chat',
+            modeOverride: recommendation.recommendedMode,
+          })
+          return true
+        }
+
+        await logRecommendationEvent(recommendation, 'shown', currentChat?.id)
+        awaitRecommendationDecision()
+        debugSendPipeline('precheck-modal-opened', {
           from: currentMode,
           to: recommendation.recommendedMode,
         })
-        await logRecommendationEvent(
+        setPendingRecommendation({
+          submission,
           recommendation,
-          'autoswitched',
-          currentChat?.id
-        )
-        await continueWithSubmission({
-          ...submission,
-          kind: recommendation.recommendedMode === 'image' ? 'image' : 'chat',
-          modeOverride: recommendation.recommendedMode,
+          submissionKey,
         })
-        return true
+        setSuppressForMessage(false)
+        return false
+      } catch (error) {
+        clearPromptPrecheck()
+        throw error
       }
-
-      await logRecommendationEvent(recommendation, 'shown', currentChat?.id)
-      debugSendPipeline('precheck-modal-opened', {
-        from: currentMode,
-        to: recommendation.recommendedMode,
-      })
-      setPendingRecommendation({
-        submission,
-        recommendation,
-        submissionKey,
-      })
-      setSuppressForMessage(false)
-      return false
     },
     [
       appSettings.assistantRecommendations.autoSwitchOnHighConfidence,
       appSettings.assistantRecommendations.enabled,
+      awaitRecommendationDecision,
+      beginPromptPrecheck,
+      clearPromptPrecheck,
       continueWithSubmission,
       currentChat?.id,
       currentMode,
@@ -255,8 +291,10 @@ export function usePromptPrecheck(input: {
       current: pendingRecommendation.recommendation.currentAssistant,
       recommended: pendingRecommendation.recommendation.predictedAssistant,
     })
+    clearPromptPrecheck()
     clearPendingRecommendation()
   }, [
+    clearPromptPrecheck,
     clearPendingRecommendation,
     currentChat?.id,
     logRecommendationEvent,
