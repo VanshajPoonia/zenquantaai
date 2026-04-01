@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { CircleHelp } from 'lucide-react'
+import { CircleHelp, Shield } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useChatContext } from '@/lib/chat-context'
 import { ModeIcon, getModeAccentClass, getModeTintClass } from '@/lib/mode-utils'
@@ -103,8 +103,16 @@ export function Header({ onOpenSettings, onOpenAssistantHelp }: HeaderProps) {
       {/* Right Section */}
       <div className="flex items-center gap-2">
         {isAdmin ? (
-          <Button asChild variant="secondary" size="sm" className="rounded-xl">
-            <Link href="/admin">Admin</Link>
+          <Button
+            asChild
+            variant="secondary"
+            size="sm"
+            className="rounded-xl gap-2 px-3"
+          >
+            <Link href="/admin">
+              <Shield className="size-3.5" />
+              <span>Admin</span>
+            </Link>
           </Button>
         ) : null}
 

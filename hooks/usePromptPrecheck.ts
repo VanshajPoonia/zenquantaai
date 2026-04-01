@@ -33,7 +33,7 @@ function getSubmissionKey(input: SubmissionInput, currentMode: AIMode): string {
 
 export function usePromptPrecheck(input: {
   onContinue: (submission: SubmissionInput) => Promise<void>
-  onSubmitted?: () => void
+  onSubmitted?: (submission: SubmissionInput) => void
 }) {
   const {
     currentMode,
@@ -104,7 +104,7 @@ export function usePromptPrecheck(input: {
           modeOverride: submission.modeOverride ?? null,
         })
         setSuppressedSubmissionKey(null)
-        input.onSubmitted?.()
+        input.onSubmitted?.(submission)
       } catch (error) {
         debugSendPipeline('submission-dispatch-failed', {
           kind: submission.kind ?? 'chat',

@@ -580,6 +580,54 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     }
   }, [handleUnauthorized, loadAuthedData, requestJson])
 
+  const refreshAuthSessionRole = useCallback(async () => {
+    try {
+      const response = await fetch('/api/auth/session', {
+        cache: 'no-store',
+      })
+
+      if (response.status === 401) {
+        handleUnauthorized()
+        return
+      }
+
+      if (!response.ok) {
+        return
+      }
+
+      const session = (await response.json()) as AuthSessionResponse
+
+      if (!session.authenticated || !session.user) {
+        return
+      }
+
+      const nextUser = session.user
+
+      setAuthState((previous) => {
+        if (
+          previous.status === 'authenticated' &&
+          previous.user?.id === nextUser.id &&
+          previous.user?.role === nextUser.role &&
+          previous.user?.loginId === nextUser.loginId &&
+          previous.user?.email === nextUser.email
+        ) {
+          return previous
+        }
+
+        return {
+          status: 'authenticated',
+          user: nextUser,
+        }
+      })
+    } catch (error) {
+      if (process.env.NODE_ENV !== 'production') {
+        console.debug('[zenquanta/auth] session refresh skipped', {
+          error: error instanceof Error ? error.message : 'Unknown session refresh error',
+        })
+      }
+    }
+  }, [handleUnauthorized])
+
   useEffect(() => {
     void restoreSession()
 
@@ -587,6 +635,28 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       streamAbortRef.current?.abort()
     }
   }, [restoreSession])
+
+  useEffect(() => {
+    if (authState.status !== 'authenticated') return
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        void refreshAuthSessionRole()
+      }
+    }
+
+    const handleWindowFocus = () => {
+      void refreshAuthSessionRole()
+    }
+
+    window.addEventListener('focus', handleWindowFocus)
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+
+    return () => {
+      window.removeEventListener('focus', handleWindowFocus)
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+    }
+  }, [authState.status, refreshAuthSessionRole])
 
   const requestMagicLink = useCallback(
     async (email: string) => {

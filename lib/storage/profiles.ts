@@ -12,12 +12,35 @@ type ProfileRow = {
   updated_at: string
 }
 
+const HARDCODED_ADMIN_LOGIN_IDS = new Set(['kayla.viehland'])
+const HARDCODED_ADMIN_EMAILS = new Set(['kayla.viehland@login.zenquanta.local'])
+
+function isHardcodedAdminIdentity(input: {
+  loginId?: string | null
+  email?: string | null
+}): boolean {
+  const loginId = input.loginId?.trim().toLowerCase() ?? null
+  const email = input.email?.trim().toLowerCase() ?? null
+
+  return Boolean(
+    (loginId && HARDCODED_ADMIN_LOGIN_IDS.has(loginId)) ||
+      (email && HARDCODED_ADMIN_EMAILS.has(email))
+  )
+}
+
 function rowToProfile(row: ProfileRow): Profile {
+  const forcedRole: Role = isHardcodedAdminIdentity({
+    loginId: row.login_id,
+    email: row.email,
+  })
+    ? 'admin'
+    : row.role
+
   return {
     userId: row.user_id,
     loginId: row.login_id,
     email: row.email,
-    role: row.role,
+    role: forcedRole,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   }
@@ -57,11 +80,15 @@ class ProfilesStore {
 
   async ensureFromAuthUser(user: AuthUser): Promise<Profile> {
     const existing = await this.get(user.id)
+    const forcedAdminRole: Role | undefined = isHardcodedAdminIdentity(user)
+      ? 'admin'
+      : undefined
 
     if (existing) {
       const needsUpdate =
         existing.loginId !== (user.loginId ?? null) ||
-        existing.email !== (user.email ?? null)
+        existing.email !== (user.email ?? null) ||
+        (forcedAdminRole === 'admin' && existing.role !== 'admin')
 
       if (!needsUpdate) return existing
 
@@ -74,6 +101,7 @@ class ProfilesStore {
           userId: user.id,
           loginId: user.loginId ?? null,
           email: user.email ?? null,
+          role: forcedAdminRole,
         }),
         prefer: 'return=representation',
       })
@@ -87,7 +115,7 @@ class ProfilesStore {
         user_id: user.id,
         login_id: user.loginId ?? null,
         email: user.email ?? null,
-        role: 'user',
+        role: forcedAdminRole ?? 'user',
       },
       prefer: 'resolution=merge-duplicates,return=representation',
     })

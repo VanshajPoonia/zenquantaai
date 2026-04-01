@@ -38,6 +38,7 @@ interface ComposerProps {
 export function Composer({ onSend, disabled, initialValue = '' }: ComposerProps) {
   const {
     currentMode,
+    currentChat,
     promptLibrary,
     savePrompt,
     deletePrompt,
@@ -48,6 +49,12 @@ export function Composer({ onSend, disabled, initialValue = '' }: ComposerProps)
   const [value, setValue] = useState(initialValue)
   const [composerKind, setComposerKind] = useState<'chat' | 'image'>('chat')
   const [pendingAttachments, setPendingAttachments] = useState<PendingAttachment[]>([])
+  const [pendingDraftClear, setPendingDraftClear] = useState<{
+    value: string
+    normalizedContent: string
+    attachmentIds: string[]
+    composerKind: 'chat' | 'image'
+  } | null>(null)
   const [promptTitle, setPromptTitle] = useState('')
   const [isPromptPopoverOpen, setIsPromptPopoverOpen] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -56,6 +63,7 @@ export function Composer({ onSend, disabled, initialValue = '' }: ComposerProps)
     setValue('')
     setPendingAttachments([])
     setComposerKind('chat')
+    setPendingDraftClear(null)
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto'
     }
@@ -71,7 +79,14 @@ export function Composer({ onSend, disabled, initialValue = '' }: ComposerProps)
     handleCancel,
   } = usePromptPrecheck({
     onContinue: onSend,
-    onSubmitted: clearDraft,
+    onSubmitted: (submission) => {
+      setPendingDraftClear({
+        value,
+        normalizedContent: submission.content,
+        attachmentIds: pendingAttachments.map((attachment) => attachment.id),
+        composerKind,
+      })
+    },
   })
 
   const modeConfig = MODE_CONFIGS[currentMode]
@@ -93,6 +108,40 @@ export function Composer({ onSend, disabled, initialValue = '' }: ComposerProps)
     }
   }, [value])
 
+  useEffect(() => {
+    if (!pendingDraftClear) return
+
+    const matchingUserMessage = [...(currentChat?.messages ?? [])]
+      .reverse()
+      .find(
+        (message) =>
+          message.role === 'user' &&
+          message.content.trim() === pendingDraftClear.normalizedContent.trim()
+      )
+
+    if (!matchingUserMessage) {
+      return
+    }
+
+    const attachmentIdsMatch =
+      pendingAttachments.length === pendingDraftClear.attachmentIds.length &&
+      pendingAttachments.every(
+        (attachment, index) => attachment.id === pendingDraftClear.attachmentIds[index]
+      )
+
+    const draftStillMatches =
+      value === pendingDraftClear.value &&
+      composerKind === pendingDraftClear.composerKind &&
+      attachmentIdsMatch
+
+    if (!draftStillMatches) {
+      setPendingDraftClear(null)
+      return
+    }
+
+    clearDraft()
+  }, [clearDraft, composerKind, currentChat?.messages, pendingAttachments, pendingDraftClear, value])
+
   const handleSubmit = async () => {
     if ((!value.trim() && pendingAttachments.length === 0) || disabled) return
     const normalizedContent =
@@ -100,6 +149,8 @@ export function Composer({ onSend, disabled, initialValue = '' }: ComposerProps)
       `Review these files and help me with them: ${pendingAttachments
         .map((attachment) => attachment.name)
         .join(', ')}.`
+
+    setPendingDraftClear(null)
 
     await precheckAndSend({
       content: normalizedContent,
