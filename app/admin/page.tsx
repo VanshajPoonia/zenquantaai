@@ -5,15 +5,21 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { updatePlanRequestStatusAction } from './actions'
+import { updatePlanRequestStatusAction, updateUserAdminAction } from './actions'
 
-export default async function AdminPage() {
+export default async function AdminPage({
+  searchParams,
+}: {
+  searchParams?: Promise<Record<string, string | string[] | undefined>>
+}) {
   await requireAdmin()
+  const params = searchParams ? await searchParams : {}
   const [overview, userRows, requests] = await Promise.all([
     adminStore.getOverview(),
     adminStore.listUserRows(),
     planRequestsStore.list(),
   ])
+  const updated = params?.updated === '1'
 
   return (
     <main className="min-h-screen bg-background px-4 py-8 sm:px-6 lg:px-10">
@@ -31,6 +37,12 @@ export default async function AdminPage() {
             <Link href="/">Back to app</Link>
           </Button>
         </div>
+
+        {updated ? (
+          <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100">
+            Admin changes were saved successfully.
+          </div>
+        ) : null}
 
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           <MetricCard label="Active users" value={String(overview.activeUsers)} />
@@ -59,11 +71,15 @@ export default async function AdminPage() {
             </CardHeader>
             <CardContent className="space-y-3">
               {userRows.map((row) => (
-                <div
+                <form
                   key={row.subscription.userId}
+                  action={updateUserAdminAction}
                   className="flex flex-col gap-3 rounded-2xl border border-border/60 bg-background/40 px-4 py-4 lg:flex-row lg:items-center lg:justify-between"
                 >
-                  <div className="min-w-0">
+                  <input type="hidden" name="targetUserId" value={row.subscription.userId} />
+                  <input type="hidden" name="returnTo" value="admin" />
+
+                  <div className="min-w-0 lg:w-[16rem]">
                     <p className="truncate font-medium text-foreground">
                       {row.profile?.email ?? row.profile?.loginId ?? row.subscription.userId}
                     </p>
@@ -71,18 +87,93 @@ export default async function AdminPage() {
                       {row.subscription.tier.toUpperCase()} · {row.subscription.status}
                     </p>
                   </div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Badge variant="secondary">
-                      ${row.displayedCostUsd.toFixed(2)}
-                    </Badge>
-                    <Badge variant="outline">
-                      {row.remainingDisplayedCredits} credits left
-                    </Badge>
+
+                  <div className="grid flex-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
+                    <div className="rounded-xl border border-border/50 bg-background/40 px-3 py-2">
+                      <p className="text-[11px] uppercase tracking-[0.14em] text-muted-foreground">
+                        Displayed usage
+                      </p>
+                      <p className="mt-1 text-sm font-medium text-foreground">
+                        ${row.displayedCostUsd.toFixed(2)}
+                      </p>
+                    </div>
+                    <div className="rounded-xl border border-border/50 bg-background/40 px-3 py-2">
+                      <p className="text-[11px] uppercase tracking-[0.14em] text-muted-foreground">
+                        Credits left
+                      </p>
+                      <p className="mt-1 text-sm font-medium text-foreground">
+                        {row.remainingDisplayedCredits}
+                      </p>
+                    </div>
+                    <FieldSelect
+                      name="tier"
+                      label="Tier"
+                      defaultValue={row.subscription.tier}
+                      options={['free', 'basic', 'pro', 'ultra', 'prime']}
+                    />
+                    <FieldSelect
+                      name="status"
+                      label="Status"
+                      defaultValue={row.subscription.status}
+                      options={['active', 'paused', 'cancelled']}
+                    />
+                    <FieldSelect
+                      name="role"
+                      label="Role"
+                      defaultValue={row.profile?.role ?? 'user'}
+                      options={['user', 'admin']}
+                    />
+                    <FieldInput
+                      name="coreTokensIncluded"
+                      label="Core tokens"
+                      defaultValue={String(
+                        row.override?.coreTokensIncluded ??
+                          row.subscription.coreTokensIncluded
+                      )}
+                    />
+                    <FieldInput
+                      name="tierTokensIncluded"
+                      label="Tier tokens"
+                      defaultValue={String(
+                        row.override?.tierTokensIncluded ??
+                          row.subscription.tierTokensIncluded
+                      )}
+                    />
+                    <FieldInput
+                      name="imageCreditsIncluded"
+                      label="Image credits"
+                      defaultValue={String(
+                        row.override?.imageCreditsIncluded ??
+                          row.subscription.imageCreditsIncluded
+                      )}
+                    />
+                    <FieldInput
+                      name="dailyMessageLimit"
+                      label="Daily messages"
+                      defaultValue={String(
+                        row.override?.dailyMessageLimit ??
+                          row.subscription.dailyMessageLimit
+                      )}
+                    />
+                    <FieldInput
+                      name="maxImagesPerDay"
+                      label="Images per day"
+                      defaultValue={String(
+                        row.override?.maxImagesPerDay ??
+                          row.subscription.maxImagesPerDay
+                      )}
+                    />
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2 lg:w-[10rem] lg:flex-col lg:items-stretch">
+                    <Button type="submit" size="sm" className="rounded-lg">
+                      Save
+                    </Button>
                     <Button asChild variant="secondary" size="sm" className="rounded-lg">
                       <Link href={`/admin/users/${row.subscription.userId}`}>Open</Link>
                     </Button>
                   </div>
-                </div>
+                </form>
               ))}
             </CardContent>
           </Card>
@@ -167,5 +258,59 @@ function MetricCard({ label, value }: { label: string; value: string }) {
         </p>
       </CardContent>
     </Card>
+  )
+}
+
+function FieldInput({
+  name,
+  label,
+  defaultValue,
+}: {
+  name: string
+  label: string
+  defaultValue: string
+}) {
+  return (
+    <label className="space-y-1.5">
+      <span className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+        {label}
+      </span>
+      <Input
+        name={name}
+        defaultValue={defaultValue}
+        className="h-9 rounded-xl border-border/60 bg-background/50"
+      />
+    </label>
+  )
+}
+
+function FieldSelect({
+  name,
+  label,
+  defaultValue,
+  options,
+}: {
+  name: string
+  label: string
+  defaultValue: string
+  options: string[]
+}) {
+  return (
+    <label className="space-y-1.5">
+      <span className="text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+        {label}
+      </span>
+      <select
+        name={name}
+        defaultValue={defaultValue}
+        className="flex h-9 w-full rounded-xl border border-border/60 bg-background/50 px-3 text-sm text-foreground outline-none transition-colors focus:border-primary/40 focus:ring-2 focus:ring-primary/20"
+      >
+        {options.map((option) => (
+          <option key={option} value={option}>
+            {option}
+          </option>
+        ))}
+      </select>
+    </label>
   )
 }

@@ -1,8 +1,9 @@
 'use client'
 
+import Link from 'next/link'
+import { CircleHelp } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useChatContext } from '@/lib/chat-context'
-import { MODE_CONFIGS } from '@/lib/types'
 import { ModeIcon, getModeAccentClass, getModeTintClass } from '@/lib/mode-utils'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -30,11 +31,13 @@ import {
 
 interface HeaderProps {
   onOpenSettings: () => void
+  onOpenAssistantHelp: () => void
 }
 
-export function Header({ onOpenSettings }: HeaderProps) {
+export function Header({ onOpenSettings, onOpenAssistantHelp }: HeaderProps) {
   const {
     currentMode,
+    authState,
     currentChat,
     exportCurrentChat,
     goHome,
@@ -45,7 +48,7 @@ export function Header({ onOpenSettings }: HeaderProps) {
     statusLabel,
   } = useChatContext()
 
-  const modeConfig = MODE_CONFIGS[currentMode]
+  const isAdmin = authState.user?.role === 'admin'
 
   return (
     <div className="px-3 pt-3">
@@ -85,14 +88,9 @@ export function Header({ onOpenSettings }: HeaderProps) {
             `${getModeAccentClass(currentMode, 'border')}/30`,
             getModeTintClass(currentMode, 'subtle')
           )}
+          title="Current assistant"
         >
           <ModeIcon mode={currentMode} size="sm" />
-          <div className="hidden sm:flex flex-col leading-none">
-            <span className="text-sm font-medium">{modeConfig.name}</span>
-            <span className="text-[11px] text-muted-foreground">
-              Zenquanta AI
-            </span>
-          </div>
         </div>
         <Badge
           variant={statusLabel === 'Streaming' ? 'default' : 'secondary'}
@@ -104,6 +102,23 @@ export function Header({ onOpenSettings }: HeaderProps) {
 
       {/* Right Section */}
       <div className="flex items-center gap-2">
+        {isAdmin ? (
+          <Button asChild variant="secondary" size="sm" className="rounded-xl">
+            <Link href="/admin">Admin</Link>
+          </Button>
+        ) : null}
+
+        <TooltipProvider delayDuration={300}>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button variant="ghost" size="icon" onClick={onOpenAssistantHelp}>
+                <CircleHelp className="size-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Assistant guide</TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+
         <TooltipProvider delayDuration={300}>
           <Tooltip>
             <TooltipTrigger asChild>

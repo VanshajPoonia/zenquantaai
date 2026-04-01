@@ -39,6 +39,7 @@ export interface AdminOverview {
 export interface AdminUserRow {
   profile: Profile | null
   subscription: Subscription
+  override: UsageLimitOverride | null
   pendingRequest: PlanChangeRequest | null
   textTokensThisPeriod: number
   imageGenerationsThisPeriod: number
@@ -206,10 +207,11 @@ class AdminStore {
   }
 
   async listUserRows(): Promise<AdminUserRow[]> {
-    const [profiles, subscriptions, usageEvents, imageEvents, requests] =
+    const [profiles, subscriptions, overrides, usageEvents, imageEvents, requests] =
       await Promise.all([
         profilesStore.list(),
         subscriptionsStore.list(),
+        usageLimitOverridesStore.list(),
         usageEventsStore.list(),
         imageGenerationEventsStore.list(),
         planRequestsStore.list(),
@@ -217,6 +219,8 @@ class AdminStore {
 
     return subscriptions.map((subscription) => {
       const profile = profiles.find((item) => item.userId === subscription.userId) ?? null
+      const override =
+        overrides.find((item) => item.userId === subscription.userId) ?? null
       const userUsage = usageEvents.filter((event) => event.userId === subscription.userId)
       const userImages = imageEvents.filter((event) => event.userId === subscription.userId)
       const pendingRequest =
@@ -234,6 +238,7 @@ class AdminStore {
       return {
         profile,
         subscription,
+        override,
         pendingRequest,
         textTokensThisPeriod: sum(userUsage, (event) => event.totalTokens),
         imageGenerationsThisPeriod: sum(userImages, (event) => event.imageCount),

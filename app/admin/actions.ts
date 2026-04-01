@@ -54,6 +54,7 @@ export async function updatePlanRequestStatusAction(formData: FormData) {
 export async function updateUserAdminAction(formData: FormData) {
   const { user } = await requireAdmin()
   const targetUserId = formData.get('targetUserId')?.toString()
+  const returnTo = formData.get('returnTo')?.toString()
 
   if (!targetUserId) {
     redirect('/admin?error=missing-user')
@@ -62,7 +63,9 @@ export async function updateUserAdminAction(formData: FormData) {
   const tier = formData.get('tier')?.toString()
   const status = formData.get('status')?.toString()
   const role = formData.get('role')?.toString()
-  const note = formData.get('note')?.toString().trim() ?? null
+  const noteField = formData.get('note')
+  const note =
+    noteField === null ? undefined : noteField.toString().trim() || null
   const coreTokensIncluded = formData.get('coreTokensIncluded')?.toString()
   const tierTokensIncluded = formData.get('tierTokensIncluded')?.toString()
   const imageCreditsIncluded = formData.get('imageCreditsIncluded')?.toString()
@@ -84,7 +87,11 @@ export async function updateUserAdminAction(formData: FormData) {
     tier === 'ultra' ||
     tier === 'prime'
   ) {
-    await subscriptionsStore.updateTier(targetUserId, tier, note)
+    if (typeof note === 'undefined') {
+      await subscriptionsStore.updateTier(targetUserId, tier)
+    } else {
+      await subscriptionsStore.updateTier(targetUserId, tier, note)
+    }
   }
 
   if (status === 'active' || status === 'paused' || status === 'cancelled') {
@@ -104,7 +111,7 @@ export async function updateUserAdminAction(formData: FormData) {
       : undefined,
     maxImagesPerDay: maxImagesPerDay ? Number(maxImagesPerDay) : undefined,
     allowedModelOverrides,
-    notes: note,
+    notes: typeof note === 'undefined' ? undefined : note,
   })
 
   if (role === 'user' || role === 'admin') {
@@ -130,6 +137,10 @@ export async function updateUserAdminAction(formData: FormData) {
       allowedModelOverrides,
     },
   })
+
+  if (returnTo === 'admin') {
+    redirect('/admin?updated=1')
+  }
 
   redirect(`/admin/users/${targetUserId}?updated=1`)
 }

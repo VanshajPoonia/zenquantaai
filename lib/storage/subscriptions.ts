@@ -146,6 +146,17 @@ function toIsoDay(input: string): string {
 }
 
 class UsageLimitOverridesStore {
+  async list(): Promise<UsageLimitOverride[]> {
+    const rows = await supabaseRequest<OverrideRow[]>(OVERRIDES_TABLE, {
+      query: {
+        select: '*',
+        order: 'updated_at.desc',
+      },
+    })
+
+    return rows.map(rowToOverride)
+  }
+
   async getByUserId(userId: string): Promise<UsageLimitOverride | null> {
     const rows = await supabaseRequest<OverrideRow[]>(OVERRIDES_TABLE, {
       query: {
