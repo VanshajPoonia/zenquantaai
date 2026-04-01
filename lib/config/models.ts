@@ -20,9 +20,11 @@ export const PROJECT_COLOR_OPTIONS = [
 ] as const
 
 export const IMAGE_GENERATION_CONFIG = {
-  model: 'black-forest-labs/flux.2-pro',
+  model: 'google/gemini-2.5-flash-image-preview',
   label: 'Studio Visual',
-  description: 'Sharper image output for polished concept work at a moderate cost.',
+  description:
+    'Higher-fidelity visual generation with stronger prompt understanding and cleaner scene composition.',
+  modalities: ['image', 'text'] as const,
 } as const
 
 export const RESPONSE_PROFILE_LABELS: Record<ModelOverrideOption, string> = {

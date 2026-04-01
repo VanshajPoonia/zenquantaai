@@ -14,6 +14,7 @@ import {
 import { estimateUsage } from '@/lib/utils/cost'
 import { toAttachmentContext } from '@/lib/utils/files'
 import {
+  buildImageGenerationPrompt,
   buildGeneratedImageCaption,
   createGeneratedImageAttachment,
   createGeneratedImageAttachmentFromUrl,
@@ -85,11 +86,12 @@ async function generateImageAttachment(
   try {
     const image = await createOpenRouterImage({
       model: IMAGE_GENERATION_CONFIG.model,
-      prompt,
+      prompt: buildImageGenerationPrompt(prompt, mode),
       systemPrompt: `${buildSystemPrompt(
         mode,
         settings.systemPreset
-      )}\n\nGenerate a single polished image that matches the user's request. Keep any companion text extremely brief and let the image do the work.`,
+      )}\n\nGenerate a single premium image that matches the user's request with strong composition, clean subject focus, and minimal companion text.`,
+      modalities: [...IMAGE_GENERATION_CONFIG.modalities],
     })
 
     return createGeneratedImageAttachmentFromUrl(prompt, image.imageUrl)

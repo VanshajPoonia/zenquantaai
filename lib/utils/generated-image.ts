@@ -72,6 +72,33 @@ export function buildGeneratedImageCaption(prompt: string): string {
   return `Created a visual concept based on your prompt: "${prompt.trim()}"`
 }
 
+export function buildImageGenerationPrompt(
+  prompt: string,
+  mode: AIMode
+): string {
+  const trimmedPrompt = prompt.trim()
+  const modeDirection: Record<AIMode, string> = {
+    general:
+      'Aim for a clean, useful, polished visual with strong composition and natural details.',
+    creative:
+      'Lean into striking art direction, tasteful stylization, rich atmosphere, and memorable visual storytelling.',
+    logic:
+      'Favor clarity, clean structure, readable layout, and precise visual hierarchy over decorative flourish.',
+    code:
+      'Favor crisp interface-like presentation, clear geometry, product realism, and implementation-ready visual clarity.',
+  }
+
+  return [
+    'Create one high-quality image that directly fulfills the request below.',
+    'Make it feel premium, coherent, and intentionally composed.',
+    'Do not add watermarks, labels, UI chrome, or text in the image unless the user explicitly asks for text.',
+    'Prefer strong subject separation, clean lighting, accurate anatomy/perspective, and a polished final render.',
+    modeDirection[mode],
+    '',
+    `User request: ${trimmedPrompt}`,
+  ].join('\n')
+}
+
 export function createGeneratedImageAttachment(
   prompt: string,
   mode: AIMode

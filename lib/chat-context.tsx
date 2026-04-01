@@ -71,6 +71,15 @@ interface SendMessageInput {
   kind?: 'chat' | 'image'
 }
 
+interface QueuedPrompt {
+  id: string
+  input: SendMessageInput
+  mode: AIMode
+  settings: SessionSettings
+  projectId: string
+  conversationId?: string
+}
+
 type ProjectFilterId = 'all' | string
 
 interface SavePromptInput {
@@ -102,6 +111,7 @@ interface ChatContextType {
   createNewChat: () => Promise<void>
   deleteChat: (chatId: string) => Promise<void>
   togglePinChat: (chatId: string) => Promise<void>
+  queuedPromptCount: number
   sendMessage: (input: SendMessageInput) => Promise<void>
   regenerateLastResponse: () => Promise<void>
   retryLastMessage: () => Promise<void>
@@ -128,6 +138,7 @@ interface ChatContextType {
   selectedProjectId: ProjectFilterId
   setSelectedProjectId: (projectId: ProjectFilterId) => void
   createProject: (name: string) => Promise<Project | null>
+  moveChatToProject: (chatId: string, projectId: string) => Promise<void>
   moveCurrentChatToProject: (projectId: string) => Promise<void>
   promptLibrary: PromptLibraryItem[]
   savePrompt: (input: SavePromptInput) => Promise<PromptLibraryItem | null>
@@ -207,9 +218,12 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const [selectedProjectIdState, setSelectedProjectIdState] =
     useState<ProjectFilterId>('all')
   const [promptLibrary, setPromptLibrary] = useState<PromptLibraryItem[]>([])
+  const [queuedPrompts, setQueuedPrompts] = useState<QueuedPrompt[]>([])
   const streamAbortRef = useRef<AbortController | null>(null)
   const conversationsRef = useRef<Conversation[]>([])
   const currentChatRef = useRef<Conversation | null>(null)
+  const queuedPromptsRef = useRef<QueuedPrompt[]>([])
+  const isProcessingQueueRef = useRef(false)
 
   const chats = useMemo(
     () => sortConversationSummaries(conversations.map(toConversationSummary)),
@@ -225,6 +239,10 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     currentChatRef.current = currentChat
   }, [currentChat])
+
+  useEffect(() => {
+    queuedPromptsRef.current = queuedPrompts
+  }, [queuedPrompts])
 
   const sessionSettings = normalizeModeSessionSettings(
     currentMode,
@@ -251,6 +269,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     setCurrentChatState(null)
     setProjects([])
     setPromptLibrary([])
+    setQueuedPrompts([])
     setCurrentModeState(DEFAULT_APP_SETTINGS.defaultMode)
     setAppSettings(DEFAULT_APP_SETTINGS)
     setDraftSessionSettings(DEFAULT_APP_SETTINGS.sessionDefaults)
@@ -780,6 +799,27 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     [applyConversationPatch, currentChat, persistConversationMutation]
   )
 
+  const moveChatToProject = useCallback(
+    async (chatId: string, projectId: string) => {
+      applyConversationPatch(chatId, (conversation) =>
+        updateConversationSnapshot(conversation, {
+          projectId,
+        })
+      )
+
+      void persistConversationMutation(chatId, {
+        projectId,
+      }).catch((error) => {
+        console.error('Failed to move chat to project.', error)
+      })
+    },
+    [applyConversationPatch, persistConversationMutation]
+  )
+
+  const enqueuePrompt = useCallback((prompt: QueuedPrompt) => {
+    setQueuedPrompts((previous) => [...previous, prompt])
+  }, [])
+
   const savePrompt = useCallback(
     async ({ title, content, mode }: SavePromptInput) => {
       const trimmedTitle = title.trim()
@@ -857,22 +897,45 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     setStreamingState({ status: 'idle' })
   }, [])
 
-  const ensureConversation = useCallback(async () => {
-    if (currentChat) return currentChat
+  const ensureConversationForMessage = useCallback(
+    async (options: {
+      conversationId?: string
+      mode: AIMode
+      settings: SessionSettings
+      projectId: string
+    }) => {
+      if (options.conversationId) {
+        const existing =
+          conversationsRef.current.find(
+            (conversation) => conversation.id === options.conversationId
+          ) ?? null
 
-    const conversation = await requestJson<Conversation>('/api/conversations', {
-      method: 'POST',
-      body: JSON.stringify({
-        mode: currentMode,
-        projectId:
-          selectedProjectId === 'all' ? DEFAULT_PROJECT_ID : selectedProjectId,
-        sessionSettings,
-      }),
-    })
+        if (existing) {
+          return existing
+        }
+      }
 
-    upsertConversation(conversation)
-    return conversation
-  }, [currentChat, currentMode, requestJson, selectedProjectId, sessionSettings, upsertConversation])
+      if (
+        currentChat &&
+        (!options.conversationId || currentChat.id === options.conversationId)
+      ) {
+        return currentChat
+      }
+
+      const conversation = await requestJson<Conversation>('/api/conversations', {
+        method: 'POST',
+        body: JSON.stringify({
+          mode: options.mode,
+          projectId: options.projectId,
+          sessionSettings: options.settings,
+        }),
+      })
+
+      upsertConversation(conversation)
+      return conversation
+    },
+    [currentChat, requestJson, upsertConversation]
+  )
 
   const uploadAttachments = useCallback(
     async (
@@ -936,6 +999,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       content?: string
       targetMessageId?: string
       targetMode?: AIMode
+      mode: AIMode
+      settings: SessionSettings
       conversation: Conversation
       optimisticConversation: Conversation
       attachments?: Attachment[]
@@ -962,10 +1027,10 @@ export function ChatProvider({ children }: { children: ReactNode }) {
           body: JSON.stringify({
             action: payload.action,
             conversationId: payload.conversation.id,
-            mode: currentMode,
+            mode: payload.mode,
             targetMode: payload.targetMode,
             content: payload.content,
-            settings: sessionSettings,
+            settings: payload.settings,
             targetMessageId: payload.targetMessageId,
             attachments: payload.attachments,
             attachmentContext: (payload.attachments ?? []).map(toAttachmentContext),
@@ -1066,48 +1131,98 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     [
       applyConversationPatch,
       applyLocalError,
-      currentMode,
       handleUnauthorized,
-      sessionSettings,
       upsertConversation,
     ]
   )
 
-  const sendMessage = useCallback(
-    async ({ content, attachments = [], kind = 'chat' }: SendMessageInput) => {
-      const conversation = await ensureConversation()
+  const executeSendMessage = useCallback(
+    async (
+      { content, attachments = [], kind = 'chat' }: SendMessageInput,
+      options: {
+        conversationId?: string
+        mode: AIMode
+        settings: SessionSettings
+        projectId: string
+      }
+    ) => {
+      const conversation = await ensureConversationForMessage(options)
       const uploadedAttachments = await uploadAttachments(attachments)
       const userMessage = createMessage({
         role: 'user',
         content,
-        mode: currentMode,
+        mode: options.mode,
         attachments: uploadedAttachments,
       })
       const placeholder = createMessage({
         role: 'assistant',
         content: '',
-        mode: currentMode,
+        mode: options.mode,
         status: 'streaming',
-        model: resolveModelConfig(currentMode, sessionSettings.modelOverride).model,
+        model: resolveModelConfig(options.mode, options.settings.modelOverride).model,
         provider: 'openrouter',
         parentUserMessageId: userMessage.id,
       })
 
       const optimisticConversation = updateConversationSnapshot(conversation, {
-        mode: currentMode,
-        sessionSettings,
+        mode: options.mode,
+        sessionSettings: options.settings,
         messages: [...conversation.messages, userMessage, placeholder],
       })
 
       await runChatAction({
         action: kind === 'image' ? 'generate-image' : 'send',
         content,
+        mode: options.mode,
+        settings: options.settings,
         conversation,
         optimisticConversation,
         attachments: uploadedAttachments,
       })
     },
-    [currentMode, ensureConversation, runChatAction, sessionSettings, uploadAttachments]
+    [ensureConversationForMessage, runChatAction, uploadAttachments]
+  )
+
+  const sendMessage = useCallback(
+    async ({ content, attachments = [], kind = 'chat' }: SendMessageInput) => {
+      const projectId =
+        selectedProjectId === 'all' ? DEFAULT_PROJECT_ID : selectedProjectId
+
+      if (streamAbortRef.current || streamingState.status === 'streaming') {
+        enqueuePrompt({
+          id: crypto.randomUUID(),
+          input: {
+            content,
+            attachments,
+            kind,
+          },
+          mode: currentMode,
+          settings: sessionSettings,
+          projectId,
+          conversationId: currentChat?.id,
+        })
+        return
+      }
+
+      await executeSendMessage(
+        { content, attachments, kind },
+        {
+          conversationId: currentChat?.id,
+          mode: currentMode,
+          settings: sessionSettings,
+          projectId,
+        }
+      )
+    },
+    [
+      currentChat?.id,
+      currentMode,
+      enqueuePrompt,
+      executeSendMessage,
+      selectedProjectId,
+      sessionSettings,
+      streamingState.status,
+    ]
   )
 
   const regenerateLastResponse = useCallback(async () => {
@@ -1137,6 +1252,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
     await runChatAction({
       action: 'regenerate',
+      mode: currentMode,
+      settings: sessionSettings,
       conversation: currentChat,
       optimisticConversation,
     })
@@ -1170,6 +1287,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
     await runChatAction({
       action: 'retry',
+      mode: currentMode,
+      settings: sessionSettings,
       conversation: currentChat,
       optimisticConversation,
     })
@@ -1220,6 +1339,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         action: 'edit-last-user',
         content,
         targetMessageId: lastUser.id,
+        mode: currentMode,
+        settings: sessionSettings,
         conversation: currentChat,
         optimisticConversation,
         attachments: editedUser.attachments,
@@ -1254,6 +1375,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
       await runChatAction({
         action: 'ask-another-mode',
+        mode: currentMode,
+        settings: sessionSettings,
         conversation: currentChat,
         optimisticConversation,
         targetMode: mode,
@@ -1316,6 +1439,27 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     [currentChat]
   )
 
+  useEffect(() => {
+    if (streamingState.status === 'streaming') return
+    if (isProcessingQueueRef.current) return
+    if (queuedPromptsRef.current.length === 0) return
+
+    const nextPrompt = queuedPromptsRef.current[0]
+    if (!nextPrompt) return
+
+    isProcessingQueueRef.current = true
+    setQueuedPrompts((previous) => previous.slice(1))
+
+    void executeSendMessage(nextPrompt.input, {
+      conversationId: nextPrompt.conversationId,
+      mode: nextPrompt.mode,
+      settings: nextPrompt.settings,
+      projectId: nextPrompt.projectId,
+    }).finally(() => {
+      isProcessingQueueRef.current = false
+    })
+  }, [executeSendMessage, queuedPrompts, streamingState.status])
+
   const value = useMemo<ChatContextType>(
     () => ({
       authState,
@@ -1335,6 +1479,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       createNewChat,
       deleteChat,
       togglePinChat,
+      queuedPromptCount: queuedPrompts.length,
       sendMessage,
       regenerateLastResponse,
       retryLastMessage,
@@ -1361,6 +1506,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       selectedProjectId,
       setSelectedProjectId,
       createProject,
+      moveChatToProject,
       moveCurrentChatToProject,
       promptLibrary,
       savePrompt,
@@ -1385,6 +1531,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       isSettingsPanelOpen,
       isSidebarOpen,
       isStreaming,
+      queuedPrompts.length,
+      moveChatToProject,
       moveCurrentChatToProject,
       projects,
       promptLibrary,

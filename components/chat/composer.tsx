@@ -39,6 +39,7 @@ export function Composer({ onSend, disabled, initialValue = '' }: ComposerProps)
     savePrompt,
     deletePrompt,
     isStreaming,
+    queuedPromptCount,
     stopStreaming,
   } = useChatContext()
   const [value, setValue] = useState(initialValue)
@@ -69,7 +70,7 @@ export function Composer({ onSend, disabled, initialValue = '' }: ComposerProps)
   }, [value])
 
   const handleSubmit = () => {
-    if ((!value.trim() && pendingAttachments.length === 0) || disabled || isStreaming) return
+    if ((!value.trim() && pendingAttachments.length === 0) || disabled) return
     const normalizedContent =
       value.trim() ||
       `Review these files and help me with them: ${pendingAttachments
@@ -193,7 +194,7 @@ export function Composer({ onSend, disabled, initialValue = '' }: ComposerProps)
                 ? 'Describe the image you want to create...'
                 : modeConfig.placeholder
             }
-            disabled={disabled || isStreaming}
+            disabled={disabled}
             rows={1}
             className={cn(
               'w-full resize-none bg-transparent px-4 pt-4 pb-14 text-foreground placeholder:text-muted-foreground',
@@ -219,7 +220,7 @@ export function Composer({ onSend, disabled, initialValue = '' }: ComposerProps)
                           variant="ghost"
                           size="icon-sm"
                           className="text-muted-foreground hover:text-foreground"
-                          disabled={disabled || isStreaming}
+                          disabled={disabled}
                         >
                           <BookText className="size-4" />
                         </Button>
@@ -326,7 +327,7 @@ export function Composer({ onSend, disabled, initialValue = '' }: ComposerProps)
                       variant="ghost"
                       size="icon-sm"
                       className="text-muted-foreground hover:text-foreground"
-                      disabled={disabled || isStreaming}
+                      disabled={disabled}
                       onClick={handleOpenFilePicker}
                     >
                       <PaperclipIcon className="size-4" />
@@ -347,7 +348,7 @@ export function Composer({ onSend, disabled, initialValue = '' }: ComposerProps)
                         composerKind === 'image' &&
                           `${getModeAccentClass(currentMode, 'text')} ${getModeGlow(currentMode)}`
                       )}
-                      disabled={disabled || isStreaming}
+                      disabled={disabled}
                       onClick={() =>
                         setComposerKind((previous) =>
                           previous === 'image' ? 'chat' : 'image'
@@ -369,13 +370,29 @@ export function Composer({ onSend, disabled, initialValue = '' }: ComposerProps)
             {/* Right Actions */}
             <div className="flex items-center gap-2">
               {isStreaming ? (
-                <Button
-                  onClick={handleStop}
-                  className="bg-destructive hover:bg-destructive/90 text-destructive-foreground"
-                >
-                  <StopIcon className="size-4 mr-2" />
-                  Stop
-                </Button>
+                <>
+                  <Button
+                    onClick={handleSubmit}
+                    disabled={(!value.trim() && pendingAttachments.length === 0) || disabled}
+                    className={cn(
+                      'transition-all duration-300 text-white disabled:opacity-50',
+                      getModeAccentClass(currentMode, 'bg'),
+                      'hover:opacity-90',
+                      getModeGlow(currentMode)
+                    )}
+                  >
+                    <SendIcon className="size-4 mr-2" />
+                    Queue
+                    {queuedPromptCount > 0 ? ` (${queuedPromptCount + 1})` : ''}
+                  </Button>
+                  <Button
+                    onClick={handleStop}
+                    className="bg-destructive hover:bg-destructive/90 text-destructive-foreground"
+                  >
+                    <StopIcon className="size-4 mr-2" />
+                    Stop
+                  </Button>
+                </>
               ) : (
                 <Button
                   onClick={handleSubmit}
@@ -399,13 +416,14 @@ export function Composer({ onSend, disabled, initialValue = '' }: ComposerProps)
         <p className="text-xs text-muted-foreground text-center mt-3">
           {composerKind === 'image' ? (
             <>
-              Image mode generates a polished visual from your prompt.
+              Image mode generates a richer, more production-ready visual from your prompt.
             </>
           ) : null}
           {composerKind === 'image' ? ' ' : null}
           Press <kbd className="px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-mono text-xs">Enter</kbd> to send,{' '}
           <kbd className="px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-mono text-xs">Shift + Enter</kbd> for new line,{' '}
           <kbd className="px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-mono text-xs">Ctrl/Cmd + Enter</kbd> to send from anywhere in the draft
+          {queuedPromptCount > 0 ? ` • ${queuedPromptCount} queued` : ''}
         </p>
       </div>
     </div>
