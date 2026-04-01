@@ -82,7 +82,7 @@ function ChatItem({
   return (
     <div
       className={cn(
-        'group relative flex items-center gap-3 rounded-xl px-3 py-2.5 cursor-pointer transition-all duration-200',
+        'group relative flex items-center gap-3 rounded-xl px-3 py-2.5 pr-13 cursor-pointer transition-all duration-200',
         isActive
           ? 'bg-sidebar-accent text-sidebar-accent-foreground'
           : 'hover:bg-sidebar-accent/50 text-sidebar-foreground/70 hover:text-sidebar-foreground'
@@ -118,7 +118,7 @@ function ChatItem({
         </p>
       </div>
 
-      <div className="flex shrink-0 items-center gap-1">
+      <div className="absolute right-3 top-1/2 flex -translate-y-1/2 items-center gap-1">
         {chat.isPinned && (
           <PinIcon className="size-3 text-sidebar-foreground/40 shrink-0" />
         )}
@@ -132,10 +132,10 @@ function ChatItem({
                     variant="outline"
                     size="icon"
                     className={cn(
-                      'size-8 cursor-pointer rounded-lg border-sidebar-border/70 bg-sidebar-accent/50 text-sidebar-foreground/75 shadow-none transition-all hover:border-sidebar-primary/30 hover:bg-sidebar-accent hover:text-sidebar-foreground',
+                      'size-8 cursor-pointer rounded-lg border-sidebar-border/80 bg-sidebar/95 text-sidebar-foreground/85 shadow-sm transition-all hover:border-sidebar-primary/40 hover:bg-sidebar-accent hover:text-sidebar-foreground',
                       isActive
                         ? 'opacity-100'
-                        : 'opacity-70 group-hover:opacity-100 group-focus-within:opacity-100'
+                        : 'opacity-95 group-hover:opacity-100 group-focus-within:opacity-100'
                     )}
                     onClick={(event) => event.stopPropagation()}
                   >
