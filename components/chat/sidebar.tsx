@@ -62,8 +62,8 @@ interface SidebarProps {
 
 function getSidebarChatTitle(title: string): string {
   const trimmed = title.trim()
-  if (trimmed.length <= 34) return trimmed
-  return `${trimmed.slice(0, 34).trimEnd()}…`
+  if (trimmed.length <= 28) return trimmed
+  return `${trimmed.slice(0, 28).trimEnd()}…`
 }
 
 function ChatItem({
@@ -88,7 +88,7 @@ function ChatItem({
   return (
     <div
       className={cn(
-        'group relative flex items-start gap-3 rounded-xl px-3 py-2.5 cursor-pointer transition-all duration-200',
+        'group relative grid grid-cols-[2rem,minmax(0,1fr),2.75rem] items-start gap-3 rounded-xl px-3 py-2.5 cursor-pointer transition-all duration-200',
         isActive
           ? 'bg-sidebar-accent text-sidebar-accent-foreground'
           : 'hover:bg-sidebar-accent/50 text-sidebar-foreground/70 hover:text-sidebar-foreground'
@@ -106,7 +106,7 @@ function ChatItem({
         <ModeIcon mode={chat.mode} size="sm" />
       </div>
 
-      <div className="min-w-0 flex-1 overflow-hidden">
+      <div className="min-w-0 pr-1">
         <TooltipProvider delayDuration={300}>
           <Tooltip>
             <TooltipTrigger asChild>
@@ -131,7 +131,7 @@ function ChatItem({
         </div>
       </div>
 
-      <div className="flex h-8 w-10 shrink-0 items-start justify-end pl-2">
+      <div className="flex w-11 shrink-0 items-start justify-end">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button
@@ -141,8 +141,8 @@ function ChatItem({
               title="Chat actions"
               aria-label="Chat actions"
               className={cn(
-                'size-8 cursor-pointer rounded-lg border-sidebar-border/90 bg-sidebar/95 text-sidebar-foreground/85 shadow-sm transition-all hover:border-sidebar-primary/50 hover:bg-sidebar-accent hover:text-sidebar-foreground',
-                isActive && 'border-sidebar-primary/30 bg-sidebar-accent/70'
+                'size-8 cursor-pointer rounded-lg border-sidebar-border bg-sidebar-accent text-sidebar-foreground shadow-sm transition-all hover:border-sidebar-primary/50 hover:bg-sidebar-primary/10 hover:text-sidebar-foreground',
+                isActive && 'border-sidebar-primary/40 bg-sidebar-primary/10 text-sidebar-foreground'
               )}
               onClick={(event) => event.stopPropagation()}
             >
@@ -543,7 +543,7 @@ export function Sidebar({ onOpenSettings }: SidebarProps) {
 
       {/* Chat List */}
       <ScrollArea className="min-h-0 flex-1 px-2">
-        <div className="space-y-6 py-2 pr-4">
+        <div className="space-y-6 py-2 pr-5">
           <ChatSection
             title="Pinned"
             chats={pinnedChats}
@@ -557,7 +557,7 @@ export function Sidebar({ onOpenSettings }: SidebarProps) {
           />
 
           <ChatSection
-            title="Recent"
+            title="Chats"
             chats={recentChats}
             currentChatId={currentChat?.id}
             onSelectChat={setCurrentChat}
