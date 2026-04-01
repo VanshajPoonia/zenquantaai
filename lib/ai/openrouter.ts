@@ -252,6 +252,7 @@ export async function createOpenRouterImage(input: {
   model: string
   prompt: string
   systemPrompt?: string
+  modalities?: Array<'image' | 'text'>
 }): Promise<{
   content: string
   imageUrl: string
@@ -280,7 +281,7 @@ export async function createOpenRouterImage(input: {
     body: JSON.stringify({
       model: input.model,
       messages,
-      modalities: ['image', 'text'],
+      modalities: input.modalities ?? ['image'],
     }),
   })
 

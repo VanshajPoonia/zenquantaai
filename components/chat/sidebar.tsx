@@ -1,10 +1,10 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import { FolderPlus, FolderTree } from 'lucide-react'
+import { FolderInput, FolderPlus, FolderTree, MoreHorizontal } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useChatContext } from '@/lib/chat-context'
-import { ConversationSummary } from '@/lib/types'
+import { ConversationSummary, Project } from '@/lib/types'
 import { ModeIcon, getModeAccentClass } from '@/lib/mode-utils'
 import {
   formatEstimatedCostUsd,
@@ -31,6 +31,10 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import {
@@ -55,14 +59,18 @@ function ChatItem({
   onSelect,
   onPin,
   onDelete,
+  onMoveToProject,
   projectLabel,
+  projects,
 }: {
   chat: ConversationSummary
   isActive: boolean
   onSelect: () => void
   onPin: () => void
   onDelete: () => void
+  onMoveToProject: (projectId: string) => void
   projectLabel: string
+  projects: Project[]
 }) {
   const [showActions, setShowActions] = useState(false)
 
@@ -113,52 +121,68 @@ function ChatItem({
       )}
 
       {showActions && (
-        <div className="flex items-center gap-0.5 shrink-0 animate-in fade-in duration-150">
-          <TooltipProvider delayDuration={300}>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="size-7 hover:bg-sidebar-accent"
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    onPin()
-                  }}
-                >
-                  <PinIcon
-                    className={cn(
-                      'size-3',
-                      chat.isPinned && 'text-sidebar-primary'
-                    )}
-                  />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="top" className="text-xs">
-                {chat.isPinned ? 'Unpin' : 'Pin'}
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
-          <TooltipProvider delayDuration={300}>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="size-7 hover:bg-destructive/20 hover:text-destructive"
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    onDelete()
-                  }}
-                >
-                  <TrashIcon className="size-3" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="top" className="text-xs">
-                Delete
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
+        <div className="shrink-0 animate-in fade-in duration-150">
+          <DropdownMenu>
+            <TooltipProvider delayDuration={300}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="size-7 cursor-pointer hover:bg-sidebar-accent"
+                      onClick={(event) => event.stopPropagation()}
+                    >
+                      <MoreHorizontal className="size-3.5" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                </TooltipTrigger>
+                <TooltipContent side="top" className="text-xs">
+                  Chat actions
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+            <DropdownMenuContent
+              align="end"
+              className="w-52 rounded-xl border-sidebar-border/70 bg-sidebar p-1.5 text-sidebar-foreground"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <DropdownMenuSub>
+                <DropdownMenuSubTrigger className="cursor-pointer rounded-lg">
+                  <FolderInput className="size-4" />
+                  Move to project
+                </DropdownMenuSubTrigger>
+                <DropdownMenuSubContent className="w-48 rounded-xl border-sidebar-border/70 bg-sidebar p-1.5 text-sidebar-foreground">
+                  {projects.map((project) => (
+                    <DropdownMenuItem
+                      key={project.id}
+                      className="cursor-pointer rounded-lg"
+                      disabled={project.id === chat.projectId}
+                      onClick={() => onMoveToProject(project.id)}
+                    >
+                      {project.name}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuSubContent>
+              </DropdownMenuSub>
+              <DropdownMenuSeparator className="bg-sidebar-border/70" />
+              <DropdownMenuItem
+                className="cursor-pointer rounded-lg"
+                onClick={onPin}
+              >
+                <PinIcon className={cn('size-4', chat.isPinned && 'text-sidebar-primary')} />
+                {chat.isPinned ? 'Unpin chat' : 'Pin chat'}
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                variant="destructive"
+                className="cursor-pointer rounded-lg"
+                onClick={onDelete}
+              >
+                <TrashIcon className="size-4" />
+                Delete chat
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       )}
     </div>
@@ -172,7 +196,9 @@ function ChatSection({
   onSelectChat,
   onPinChat,
   onDeleteChat,
+  onMoveChatToProject,
   projectLabelById,
+  projects,
 }: {
   title: string
   chats: ConversationSummary[]
@@ -180,7 +206,9 @@ function ChatSection({
   onSelectChat: (chat: ConversationSummary) => void
   onPinChat: (id: string) => void
   onDeleteChat: (id: string) => void
+  onMoveChatToProject: (chatId: string, projectId: string) => void
   projectLabelById: Record<string, string>
+  projects: Project[]
 }) {
   if (chats.length === 0) return null
 
@@ -197,7 +225,9 @@ function ChatSection({
           onSelect={() => onSelectChat(chat)}
           onPin={() => onPinChat(chat.id)}
           onDelete={() => onDeleteChat(chat.id)}
+          onMoveToProject={(projectId) => onMoveChatToProject(chat.id, projectId)}
           projectLabel={projectLabelById[chat.projectId] ?? 'Inbox'}
+          projects={projects}
         />
       ))}
     </div>
@@ -230,6 +260,7 @@ export function Sidebar({ onOpenSettings }: SidebarProps) {
     createNewChat,
     deleteChat,
     togglePinChat,
+    moveChatToProject,
     projects,
     selectedProjectId,
     setSelectedProjectId,
@@ -468,7 +499,9 @@ export function Sidebar({ onOpenSettings }: SidebarProps) {
             onSelectChat={setCurrentChat}
             onPinChat={togglePinChat}
             onDeleteChat={deleteChat}
+            onMoveChatToProject={moveChatToProject}
             projectLabelById={projectLabelById}
+            projects={projects}
           />
 
           <ChatSection
@@ -478,7 +511,9 @@ export function Sidebar({ onOpenSettings }: SidebarProps) {
             onSelectChat={setCurrentChat}
             onPinChat={togglePinChat}
             onDeleteChat={deleteChat}
+            onMoveChatToProject={moveChatToProject}
             projectLabelById={projectLabelById}
+            projects={projects}
           />
 
           {filteredChats.length === 0 && (
