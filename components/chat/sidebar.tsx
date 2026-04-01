@@ -1,7 +1,14 @@
 'use client'
 
-import { useMemo, useState } from 'react'
-import { FolderInput, FolderPlus, FolderTree, MoreHorizontal } from 'lucide-react'
+import { useMemo, useRef, useState } from 'react'
+import {
+  FolderInput,
+  FolderPlus,
+  FolderTree,
+  GripVertical,
+  MoreHorizontal,
+  PanelLeftClose,
+} from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useChatContext } from '@/lib/chat-context'
 import { ConversationSummary, Project } from '@/lib/types'
@@ -72,8 +79,6 @@ function ChatItem({
   projectLabel: string
   projects: Project[]
 }) {
-  const [showActions, setShowActions] = useState(false)
-
   return (
     <div
       className={cn(
@@ -83,8 +88,6 @@ function ChatItem({
           : 'hover:bg-sidebar-accent/50 text-sidebar-foreground/70 hover:text-sidebar-foreground'
       )}
       onClick={onSelect}
-      onMouseEnter={() => setShowActions(true)}
-      onMouseLeave={() => setShowActions(false)}
     >
       {/* Mode indicator */}
       <div
@@ -115,76 +118,78 @@ function ChatItem({
         </p>
       </div>
 
-      {/* Pin icon or actions */}
-      {chat.isPinned && !showActions && (
-        <PinIcon className="size-3 text-sidebar-foreground/40 shrink-0" />
-      )}
+      <div className="flex shrink-0 items-center gap-1">
+        {chat.isPinned && (
+          <PinIcon className="size-3 text-sidebar-foreground/40 shrink-0" />
+        )}
 
-      {showActions && (
-        <div className="shrink-0 animate-in fade-in duration-150">
-          <DropdownMenu>
-            <TooltipProvider delayDuration={300}>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <DropdownMenuTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="size-7 cursor-pointer hover:bg-sidebar-accent"
-                      onClick={(event) => event.stopPropagation()}
-                    >
-                      <MoreHorizontal className="size-3.5" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                </TooltipTrigger>
-                <TooltipContent side="top" className="text-xs">
-                  Chat actions
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-            <DropdownMenuContent
-              align="end"
-              className="w-52 rounded-xl border-sidebar-border/70 bg-sidebar p-1.5 text-sidebar-foreground"
-              onClick={(event) => event.stopPropagation()}
+        <DropdownMenu>
+          <TooltipProvider delayDuration={300}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className={cn(
+                      'size-7 cursor-pointer rounded-lg text-sidebar-foreground/45 transition-all hover:bg-sidebar-accent hover:text-sidebar-foreground',
+                      isActive
+                        ? 'opacity-100'
+                        : 'opacity-70 group-hover:opacity-100 group-focus-within:opacity-100'
+                    )}
+                    onClick={(event) => event.stopPropagation()}
+                  >
+                    <MoreHorizontal className="size-3.5" />
+                  </Button>
+                </DropdownMenuTrigger>
+              </TooltipTrigger>
+              <TooltipContent side="top" className="text-xs">
+                Chat actions
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+          <DropdownMenuContent
+            align="end"
+            className="w-52 rounded-xl border-sidebar-border/70 bg-sidebar p-1.5 text-sidebar-foreground"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <DropdownMenuSub>
+              <DropdownMenuSubTrigger className="cursor-pointer rounded-lg">
+                <FolderInput className="size-4" />
+                Move to project
+              </DropdownMenuSubTrigger>
+              <DropdownMenuSubContent className="w-48 rounded-xl border-sidebar-border/70 bg-sidebar p-1.5 text-sidebar-foreground">
+                {projects.map((project) => (
+                  <DropdownMenuItem
+                    key={project.id}
+                    className="cursor-pointer rounded-lg"
+                    disabled={project.id === chat.projectId}
+                    onClick={() => onMoveToProject(project.id)}
+                  >
+                    {project.name}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuSubContent>
+            </DropdownMenuSub>
+            <DropdownMenuSeparator className="bg-sidebar-border/70" />
+            <DropdownMenuItem
+              className="cursor-pointer rounded-lg"
+              onClick={onPin}
             >
-              <DropdownMenuSub>
-                <DropdownMenuSubTrigger className="cursor-pointer rounded-lg">
-                  <FolderInput className="size-4" />
-                  Move to project
-                </DropdownMenuSubTrigger>
-                <DropdownMenuSubContent className="w-48 rounded-xl border-sidebar-border/70 bg-sidebar p-1.5 text-sidebar-foreground">
-                  {projects.map((project) => (
-                    <DropdownMenuItem
-                      key={project.id}
-                      className="cursor-pointer rounded-lg"
-                      disabled={project.id === chat.projectId}
-                      onClick={() => onMoveToProject(project.id)}
-                    >
-                      {project.name}
-                    </DropdownMenuItem>
-                  ))}
-                </DropdownMenuSubContent>
-              </DropdownMenuSub>
-              <DropdownMenuSeparator className="bg-sidebar-border/70" />
-              <DropdownMenuItem
-                className="cursor-pointer rounded-lg"
-                onClick={onPin}
-              >
-                <PinIcon className={cn('size-4', chat.isPinned && 'text-sidebar-primary')} />
-                {chat.isPinned ? 'Unpin chat' : 'Pin chat'}
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                variant="destructive"
-                className="cursor-pointer rounded-lg"
-                onClick={onDelete}
-              >
-                <TrashIcon className="size-4" />
-                Delete chat
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-      )}
+              <PinIcon className={cn('size-4', chat.isPinned && 'text-sidebar-primary')} />
+              {chat.isPinned ? 'Unpin chat' : 'Pin chat'}
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              variant="destructive"
+              className="cursor-pointer rounded-lg"
+              onClick={onDelete}
+            >
+              <TrashIcon className="size-4" />
+              Delete chat
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
     </div>
   )
 }
@@ -268,11 +273,15 @@ export function Sidebar({ onOpenSettings }: SidebarProps) {
     searchQuery,
     setSearchQuery,
     isSidebarOpen,
+    sidebarWidth,
+    setSidebarWidth,
+    toggleSidebar,
     authState,
     signOut,
   } = useChatContext()
   const [isCreatingProject, setIsCreatingProject] = useState(false)
   const [newProjectName, setNewProjectName] = useState('')
+  const sidebarRef = useRef<HTMLElement | null>(null)
 
   const projectLabelById = useMemo(
     () =>
@@ -347,25 +356,67 @@ export function Sidebar({ onOpenSettings }: SidebarProps) {
 
   if (!isSidebarOpen) return null
 
+  const handleResizeStart = (event: React.MouseEvent<HTMLDivElement>) => {
+    event.preventDefault()
+
+    const handlePointerMove = (moveEvent: MouseEvent) => {
+      const left = sidebarRef.current?.getBoundingClientRect().left ?? 0
+      setSidebarWidth(moveEvent.clientX - left)
+    }
+
+    const handlePointerUp = () => {
+      window.removeEventListener('mousemove', handlePointerMove)
+      window.removeEventListener('mouseup', handlePointerUp)
+    }
+
+    window.addEventListener('mousemove', handlePointerMove)
+    window.addEventListener('mouseup', handlePointerUp)
+  }
+
   return (
-    <aside className="flex h-full min-h-0 w-72 flex-col bg-sidebar border-r border-sidebar-border">
+    <aside
+      ref={sidebarRef}
+      style={{ width: `${sidebarWidth}px` }}
+      className="relative flex h-full min-h-0 shrink-0 flex-col border-r border-sidebar-border bg-sidebar"
+    >
       {/* Header with logo and new chat */}
       <div className="p-4 space-y-4">
-        <button
-          type="button"
-          onClick={goHome}
-          className="flex cursor-pointer items-center gap-3 rounded-2xl p-1 text-left transition-colors hover:bg-sidebar-accent/40"
-        >
-          <ZenquantaLogo className="size-9" />
-          <div>
-            <span className="font-bold text-lg text-sidebar-foreground tracking-tight">
-              Zenquanta
-            </span>
-            <span className="ml-1.5 text-xs font-medium px-1.5 py-0.5 rounded bg-sidebar-primary/20 text-sidebar-primary">
-              AI
-            </span>
-          </div>
-        </button>
+        <div className="flex items-center justify-between gap-2">
+          <button
+            type="button"
+            onClick={goHome}
+            className="flex cursor-pointer items-center gap-3 rounded-2xl p-1 text-left transition-colors hover:bg-sidebar-accent/40"
+          >
+            <ZenquantaLogo className="size-9" />
+            <div>
+              <span className="font-bold text-lg text-sidebar-foreground tracking-tight">
+                Zenquanta
+              </span>
+              <span className="ml-1.5 text-xs font-medium px-1.5 py-0.5 rounded bg-sidebar-primary/20 text-sidebar-primary">
+                AI
+              </span>
+            </div>
+          </button>
+
+          <TooltipProvider delayDuration={300}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="size-9 rounded-xl text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground"
+                  onClick={toggleSidebar}
+                >
+                  <PanelLeftClose className="size-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" className="text-xs">
+                Collapse sidebar
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        </div>
 
         <Button
           onClick={createNewChat}
@@ -602,6 +653,18 @@ export function Sidebar({ onOpenSettings }: SidebarProps) {
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
+        </div>
+      </div>
+
+      <div
+        role="separator"
+        aria-orientation="vertical"
+        aria-label="Resize sidebar"
+        className="absolute inset-y-0 right-0 z-20 flex w-3 translate-x-1/2 cursor-col-resize items-center justify-center"
+        onMouseDown={handleResizeStart}
+      >
+        <div className="flex h-16 w-1.5 items-center justify-center rounded-full bg-sidebar-border/70 text-sidebar-foreground/30 transition-colors hover:bg-sidebar-primary/40 hover:text-sidebar-foreground/60">
+          <GripVertical className="size-3.5" />
         </div>
       </div>
     </aside>

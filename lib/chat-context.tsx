@@ -44,8 +44,10 @@ import {
   readBrowserProjects,
   readBrowserPromptLibrary,
   readBrowserSelectedProjectId,
+  readBrowserSidebarWidth,
   writeBrowserCurrentChatId,
   writeBrowserSelectedProjectId,
+  writeBrowserSidebarWidth,
   writeLocalImportMarker,
 } from '@/lib/storage/browser'
 import {
@@ -128,6 +130,8 @@ interface ChatContextType {
   apiSettings: APISettings
   updateApiSettings: (settings: Partial<APISettings>) => Promise<void>
   isSidebarOpen: boolean
+  sidebarWidth: number
+  setSidebarWidth: (width: number) => void
   toggleSidebar: () => void
   isSettingsPanelOpen: boolean
   toggleSettingsPanel: () => void
@@ -146,6 +150,12 @@ interface ChatContextType {
 }
 
 const ChatContext = createContext<ChatContextType | undefined>(undefined)
+const MIN_SIDEBAR_WIDTH = 280
+const MAX_SIDEBAR_WIDTH = 440
+
+function clampSidebarWidth(width: number): number {
+  return Math.min(MAX_SIDEBAR_WIDTH, Math.max(MIN_SIDEBAR_WIDTH, width))
+}
 
 function normalizeModeSessionSettings(
   mode: AIMode,
@@ -212,6 +222,9 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     status: 'idle',
   })
   const [isSidebarOpen, setIsSidebarOpen] = useState(true)
+  const [sidebarWidth, setSidebarWidthState] = useState<number>(() =>
+    clampSidebarWidth(readBrowserSidebarWidth() ?? 288)
+  )
   const [isSettingsPanelOpen, setIsSettingsPanelOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [projects, setProjects] = useState<Project[]>([])
@@ -409,6 +422,12 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const setSelectedProjectId = useCallback((projectId: ProjectFilterId) => {
     setSelectedProjectIdState(projectId)
     writeBrowserSelectedProjectId(projectId === 'all' ? null : projectId)
+  }, [])
+
+  const setSidebarWidth = useCallback((width: number) => {
+    const nextWidth = clampSidebarWidth(width)
+    setSidebarWidthState(nextWidth)
+    writeBrowserSidebarWidth(nextWidth)
   }, [])
 
   const runLocalImport = useCallback(
@@ -1496,6 +1515,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       apiSettings: appSettings.gatewayDrafts,
       updateApiSettings,
       isSidebarOpen,
+      sidebarWidth,
+      setSidebarWidth,
       toggleSidebar: () => setIsSidebarOpen((previous) => !previous),
       isSettingsPanelOpen,
       toggleSettingsPanel: () => setIsSettingsPanelOpen((previous) => !previous),
@@ -1532,6 +1553,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       isSidebarOpen,
       isStreaming,
       queuedPrompts.length,
+      setSidebarWidth,
+      sidebarWidth,
       moveChatToProject,
       moveCurrentChatToProject,
       projects,

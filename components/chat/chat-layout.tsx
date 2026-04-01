@@ -3,6 +3,8 @@
 import { useState } from 'react'
 import { ChatProvider, useChatContext } from '@/lib/chat-context'
 import { AuthGate } from '@/components/auth/auth-gate'
+import { Button } from '@/components/ui/button'
+import { MenuIcon } from '@/components/icons'
 import { Sidebar } from './sidebar'
 import { Header } from './header'
 import { ChatArea } from './chat-area'
@@ -26,7 +28,7 @@ function ChatShell({
   isSettingsModalOpen: boolean
   setIsSettingsModalOpen: (value: boolean) => void
 }) {
-  const { authState } = useChatContext()
+  const { authState, isSidebarOpen, toggleSidebar } = useChatContext()
 
   if (authState.status === 'loading') {
     return <LoadingScreen />
@@ -39,6 +41,18 @@ function ChatShell({
   return (
     <div className="flex h-screen w-full overflow-hidden bg-background">
       <Sidebar onOpenSettings={() => setIsSettingsModalOpen(true)} />
+
+      {!isSidebarOpen && (
+        <Button
+          type="button"
+          variant="secondary"
+          size="icon"
+          className="absolute left-4 top-4 z-40 size-10 rounded-xl border border-border/70 bg-card/90 shadow-lg backdrop-blur-sm"
+          onClick={toggleSidebar}
+        >
+          <MenuIcon className="size-4" />
+        </Button>
+      )}
 
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         <Header onOpenSettings={() => setIsSettingsModalOpen(true)} />
