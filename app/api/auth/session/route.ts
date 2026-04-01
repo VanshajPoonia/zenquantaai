@@ -4,6 +4,7 @@ import {
   appendClearedAuthCookies,
   readRequestAuthSession,
 } from '@/lib/auth/session'
+import { profilesStore } from '@/lib/storage'
 
 export const runtime = 'nodejs'
 
@@ -23,8 +24,13 @@ export async function GET(request: NextRequest) {
     return response
   }
 
+  const profile = await profilesStore.ensureFromAuthUser(session.user)
+
   const response = NextResponse.json({
-    user: session.user,
+    user: {
+      ...session.user,
+      role: profile.role,
+    },
     authenticated: true,
   })
 

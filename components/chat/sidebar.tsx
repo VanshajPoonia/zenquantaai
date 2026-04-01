@@ -663,6 +663,11 @@ export function Sidebar({ onOpenSettings }: SidebarProps) {
                 <p className="mt-1 truncate text-sm text-foreground">
                   {authState.user?.loginId ?? authState.user?.email ?? 'Zenquanta user'}
                 </p>
+                {authState.user?.role === 'admin' ? (
+                  <p className="mt-1 text-[11px] font-medium uppercase tracking-[0.18em] text-sidebar-primary">
+                    Admin access enabled
+                  </p>
+                ) : null}
               </div>
               <div className="px-3 pb-2">
                 <div className="rounded-xl border border-border/70 bg-card/60 p-3">
@@ -706,9 +711,11 @@ export function Sidebar({ onOpenSettings }: SidebarProps) {
               <DropdownMenuItem asChild>
                 <Link href="/pricing">Plans</Link>
               </DropdownMenuItem>
-              <DropdownMenuItem asChild>
-                <Link href="/admin">Admin</Link>
-              </DropdownMenuItem>
+              {authState.user?.role === 'admin' ? (
+                <DropdownMenuItem asChild>
+                  <Link href="/admin">Admin</Link>
+                </DropdownMenuItem>
+              ) : null}
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={() => void signOut()}>
                 Sign out

@@ -11,13 +11,23 @@ import {
   getAssistantUsageBreakdown,
   getDisplayedCreditsSnapshot,
 } from '@/lib/billing/costs'
-import { usdToDisplayedCredits } from '@/lib/config'
+import {
+  ASSISTANT_FAMILY_COPY,
+  ASSISTANT_PUBLIC_PAGES,
+  usdToDisplayedCredits,
+} from '@/lib/config'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 
-export default async function DashboardPage() {
-  const { user } = await requireServerUser()
+export default async function DashboardPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>
+}) {
+  const { user, profile } = await requireServerUser()
+  const params = await searchParams
+  const adminRequired = params.admin === 'required'
   const [subscription, usageEvents, imageEvents, requests, conversations] =
     await Promise.all([
       subscriptionsStore.ensureForUser(user),
@@ -68,8 +78,20 @@ export default async function DashboardPage() {
             <Button asChild className="rounded-xl">
               <Link href="/pricing">View plans</Link>
             </Button>
+            {profile?.role === 'admin' ? (
+              <Button asChild variant="outline" className="rounded-xl">
+                <Link href="/admin">Open admin</Link>
+              </Button>
+            ) : null}
           </div>
         </div>
+
+        {adminRequired ? (
+          <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 px-5 py-4 text-sm text-amber-100">
+            Admin access is enabled only for accounts with the admin role. If you
+            just updated your role in Supabase, refresh this page and try again.
+          </div>
+        ) : null}
 
         {pendingRequest ? (
           <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 px-5 py-4 text-sm text-amber-100">
@@ -120,9 +142,12 @@ export default async function DashboardPage() {
                   className="flex items-center justify-between rounded-2xl border border-border/60 bg-background/40 px-4 py-3"
                 >
                   <div>
-                    <p className="font-medium capitalize text-foreground">
-                      {item.family}
-                    </p>
+                    <Link
+                      href={`/${ASSISTANT_PUBLIC_PAGES[item.family].slug}`}
+                      className="font-medium capitalize text-foreground transition-colors hover:text-primary"
+                    >
+                      {ASSISTANT_FAMILY_COPY[item.family].shortName}
+                    </Link>
                     <p className="text-xs text-muted-foreground">
                       {item.events} requests
                     </p>

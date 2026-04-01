@@ -12,10 +12,14 @@ export async function requireServerUser() {
     redirect('/')
   }
 
-  const profile = await profilesStore.get(session.user.id)
+  const profile = await profilesStore.ensureFromAuthUser(session.user)
+  const user = {
+    ...session.user,
+    role: profile.role,
+  }
 
   return {
-    user: session.user,
+    user,
     profile,
     session,
   }
@@ -25,7 +29,7 @@ export async function requireAdmin() {
   const result = await requireServerUser()
 
   if (result.profile?.role !== 'admin') {
-    redirect('/')
+    redirect('/dashboard?admin=required')
   }
 
   return result
@@ -38,7 +42,7 @@ export async function requireAdminApiUser(request: NextRequest) {
     return auth
   }
 
-  const profile = await profilesStore.get(auth.user.id)
+  const profile = await profilesStore.ensureFromAuthUser(auth.user)
 
   if (profile?.role !== 'admin') {
     return {

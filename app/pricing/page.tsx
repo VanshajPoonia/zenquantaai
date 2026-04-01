@@ -1,5 +1,10 @@
 import Link from 'next/link'
-import { PLAN_CONFIGS, TIER_ASSISTANT_NAMES } from '@/lib/config'
+import {
+  ASSISTANT_PUBLIC_PAGES,
+  PLAN_CONFIGS,
+  TIER_ASSISTANT_NAMES,
+} from '@/lib/config'
+import { AssistantFamily } from '@/types'
 import { requireServerUser } from '@/lib/auth/require-admin'
 import { planRequestsStore, subscriptionsStore } from '@/lib/storage'
 import { requestPlanAction } from './actions'
@@ -19,6 +24,12 @@ export default async function PricingPage({
   const pendingRequest = await planRequestsStore.getLatestPendingForUser(user.id)
   const params = await searchParams
   const requested = params.requested === '1'
+  const error =
+    typeof params.error === 'string'
+      ? params.error
+      : Array.isArray(params.error)
+        ? params.error[0]
+        : null
 
   return (
     <main className="min-h-screen bg-background px-4 py-8 sm:px-6 lg:px-10">
@@ -49,6 +60,13 @@ export default async function PricingPage({
         {requested ? (
           <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-5 py-4 text-sm text-emerald-100">
             Your request has been sent. Your plan will be activated soon.
+          </div>
+        ) : null}
+
+        {error === 'already-covered' ? (
+          <div className="rounded-2xl border border-rose-500/30 bg-rose-500/10 px-5 py-4 text-sm text-rose-100">
+            Your current plan already covers this tier or higher. Choose a higher
+            plan if you want to submit a new request.
           </div>
         ) : null}
 
@@ -92,13 +110,14 @@ export default async function PricingPage({
                   <p>{plan.maxImagesPerDay.toLocaleString()} images/day</p>
                 </div>
                 <div className="space-y-2">
-                  {Object.values(TIER_ASSISTANT_NAMES[plan.tier]).map((name) => (
-                    <div
+                  {Object.entries(TIER_ASSISTANT_NAMES[plan.tier]).map(([family, name]) => (
+                    <Link
                       key={name}
+                      href={`/${ASSISTANT_PUBLIC_PAGES[family as AssistantFamily].slug}`}
                       className="rounded-xl border border-border/50 bg-background/50 px-3 py-2 text-sm"
                     >
                       {name}
-                    </div>
+                    </Link>
                   ))}
                 </div>
                 {plan.tier === 'free' ? (

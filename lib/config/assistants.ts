@@ -1,4 +1,10 @@
-import { AssistantFamily, AssistantModelConfig, AIMode, SubscriptionTier } from '@/types'
+import {
+  AssistantFamily,
+  AssistantModelConfig,
+  AIMode,
+  AssistantPublicPageConfig,
+  SubscriptionTier,
+} from '@/types'
 import { MODEL_PRICING_CONFIG, TIER_ASSISTANT_NAMES } from './pricing'
 
 export const MODE_TO_FAMILY: Record<AIMode, AssistantFamily> = {
@@ -151,6 +157,138 @@ export const ASSISTANT_FAMILY_COPY: Record<
   },
 }
 
+export const ASSISTANT_PUBLIC_PAGES: Record<
+  AssistantFamily,
+  AssistantPublicPageConfig
+> = {
+  nova: {
+    family: 'nova',
+    slug: 'nova',
+    mode: 'general',
+    badge: 'General intelligence',
+    headline: 'Nova keeps broad work clear, useful, and fast-moving.',
+    subheadline:
+      'Use Nova when the work is open-ended and the priority is turning ambiguity into organized progress.',
+    positioning:
+      'Nova is the default Zenquanta engine for planning, synthesis, summaries, and practical decision support.',
+    bestFor: [
+      'Daily planning and structured execution',
+      'Summaries, notes, and simplification',
+      'Recommendation-style help and brainstorming',
+    ],
+    demoHighlights: [
+      'Turns rough notes into a clean action plan',
+      'Organizes messy thinking into confident next steps',
+      'Handles broad questions without feeling generic',
+    ],
+  },
+  velora: {
+    family: 'velora',
+    slug: 'velora',
+    mode: 'creative',
+    badge: 'Creative engine',
+    headline: 'Velora is built for taste, tone, and original direction.',
+    subheadline:
+      'Use Velora for copy, storytelling, concepts, naming, creative framing, and stronger brand language.',
+    positioning:
+      'Velora is Zenquanta’s expressive assistant for writing that needs voice, elegance, and imaginative range.',
+    bestFor: [
+      'Creative writing and concept work',
+      'Brand copy and campaign language',
+      'Naming, slogans, and art direction prompts',
+    ],
+    demoHighlights: [
+      'Sharpens flat writing into premium-feeling copy',
+      'Finds distinctive angles instead of generic phrasing',
+      'Keeps tone consistent across longer drafts',
+    ],
+  },
+  axiom: {
+    family: 'axiom',
+    slug: 'axiom',
+    mode: 'logic',
+    badge: 'Reasoning engine',
+    headline: 'Axiom is for decisions that need structure, not guesswork.',
+    subheadline:
+      'Use Axiom when you need rigorous comparisons, tradeoff analysis, and stepwise reasoning.',
+    positioning:
+      'Axiom is Zenquanta’s analytical assistant for decisions, frameworks, comparisons, and careful evaluation.',
+    bestFor: [
+      'Decision frameworks and tradeoffs',
+      'Complex comparisons and analysis',
+      'Breaking hard questions into clear reasoning',
+    ],
+    demoHighlights: [
+      'Separates signal from noise in complex choices',
+      'Produces more disciplined comparisons and criteria',
+      'Helps explain why a decision makes sense',
+    ],
+  },
+  forge: {
+    family: 'forge',
+    slug: 'forge',
+    mode: 'code',
+    badge: 'Technical engine',
+    headline: 'Forge focuses on implementation, debugging, and shipping.',
+    subheadline:
+      'Use Forge for code generation, system design, debugging, architecture, and technical planning.',
+    positioning:
+      'Forge is Zenquanta’s implementation-heavy assistant for developers and technical operators.',
+    bestFor: [
+      'Debugging and root-cause analysis',
+      'Building features and route handlers',
+      'Architecture notes and refactor planning',
+    ],
+    demoHighlights: [
+      'Produces implementation-ready technical output',
+      'Stays grounded in practical engineering tradeoffs',
+      'Works well for both debugging and new feature delivery',
+    ],
+  },
+  pulse: {
+    family: 'pulse',
+    slug: 'pulse',
+    mode: 'live',
+    badge: 'Current-context engine',
+    headline: 'Pulse is tuned for fast-moving context and live-style synthesis.',
+    subheadline:
+      'Use Pulse for market scans, current-context questions, active research, and quick synthesis.',
+    positioning:
+      'Pulse is Zenquanta’s research-oriented assistant for current information and fast situational awareness.',
+    bestFor: [
+      'Current-context research and synthesis',
+      'Comparing fast-moving markets or products',
+      'Rapid investigation and follow-up questioning',
+    ],
+    demoHighlights: [
+      'Feels faster and more current for live-style work',
+      'Good for active research threads and synthesis',
+      'Keeps answers concise while still directional',
+    ],
+  },
+  prism: {
+    family: 'prism',
+    slug: 'prism',
+    mode: 'image',
+    badge: 'Visual engine',
+    headline: 'Prism turns creative direction into polished visual output.',
+    subheadline:
+      'Use Prism for image generation, concept visuals, product renders, editorial ideas, and art direction.',
+    positioning:
+      'Prism is Zenquanta’s image-generation assistant for visual ideation and branded creative output.',
+    bestFor: [
+      'Campaign visuals and hero images',
+      'Product renders and editorial concepts',
+      'Moodboards, style exploration, and art direction',
+    ],
+    demoHighlights: [
+      'Transforms plain prompts into stronger visual direction',
+      'Fits branded creative work better than generic image tools',
+      'Keeps image usage separate from text usage in Zenquanta',
+    ],
+  },
+}
+
 type TierModelMap = Record<SubscriptionTier, Record<AssistantFamily, string>>
 
 const MODELS_BY_TIER: TierModelMap = {
@@ -284,4 +422,8 @@ export function getTierAssistantModelConfig(
     topP: DEFAULT_TOP_P[family],
     description: base.description,
   }
+}
+
+export function getAssistantPublicPageBySlug(slug: string) {
+  return Object.values(ASSISTANT_PUBLIC_PAGES).find((page) => page.slug === slug) ?? null
 }

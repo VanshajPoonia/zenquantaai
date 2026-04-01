@@ -398,6 +398,18 @@ export interface AssistantModelConfig {
   description: string
 }
 
+export interface AssistantPublicPageConfig {
+  family: AssistantFamily
+  slug: string
+  mode: AIMode
+  badge: string
+  headline: string
+  subheadline: string
+  positioning: string
+  bestFor: string[]
+  demoHighlights: string[]
+}
+
 export interface ImageModelConfig {
   family: 'prism'
   tier: SubscriptionTier

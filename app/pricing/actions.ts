@@ -21,9 +21,20 @@ export async function requestPlanAction(formData: FormData) {
 
   const subscription = await subscriptionsStore.ensureForUser(user)
   const pending = await planRequestsStore.getLatestPendingForUser(user.id)
+  const tierRank = {
+    free: 0,
+    basic: 1,
+    pro: 2,
+    ultra: 3,
+    prime: 4,
+  } as const
 
   if (pending) {
     redirect('/pricing?error=pending')
+  }
+
+  if (tierRank[requestedTier] <= tierRank[subscription.tier]) {
+    redirect('/pricing?error=already-covered')
   }
 
   await planRequestsStore.create({
