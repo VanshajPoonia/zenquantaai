@@ -3,6 +3,7 @@ import { requireAdminApiUser } from '@/lib/auth/require-admin'
 import {
   adminAuditLogsStore,
   adminStore,
+  buildTierRebasedUsageOverridePatch,
   profilesStore,
   subscriptionsStore,
   usageLimitOverridesStore,
@@ -58,10 +59,14 @@ export async function PATCH(
   }
 
   let updatedSubscription = await subscriptionsStore.getByUserId(id)
+  const currentOverride = await usageLimitOverridesStore.getByUserId(id)
 
   if (!updatedSubscription) {
     return NextResponse.json({ error: 'User subscription not found.' }, { status: 404 })
   }
+
+  const currentSubscription = updatedSubscription
+  const nextTier = body.tier ?? updatedSubscription.tier
 
   if (body.tier) {
     updatedSubscription = await subscriptionsStore.updateTier(
@@ -86,14 +91,23 @@ export async function PATCH(
     typeof body.allowedModelOverrides !== 'undefined' ||
     typeof body.note !== 'undefined'
   ) {
+    const overridePatch = buildTierRebasedUsageOverridePatch({
+      currentSubscription,
+      currentOverride,
+      nextTier,
+      submittedOverrides: {
+        coreTokensIncluded: body.coreTokensIncluded,
+        tierTokensIncluded: body.tierTokensIncluded,
+        imageCreditsIncluded: body.imageCreditsIncluded,
+        dailyMessageLimit: body.dailyMessageLimit,
+        maxInputTokensPerRequest: body.maxInputTokensPerRequest,
+        maxOutputTokensPerRequest: body.maxOutputTokensPerRequest,
+        maxImagesPerDay: body.maxImagesPerDay,
+      },
+    })
+
     await usageLimitOverridesStore.upsert(id, {
-      coreTokensIncluded: body.coreTokensIncluded,
-      tierTokensIncluded: body.tierTokensIncluded,
-      imageCreditsIncluded: body.imageCreditsIncluded,
-      dailyMessageLimit: body.dailyMessageLimit,
-      maxInputTokensPerRequest: body.maxInputTokensPerRequest,
-      maxOutputTokensPerRequest: body.maxOutputTokensPerRequest,
-      maxImagesPerDay: body.maxImagesPerDay,
+      ...overridePatch,
       allowedModelOverrides: body.allowedModelOverrides,
       notes: body.note,
     })

@@ -54,6 +54,25 @@ type OverrideRow = {
   updated_at: string
 }
 
+type RebasableUsageLimitField =
+  | 'coreTokensIncluded'
+  | 'tierTokensIncluded'
+  | 'imageCreditsIncluded'
+  | 'dailyMessageLimit'
+  | 'maxInputTokensPerRequest'
+  | 'maxOutputTokensPerRequest'
+  | 'maxImagesPerDay'
+
+const REBASABLE_USAGE_LIMIT_FIELDS: RebasableUsageLimitField[] = [
+  'coreTokensIncluded',
+  'tierTokensIncluded',
+  'imageCreditsIncluded',
+  'dailyMessageLimit',
+  'maxInputTokensPerRequest',
+  'maxOutputTokensPerRequest',
+  'maxImagesPerDay',
+]
+
 function addDays(date: Date, days: number): Date {
   const next = new Date(date)
   next.setDate(next.getDate() + days)
@@ -143,6 +162,95 @@ function buildPlanRow(
 
 function toIsoDay(input: string): string {
   return new Date(input).toISOString().slice(0, 10)
+}
+
+function getSubscriptionFieldValue(
+  subscription: Subscription,
+  field: RebasableUsageLimitField
+): number {
+  switch (field) {
+    case 'coreTokensIncluded':
+      return subscription.coreTokensIncluded
+    case 'tierTokensIncluded':
+      return subscription.tierTokensIncluded
+    case 'imageCreditsIncluded':
+      return subscription.imageCreditsIncluded
+    case 'dailyMessageLimit':
+      return subscription.dailyMessageLimit
+    case 'maxInputTokensPerRequest':
+      return subscription.maxInputTokensPerRequest
+    case 'maxOutputTokensPerRequest':
+      return subscription.maxOutputTokensPerRequest
+    case 'maxImagesPerDay':
+      return subscription.maxImagesPerDay
+  }
+}
+
+function getPlanFieldValue(
+  tier: SubscriptionTier,
+  field: RebasableUsageLimitField
+): number {
+  const plan = PLAN_CONFIGS[tier]
+
+  switch (field) {
+    case 'coreTokensIncluded':
+      return plan.coreTokens
+    case 'tierTokensIncluded':
+      return plan.tierTokens
+    case 'imageCreditsIncluded':
+      return plan.imageCredits
+    case 'dailyMessageLimit':
+      return plan.dailyMessageLimit
+    case 'maxInputTokensPerRequest':
+      return plan.maxInputTokensPerRequest
+    case 'maxOutputTokensPerRequest':
+      return plan.maxOutputTokensPerRequest
+    case 'maxImagesPerDay':
+      return plan.maxImagesPerDay
+  }
+}
+
+export function buildTierRebasedUsageOverridePatch(input: {
+  currentSubscription: Subscription
+  currentOverride: UsageLimitOverride | null
+  nextTier: SubscriptionTier
+  submittedOverrides?: Partial<Record<RebasableUsageLimitField, number | null | undefined>>
+}): Partial<UsageLimitOverride> {
+  const patch: Partial<UsageLimitOverride> = {}
+  const tierChanged = input.currentSubscription.tier !== input.nextTier
+
+  for (const field of REBASABLE_USAGE_LIMIT_FIELDS) {
+    const currentPlanValue = getSubscriptionFieldValue(input.currentSubscription, field)
+    const nextPlanValue = getPlanFieldValue(input.nextTier, field)
+    const currentOverrideValue = input.currentOverride?.[field]
+    const submittedValue = input.submittedOverrides?.[field]
+    const submittedProvided = typeof submittedValue !== 'undefined'
+
+    if (submittedProvided) {
+      if (submittedValue === null) {
+        patch[field] = null
+        continue
+      }
+
+      if (tierChanged && (submittedValue === currentPlanValue || submittedValue === nextPlanValue)) {
+        patch[field] = null
+        continue
+      }
+
+      patch[field] = submittedValue
+      continue
+    }
+
+    if (!tierChanged || currentOverrideValue == null) {
+      continue
+    }
+
+    if (currentOverrideValue === currentPlanValue || currentOverrideValue === nextPlanValue) {
+      patch[field] = null
+    }
+  }
+
+  return patch
 }
 
 class UsageLimitOverridesStore {

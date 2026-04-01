@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation'
 import { requireAdmin } from '@/lib/auth/require-admin'
 import {
   adminAuditLogsStore,
+  buildTierRebasedUsageOverridePatch,
   planRequestsStore,
   profilesStore,
   subscriptionsStore,
@@ -33,7 +34,22 @@ export async function updatePlanRequestStatusAction(formData: FormData) {
   await planRequestsStore.updateStatus(requestId, status, adminNote)
 
   if (status === 'activated') {
+    const currentSubscription = await subscriptionsStore.getByUserId(request.userId)
+    const currentOverride = await usageLimitOverridesStore.getByUserId(request.userId)
+
     await subscriptionsStore.updateTier(request.userId, request.requestedTier)
+
+    if (currentSubscription) {
+      const overridePatch = buildTierRebasedUsageOverridePatch({
+        currentSubscription,
+        currentOverride,
+        nextTier: request.requestedTier,
+      })
+
+      if (Object.keys(overridePatch).length > 0) {
+        await usageLimitOverridesStore.upsert(request.userId, overridePatch)
+      }
+    }
   }
 
   await adminAuditLogsStore.create({
@@ -60,6 +76,9 @@ export async function updateUserAdminAction(formData: FormData) {
     redirect('/admin?error=missing-user')
   }
 
+  const currentSubscription = await subscriptionsStore.getByUserId(targetUserId)
+  const currentOverride = await usageLimitOverridesStore.getByUserId(targetUserId)
+
   const tier = formData.get('tier')?.toString()
   const status = formData.get('status')?.toString()
   const role = formData.get('role')?.toString()
@@ -79,6 +98,14 @@ export async function updateUserAdminAction(formData: FormData) {
     .split(',')
     .map((value) => value.trim())
     .filter(Boolean)
+  const nextTier =
+    tier === 'free' ||
+    tier === 'basic' ||
+    tier === 'pro' ||
+    tier === 'ultra' ||
+    tier === 'prime'
+      ? tier
+      : currentSubscription?.tier
 
   if (
     tier === 'free' ||
@@ -98,21 +125,32 @@ export async function updateUserAdminAction(formData: FormData) {
     await subscriptionsStore.updateStatus(targetUserId, status)
   }
 
-  await usageLimitOverridesStore.upsert(targetUserId, {
-    coreTokensIncluded: coreTokensIncluded ? Number(coreTokensIncluded) : undefined,
-    tierTokensIncluded: tierTokensIncluded ? Number(tierTokensIncluded) : undefined,
-    imageCreditsIncluded: imageCreditsIncluded ? Number(imageCreditsIncluded) : undefined,
-    dailyMessageLimit: dailyMessageLimit ? Number(dailyMessageLimit) : undefined,
-    maxInputTokensPerRequest: maxInputTokensPerRequest
-      ? Number(maxInputTokensPerRequest)
-      : undefined,
-    maxOutputTokensPerRequest: maxOutputTokensPerRequest
-      ? Number(maxOutputTokensPerRequest)
-      : undefined,
-    maxImagesPerDay: maxImagesPerDay ? Number(maxImagesPerDay) : undefined,
-    allowedModelOverrides,
-    notes: typeof note === 'undefined' ? undefined : note,
-  })
+  if (currentSubscription && nextTier) {
+    const overridePatch = buildTierRebasedUsageOverridePatch({
+      currentSubscription,
+      currentOverride,
+      nextTier,
+      submittedOverrides: {
+        coreTokensIncluded: coreTokensIncluded ? Number(coreTokensIncluded) : undefined,
+        tierTokensIncluded: tierTokensIncluded ? Number(tierTokensIncluded) : undefined,
+        imageCreditsIncluded: imageCreditsIncluded ? Number(imageCreditsIncluded) : undefined,
+        dailyMessageLimit: dailyMessageLimit ? Number(dailyMessageLimit) : undefined,
+        maxInputTokensPerRequest: maxInputTokensPerRequest
+          ? Number(maxInputTokensPerRequest)
+          : undefined,
+        maxOutputTokensPerRequest: maxOutputTokensPerRequest
+          ? Number(maxOutputTokensPerRequest)
+          : undefined,
+        maxImagesPerDay: maxImagesPerDay ? Number(maxImagesPerDay) : undefined,
+      },
+    })
+
+    await usageLimitOverridesStore.upsert(targetUserId, {
+      ...overridePatch,
+      allowedModelOverrides,
+      notes: typeof note === 'undefined' ? undefined : note,
+    })
+  }
 
   if (role === 'user' || role === 'admin') {
     await profilesStore.updateRole(targetUserId, role)

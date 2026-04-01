@@ -2,9 +2,11 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireAdminApiUser } from '@/lib/auth/require-admin'
 import {
   adminAuditLogsStore,
+  buildTierRebasedUsageOverridePatch,
   planRequestsStore,
   profilesStore,
   subscriptionsStore,
+  usageLimitOverridesStore,
 } from '@/lib/storage'
 
 export const runtime = 'nodejs'
@@ -41,7 +43,22 @@ export async function PATCH(
   )
 
   if (body.status === 'activated') {
+    const currentSubscription = await subscriptionsStore.getByUserId(existing.userId)
+    const currentOverride = await usageLimitOverridesStore.getByUserId(existing.userId)
+
     await subscriptionsStore.updateTier(existing.userId, existing.requestedTier)
+
+    if (currentSubscription) {
+      const overridePatch = buildTierRebasedUsageOverridePatch({
+        currentSubscription,
+        currentOverride,
+        nextTier: existing.requestedTier,
+      })
+
+      if (Object.keys(overridePatch).length > 0) {
+        await usageLimitOverridesStore.upsert(existing.userId, overridePatch)
+      }
+    }
   }
 
   await adminAuditLogsStore.create({
