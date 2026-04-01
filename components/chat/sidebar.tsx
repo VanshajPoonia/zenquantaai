@@ -61,9 +61,7 @@ interface SidebarProps {
 }
 
 function getSidebarChatTitle(title: string): string {
-  const trimmed = title.trim()
-  if (trimmed.length <= 28) return trimmed
-  return `${trimmed.slice(0, 28).trimEnd()}…`
+  return title.trim()
 }
 
 function ChatItem({
@@ -106,11 +104,18 @@ function ChatItem({
         <ModeIcon mode={chat.mode} size="sm" />
       </div>
 
-      <div className="min-w-0 pr-1">
+      <div className="min-w-0 self-start pr-1">
         <TooltipProvider delayDuration={300}>
           <Tooltip>
             <TooltipTrigger asChild>
-              <p className="cursor-pointer truncate text-sm font-medium" title={chat.title}>
+              <p
+                className="cursor-pointer truncate pr-2 text-sm font-medium"
+                title={chat.title}
+                style={{
+                  WebkitMaskImage: 'linear-gradient(to right, black 78%, transparent 100%)',
+                  maskImage: 'linear-gradient(to right, black 78%, transparent 100%)',
+                }}
+              >
                 {getSidebarChatTitle(chat.title)}
               </p>
             </TooltipTrigger>
@@ -131,7 +136,7 @@ function ChatItem({
         </div>
       </div>
 
-      <div className="flex w-11 shrink-0 items-start justify-end">
+      <div className="flex w-11 shrink-0 items-start justify-end self-start pt-0.5">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button
@@ -543,7 +548,7 @@ export function Sidebar({ onOpenSettings }: SidebarProps) {
 
       {/* Chat List */}
       <ScrollArea className="min-h-0 flex-1 px-2">
-        <div className="space-y-6 py-2 pr-5">
+        <div className="space-y-6 py-2 pr-6">
           <ChatSection
             title="Pinned"
             chats={pinnedChats}
