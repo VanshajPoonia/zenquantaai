@@ -225,6 +225,10 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   accentStyle: 'mode',
   defaultMode: 'general',
   responseStyle: 'balanced',
+  assistantRecommendations: {
+    enabled: true,
+    autoSwitchOnHighConfidence: false,
+  },
   sessionDefaults: createSessionSettings('general'),
   gatewayDrafts: {
     openRouterApiKey: '',

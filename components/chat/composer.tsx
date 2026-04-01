@@ -4,7 +4,8 @@ import { useState, useRef, useEffect } from 'react'
 import { BookText, BookmarkPlus, ImagePlus, Trash2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useChatContext } from '@/lib/chat-context'
-import { Attachment, MODE_CONFIGS, PendingAttachment } from '@/lib/types'
+import { AIMode, Attachment, MODE_CONFIGS, PendingAttachment } from '@/lib/types'
+import { usePromptPrecheck } from '@/hooks/usePromptPrecheck'
 import { createPendingAttachment } from '@/lib/utils/files'
 import { getModeAccentClass, getModeGlow } from '@/lib/mode-utils'
 import { Button } from '@/components/ui/button'
@@ -21,13 +22,15 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip'
 import { SendIcon, StopIcon, PaperclipIcon, XIcon } from '@/components/icons'
+import { AssistantRecommendationDialog } from './assistant-recommendation-dialog'
 import { ModeSwitcherCompact } from './mode-switcher'
 interface ComposerProps {
   onSend: (input: {
     content: string
     attachments?: Array<Attachment | PendingAttachment>
     kind?: 'chat' | 'image'
-  }) => void
+    modeOverride?: AIMode
+  }) => Promise<void>
   disabled?: boolean
   initialValue?: string
 }
@@ -49,6 +52,27 @@ export function Composer({ onSend, disabled, initialValue = '' }: ComposerProps)
   const [isPromptPopoverOpen, setIsPromptPopoverOpen] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const clearDraft = () => {
+    setValue('')
+    setPendingAttachments([])
+    setComposerKind('chat')
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto'
+    }
+  }
+  const {
+    pendingRecommendation,
+    recommendationOpen,
+    suppressForMessage,
+    setSuppressForMessage,
+    precheckAndSend,
+    handleSwitchAndContinue,
+    handleContinueAnyway,
+    handleCancel,
+  } = usePromptPrecheck({
+    onContinue: onSend,
+    onSubmitted: clearDraft,
+  })
 
   const modeConfig = MODE_CONFIGS[currentMode]
 
@@ -69,7 +93,7 @@ export function Composer({ onSend, disabled, initialValue = '' }: ComposerProps)
     }
   }, [value])
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if ((!value.trim() && pendingAttachments.length === 0) || disabled) return
     const normalizedContent =
       value.trim() ||
@@ -77,23 +101,17 @@ export function Composer({ onSend, disabled, initialValue = '' }: ComposerProps)
         .map((attachment) => attachment.name)
         .join(', ')}.`
 
-    onSend({
+    await precheckAndSend({
       content: normalizedContent,
       attachments: pendingAttachments,
       kind: composerKind,
     })
-    setValue('')
-    setPendingAttachments([])
-    setComposerKind('chat')
-    if (textareaRef.current) {
-      textareaRef.current.style.height = 'auto'
-    }
   }
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
       e.preventDefault()
-      handleSubmit()
+      void handleSubmit()
       return
     }
 
@@ -105,7 +123,7 @@ export function Composer({ onSend, disabled, initialValue = '' }: ComposerProps)
       !e.altKey
     ) {
       e.preventDefault()
-      handleSubmit()
+      void handleSubmit()
     }
   }
 
@@ -372,7 +390,7 @@ export function Composer({ onSend, disabled, initialValue = '' }: ComposerProps)
               {isStreaming ? (
                 <>
                   <Button
-                    onClick={handleSubmit}
+                    onClick={() => void handleSubmit()}
                     disabled={(!value.trim() && pendingAttachments.length === 0) || disabled}
                     className={cn(
                       'transition-all duration-300 text-white disabled:opacity-50',
@@ -395,7 +413,7 @@ export function Composer({ onSend, disabled, initialValue = '' }: ComposerProps)
                 </>
               ) : (
                 <Button
-                  onClick={handleSubmit}
+                  onClick={() => void handleSubmit()}
                   disabled={(!value.trim() && pendingAttachments.length === 0) || disabled}
                   className={cn(
                     'transition-all duration-300 text-white disabled:opacity-50',
@@ -426,6 +444,21 @@ export function Composer({ onSend, disabled, initialValue = '' }: ComposerProps)
           {queuedPromptCount > 0 ? ` • ${queuedPromptCount} queued` : ''}
         </p>
       </div>
+
+      <AssistantRecommendationDialog
+        open={recommendationOpen}
+        recommendation={pendingRecommendation}
+        suppressForMessage={suppressForMessage}
+        onSuppressForMessageChange={setSuppressForMessage}
+        onSwitchAndContinue={() => void handleSwitchAndContinue()}
+        onContinueAnyway={() => void handleContinueAnyway()}
+        onCancel={() => void handleCancel()}
+        onOpenChange={(open) => {
+          if (!open) {
+            void handleCancel()
+          }
+        }}
+      />
     </div>
   )
 }

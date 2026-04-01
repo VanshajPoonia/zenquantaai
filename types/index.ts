@@ -54,6 +54,14 @@ export type ResponseStyle = 'balanced' | 'concise' | 'detailed'
 
 export type AuthStatus = 'loading' | 'authenticated' | 'unauthenticated'
 
+export type RecommendationOutcome =
+  | 'shown'
+  | 'accepted'
+  | 'continued'
+  | 'cancelled'
+  | 'autoswitched'
+  | 'not_shown'
+
 export type SystemPresetId =
   | 'default'
   | 'concise'
@@ -77,17 +85,26 @@ export interface OpenRouterSettingsDraft {
   openRouterBaseUrl: string
 }
 
+export interface AssistantRecommendationSettings {
+  enabled: boolean
+  autoSwitchOnHighConfidence: boolean
+}
+
 export interface AppSettings {
   theme: 'dark'
   accentStyle: AccentStyle
   defaultMode: AIMode
   responseStyle: ResponseStyle
+  assistantRecommendations: AssistantRecommendationSettings
   sessionDefaults: SessionSettings
   gatewayDrafts: OpenRouterSettingsDraft
 }
 
 export interface AppSettingsPatch
-  extends Partial<Omit<AppSettings, 'sessionDefaults' | 'gatewayDrafts'>> {
+  extends Partial<
+    Omit<AppSettings, 'assistantRecommendations' | 'sessionDefaults' | 'gatewayDrafts'>
+  > {
+  assistantRecommendations?: Partial<AssistantRecommendationSettings>
   sessionDefaults?: Partial<SessionSettings>
   gatewayDrafts?: Partial<OpenRouterSettingsDraft>
 }
@@ -242,6 +259,17 @@ export interface ChatRequest {
   targetMessageId?: string
   attachments?: Attachment[]
   attachmentContext?: AttachmentContext[]
+}
+
+export interface AssistantRecommendationResult {
+  currentAssistant: AssistantFamily
+  predictedAssistant: AssistantFamily
+  recommendedMode: AIMode
+  confidence: number
+  reason: string
+  matchedSignals: string[]
+  shouldRecommendSwitch: boolean
+  lockedToCurrentAssistant?: boolean
 }
 
 export interface ChatResponse {
@@ -554,6 +582,34 @@ export interface AdminAuditLog {
   action: string
   details: Record<string, unknown>
   createdAt: string
+}
+
+export interface AssistantRecommendationEvent {
+  id: string
+  userId: string
+  conversationId?: string | null
+  currentAssistant: AssistantFamily
+  recommendedAssistant: AssistantFamily
+  confidence: number
+  matchedSignals: string[]
+  reason: string
+  outcome: RecommendationOutcome
+  createdAt: string
+}
+
+export interface AssistantRecommendationAnalyticsSummary {
+  totalEvents: number
+  shown: number
+  accepted: number
+  continued: number
+  cancelled: number
+  autoswitched: number
+  notShown: number
+  topSuggestedSwitches: Array<{
+    currentAssistant: AssistantFamily
+    recommendedAssistant: AssistantFamily
+    count: number
+  }>
 }
 
 export interface DashboardUsageSummary {

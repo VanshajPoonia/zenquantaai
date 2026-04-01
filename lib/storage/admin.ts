@@ -1,5 +1,7 @@
 import {
   AdminAuditLog,
+  AssistantRecommendationAnalyticsSummary,
+  AssistantRecommendationEvent,
   DashboardUsageSummary,
   ImageGenerationEvent,
   PlanChangeRequest,
@@ -14,6 +16,7 @@ import { subscriptionsStore, usageLimitOverridesStore } from './subscriptions'
 import { imageGenerationEventsStore, usageEventsStore } from './usage-events'
 import { adminAuditLogsStore, planRequestsStore } from './plan-requests'
 import { conversationStore } from './conversations'
+import { assistantRecommendationEventsStore } from './assistant-recommendations'
 
 export interface AdminOverview {
   activeUsers: number
@@ -57,6 +60,7 @@ export interface AdminUserDetail {
   currentPlanRequestStatus: PlanChangeRequest | null
   usageEvents: UsageEvent[]
   imageEvents: ImageGenerationEvent[]
+  recommendationEvents: AssistantRecommendationEvent[]
   auditLogs: AdminAuditLog[]
   conversations: Awaited<ReturnType<typeof conversationStore.list>>
   assistantBreakdown: DashboardUsageSummary['assistantBreakdown']
@@ -256,7 +260,7 @@ class AdminStore {
   }
 
   async getUserDetail(userId: string): Promise<AdminUserDetail | null> {
-    const [profile, subscription, override, planRequests, usageEvents, imageEvents, auditLogs, conversations] =
+    const [profile, subscription, override, planRequests, usageEvents, imageEvents, recommendationEvents, auditLogs, conversations] =
       await Promise.all([
         profilesStore.get(userId),
         subscriptionsStore.getByUserId(userId),
@@ -264,6 +268,7 @@ class AdminStore {
         planRequestsStore.listByUser(userId),
         usageEventsStore.listByUser(userId),
         imageGenerationEventsStore.listByUser(userId),
+        assistantRecommendationEventsStore.listByUser(userId),
         adminAuditLogsStore.listByTargetUser(userId),
         conversationStore.list(userId),
       ])
@@ -303,6 +308,7 @@ class AdminStore {
         planRequests.find((request) => request.status === 'pending') ?? null,
       usageEvents,
       imageEvents,
+      recommendationEvents,
       auditLogs: auditLogs as AdminAuditLog[],
       conversations,
       assistantBreakdown: buildAssistantBreakdown(usageEvents, imageEvents, true),
@@ -311,6 +317,10 @@ class AdminStore {
         ...value,
       })),
     }
+  }
+
+  async getAssistantRecommendationAnalyticsSummary(): Promise<AssistantRecommendationAnalyticsSummary> {
+    return assistantRecommendationEventsStore.getAnalyticsSummary()
   }
 }
 

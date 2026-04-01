@@ -393,6 +393,66 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                 </div>
               </div>
             </div>
+
+            <div className="space-y-4 rounded-2xl border border-border/70 bg-card/60 p-4 sm:p-5">
+              <div>
+                <h3 className="text-base font-semibold">Assistant Recommendations</h3>
+                <p className="text-xs leading-6 text-muted-foreground sm:text-sm">
+                  Precheck new prompts and suggest a better assistant only when the
+                  mismatch looks obvious.
+                </p>
+              </div>
+
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="flex items-center justify-between rounded-xl border border-border px-3 py-3">
+                  <div>
+                    <p className="text-xs font-medium sm:text-sm">
+                      Recommend better-fit assistants
+                    </p>
+                    <p className="text-[11px] text-muted-foreground">
+                      Show a lightweight modal before sending obvious mismatches.
+                    </p>
+                  </div>
+                  <Switch
+                    checked={localSettings.assistantRecommendations.enabled}
+                    onCheckedChange={(checked) =>
+                      setLocalSettings((previous) => ({
+                        ...previous,
+                        assistantRecommendations: {
+                          ...previous.assistantRecommendations,
+                          enabled: checked,
+                        },
+                      }))
+                    }
+                  />
+                </div>
+
+                <div className="flex items-center justify-between rounded-xl border border-border px-3 py-3">
+                  <div>
+                    <p className="text-xs font-medium sm:text-sm">
+                      Auto-switch obvious mismatches
+                    </p>
+                    <p className="text-[11px] text-muted-foreground">
+                      Skip the modal and route the prompt automatically on high confidence.
+                    </p>
+                  </div>
+                  <Switch
+                    checked={
+                      localSettings.assistantRecommendations.autoSwitchOnHighConfidence
+                    }
+                    onCheckedChange={(checked) =>
+                      setLocalSettings((previous) => ({
+                        ...previous,
+                        assistantRecommendations: {
+                          ...previous.assistantRecommendations,
+                          autoSwitchOnHighConfidence: checked,
+                        },
+                      }))
+                    }
+                  />
+                </div>
+              </div>
+            </div>
           </TabsContent>
 
           <TabsContent value="about" className="min-h-0 flex-1 space-y-4 overflow-y-auto pr-1 pb-6 sm:pr-2">

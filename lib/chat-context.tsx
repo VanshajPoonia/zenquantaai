@@ -71,6 +71,7 @@ interface SendMessageInput {
   content: string
   attachments?: Array<Attachment | PendingAttachment>
   kind?: 'chat' | 'image'
+  modeOverride?: AIMode
 }
 
 interface QueuedPrompt {
@@ -166,7 +167,12 @@ function normalizeModeSessionSettings(
 
 function normalizeAppSettingsState(input: AppSettings): AppSettings {
   return {
+    ...DEFAULT_APP_SETTINGS,
     ...input,
+    assistantRecommendations: {
+      ...DEFAULT_APP_SETTINGS.assistantRecommendations,
+      ...input.assistantRecommendations,
+    },
     sessionDefaults: createSessionSettings(input.defaultMode, input.sessionDefaults),
   }
 }
@@ -1264,7 +1270,17 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   )
 
   const sendMessage = useCallback(
-    async ({ content, attachments = [], kind = 'chat' }: SendMessageInput) => {
+    async ({
+      content,
+      attachments = [],
+      kind = 'chat',
+      modeOverride,
+    }: SendMessageInput) => {
+      const resolvedMode = modeOverride ?? currentMode
+      const resolvedSettings = normalizeModeSessionSettings(
+        resolvedMode,
+        currentChat?.sessionSettings ?? draftSessionSettings
+      )
       const projectId =
         selectedProjectId === 'all' ? DEFAULT_PROJECT_ID : selectedProjectId
 
@@ -1276,8 +1292,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
             attachments,
             kind,
           },
-          mode: currentMode,
-          settings: sessionSettings,
+          mode: resolvedMode,
+          settings: resolvedSettings,
           projectId,
           conversationId: currentChat?.id,
         })
@@ -1288,19 +1304,20 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         { content, attachments, kind },
         {
           conversationId: currentChat?.id,
-          mode: currentMode,
-          settings: sessionSettings,
+          mode: resolvedMode,
+          settings: resolvedSettings,
           projectId,
         }
       )
     },
     [
       currentChat?.id,
+      currentChat?.sessionSettings,
       currentMode,
+      draftSessionSettings,
       enqueuePrompt,
       executeSendMessage,
       selectedProjectId,
-      sessionSettings,
       streamingState.status,
     ]
   )

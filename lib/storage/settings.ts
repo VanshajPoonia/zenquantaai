@@ -29,6 +29,14 @@ function normalizeSettings(input: Partial<AppSettings>): AppSettings {
     accentStyle: input.accentStyle ?? DEFAULT_APP_SETTINGS.accentStyle,
     defaultMode,
     responseStyle: input.responseStyle ?? DEFAULT_APP_SETTINGS.responseStyle,
+    assistantRecommendations: {
+      enabled:
+        input.assistantRecommendations?.enabled ??
+        DEFAULT_APP_SETTINGS.assistantRecommendations.enabled,
+      autoSwitchOnHighConfidence:
+        input.assistantRecommendations?.autoSwitchOnHighConfidence ??
+        DEFAULT_APP_SETTINGS.assistantRecommendations.autoSwitchOnHighConfidence,
+    },
     sessionDefaults: createSessionSettings(defaultMode, {
       temperature:
         input.sessionDefaults?.temperature ??
@@ -95,6 +103,10 @@ class SupabaseSettingsStore implements SettingsStore {
     const next = normalizeSettings({
       ...current,
       ...settings,
+      assistantRecommendations: {
+        ...current.assistantRecommendations,
+        ...settings.assistantRecommendations,
+      },
       sessionDefaults: {
         ...current.sessionDefaults,
         ...settings.sessionDefaults,

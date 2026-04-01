@@ -50,6 +50,10 @@ function normalizeAppSettings(input: AppSettings | null): AppSettings | null {
     ...DEFAULT_APP_SETTINGS,
     ...input,
     defaultMode,
+    assistantRecommendations: {
+      ...DEFAULT_APP_SETTINGS.assistantRecommendations,
+      ...input.assistantRecommendations,
+    },
     sessionDefaults: createSessionSettings(defaultMode, {
       temperature: input.sessionDefaults?.temperature,
       maxTokens: input.sessionDefaults?.maxTokens,
