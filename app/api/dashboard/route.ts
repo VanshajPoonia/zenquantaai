@@ -44,7 +44,11 @@ export async function GET(request: NextRequest) {
 
   return NextResponse.json(
     {
-      subscription,
+      plan: {
+        tier: subscription.tier,
+        status: subscription.status,
+        currentPeriodEndsAt: subscription.currentPeriodEndsAt,
+      },
       pendingRequest:
         requests.find((request) => request.status === 'pending') ?? null,
       usage: {

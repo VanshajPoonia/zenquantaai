@@ -1,9 +1,16 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import { ChevronDown, ExternalLink, ImageIcon, PencilLine, Play } from 'lucide-react'
+import {
+  ChevronDown,
+  Download,
+  ExternalLink,
+  ImageIcon,
+  PencilLine,
+  Play,
+} from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { AIMode, Message, MODE_CONFIGS, MODE_ORDER } from '@/lib/types'
+import { AIMode, Attachment, Message, MODE_CONFIGS, MODE_ORDER } from '@/lib/types'
 import {
   getModeAccentClass,
   getModeTintClass,
@@ -39,6 +46,10 @@ import {
   XIcon,
 } from '@/components/icons'
 import { getWebPreviewDocument } from '@/lib/utils/web-preview'
+import {
+  downloadAttachmentImage,
+  openAttachmentImageInNewTab,
+} from '@/lib/utils/image-download'
 
 interface ChatMessageProps {
   message: Message
@@ -275,7 +286,15 @@ function CodeBlock({ code, language }: { code: string; language: string }) {
   )
 }
 
-function AttachmentList({ message }: { message: Message }) {
+function AttachmentList({
+  message,
+  onOpenImage,
+  onDownloadImage,
+}: {
+  message: Message
+  onOpenImage: (attachment: Attachment) => void
+  onDownloadImage: (attachment: Attachment) => void
+}) {
   if (!message.attachments || message.attachments.length === 0) return null
 
   return (
@@ -296,37 +315,132 @@ function AttachmentList({ message }: { message: Message }) {
               </p>
             </div>
             {attachment.previewUrl ? (
-              <img
-                src={attachment.previewUrl}
-                alt={attachment.name}
-                className="size-12 rounded-lg object-cover"
-              />
+              attachment.kind === 'image' ? (
+                <button
+                  type="button"
+                  className="rounded-lg transition-opacity hover:opacity-90"
+                  onClick={() => onOpenImage(attachment)}
+                >
+                  <img
+                    src={attachment.previewUrl}
+                    alt={attachment.name}
+                    className="size-12 rounded-lg object-cover"
+                  />
+                </button>
+              ) : (
+                <img
+                  src={attachment.previewUrl}
+                  alt={attachment.name}
+                  className="size-12 rounded-lg object-cover"
+                />
+              )
             ) : null}
           </div>
           {attachment.kind === 'image' && attachment.previewUrl ? (
             <div className="mt-3 overflow-hidden rounded-xl border border-border/60 bg-background/80">
-              <img
-                src={attachment.previewUrl}
-                alt={attachment.name}
-                className="max-h-[360px] w-full object-cover"
-              />
+              <button
+                type="button"
+                className="block w-full cursor-pointer"
+                onClick={() => onOpenImage(attachment)}
+              >
+                <img
+                  src={attachment.previewUrl}
+                  alt={attachment.name}
+                  className="max-h-[360px] w-full object-cover"
+                />
+              </button>
               <div className="flex items-center justify-between gap-3 px-3 py-2 text-xs text-muted-foreground">
-                <span>Generated visual</span>
-                <a
-                  href={attachment.previewUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="inline-flex items-center gap-1 text-foreground transition-opacity hover:opacity-80"
-                >
-                  Open
-                  <ExternalLink className="size-3.5" />
-                </a>
+                <span>{attachment.textContent ? 'Generated visual' : 'Image attachment'}</span>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 gap-1 rounded-full px-2.5 text-xs text-foreground"
+                    onClick={() => onOpenImage(attachment)}
+                  >
+                    View
+                    <ExternalLink className="size-3.5" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 gap-1 rounded-full px-2.5 text-xs text-foreground"
+                    onClick={() => onDownloadImage(attachment)}
+                  >
+                    Download
+                    <Download className="size-3.5" />
+                  </Button>
+                </div>
               </div>
             </div>
           ) : null}
         </div>
       ))}
     </div>
+  )
+}
+
+function ImageViewerDialog({
+  attachment,
+  open,
+  onOpenChange,
+  onDownload,
+}: {
+  attachment: Attachment | null
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  onDownload: (attachment: Attachment) => void
+}) {
+  if (!attachment?.previewUrl) return null
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="w-[calc(100vw-1rem)] max-w-5xl rounded-[28px] border border-border/70 bg-background/95 p-0 shadow-2xl shadow-black/40">
+        <DialogHeader className="border-b border-border/70 px-4 py-4 text-left sm:px-6">
+          <DialogTitle>{attachment.name}</DialogTitle>
+          <DialogDescription>
+            View, download, or open this image in a new tab.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4 p-3 sm:p-4">
+          <div className="overflow-hidden rounded-2xl border border-border/70 bg-background">
+            <img
+              src={attachment.previewUrl}
+              alt={attachment.name}
+              className="max-h-[72vh] w-full object-contain bg-black/30"
+            />
+          </div>
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <Button
+              type="button"
+              variant="secondary"
+              className="rounded-xl"
+              onClick={() => onDownload(attachment)}
+            >
+              <Download className="mr-2 size-4" />
+              Download
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              className="rounded-xl"
+              onClick={() => openAttachmentImageInNewTab(attachment)}
+            >
+              <ExternalLink className="mr-2 size-4" />
+              Open in new tab
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+function getFirstImageAttachment(message: Message): Attachment | null {
+  return (
+    message.attachments?.find(
+      (attachment) => attachment.kind === 'image' && attachment.previewUrl
+    ) ?? null
   )
 }
 
@@ -342,6 +456,9 @@ export function ChatMessage({
   const [copied, setCopied] = useState(false)
   const [isEditing, setIsEditing] = useState(false)
   const [isPreviewOpen, setIsPreviewOpen] = useState(false)
+  const [selectedImageAttachment, setSelectedImageAttachment] = useState<Attachment | null>(
+    null
+  )
   const [draftValue, setDraftValue] = useState(message.content)
 
   const handleCopy = async () => {
@@ -349,6 +466,16 @@ export function ChatMessage({
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
   }
+
+  const handleOpenImage = (attachment: Attachment) => {
+    setSelectedImageAttachment(attachment)
+  }
+
+  const handleDownloadImage = async (attachment: Attachment) => {
+    await downloadAttachmentImage(attachment)
+  }
+
+  const firstImageAttachment = getFirstImageAttachment(message)
 
   const renderedContent = useMemo(
     () => renderContent(message.content),
@@ -404,7 +531,11 @@ export function ChatMessage({
                       {message.content}
                     </p>
                   )}
-                  <AttachmentList message={message} />
+                  <AttachmentList
+                    message={message}
+                    onOpenImage={handleOpenImage}
+                    onDownloadImage={handleDownloadImage}
+                  />
                 </div>
               )}
             </div>
@@ -467,7 +598,11 @@ export function ChatMessage({
                   {renderedContent}
                 </div>
               )}
-              <AttachmentList message={message} />
+              <AttachmentList
+                message={message}
+                onOpenImage={handleOpenImage}
+                onDownloadImage={handleDownloadImage}
+              />
             </div>
 
             <div
@@ -510,26 +645,27 @@ export function ChatMessage({
                 </Button>
               ) : null}
 
-              {message.attachments?.some(
-                (attachment) => attachment.kind === 'image' && attachment.previewUrl
-              ) ? (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-7 gap-1 rounded-full px-2.5 text-xs"
-                  onClick={() => {
-                    const imageAttachment = message.attachments?.find(
-                      (attachment) =>
-                        attachment.kind === 'image' && attachment.previewUrl
-                    )
-                    if (imageAttachment?.previewUrl) {
-                      window.open(imageAttachment.previewUrl, '_blank', 'noopener,noreferrer')
-                    }
-                  }}
-                >
-                  <ImageIcon className="size-3.5" />
-                  Open image
-                </Button>
+              {firstImageAttachment ? (
+                <>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 gap-1 rounded-full px-2.5 text-xs"
+                    onClick={() => handleOpenImage(firstImageAttachment)}
+                  >
+                    <ImageIcon className="size-3.5" />
+                    Open image
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 gap-1 rounded-full px-2.5 text-xs"
+                    onClick={() => void handleDownloadImage(firstImageAttachment)}
+                  >
+                    <Download className="size-3.5" />
+                    Download
+                  </Button>
+                </>
               ) : null}
 
               {isLastAssistant && (
@@ -630,6 +766,17 @@ export function ChatMessage({
           </DialogContent>
         </Dialog>
       ) : null}
+
+      <ImageViewerDialog
+        attachment={selectedImageAttachment}
+        open={Boolean(selectedImageAttachment)}
+        onOpenChange={(open) => {
+          if (!open) {
+            setSelectedImageAttachment(null)
+          }
+        }}
+        onDownload={handleDownloadImage}
+      />
     </>
   )
 }

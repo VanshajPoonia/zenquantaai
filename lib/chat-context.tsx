@@ -935,25 +935,23 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       }
 
       if (
-        currentChat &&
-        (!options.conversationId || currentChat.id === options.conversationId)
+        currentChatRef.current &&
+        (!options.conversationId || currentChatRef.current.id === options.conversationId)
       ) {
-        return currentChat
+        return currentChatRef.current
       }
 
-      const conversation = await requestJson<Conversation>('/api/conversations', {
-        method: 'POST',
-        body: JSON.stringify({
-          mode: options.mode,
-          projectId: options.projectId,
-          sessionSettings: options.settings,
-        }),
+      const conversation = createConversation({
+        id: options.conversationId,
+        mode: options.mode,
+        projectId: options.projectId,
+        sessionSettings: options.settings,
       })
 
       upsertConversation(conversation)
       return conversation
     },
-    [currentChat, requestJson, upsertConversation]
+    [upsertConversation]
   )
 
   const uploadAttachments = useCallback(
@@ -1046,6 +1044,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
           body: JSON.stringify({
             action: payload.action,
             conversationId: payload.conversation.id,
+            conversation: payload.conversation,
             mode: payload.mode,
             targetMode: payload.targetMode,
             content: payload.content,
@@ -1168,12 +1167,11 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       const resolvedKind =
         kind === 'image' || options.mode === 'image' ? 'image' : 'chat'
       const conversation = await ensureConversationForMessage(options)
-      const uploadedAttachments = await uploadAttachments(attachments)
       const userMessage = createMessage({
         role: 'user',
         content,
         mode: options.mode,
-        attachments: uploadedAttachments,
+        attachments,
       })
       const placeholder = createMessage({
         role: 'assistant',
@@ -1191,17 +1189,63 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         messages: [...conversation.messages, userMessage, placeholder],
       })
 
+      upsertConversation(optimisticConversation)
+      setStreamingState({
+        status: 'streaming',
+        conversationId: optimisticConversation.id,
+        messageId: placeholder.id,
+      })
+
+      let uploadedAttachments: Attachment[]
+
+      try {
+        uploadedAttachments = await uploadAttachments(attachments)
+      } catch (error) {
+        const message =
+          error instanceof Error
+            ? error.message
+            : 'Unable to prepare attachments for this message.'
+
+        applyLocalError(optimisticConversation.id, placeholder.id, message)
+        setStreamingState({
+          status: 'error',
+          conversationId: optimisticConversation.id,
+          messageId: placeholder.id,
+          error: message,
+        })
+        return
+      }
+
+      const preparedOptimisticConversation = updateConversationSnapshot(conversation, {
+        mode: options.mode,
+        sessionSettings: options.settings,
+        messages: [
+          ...conversation.messages,
+          {
+            ...userMessage,
+            attachments: uploadedAttachments,
+          },
+          placeholder,
+        ],
+      })
+
       await runChatAction({
         action: resolvedKind === 'image' ? 'generate-image' : 'send',
         content,
         mode: options.mode,
         settings: options.settings,
         conversation,
-        optimisticConversation,
+        optimisticConversation: preparedOptimisticConversation,
         attachments: uploadedAttachments,
       })
     },
-    [ensureConversationForMessage, runChatAction, uploadAttachments]
+    [
+      applyLocalError,
+      ensureConversationForMessage,
+      runChatAction,
+      uploadAttachments,
+      upsertConversation,
+    ]
   )
 
   const sendMessage = useCallback(
