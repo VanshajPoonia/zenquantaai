@@ -282,6 +282,9 @@ class UsageLimitOverridesStore {
   ): Promise<UsageLimitOverride> {
     const rows = await supabaseRequest<OverrideRow[]>(OVERRIDES_TABLE, {
       method: 'POST',
+      query: {
+        on_conflict: 'user_id',
+      },
       body: {
         user_id: userId,
         ...(typeof patch.coreTokensIncluded !== 'undefined'
