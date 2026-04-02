@@ -245,9 +245,9 @@ export function buildTierRebasedUsageOverridePatch(input: {
       continue
     }
 
-    if (currentOverrideValue === currentPlanValue || currentOverrideValue === nextPlanValue) {
-      patch[field] = null
-    }
+    // Tier changes should reset old effective limits to the next plan defaults
+    // unless the admin explicitly submits a new custom value in the same request.
+    patch[field] = null
   }
 
   return patch

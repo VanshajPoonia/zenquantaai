@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
+import { DetailedPlanLimitFields } from '@/components/admin/plan-limit-fields'
 
 export default async function AdminUserDetailPage({
   params,
@@ -52,57 +53,33 @@ export default async function AdminUserDetailPage({
               <form action={updateUserAdminAction} className="space-y-4">
                 <input type="hidden" name="targetUserId" value={detail.subscription.userId} />
                 <div className="grid gap-4 md:grid-cols-2">
-                  <Input name="tier" defaultValue={detail.subscription.tier} />
                   <Input name="status" defaultValue={detail.subscription.status} />
                   <Input name="role" defaultValue={detail.profile?.role ?? 'user'} />
-                  <Input
-                    name="coreTokensIncluded"
-                    defaultValue={String(
-                      detail.override?.coreTokensIncluded ??
-                        detail.subscription.coreTokensIncluded
-                    )}
-                  />
-                  <Input
-                    name="tierTokensIncluded"
-                    defaultValue={String(
-                      detail.override?.tierTokensIncluded ??
-                        detail.subscription.tierTokensIncluded
-                    )}
-                  />
-                  <Input
-                    name="imageCreditsIncluded"
-                    defaultValue={String(
-                      detail.override?.imageCreditsIncluded ??
-                        detail.subscription.imageCreditsIncluded
-                    )}
-                  />
-                  <Input
-                    name="dailyMessageLimit"
-                    defaultValue={String(
-                      detail.override?.dailyMessageLimit ??
-                        detail.subscription.dailyMessageLimit
-                    )}
-                  />
-                  <Input
-                    name="maxImagesPerDay"
-                    defaultValue={String(
-                      detail.override?.maxImagesPerDay ??
-                        detail.subscription.maxImagesPerDay
-                    )}
-                  />
-                  <Input
-                    name="maxInputTokensPerRequest"
-                    defaultValue={String(
-                      detail.override?.maxInputTokensPerRequest ??
-                        detail.subscription.maxInputTokensPerRequest
-                    )}
-                  />
-                  <Input
-                    name="maxOutputTokensPerRequest"
-                    defaultValue={String(
-                      detail.override?.maxOutputTokensPerRequest ??
-                        detail.subscription.maxOutputTokensPerRequest
-                    )}
+                  <DetailedPlanLimitFields
+                    initialTier={detail.subscription.tier}
+                    initialValues={{
+                      coreTokensIncluded:
+                        detail.override?.coreTokensIncluded ??
+                        detail.subscription.coreTokensIncluded,
+                      tierTokensIncluded:
+                        detail.override?.tierTokensIncluded ??
+                        detail.subscription.tierTokensIncluded,
+                      imageCreditsIncluded:
+                        detail.override?.imageCreditsIncluded ??
+                        detail.subscription.imageCreditsIncluded,
+                      dailyMessageLimit:
+                        detail.override?.dailyMessageLimit ??
+                        detail.subscription.dailyMessageLimit,
+                      maxImagesPerDay:
+                        detail.override?.maxImagesPerDay ??
+                        detail.subscription.maxImagesPerDay,
+                      maxInputTokensPerRequest:
+                        detail.override?.maxInputTokensPerRequest ??
+                        detail.subscription.maxInputTokensPerRequest,
+                      maxOutputTokensPerRequest:
+                        detail.override?.maxOutputTokensPerRequest ??
+                        detail.subscription.maxOutputTokensPerRequest,
+                    }}
                   />
                 </div>
                 <Input

@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { CompactPlanLimitFields } from '@/components/admin/plan-limit-fields'
 import { updatePlanRequestStatusAction, updateUserAdminAction } from './actions'
 
 const USER_GRID_COLUMNS =
@@ -119,56 +120,27 @@ export default async function AdminPage({
                     <StaticMetricCell value={`$${row.displayedCostUsd.toFixed(2)}`} />
                     <StaticMetricCell value={String(row.remainingDisplayedCredits)} />
 
-                    <CompactFieldSelect
-                      name="tier"
-                      defaultValue={row.subscription.tier}
-                      options={['free', 'basic', 'pro', 'ultra', 'prime']}
-                    />
-                    <CompactFieldSelect
-                      name="status"
-                      defaultValue={row.subscription.status}
-                      options={['active', 'paused', 'cancelled']}
-                    />
-                    <CompactFieldSelect
-                      name="role"
-                      defaultValue={row.profile?.role ?? 'user'}
-                      options={['user', 'admin']}
-                    />
-
-                    <CompactFieldInput
-                      name="coreTokensIncluded"
-                      defaultValue={String(
-                        row.override?.coreTokensIncluded ??
-                          row.subscription.coreTokensIncluded
-                      )}
-                    />
-                    <CompactFieldInput
-                      name="tierTokensIncluded"
-                      defaultValue={String(
-                        row.override?.tierTokensIncluded ??
-                          row.subscription.tierTokensIncluded
-                      )}
-                    />
-                    <CompactFieldInput
-                      name="imageCreditsIncluded"
-                      defaultValue={String(
-                        row.override?.imageCreditsIncluded ??
-                          row.subscription.imageCreditsIncluded
-                      )}
-                    />
-                    <CompactFieldInput
-                      name="dailyMessageLimit"
-                      defaultValue={String(
-                        row.override?.dailyMessageLimit ??
-                          row.subscription.dailyMessageLimit
-                      )}
-                    />
-                    <CompactFieldInput
-                      name="maxImagesPerDay"
-                      defaultValue={String(
-                        row.override?.maxImagesPerDay ??
-                          row.subscription.maxImagesPerDay
-                      )}
+                    <CompactPlanLimitFields
+                      initialTier={row.subscription.tier}
+                      initialStatus={row.subscription.status}
+                      initialRole={row.profile?.role ?? 'user'}
+                      initialValues={{
+                        coreTokensIncluded:
+                          row.override?.coreTokensIncluded ??
+                          row.subscription.coreTokensIncluded,
+                        tierTokensIncluded:
+                          row.override?.tierTokensIncluded ??
+                          row.subscription.tierTokensIncluded,
+                        imageCreditsIncluded:
+                          row.override?.imageCreditsIncluded ??
+                          row.subscription.imageCreditsIncluded,
+                        dailyMessageLimit:
+                          row.override?.dailyMessageLimit ??
+                          row.subscription.dailyMessageLimit,
+                        maxImagesPerDay:
+                          row.override?.maxImagesPerDay ??
+                          row.subscription.maxImagesPerDay,
+                      }}
                     />
 
                     <div className="flex flex-col gap-2">
@@ -281,45 +253,5 @@ function StaticMetricCell({ value }: { value: string }) {
     <div className="rounded-xl border border-border/60 bg-background/50 px-3 py-2 text-sm font-medium text-foreground">
       {value}
     </div>
-  )
-}
-
-function CompactFieldInput({
-  name,
-  defaultValue,
-}: {
-  name: string
-  defaultValue: string
-}) {
-  return (
-    <Input
-      name={name}
-      defaultValue={defaultValue}
-      className="h-10 rounded-xl border-border/60 bg-background/50 text-sm"
-    />
-  )
-}
-
-function CompactFieldSelect({
-  name,
-  defaultValue,
-  options,
-}: {
-  name: string
-  defaultValue: string
-  options: string[]
-}) {
-  return (
-    <select
-      name={name}
-      defaultValue={defaultValue}
-      className="flex h-10 w-full rounded-xl border border-border/60 bg-background/50 px-3 text-sm text-foreground outline-none transition-colors focus:border-primary/40 focus:ring-2 focus:ring-primary/20"
-    >
-      {options.map((option) => (
-        <option key={option} value={option}>
-          {option}
-        </option>
-      ))}
-    </select>
   )
 }
