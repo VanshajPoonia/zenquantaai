@@ -1,3 +1,4 @@
+import Image from 'next/image'
 import { cn } from '@/lib/utils'
 
 interface IconProps {
@@ -39,28 +40,15 @@ export function CodeIcon({ className }: IconProps) {
 
 export function ZenquantaLogo({ className }: IconProps) {
   return (
-    <svg
-      className={cn('size-8 text-foreground', className)}
-      viewBox="0 0 64 64"
-      fill="none"
+    <Image
+      src="/file.svg"
+      alt=""
+      width={64}
+      height={64}
+      className={cn('size-8 object-contain', className)}
       aria-hidden="true"
-    >
-      <path
-        d="M12 16H42L18 48H42"
-        stroke="currentColor"
-        strokeWidth="8"
-        strokeLinecap="square"
-        strokeLinejoin="round"
-      />
-      <path
-        d="M39 34L29 48"
-        stroke="currentColor"
-        strokeWidth="8"
-        strokeLinecap="square"
-        strokeLinejoin="round"
-      />
-      <circle cx="47" cy="16" r="5" fill="currentColor" />
-    </svg>
+      priority
+    />
   )
 }
 

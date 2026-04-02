@@ -20,9 +20,9 @@ export const metadata: Metadata = {
   keywords: ['AI', 'chat', 'Nova', 'Velora', 'Axiom', 'Forge', 'Pulse', 'Prism', 'creative', 'reasoning', 'coding', 'image generation'],
   authors: [{ name: 'Zenquanta' }],
   icons: {
-    icon: '/icon.svg',
-    shortcut: '/icon.svg',
-    apple: '/icon.svg',
+    icon: '/file.svg',
+    shortcut: '/file.svg',
+    apple: '/file.svg',
   },
 }
 
