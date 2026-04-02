@@ -20,21 +20,9 @@ export const metadata: Metadata = {
   keywords: ['AI', 'chat', 'Nova', 'Velora', 'Axiom', 'Forge', 'Pulse', 'Prism', 'creative', 'reasoning', 'coding', 'image generation'],
   authors: [{ name: 'Zenquanta' }],
   icons: {
-    icon: [
-      {
-        url: '/icon-light-32x32.png',
-        media: '(prefers-color-scheme: light)',
-      },
-      {
-        url: '/icon-dark-32x32.png',
-        media: '(prefers-color-scheme: dark)',
-      },
-      {
-        url: '/icon.svg',
-        type: 'image/svg+xml',
-      },
-    ],
-    apple: '/apple-icon.png',
+    icon: '/icon.svg',
+    shortcut: '/icon.svg',
+    apple: '/icon.svg',
   },
 }
 

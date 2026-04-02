@@ -39,28 +39,27 @@ export function CodeIcon({ className }: IconProps) {
 
 export function ZenquantaLogo({ className }: IconProps) {
   return (
-    <svg className={cn('size-8', className)} viewBox="0 0 32 32" fill="none">
-      <defs>
-        <linearGradient id="logoGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stopColor="oklch(0.7 0.18 330)" />
-          <stop offset="50%" stopColor="oklch(0.65 0.2 250)" />
-          <stop offset="100%" stopColor="oklch(0.7 0.2 145)" />
-        </linearGradient>
-        <linearGradient id="logoGradientFill" x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stopColor="oklch(0.7 0.18 330 / 0.3)" />
-          <stop offset="100%" stopColor="oklch(0.7 0.2 145 / 0.3)" />
-        </linearGradient>
-      </defs>
-      <circle cx="16" cy="16" r="14" stroke="url(#logoGradient)" strokeWidth="2" fill="url(#logoGradientFill)" />
+    <svg
+      className={cn('size-8 text-foreground', className)}
+      viewBox="0 0 64 64"
+      fill="none"
+      aria-hidden="true"
+    >
       <path
-        d="M10 12L16 20L22 12"
-        stroke="url(#logoGradient)"
-        strokeWidth="2"
-        strokeLinecap="round"
+        d="M12 16H42L18 48H42"
+        stroke="currentColor"
+        strokeWidth="8"
+        strokeLinecap="square"
         strokeLinejoin="round"
-        fill="none"
       />
-      <circle cx="16" cy="10" r="2" fill="url(#logoGradient)" />
+      <path
+        d="M39 34L29 48"
+        stroke="currentColor"
+        strokeWidth="8"
+        strokeLinecap="square"
+        strokeLinejoin="round"
+      />
+      <circle cx="47" cy="16" r="5" fill="currentColor" />
     </svg>
   )
 }
