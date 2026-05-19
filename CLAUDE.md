@@ -36,3 +36,27 @@ When Claude Code acts as the coding agent, it must:
 - update `AI_CHECKLIST.md` only if commands, setup, dependencies, or workflow change
 - update `AI_PROJECT.md` only if project scope, features, or structure change
 
+## Normal Claude Code Usage
+
+Examples:
+
+- Review the latest completed work.
+- Check the current architecture and identify risks.
+- Act as the coding agent because Codex is unavailable.
+- Create a Codex prompt to fix the highest-priority issues.
+
+## Review Priorities
+
+When reviewing, prioritize:
+
+- security and secret exposure risks
+- usage-limit and billing correctness
+- model-routing correctness
+- data persistence and conversation integrity
+- auth/session correctness
+- regressions in the existing chat UI
+- missed updates to shared workflow docs
+
+## Handoff Expectations
+
+If Claude Code reviews or plans work without changing files, it should produce concise findings and recommended next actions. If it changes files, it must update `AI_TASK_LOG.md` before handing off.
