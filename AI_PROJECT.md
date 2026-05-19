@@ -80,7 +80,7 @@ Unknown: whether these migrations have been applied to any live Supabase project
 
 ## State Management
 
-Primary client state is centralized in `lib/chat-context.tsx`. Send orchestration is split across `hooks/useSendMessage.ts`, `hooks/usePromptPrecheck.ts`, and `lib/chat/sendMessage.ts`.
+Primary client state is centralized in `lib/chat-context.tsx`. Send orchestration is split across `hooks/useSendMessage.ts`, `hooks/usePromptPrecheck.ts`, and `lib/chat/sendMessage.ts`. Client-side chat API transport is isolated in `lib/chat-service.ts`.
 
 Persistent user data is accessed through store wrappers under `lib/storage/`. Browser storage helpers remain for local preferences and local import compatibility.
 
@@ -88,6 +88,7 @@ Persistent user data is accessed through store wrappers under `lib/storage/`. Br
 
 - `app/api/chat/route.ts`: text chat route and streaming response orchestration.
 - `app/api/images/generate/route.ts`: Prism image route.
+- `lib/chat-service.ts`: client-side wrapper for internal chat/image API transport.
 - `lib/ai/chat.ts`: conversation preparation, provider call selection, mock fallback, completion handling.
 - `lib/ai/openrouter.ts`: OpenRouter client and streaming parsing.
 - `lib/config/assistants.ts`: assistant family mapping and tier model selection.

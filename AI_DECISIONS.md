@@ -65,6 +65,7 @@ Current technical and product decisions observed from the repository. Inferred d
 - Text and image requests are intentionally separated.
 - `/api/chat` rejects Prism/image requests.
 - `/api/images/generate` requires the request to resolve to Prism image generation.
+- Frontend chat transport is isolated in `lib/chat-service.ts`; provider calls and provider credentials remain server-side.
 - Subscription and usage checks happen in backend routes.
 - Usage estimates are calculated locally from configured model pricing and approximate token counts.
 
