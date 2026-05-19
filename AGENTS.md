@@ -94,3 +94,63 @@ Important current reality: mock responses still exist as fallback behavior when 
 - Use icons from the existing icon system or `lucide-react` when relevant.
 - Do not expose server secrets to client components.
 
+## Commands
+
+From `package.json`:
+
+- Install: `npm install` according to README. A `pnpm-lock.yaml` is present, so package-manager preference should be checked before dependency changes.
+- Dev server: `npm run dev`
+- Build: `npm run build`
+- Start production server: `npm run start`
+- Lint: `npm run lint`
+
+No `test` script is currently defined.
+
+No `type-check` script is currently defined. README expects manual `npx tsc --noEmit`.
+
+## Environment
+
+Use `.env.local` for local secrets. `.env.example` currently lists:
+
+- `OPENROUTER_API_KEY`
+- `OPENROUTER_BASE_URL`
+- `NEXT_PUBLIC_SUPABASE_URL`
+- `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`
+- `SUPABASE_SECRET_KEY`
+
+Do not commit secrets.
+
+## Handoff Rules
+
+When finishing work, update `AI_TASK_LOG.md` with:
+
+- date/time
+- agent/tool used
+- task summary
+- files changed
+- what changed
+- commands run
+- verification results
+- remaining issues
+- next recommended task
+- handoff prompt for the next agent
+
+If an architecture decision changed, update `AI_DECISIONS.md` in the same change. If commands or setup changed, update `AI_CHECKLIST.md`. If feature status changed, update `AI_PROJECT.md`.
+
+## Minimal Change Rules
+
+- Read before editing.
+- Touch only files necessary for the task.
+- Preserve user changes and existing worktree state.
+- Do not rewrite existing UI unless required.
+- Do not add backend features while doing documentation/setup work.
+- Prefer incremental migrations and compatibility-preserving changes.
+- If a command fails, document the exact failure and do not hide it.
+
+## Unknowns To Check Later
+
+- Preferred package manager for future dependency installs is unknown because README says `npm install` but `pnpm-lock.yaml` exists.
+- Production deployment target and status are unknown from the repository.
+- Live Supabase project status is unknown from the repository.
+- Real billing provider is not implemented; Stripe or another provider should be confirmed before billing work.
+- Provider pricing freshness is unknown; model pricing config should be reviewed before production billing.
