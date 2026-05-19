@@ -20,17 +20,13 @@ import {
   Chat,
   ChatAction,
   ChatResponse,
-  ChatRequest,
   Conversation,
   ConversationSummary,
-  ImageGenerateRequest,
-  ImageGenerateResponse,
   PendingAttachment,
   Project,
   PromptLibraryItem,
   SendLifecycleStatus,
   SessionSettings,
-  StreamEvent,
   StreamingState,
 } from '@/types'
 import {
@@ -63,13 +59,17 @@ import {
   updateConversationSnapshot,
   toConversationSummary,
 } from '@/lib/utils/chat'
-import { readNdjsonStream } from '@/lib/utils/stream'
 import {
   createAssistantPlaceholder,
   createPendingSend,
   debugSendPipeline,
   resolveSend,
 } from '@/lib/chat/sendMessage'
+import {
+  ChatServiceRequestError,
+  generateImageServiceResponse,
+  streamChatServiceResponse,
+} from '@/lib/chat-service'
 import { useSendMessage } from '@/hooks/useSendMessage'
 import {
   conversationToJson,
@@ -1212,15 +1212,14 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       let terminalEvent: 'done' | 'error' | null = null
 
       try {
-        const response = await fetch('/api/chat', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
+        setSendLifecycleStatus('streaming_text')
+
+        await streamChatServiceResponse(
+          {
             action: payload.action,
             conversationId: payload.conversation.id,
             conversation: payload.conversation,
+            messages: payload.conversation.messages,
             mode: payload.mode,
             targetMode: payload.targetMode,
             content: payload.content,
@@ -1228,100 +1227,81 @@ export function ChatProvider({ children }: { children: ReactNode }) {
             targetMessageId: payload.targetMessageId,
             attachments: payload.attachments,
             attachmentContext: (payload.attachments ?? []).map(toAttachmentContext),
-          } satisfies ChatRequest),
-          signal: controller.signal,
-        })
+          },
+          {
+            signal: controller.signal,
+            onEvent: (event) => {
+              if (payload.sendId && activeSendIdRef.current !== payload.sendId) {
+                return
+              }
 
-        if (response.status === 401) {
-          handleUnauthorized()
-          throw new Error('Authentication required.')
-        }
+              switch (event.type) {
+                case 'start': {
+                  const startedConversation = updateConversationSnapshot(
+                    event.conversation,
+                    {
+                      messages: [...event.conversation.messages, event.message],
+                    }
+                  )
 
-        if (!response.ok) {
-          const body = (await response.json().catch(() => null)) as
-            | { error?: string }
-            | null
-          debugSendPipeline('request-failure', {
-            action: payload.action,
-            route: '/api/chat',
-            error: body?.error ?? 'Unable to send chat request.',
-            sendId: payload.sendId,
-          })
-          throw new Error(body?.error ?? 'Unable to send chat request.')
-        }
-
-        setSendLifecycleStatus('streaming_text')
-
-        await readNdjsonStream<StreamEvent>(response, (event) => {
-          if (payload.sendId && activeSendIdRef.current !== payload.sendId) {
-            return
-          }
-
-          switch (event.type) {
-            case 'start': {
-              const startedConversation = updateConversationSnapshot(
-                event.conversation,
-                {
-                  messages: [...event.conversation.messages, event.message],
+                  upsertConversation(startedConversation)
+                  setStreamingState({
+                    status: 'streaming',
+                    conversationId: startedConversation.id,
+                    messageId: event.message.id,
+                    workingTitle: 'Working notes',
+                    workingNotes: [],
+                  })
+                  break
                 }
-              )
-
-              upsertConversation(startedConversation)
-              setStreamingState({
-                status: 'streaming',
-                conversationId: startedConversation.id,
-                messageId: event.message.id,
-                workingTitle: 'Working notes',
-                workingNotes: [],
-              })
-              break
-            }
-            case 'delta': {
-              applyConversationPatch(event.conversationId, (conversation) =>
-                updateConversationSnapshot(conversation, {
-                  messages: conversation.messages.map((message) =>
-                    message.id === event.messageId
-                      ? {
-                          ...message,
-                          content: `${message.content}${event.delta}`,
-                          status: 'streaming',
-                        }
-                      : message
-                  ),
-                })
-              )
-              break
-            }
-            case 'working': {
-              setStreamingState((previous) => ({
-                ...previous,
-                status: 'streaming',
-                conversationId: event.conversationId,
-                messageId: event.messageId,
-                workingTitle: event.title ?? previous.workingTitle ?? 'Working notes',
-                workingNotes: event.notes,
-              }))
-              break
-            }
-            case 'done': {
-              terminalEvent = 'done'
-              upsertConversation(event.conversation)
-              setStreamingState({ status: 'idle' })
-              break
-            }
-            case 'error': {
-              terminalEvent = 'error'
-              applyLocalError(event.conversationId, event.messageId, event.error)
-              setStreamingState({
-                status: 'error',
-                conversationId: event.conversationId,
-                messageId: event.messageId,
-                error: event.error,
-              })
-              break
-            }
+                case 'delta': {
+                  applyConversationPatch(event.conversationId, (conversation) =>
+                    updateConversationSnapshot(conversation, {
+                      messages: conversation.messages.map((message) =>
+                        message.id === event.messageId
+                          ? {
+                              ...message,
+                              content: `${message.content}${event.delta}`,
+                              status: 'streaming',
+                            }
+                          : message
+                      ),
+                    })
+                  )
+                  break
+                }
+                case 'working': {
+                  setStreamingState((previous) => ({
+                    ...previous,
+                    status: 'streaming',
+                    conversationId: event.conversationId,
+                    messageId: event.messageId,
+                    workingTitle: event.title ?? previous.workingTitle ?? 'Working notes',
+                    workingNotes: event.notes,
+                  }))
+                  break
+                }
+                case 'done': {
+                  terminalEvent = 'done'
+                  upsertConversation(event.conversation)
+                  setStreamingState({ status: 'idle' })
+                  break
+                }
+                case 'error': {
+                  terminalEvent = 'error'
+                  applyLocalError(event.conversationId, event.messageId, event.error)
+                  setStreamingState({
+                    status: 'error',
+                    conversationId: event.conversationId,
+                    messageId: event.messageId,
+                    error: event.error,
+                  })
+                  break
+                }
+              }
+            },
           }
-        })
+        )
 
         if (payload.sendId && activeSendIdRef.current !== payload.sendId) {
           markSendAsSuperseded(
@@ -1360,6 +1340,10 @@ export function ChatProvider({ children }: { children: ReactNode }) {
           setStreamingState({ status: 'idle' })
           finalizeSendLifecycle(payload.sendId)
           return
+        }
+
+        if (error instanceof ChatServiceRequestError && error.status === 401) {
+          handleUnauthorized()
         }
 
         const message =
@@ -1431,15 +1415,12 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       streamAbortRef.current = controller
 
       try {
-        const response = await fetch('/api/images/generate', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
+        const data = await generateImageServiceResponse(
+          {
             action: payload.action,
             conversationId: payload.conversation.id,
             conversation: payload.conversation,
+            messages: payload.conversation.messages,
             mode: payload.mode,
             targetMode: payload.targetMode,
             prompt: payload.content,
@@ -1448,33 +1429,9 @@ export function ChatProvider({ children }: { children: ReactNode }) {
             targetMessageId: payload.targetMessageId,
             attachments: payload.attachments,
             imageCount: 1,
-          } satisfies ImageGenerateRequest),
-          signal: controller.signal,
-        })
-
-        if (response.status === 401) {
-          handleUnauthorized()
-          throw new Error('Authentication required.')
-        }
-
-        if (!response.ok) {
-          const body = (await response.json().catch(() => null)) as
-            | { error?: string }
-            | null
-          debugSendPipeline('request-failure', {
-            action: payload.action,
-            route: '/api/images/generate',
-            error: body?.error ?? 'Unable to generate image.',
-            sendId: payload.sendId,
-          })
-          throw new Error(body?.error ?? 'Unable to generate image.')
-        }
-
-        const data = (await response.json()) as ImageGenerateResponse
-
-        if (!data?.conversation || !data?.message) {
-          throw new Error('Image response was incomplete.')
-        }
+          },
+          { signal: controller.signal }
+        )
 
         if (payload.sendId && activeSendIdRef.current !== payload.sendId) {
           markSendAsSuperseded(
@@ -1512,6 +1469,10 @@ export function ChatProvider({ children }: { children: ReactNode }) {
           setStreamingState({ status: 'idle' })
           finalizeSendLifecycle(payload.sendId)
           return
+        }
+
+        if (error instanceof ChatServiceRequestError && error.status === 401) {
+          handleUnauthorized()
         }
 
         const message =
