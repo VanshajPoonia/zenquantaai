@@ -4,7 +4,7 @@ Every AI agent must update this file after making changes to the repo.
 
 ## Current Status
 
-Shared AI-agent workflow documentation has been added as the current coordination baseline. No app code, backend code, migrations, package scripts, or dependencies were changed in this documentation milestone.
+Shared AI-agent workflow documentation exists. The local verification baseline now uses pnpm, dependencies are installed from `pnpm-lock.yaml`, TypeScript and production build pass, and lint runs but fails on existing React/Next lint findings.
 
 ## Completed Work
 
@@ -56,23 +56,75 @@ Shared AI-agent workflow documentation has been added as the current coordinatio
 - Handoff prompt for the next agent:
   - Read `AGENTS.md`, `AI_PROJECT.md`, `AI_TASK_LOG.md`, `AI_DECISIONS.md`, and `AI_CHECKLIST.md`. Then verify the local setup by resolving dependency installation/package-manager choice, re-running `npm run lint`, `npm run build`, and `npx tsc --noEmit`, and updating `AI_TASK_LOG.md` plus `AI_CHECKLIST.md` with the new results. Do not add product features until the verification baseline is understood.
 
+### 2026-05-20 00:31:42 IST
+
+- Agent/tool used: Codex
+- Task summary: Standardized the local verification workflow on pnpm, installed dependencies from the existing lockfile, added minimal ESLint tooling/config so lint can execute, and recorded the new baseline.
+- Files changed:
+  - `.gitignore`
+  - `AGENTS.md`
+  - `AI_CHECKLIST.md`
+  - `AI_PROJECT.md`
+  - `AI_TASK_LOG.md`
+  - `eslint.config.mjs`
+  - `package.json`
+  - `pnpm-lock.yaml`
+  - `pnpm-workspace.yaml`
+- What changed:
+  - Documented pnpm as the current package manager for setup and verification.
+  - Added local `eslint` and `eslint-config-next` dev dependencies for the existing `lint` script.
+  - Added minimal Next flat ESLint config.
+  - Added pnpm build-script approvals for `sharp` and `unrs-resolver`.
+  - Ignored the local `.pnpm-store/` directory.
+  - Updated project/checklist/task memory to replace stale missing-dependency and missing-ESLint-config status.
+- Commands run:
+  - `git status --short --branch`: confirmed clean `main...origin/main` before this milestone.
+  - `rg`/`sed` inspections of workflow docs and package metadata.
+  - `pnpm install --frozen-lockfile`: first sandboxed attempt failed with registry `ENOTFOUND`; rerun with network approval installed dependencies but required build-script approval.
+  - `pnpm approve-builds --all`: approved `sharp`, later `unrs-resolver`.
+  - `CI=true pnpm install --frozen-lockfile`: sandboxed attempt failed with registry `ENOTFOUND`; rerun with network approval succeeded.
+  - `pnpm exec which eslint` and `pnpm exec eslint --version`: showed the initial lint run was using global ESLint before local lint dependencies were added.
+  - `test -d node_modules/eslint`: failed before local lint dependencies were added.
+  - `pnpm why eslint`: failed with `[ERR_SQLITE_ERROR] unable to open database file`; direct dependency inspection was used instead.
+  - `pnpm run lint`: initially failed due missing `eslint.config.(js|mjs|cjs)`; after adding config/deps, failed due ESLint 10/plugin compatibility; after pinning ESLint 9, ran and reported existing app lint findings.
+  - `pnpm view eslint-config-next@16.2.0 peerDependencies`: verified peer dependency range after initial network failure and approved rerun.
+  - `pnpm add -D eslint@^10.3.0 eslint-config-next@16.2.0`: added lint deps, then ESLint 10 proved incompatible with the current React lint plugin.
+  - `pnpm add -D eslint@^9.0.0`: adjusted to ESLint 9.39.4.
+  - `pnpm run build`: sandboxed run failed fetching Google Fonts; network-approved run passed.
+  - `pnpm exec tsc --noEmit`: passed.
+  - `git status --short --branch`: showed only intended verification/tooling/docs changes.
+  - `git diff --stat`: reviewed diff size and confirmed the large change is `pnpm-lock.yaml`.
+  - `git diff --check`: passed with no whitespace errors.
+- Verification results:
+  - `pnpm install --frozen-lockfile`: pass with network access and approved native build scripts.
+  - `pnpm run lint`: fails on existing code findings, not missing tooling.
+  - `pnpm run build`: pass with network access; default sandbox failed only on Google Fonts fetch.
+  - `pnpm exec tsc --noEmit`: pass.
+  - Final changed files were `.gitignore`, workflow docs, ESLint config, package metadata, lockfile, and pnpm workspace approval file.
+- Remaining issues:
+  - Fix existing lint findings in a separate focused milestone.
+  - Consider local fonts or cached font strategy if offline/sandboxed builds must pass.
+  - No automated `test` or `type-check` package scripts exist.
+  - Production Supabase, deployment, billing, and provider pricing status remain unknown.
+- Next recommended task:
+  - Create a focused lint-baseline milestone that addresses the React hook/compiler errors first, then review whether Next image warnings should be code changes or config exceptions.
+- Handoff prompt for the next agent:
+  - Read `AGENTS.md`, `AI_PROJECT.md`, `AI_TASK_LOG.md`, `AI_DECISIONS.md`, and `AI_CHECKLIST.md`. Verify the current diff is limited to pnpm setup/tooling/docs, then review the `pnpm run lint` failures without broad UI refactors. Do not change backend/product behavior while closing the lint baseline.
+
 ## Current Work
 
 No active implementation work is in progress in this log.
 
 ## Proposed Next Work
 
-- Resolve package-manager ambiguity.
-- Install dependencies using the confirmed package manager.
-- Fix or add ESLint configuration if linting is intended to be part of the workflow.
-- Re-run build and type-check after dependencies are available.
+- Fix existing lint findings in a separate, focused milestone.
+- Consider adding explicit package scripts for `type-check` and tests later.
 - Audit `/api/chat`, `/api/images/generate`, billing enforcement, and conversation persistence before production backend hardening.
 
 ## Active Bugs / Issues
 
-- `npm run lint` fails because ESLint cannot find a flat config file.
-- `npm run build` fails in the current environment because `next` is not installed.
-- `npx tsc --noEmit` fails in the current environment because dependencies/types are unavailable and may reveal additional strictness issues after install.
+- `pnpm run lint` fails on existing React/Next lint findings after tooling setup.
+- `pnpm run build` requires network access for Google Fonts in the current configuration.
 
 ## Architecture Concerns
 
@@ -85,21 +137,25 @@ No active implementation work is in progress in this log.
 
 - No `test` script is defined in `package.json`.
 - No `type-check` script is defined in `package.json`.
-- README expects `npx tsc --noEmit` and `npm run build`.
-- Current verification is blocked by missing dependencies and missing ESLint config.
+- Current manual type check is `pnpm exec tsc --noEmit`.
+- Current build command is `pnpm run build`.
+- TypeScript passes.
+- Production build passes with network access.
+- Lint runs but fails on existing React/Next lint findings.
 
 ## Known Risks
 
-- Package-manager preference is unclear.
 - Live Supabase migration/application state is unknown.
 - Production deployment status is unknown.
 - Real billing provider is unknown and not implemented.
 - Provider pricing freshness is unknown.
 - A hardcoded internal fallback admin identity is noted in the README and should be reviewed before production.
+- Offline/sandboxed builds may fail while Google Fonts are fetched at build time.
 
 ## AI Handoff Summaries
 
 - 2026-05-19: Created shared workflow docs. Next agent should use them as the source of truth for coordination and update this log after any repo changes.
+- 2026-05-20: Established pnpm verification baseline. Next agent should treat lint failures as existing app findings, not missing setup.
 
 ## Future Feature Ideas
 
@@ -112,7 +168,6 @@ No active implementation work is in progress in this log.
 
 ## Open Questions
 
-- Should future dependency installs use npm or pnpm?
 - Has any Supabase project already applied the migrations?
 - What is the production deployment target?
 - Which billing provider should be used?
