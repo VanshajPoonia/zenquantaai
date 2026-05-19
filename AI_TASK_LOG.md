@@ -111,6 +111,43 @@ Shared AI-agent workflow documentation exists. The local verification baseline n
 - Handoff prompt for the next agent:
   - Read `AGENTS.md`, `AI_PROJECT.md`, `AI_TASK_LOG.md`, `AI_DECISIONS.md`, and `AI_CHECKLIST.md`. Verify the current diff is limited to pnpm setup/tooling/docs, then review the `pnpm run lint` failures without broad UI refactors. Do not change backend/product behavior while closing the lint baseline.
 
+### 2026-05-20 00:44:17 IST
+
+- Agent/tool used: Codex
+- Task summary: Added an API-ready client chat service layer and refactored chat/image send transport out of React context without changing UI or provider behavior.
+- Files changed:
+  - `AI_DECISIONS.md`
+  - `AI_PROJECT.md`
+  - `AI_TASK_LOG.md`
+  - `lib/chat-context.tsx`
+  - `lib/chat-service.ts`
+  - `types/index.ts`
+- What changed:
+  - Added `lib/chat-service.ts` with client-safe wrappers for `/api/chat` streaming and `/api/images/generate` JSON requests.
+  - Added `ChatServiceRequestError` with HTTP status for auth/error handling.
+  - Added optional `requestedModelId` to `ChatRequest` and `ImageGenerateRequest` for later model-routing work.
+  - Refactored `lib/chat-context.tsx` to delegate text and image API transport to the service while preserving optimistic updates, stream event handling, aborts, queueing, and local error handling.
+  - Recorded the architecture decision that frontend transport is isolated while provider calls remain server-side.
+- Commands run:
+  - `git status --short --branch`: confirmed existing uncommitted verification-baseline changes before this milestone.
+  - `sed`/`rg` inspections of workflow docs, chat context, send hook, mock data, shared types, and stream utilities.
+  - `pnpm exec tsc --noEmit`: passed.
+  - `pnpm run build`: passed.
+  - `pnpm run lint`: failed on known existing React/Next lint findings; no new service-specific lint output was reported.
+  - `git diff --check`: passed.
+- Verification results:
+  - TypeScript passes.
+  - Production build passes.
+  - Lint remains blocked by pre-existing React Compiler/hooks and Next image findings.
+  - No UI redesign, backend provider changes, migrations, billing changes, mock-data removal, or frontend provider-key logic were introduced.
+- Remaining issues:
+  - Existing lint baseline still needs a separate focused cleanup.
+  - `requestedModelId` is accepted in the client/service request shape but is not enforced by backend routes yet.
+- Next recommended task:
+  - Wire `requestedModelId` into the backend model-routing/entitlement layer after the model catalog milestone is implemented.
+- Handoff prompt for the next agent:
+  - Read `AGENTS.md`, `AI_PROJECT.md`, `AI_TASK_LOG.md`, `AI_DECISIONS.md`, and `AI_CHECKLIST.md`. Review `lib/chat-service.ts` and the transport-only changes in `lib/chat-context.tsx`; verify provider calls still happen only through server routes and that the next backend milestone handles `requestedModelId` enforcement.
+
 ## Current Work
 
 No active implementation work is in progress in this log.
@@ -118,6 +155,7 @@ No active implementation work is in progress in this log.
 ## Proposed Next Work
 
 - Fix existing lint findings in a separate, focused milestone.
+- Wire backend model-routing enforcement for the optional `requestedModelId` request field.
 - Consider adding explicit package scripts for `type-check` and tests later.
 - Audit `/api/chat`, `/api/images/generate`, billing enforcement, and conversation persistence before production backend hardening.
 
