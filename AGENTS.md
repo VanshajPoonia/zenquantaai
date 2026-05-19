@@ -98,15 +98,16 @@ Important current reality: mock responses still exist as fallback behavior when 
 
 From `package.json`:
 
-- Install: `npm install` according to README. A `pnpm-lock.yaml` is present, so package-manager preference should be checked before dependency changes.
-- Dev server: `npm run dev`
-- Build: `npm run build`
-- Start production server: `npm run start`
-- Lint: `npm run lint`
+- Package manager: `pnpm` is the current verification baseline because `pnpm-lock.yaml` exists, no `package-lock.json` exists, and frozen install succeeded.
+- Install: `pnpm install --frozen-lockfile`
+- Dev server: `pnpm run dev`
+- Build: `pnpm run build`
+- Start production server: `pnpm run start`
+- Lint: `pnpm run lint`
 
 No `test` script is currently defined.
 
-No `type-check` script is currently defined. README expects manual `npx tsc --noEmit`.
+No `type-check` script is currently defined. Use manual `pnpm exec tsc --noEmit`.
 
 ## Environment
 
@@ -149,7 +150,6 @@ If an architecture decision changed, update `AI_DECISIONS.md` in the same change
 
 ## Unknowns To Check Later
 
-- Preferred package manager for future dependency installs is unknown because README says `npm install` but `pnpm-lock.yaml` exists.
 - Production deployment target and status are unknown from the repository.
 - Live Supabase project status is unknown from the repository.
 - Real billing provider is not implemented; Stripe or another provider should be confirmed before billing work.

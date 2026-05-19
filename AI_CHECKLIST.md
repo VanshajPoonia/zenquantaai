@@ -4,18 +4,24 @@ Shared setup, verification, and debugging checklist for AI agents.
 
 ## Install Command
 
-README says:
+Use pnpm for local setup and verification:
 
 ```bash
-npm install
+pnpm install --frozen-lockfile
 ```
 
-Note: `pnpm-lock.yaml` exists. Confirm package-manager preference before dependency or lockfile changes.
+Package-manager note: `pnpm-lock.yaml` exists, `package-lock.json` does not, and frozen install succeeded with pnpm. If pnpm tries to remove/recreate `node_modules` in a non-interactive shell, use:
+
+```bash
+CI=true pnpm install --frozen-lockfile
+```
+
+`pnpm-workspace.yaml` currently allows build scripts for `sharp` and `unrs-resolver`, which were approved during dependency setup.
 
 ## Dev Server Command
 
 ```bash
-npm run dev
+pnpm run dev
 ```
 
 Expected local URL from README:
@@ -27,16 +33,18 @@ http://localhost:3000
 ## Build Command
 
 ```bash
-npm run build
+pnpm run build
 ```
+
+Known environment note: `next/font` may need network access to fetch Google Fonts during production builds unless fonts are cached or changed to local fonts.
 
 ## Lint Command
 
 ```bash
-npm run lint
+pnpm run lint
 ```
 
-Current observed result from initial audit: this failed because ESLint could not find `eslint.config.(js|mjs|cjs)`. Recheck after dependencies are installed before making a final lint/config diagnosis.
+Current result: ESLint runs with `eslint.config.mjs` and fails on existing React/Next lint findings. The missing-config failure from the initial audit has been resolved.
 
 ## Test Command
 
@@ -46,13 +54,13 @@ No test command is currently defined in `package.json`.
 
 No `type-check` script is currently defined in `package.json`.
 
-README expects the manual command:
+Use the manual command:
 
 ```bash
-npx tsc --noEmit
+pnpm exec tsc --noEmit
 ```
 
-Current known result from initial audit: this failed before dependencies were installed, with many missing module/type errors and some strictness errors to recheck after install.
+Current result: passes after dependency installation.
 
 ## Env Setup
 
@@ -131,11 +139,11 @@ Unknown: whether a Supabase CLI workflow is intended.
 ## Common Failure Points
 
 - Dependencies not installed: `next` and React types are unavailable.
-- Observed missing ESLint flat config: `npm run lint` currently fails; recheck after dependencies are installed before making a final lint/config diagnosis.
+- Existing lint findings: `pnpm run lint` currently fails on React Compiler/hooks rules and Next image warnings.
+- Build network dependency: `pnpm run build` needs access to Google Fonts unless font handling changes.
 - Missing env values: Supabase/OpenRouter runtime calls will fail or fall back.
 - OpenRouter key missing: mock AI fallback may be used.
 - Supabase migrations not applied: storage/API routes may fail.
-- Package-manager ambiguity: README uses npm while `pnpm-lock.yaml` exists.
 - Provider pricing estimates may be stale.
 
 ## What To Do When Commands Fail
@@ -143,7 +151,7 @@ Unknown: whether a Supabase CLI workflow is intended.
 - Capture the exact command and failure.
 - Do not hide failures.
 - Distinguish environment/setup failures from code failures.
-- If dependencies are missing, install only after package-manager preference is confirmed or requested.
+- If dependencies are missing, use `pnpm install --frozen-lockfile`.
 - If a command failure is unrelated to the current task, document it and continue only if safe.
 - Update `AI_TASK_LOG.md` with verification results after changing files.
 
@@ -154,3 +162,11 @@ Unknown: whether a Supabase CLI workflow is intended.
 - `npm run lint`: observed failure due to missing ESLint config; recheck after dependencies are installed before making a final lint/config diagnosis.
 - `npm run build`: failed because `next` was not found.
 - `npx tsc --noEmit`: failed with missing dependencies/types and additional strictness errors to recheck after install.
+
+## Verification Baseline: 2026-05-20
+
+- `pnpm install --frozen-lockfile`: succeeded after network approval and approved build scripts.
+- `pnpm add -D eslint@^9.0.0 eslint-config-next@16.2.0`: added the minimal local lint dependencies needed for the declared `lint` script and Next flat config.
+- `pnpm run lint`: runs ESLint, but fails on existing app lint findings: React hook `set-state-in-effect`, React Compiler memoization/purity rules, React hook dependency warning, and Next `<img>` warnings.
+- `pnpm run build`: failed in the default sandbox because Next could not fetch Google Fonts; passed with network approval.
+- `pnpm exec tsc --noEmit`: passed.
