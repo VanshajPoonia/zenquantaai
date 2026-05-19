@@ -60,3 +60,44 @@ Current technical and product decisions observed from the repository. Inferred d
 - Server persistence is abstracted through `lib/storage/` stores.
 - Conversation memory is conversation-scoped and controlled by session settings.
 
+## Backend/API Decisions
+
+- Text and image requests are intentionally separated.
+- `/api/chat` rejects Prism/image requests.
+- `/api/images/generate` requires the request to resolve to Prism image generation.
+- Subscription and usage checks happen in backend routes.
+- Usage estimates are calculated locally from configured model pricing and approximate token counts.
+
+## Auth / Database Decisions
+
+- Supabase Auth is the current auth provider.
+- ID/password is the current primary user-facing auth flow.
+- Server cookies store access/refresh tokens.
+- Supabase migrations define app tables, RLS policies, storage policies, subscriptions, usage events, and admin audit logs.
+- User settings are stored as a JSON payload in `zen_user_settings`.
+
+## Security Considerations
+
+- Keep `SUPABASE_SECRET_KEY` server-only.
+- Keep `OPENROUTER_API_KEY` server-only.
+- Do not expose raw internal cost data to normal users unless intentionally designed.
+- Review hardcoded admin fallback behavior before production.
+- Review RLS policies whenever adding or changing tables.
+- Review upload/storage paths and signed URL behavior when changing attachment handling.
+
+## Future Migration Considerations
+
+- Package-manager preference should be decided before dependency changes.
+- Billing automation should add explicit payment/customer/event tables or clear external references.
+- Model/pricing changes may need versioned config snapshots for historical usage accuracy.
+- Usage enforcement should become atomic before paid production use.
+- Conversation persistence may need targeted message writes instead of full delete/rewrite.
+
+## Open Questions
+
+- Is npm or pnpm the intended package manager?
+- Is the live Supabase schema already migrated?
+- What deployment platform is intended?
+- Which billing provider will be used?
+- Should provider pricing live in code, database config, or both?
+- Should mock provider fallback be disabled in production?
