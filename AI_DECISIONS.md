@@ -65,7 +65,6 @@ Current technical and product decisions observed from the repository. Inferred d
 - Text and image requests are intentionally separated.
 - `/api/chat` rejects Prism/image requests.
 - `/api/images/generate` requires the request to resolve to Prism image generation.
-- Frontend chat transport is isolated in `lib/chat-service.ts`; provider calls and provider credentials remain server-side.
 - Subscription and usage checks happen in backend routes.
 - Usage estimates are calculated locally from configured model pricing and approximate token counts.
 
@@ -88,7 +87,7 @@ Current technical and product decisions observed from the repository. Inferred d
 
 ## Future Migration Considerations
 
-- Package-manager workflow is now documented in `AI_CHECKLIST.md`; pnpm is the current verification baseline.
+- Package-manager preference should be decided before dependency changes.
 - Billing automation should add explicit payment/customer/event tables or clear external references.
 - Model/pricing changes may need versioned config snapshots for historical usage accuracy.
 - Usage enforcement should become atomic before paid production use.
@@ -96,6 +95,7 @@ Current technical and product decisions observed from the repository. Inferred d
 
 ## Open Questions
 
+- Is npm or pnpm the intended package manager?
 - Is the live Supabase schema already migrated?
 - What deployment platform is intended?
 - Which billing provider will be used?

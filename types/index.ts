@@ -266,7 +266,6 @@ export interface ChatRequest {
   mode: AIMode
   targetMode?: AIMode
   content?: string
-  requestedModelId?: string
   settings: SessionSettings
   targetMessageId?: string
   attachments?: Attachment[]
@@ -315,7 +314,6 @@ export interface ImageGenerateRequest {
   targetMode?: AIMode
   prompt?: string
   content?: string
-  requestedModelId?: string
   settings: SessionSettings
   targetMessageId?: string
   attachments?: Attachment[]

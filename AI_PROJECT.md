@@ -80,7 +80,7 @@ Unknown: whether these migrations have been applied to any live Supabase project
 
 ## State Management
 
-Primary client state is centralized in `lib/chat-context.tsx`. Send orchestration is split across `hooks/useSendMessage.ts`, `hooks/usePromptPrecheck.ts`, and `lib/chat/sendMessage.ts`. Client-side chat API transport is isolated in `lib/chat-service.ts`.
+Primary client state is centralized in `lib/chat-context.tsx`. Send orchestration is split across `hooks/useSendMessage.ts`, `hooks/usePromptPrecheck.ts`, and `lib/chat/sendMessage.ts`.
 
 Persistent user data is accessed through store wrappers under `lib/storage/`. Browser storage helpers remain for local preferences and local import compatibility.
 
@@ -88,7 +88,6 @@ Persistent user data is accessed through store wrappers under `lib/storage/`. Br
 
 - `app/api/chat/route.ts`: text chat route and streaming response orchestration.
 - `app/api/images/generate/route.ts`: Prism image route.
-- `lib/chat-service.ts`: client-side wrapper for internal chat/image API transport.
 - `lib/ai/chat.ts`: conversation preparation, provider call selection, mock fallback, completion handling.
 - `lib/ai/openrouter.ts`: OpenRouter client and streaming parsing.
 - `lib/config/assistants.ts`: assistant family mapping and tier model selection.
@@ -115,14 +114,14 @@ Persistent user data is accessed through store wrappers under `lib/storage/`. Br
 - Provider usage appears estimated locally; provider-reported usage capture should be verified or added later.
 - No automated test script exists in `package.json`.
 - No type-check script exists in `package.json`.
-- ESLint config now exists, but `pnpm run lint` currently fails on existing React/Next lint findings.
+- ESLint config appears absent based on `npm run lint` failure.
 
 ## Technical Debt and Risks
 
 - Usage counters and limit enforcement may need atomic database operations before production use.
 - `conversationStore.save()` deletes and rewrites messages, which may be risky for concurrent sends or partial failures.
 - Model pricing values are configurable estimates and may drift from OpenRouter pricing.
-- The project verification workflow now uses pnpm because `pnpm-lock.yaml` exists and frozen install succeeds.
+- The package-manager preference is unclear because README says `npm install` while `pnpm-lock.yaml` exists.
 - A hardcoded admin fallback identity exists according to README and should be reviewed before production.
-- Production builds need network access for Google Fonts unless font handling changes.
+- Build and type-check verification could not pass in the current environment without installed dependencies.
 - Production deployment status is unknown.
