@@ -114,14 +114,14 @@ Persistent user data is accessed through store wrappers under `lib/storage/`. Br
 - Provider usage appears estimated locally; provider-reported usage capture should be verified or added later.
 - No automated test script exists in `package.json`.
 - No type-check script exists in `package.json`.
-- ESLint config appears absent based on `npm run lint` failure.
+- ESLint config now exists, but `pnpm run lint` currently fails on existing React/Next lint findings.
 
 ## Technical Debt and Risks
 
 - Usage counters and limit enforcement may need atomic database operations before production use.
 - `conversationStore.save()` deletes and rewrites messages, which may be risky for concurrent sends or partial failures.
 - Model pricing values are configurable estimates and may drift from OpenRouter pricing.
-- The package-manager preference is unclear because README says `npm install` while `pnpm-lock.yaml` exists.
+- The project verification workflow now uses pnpm because `pnpm-lock.yaml` exists and frozen install succeeds.
 - A hardcoded admin fallback identity exists according to README and should be reviewed before production.
-- Build and type-check verification could not pass in the current environment without installed dependencies.
+- Production builds need network access for Google Fonts unless font handling changes.
 - Production deployment status is unknown.

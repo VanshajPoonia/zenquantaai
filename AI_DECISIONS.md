@@ -87,7 +87,7 @@ Current technical and product decisions observed from the repository. Inferred d
 
 ## Future Migration Considerations
 
-- Package-manager preference should be decided before dependency changes.
+- Package-manager workflow is now documented in `AI_CHECKLIST.md`; pnpm is the current verification baseline.
 - Billing automation should add explicit payment/customer/event tables or clear external references.
 - Model/pricing changes may need versioned config snapshots for historical usage accuracy.
 - Usage enforcement should become atomic before paid production use.
@@ -95,7 +95,6 @@ Current technical and product decisions observed from the repository. Inferred d
 
 ## Open Questions
 
-- Is npm or pnpm the intended package manager?
 - Is the live Supabase schema already migrated?
 - What deployment platform is intended?
 - Which billing provider will be used?
