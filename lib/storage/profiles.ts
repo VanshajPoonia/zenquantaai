@@ -1,5 +1,7 @@
 import { AuthUser, Profile, Role } from '@/types'
-import { neonQuery } from './neon'
+import { supabaseRequest } from './supabase'
+
+const PROFILES_TABLE = 'zen_profiles'
 
 type ProfileRow = {
   user_id: string
@@ -44,20 +46,34 @@ function rowToProfile(row: ProfileRow): Profile {
   }
 }
 
+function profileToRow(profile: Partial<Profile> & Pick<Profile, 'userId'>): Partial<ProfileRow> {
+  return {
+    user_id: profile.userId,
+    ...(typeof profile.loginId !== 'undefined' ? { login_id: profile.loginId } : {}),
+    ...(typeof profile.email !== 'undefined' ? { email: profile.email } : {}),
+    ...(typeof profile.role !== 'undefined' ? { role: profile.role } : {}),
+  }
+}
+
 class ProfilesStore {
   async list(): Promise<Profile[]> {
-    const rows = await neonQuery<ProfileRow>(
-      'select * from public.zen_profiles order by updated_at desc'
-    )
+    const rows = await supabaseRequest<ProfileRow[]>(PROFILES_TABLE, {
+      query: {
+        select: '*',
+        order: 'updated_at.desc',
+      },
+    })
 
     return rows.map(rowToProfile)
   }
 
   async get(userId: string): Promise<Profile | null> {
-    const rows = await neonQuery<ProfileRow>(
-      'select * from public.zen_profiles where user_id = $1',
-      [userId]
-    )
+    const rows = await supabaseRequest<ProfileRow[]>(PROFILES_TABLE, {
+      query: {
+        user_id: `eq.${userId}`,
+        select: '*',
+      },
+    })
 
     return rows[0] ? rowToProfile(rows[0]) : null
   }
@@ -76,47 +92,48 @@ class ProfilesStore {
 
       if (!needsUpdate) return existing
 
-      const updated = await neonQuery<ProfileRow>(
-        `
-          update public.zen_profiles
-          set login_id = $2,
-              email = $3,
-              role = coalesce($4, role)
-          where user_id = $1
-          returning *
-        `,
-        [user.id, user.loginId ?? null, user.email ?? null, forcedAdminRole ?? null]
-      )
+      const updated = await supabaseRequest<ProfileRow[]>(PROFILES_TABLE, {
+        method: 'PATCH',
+        query: {
+          user_id: `eq.${user.id}`,
+        },
+        body: profileToRow({
+          userId: user.id,
+          loginId: user.loginId ?? null,
+          email: user.email ?? null,
+          role: forcedAdminRole,
+        }),
+        prefer: 'return=representation',
+      })
 
       return rowToProfile(updated[0])
     }
 
-    const created = await neonQuery<ProfileRow>(
-      `
-        insert into public.zen_profiles (user_id, login_id, email, role)
-        values ($1, $2, $3, $4)
-        on conflict (user_id) do update
-        set login_id = excluded.login_id,
-            email = excluded.email,
-            role = excluded.role
-        returning *
-      `,
-      [user.id, user.loginId ?? null, user.email ?? null, forcedAdminRole ?? 'user']
-    )
+    const created = await supabaseRequest<ProfileRow[]>(PROFILES_TABLE, {
+      method: 'POST',
+      body: {
+        user_id: user.id,
+        login_id: user.loginId ?? null,
+        email: user.email ?? null,
+        role: forcedAdminRole ?? 'user',
+      },
+      prefer: 'resolution=merge-duplicates,return=representation',
+    })
 
     return rowToProfile(created[0])
   }
 
   async updateRole(userId: string, role: Role): Promise<Profile> {
-    const rows = await neonQuery<ProfileRow>(
-      `
-        update public.zen_profiles
-        set role = $2
-        where user_id = $1
-        returning *
-      `,
-      [userId, role]
-    )
+    const rows = await supabaseRequest<ProfileRow[]>(PROFILES_TABLE, {
+      method: 'PATCH',
+      query: {
+        user_id: `eq.${userId}`,
+      },
+      body: {
+        role,
+      },
+      prefer: 'return=representation',
+    })
 
     return rowToProfile(rows[0])
   }
