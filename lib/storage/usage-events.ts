@@ -1,5 +1,8 @@
 import { ImageGenerationEvent, UsageEvent } from '@/types'
-import { neonQuery, toNumber } from './neon'
+import { supabaseRequest } from './supabase'
+
+const USAGE_EVENTS_TABLE = 'zen_usage_events'
+const IMAGE_EVENTS_TABLE = 'zen_image_generation_events'
 
 type UsageEventRow = {
   id: string
@@ -14,10 +17,10 @@ type UsageEventRow = {
   prompt_tokens: number
   completion_tokens: number
   total_tokens: number
-  raw_cost_usd: number | string
-  displayed_cost_usd: number | string
-  display_multiplier: number | string
-  margin_usd: number | string
+  raw_cost_usd: number
+  displayed_cost_usd: number
+  display_multiplier: number
+  margin_usd: number
   credits_consumed: number
   created_at: string
 }
@@ -36,10 +39,10 @@ type ImageEventRow = {
   aspect_ratio: string | null
   image_count: number
   image_credits_consumed: number
-  raw_cost_usd: number | string
-  displayed_cost_usd: number | string
-  display_multiplier: number | string
-  margin_usd: number | string
+  raw_cost_usd: number
+  displayed_cost_usd: number
+  display_multiplier: number
+  margin_usd: number
   output_urls: string[] | null
   created_at: string
 }
@@ -58,10 +61,10 @@ function rowToUsageEvent(row: UsageEventRow): UsageEvent {
     promptTokens: row.prompt_tokens,
     completionTokens: row.completion_tokens,
     totalTokens: row.total_tokens,
-    rawCostUsd: toNumber(row.raw_cost_usd),
-    displayedCostUsd: toNumber(row.displayed_cost_usd),
-    displayMultiplier: toNumber(row.display_multiplier),
-    marginUsd: toNumber(row.margin_usd),
+    rawCostUsd: row.raw_cost_usd,
+    displayedCostUsd: row.displayed_cost_usd,
+    displayMultiplier: row.display_multiplier,
+    marginUsd: row.margin_usd,
     creditsConsumed: row.credits_consumed,
     createdAt: row.created_at,
   }
@@ -82,10 +85,10 @@ function rowToImageEvent(row: ImageEventRow): ImageGenerationEvent {
     aspectRatio: row.aspect_ratio,
     imageCount: row.image_count,
     imageCreditsConsumed: row.image_credits_consumed,
-    rawCostUsd: toNumber(row.raw_cost_usd),
-    displayedCostUsd: toNumber(row.displayed_cost_usd),
-    displayMultiplier: toNumber(row.display_multiplier),
-    marginUsd: toNumber(row.margin_usd),
+    rawCostUsd: row.raw_cost_usd,
+    displayedCostUsd: row.displayed_cost_usd,
+    displayMultiplier: row.display_multiplier,
+    marginUsd: row.margin_usd,
     outputUrls: row.output_urls ?? [],
     createdAt: row.created_at,
   }
@@ -93,70 +96,51 @@ function rowToImageEvent(row: ImageEventRow): ImageGenerationEvent {
 
 class UsageEventsStore {
   async list(): Promise<UsageEvent[]> {
-    const rows = await neonQuery<UsageEventRow>(
-      'select * from public.zen_usage_events order by created_at desc'
-    )
+    const rows = await supabaseRequest<UsageEventRow[]>(USAGE_EVENTS_TABLE, {
+      query: {
+        select: '*',
+        order: 'created_at.desc',
+      },
+    })
 
     return rows.map(rowToUsageEvent)
   }
 
   async listByUser(userId: string): Promise<UsageEvent[]> {
-    const rows = await neonQuery<UsageEventRow>(
-      `
-        select *
-        from public.zen_usage_events
-        where user_id = $1
-        order by created_at desc
-      `,
-      [userId]
-    )
+    const rows = await supabaseRequest<UsageEventRow[]>(USAGE_EVENTS_TABLE, {
+      query: {
+        user_id: `eq.${userId}`,
+        select: '*',
+        order: 'created_at.desc',
+      },
+    })
 
     return rows.map(rowToUsageEvent)
   }
 
   async create(event: Omit<UsageEvent, 'id' | 'createdAt'>): Promise<UsageEvent> {
-    const rows = await neonQuery<UsageEventRow>(
-      `
-        insert into public.zen_usage_events (
-          user_id,
-          subscription_id,
-          conversation_id,
-          message_id,
-          assistant_family,
-          mode,
-          model,
-          wallet_type,
-          prompt_tokens,
-          completion_tokens,
-          total_tokens,
-          raw_cost_usd,
-          displayed_cost_usd,
-          display_multiplier,
-          margin_usd,
-          credits_consumed
-        )
-        values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
-        returning *
-      `,
-      [
-        event.userId,
-        event.subscriptionId,
-        event.conversationId ?? null,
-        event.messageId ?? null,
-        event.assistantFamily,
-        event.mode,
-        event.model,
-        event.walletType,
-        event.promptTokens,
-        event.completionTokens,
-        event.totalTokens,
-        event.rawCostUsd,
-        event.displayedCostUsd,
-        event.displayMultiplier,
-        event.marginUsd,
-        event.creditsConsumed,
-      ]
-    )
+    const rows = await supabaseRequest<UsageEventRow[]>(USAGE_EVENTS_TABLE, {
+      method: 'POST',
+      body: {
+        user_id: event.userId,
+        subscription_id: event.subscriptionId,
+        conversation_id: event.conversationId ?? null,
+        message_id: event.messageId ?? null,
+        assistant_family: event.assistantFamily,
+        mode: event.mode,
+        model: event.model,
+        wallet_type: event.walletType,
+        prompt_tokens: event.promptTokens,
+        completion_tokens: event.completionTokens,
+        total_tokens: event.totalTokens,
+        raw_cost_usd: event.rawCostUsd,
+        displayed_cost_usd: event.displayedCostUsd,
+        display_multiplier: event.displayMultiplier,
+        margin_usd: event.marginUsd,
+        credits_consumed: event.creditsConsumed,
+      },
+      prefer: 'return=representation',
+    })
 
     return rowToUsageEvent(rows[0])
   }
@@ -164,23 +148,24 @@ class UsageEventsStore {
 
 class ImageGenerationEventsStore {
   async listByUser(userId: string): Promise<ImageGenerationEvent[]> {
-    const rows = await neonQuery<ImageEventRow>(
-      `
-        select *
-        from public.zen_image_generation_events
-        where user_id = $1
-        order by created_at desc
-      `,
-      [userId]
-    )
+    const rows = await supabaseRequest<ImageEventRow[]>(IMAGE_EVENTS_TABLE, {
+      query: {
+        user_id: `eq.${userId}`,
+        select: '*',
+        order: 'created_at.desc',
+      },
+    })
 
     return rows.map(rowToImageEvent)
   }
 
   async list(): Promise<ImageGenerationEvent[]> {
-    const rows = await neonQuery<ImageEventRow>(
-      'select * from public.zen_image_generation_events order by created_at desc'
-    )
+    const rows = await supabaseRequest<ImageEventRow[]>(IMAGE_EVENTS_TABLE, {
+      query: {
+        select: '*',
+        order: 'created_at.desc',
+      },
+    })
 
     return rows.map(rowToImageEvent)
   }
@@ -188,50 +173,29 @@ class ImageGenerationEventsStore {
   async create(
     event: Omit<ImageGenerationEvent, 'id' | 'createdAt'>
   ): Promise<ImageGenerationEvent> {
-    const rows = await neonQuery<ImageEventRow>(
-      `
-        insert into public.zen_image_generation_events (
-          user_id,
-          subscription_id,
-          conversation_id,
-          message_id,
-          assistant_family,
-          model,
-          prompt,
-          negative_prompt,
-          size,
-          aspect_ratio,
-          image_count,
-          image_credits_consumed,
-          raw_cost_usd,
-          displayed_cost_usd,
-          display_multiplier,
-          margin_usd,
-          output_urls
-        )
-        values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17::jsonb)
-        returning *
-      `,
-      [
-        event.userId,
-        event.subscriptionId,
-        event.conversationId ?? null,
-        event.messageId ?? null,
-        event.assistantFamily,
-        event.model,
-        event.prompt,
-        event.negativePrompt ?? null,
-        event.size ?? null,
-        event.aspectRatio ?? null,
-        event.imageCount,
-        event.imageCreditsConsumed,
-        event.rawCostUsd,
-        event.displayedCostUsd,
-        event.displayMultiplier,
-        event.marginUsd,
-        JSON.stringify(event.outputUrls),
-      ]
-    )
+    const rows = await supabaseRequest<ImageEventRow[]>(IMAGE_EVENTS_TABLE, {
+      method: 'POST',
+      body: {
+        user_id: event.userId,
+        subscription_id: event.subscriptionId,
+        conversation_id: event.conversationId ?? null,
+        message_id: event.messageId ?? null,
+        assistant_family: event.assistantFamily,
+        model: event.model,
+        prompt: event.prompt,
+        negative_prompt: event.negativePrompt ?? null,
+        size: event.size ?? null,
+        aspect_ratio: event.aspectRatio ?? null,
+        image_count: event.imageCount,
+        image_credits_consumed: event.imageCreditsConsumed,
+        raw_cost_usd: event.rawCostUsd,
+        displayed_cost_usd: event.displayedCostUsd,
+        display_multiplier: event.displayMultiplier,
+        margin_usd: event.marginUsd,
+        output_urls: event.outputUrls,
+      },
+      prefer: 'return=representation',
+    })
 
     return rowToImageEvent(rows[0])
   }

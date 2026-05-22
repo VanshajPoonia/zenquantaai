@@ -3,7 +3,9 @@ import {
   AssistantRecommendationEvent,
   RecommendationOutcome,
 } from '@/types'
-import { neonQuery, toNumber } from './neon'
+import { supabaseRequest } from './supabase'
+
+const ASSISTANT_RECOMMENDATION_EVENTS_TABLE = 'zen_assistant_recommendation_events'
 
 type AssistantRecommendationEventRow = {
   id: string
@@ -11,7 +13,7 @@ type AssistantRecommendationEventRow = {
   conversation_id: string | null
   current_assistant: AssistantRecommendationEvent['currentAssistant']
   recommended_assistant: AssistantRecommendationEvent['recommendedAssistant']
-  confidence: number | string
+  confidence: number
   matched_signals: string[] | null
   reason: string
   outcome: RecommendationOutcome
@@ -27,7 +29,7 @@ function rowToAssistantRecommendationEvent(
     conversationId: row.conversation_id,
     currentAssistant: row.current_assistant,
     recommendedAssistant: row.recommended_assistant,
-    confidence: toNumber(row.confidence),
+    confidence: row.confidence,
     matchedSignals: row.matched_signals ?? [],
     reason: row.reason,
     outcome: row.outcome,
@@ -84,26 +86,29 @@ function buildAnalyticsSummary(
 
 class AssistantRecommendationEventsStore {
   async list(): Promise<AssistantRecommendationEvent[]> {
-    const rows = await neonQuery<AssistantRecommendationEventRow>(
-      `
-        select *
-        from public.zen_assistant_recommendation_events
-        order by created_at desc
-      `
+    const rows = await supabaseRequest<AssistantRecommendationEventRow[]>(
+      ASSISTANT_RECOMMENDATION_EVENTS_TABLE,
+      {
+        query: {
+          select: '*',
+          order: 'created_at.desc',
+        },
+      }
     )
 
     return rows.map(rowToAssistantRecommendationEvent)
   }
 
   async listByUser(userId: string): Promise<AssistantRecommendationEvent[]> {
-    const rows = await neonQuery<AssistantRecommendationEventRow>(
-      `
-        select *
-        from public.zen_assistant_recommendation_events
-        where user_id = $1
-        order by created_at desc
-      `,
-      [userId]
+    const rows = await supabaseRequest<AssistantRecommendationEventRow[]>(
+      ASSISTANT_RECOMMENDATION_EVENTS_TABLE,
+      {
+        query: {
+          user_id: `eq.${userId}`,
+          select: '*',
+          order: 'created_at.desc',
+        },
+      }
     )
 
     return rows.map(rowToAssistantRecommendationEvent)
@@ -112,31 +117,22 @@ class AssistantRecommendationEventsStore {
   async create(
     event: Omit<AssistantRecommendationEvent, 'id' | 'createdAt'>
   ): Promise<AssistantRecommendationEvent> {
-    const rows = await neonQuery<AssistantRecommendationEventRow>(
-      `
-        insert into public.zen_assistant_recommendation_events (
-          user_id,
-          conversation_id,
-          current_assistant,
-          recommended_assistant,
-          confidence,
-          matched_signals,
-          reason,
-          outcome
-        )
-        values ($1, $2, $3, $4, $5, $6, $7, $8)
-        returning *
-      `,
-      [
-        event.userId,
-        event.conversationId ?? null,
-        event.currentAssistant,
-        event.recommendedAssistant,
-        event.confidence,
-        event.matchedSignals,
-        event.reason,
-        event.outcome,
-      ]
+    const rows = await supabaseRequest<AssistantRecommendationEventRow[]>(
+      ASSISTANT_RECOMMENDATION_EVENTS_TABLE,
+      {
+        method: 'POST',
+        body: {
+          user_id: event.userId,
+          conversation_id: event.conversationId ?? null,
+          current_assistant: event.currentAssistant,
+          recommended_assistant: event.recommendedAssistant,
+          confidence: event.confidence,
+          matched_signals: event.matchedSignals,
+          reason: event.reason,
+          outcome: event.outcome,
+        },
+        prefer: 'return=representation',
+      }
     )
 
     return rowToAssistantRecommendationEvent(rows[0])
