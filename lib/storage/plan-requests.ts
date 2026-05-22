@@ -1,8 +1,5 @@
 import { PlanChangeRequest, PlanRequestStatus, SubscriptionTier } from '@/types'
-import { supabaseRequest } from './supabase'
-
-const PLAN_REQUESTS_TABLE = 'zen_plan_change_requests'
-const AUDIT_LOGS_TABLE = 'zen_admin_audit_logs'
+import { neonQuery } from './neon'
 
 type PlanRequestRow = {
   id: string
@@ -60,38 +57,38 @@ function rowToAuditLog(row: AuditLogRow) {
 
 class PlanRequestsStore {
   async list(): Promise<PlanChangeRequest[]> {
-    const rows = await supabaseRequest<PlanRequestRow[]>(PLAN_REQUESTS_TABLE, {
-      query: {
-        select: '*',
-        order: 'created_at.desc',
-      },
-    })
+    const rows = await neonQuery<PlanRequestRow>(
+      'select * from public.zen_plan_change_requests order by created_at desc'
+    )
 
     return rows.map(rowToPlanRequest)
   }
 
   async listByUser(userId: string): Promise<PlanChangeRequest[]> {
-    const rows = await supabaseRequest<PlanRequestRow[]>(PLAN_REQUESTS_TABLE, {
-      query: {
-        user_id: `eq.${userId}`,
-        select: '*',
-        order: 'created_at.desc',
-      },
-    })
+    const rows = await neonQuery<PlanRequestRow>(
+      `
+        select *
+        from public.zen_plan_change_requests
+        where user_id = $1
+        order by created_at desc
+      `,
+      [userId]
+    )
 
     return rows.map(rowToPlanRequest)
   }
 
   async getLatestPendingForUser(userId: string): Promise<PlanChangeRequest | null> {
-    const rows = await supabaseRequest<PlanRequestRow[]>(PLAN_REQUESTS_TABLE, {
-      query: {
-        user_id: `eq.${userId}`,
-        status: 'eq.pending',
-        select: '*',
-        order: 'created_at.desc',
-        limit: 1,
-      },
-    })
+    const rows = await neonQuery<PlanRequestRow>(
+      `
+        select *
+        from public.zen_plan_change_requests
+        where user_id = $1 and status = 'pending'
+        order by created_at desc
+        limit 1
+      `,
+      [userId]
+    )
 
     return rows[0] ? rowToPlanRequest(rows[0]) : null
   }
@@ -103,18 +100,27 @@ class PlanRequestsStore {
     note?: string
     contact?: string
   }): Promise<PlanChangeRequest> {
-    const rows = await supabaseRequest<PlanRequestRow[]>(PLAN_REQUESTS_TABLE, {
-      method: 'POST',
-      body: {
-        user_id: input.userId,
-        current_tier: input.currentTier,
-        requested_tier: input.requestedTier,
-        note: input.note ?? null,
-        contact: input.contact ?? null,
-        status: 'pending',
-      },
-      prefer: 'return=representation',
-    })
+    const rows = await neonQuery<PlanRequestRow>(
+      `
+        insert into public.zen_plan_change_requests (
+          user_id,
+          current_tier,
+          requested_tier,
+          note,
+          contact,
+          status
+        )
+        values ($1, $2, $3, $4, $5, 'pending')
+        returning *
+      `,
+      [
+        input.userId,
+        input.currentTier,
+        input.requestedTier,
+        input.note ?? null,
+        input.contact ?? null,
+      ]
+    )
 
     return rowToPlanRequest(rows[0])
   }
@@ -125,20 +131,19 @@ class PlanRequestsStore {
     adminNote?: string | null
   ): Promise<PlanChangeRequest> {
     const now = new Date().toISOString()
-    const rows = await supabaseRequest<PlanRequestRow[]>(PLAN_REQUESTS_TABLE, {
-      method: 'PATCH',
-      query: {
-        id: `eq.${id}`,
-      },
-      body: {
-        status,
-        admin_note: typeof adminNote === 'undefined' ? null : adminNote,
-        ...(status === 'approved' ? { approved_at: now } : {}),
-        ...(status === 'rejected' ? { rejected_at: now } : {}),
-        ...(status === 'activated' ? { activated_at: now } : {}),
-      },
-      prefer: 'return=representation',
-    })
+    const rows = await neonQuery<PlanRequestRow>(
+      `
+        update public.zen_plan_change_requests
+        set status = $2,
+            admin_note = $3,
+            approved_at = case when $2 = 'approved' then $4 else approved_at end,
+            rejected_at = case when $2 = 'rejected' then $4 else rejected_at end,
+            activated_at = case when $2 = 'activated' then $4 else activated_at end
+        where id = $1
+        returning *
+      `,
+      [id, status, typeof adminNote === 'undefined' ? null : adminNote, now]
+    )
 
     return rowToPlanRequest(rows[0])
   }
@@ -151,28 +156,33 @@ class AdminAuditLogsStore {
     action: string
     details: Record<string, unknown>
   }) {
-    const rows = await supabaseRequest<AuditLogRow[]>(AUDIT_LOGS_TABLE, {
-      method: 'POST',
-      body: {
-        admin_user_id: input.adminUserId,
-        target_user_id: input.targetUserId,
-        action: input.action,
-        details: input.details,
-      },
-      prefer: 'return=representation',
-    })
+    const rows = await neonQuery<AuditLogRow>(
+      `
+        insert into public.zen_admin_audit_logs (
+          admin_user_id,
+          target_user_id,
+          action,
+          details
+        )
+        values ($1, $2, $3, $4::jsonb)
+        returning *
+      `,
+      [input.adminUserId, input.targetUserId, input.action, JSON.stringify(input.details)]
+    )
 
     return rowToAuditLog(rows[0])
   }
 
   async listByTargetUser(userId: string) {
-    const rows = await supabaseRequest<AuditLogRow[]>(AUDIT_LOGS_TABLE, {
-      query: {
-        target_user_id: `eq.${userId}`,
-        select: '*',
-        order: 'created_at.desc',
-      },
-    })
+    const rows = await neonQuery<AuditLogRow>(
+      `
+        select *
+        from public.zen_admin_audit_logs
+        where target_user_id = $1
+        order by created_at desc
+      `,
+      [userId]
+    )
 
     return rows.map(rowToAuditLog)
   }
