@@ -412,6 +412,41 @@ function AttachmentList({
   )
 }
 
+function SourceList({ message }: { message: Message }) {
+  const sources = message.sources ?? []
+  if (sources.length === 0) return null
+
+  return (
+    <div className="mt-3 rounded-xl border border-border/60 bg-background/40 px-3 py-2.5">
+      <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+        Sources
+      </p>
+      <div className="mt-2 space-y-2">
+        {sources.map((source) => (
+          <a
+            key={`${source.id}-${source.url}`}
+            href={source.url}
+            target="_blank"
+            rel="noreferrer"
+            className="group flex items-start gap-2 text-xs leading-5 text-foreground/90 transition-colors hover:text-foreground sm:text-sm"
+          >
+            <span className="mt-0.5 shrink-0 rounded-md border border-border/70 bg-background/70 px-1.5 py-0.5 text-[11px] text-muted-foreground">
+              {source.id}
+            </span>
+            <span className="min-w-0">
+              <span className="block truncate font-medium">{source.title}</span>
+              <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                {source.domain}
+                <ExternalLink className="size-3 opacity-70 transition-opacity group-hover:opacity-100" />
+              </span>
+            </span>
+          </a>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 function ImageViewerDialog({
   attachment,
   open,
@@ -666,6 +701,7 @@ export function ChatMessage({
                 onOpenImage={handleOpenImage}
                 onDownloadImage={handleDownloadImage}
               />
+              <SourceList message={message} />
               {isStreamingMessage ? (
                 <WorkingNotesPanel
                   title={workingTitle}

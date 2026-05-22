@@ -1112,7 +1112,11 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
   const uploadAttachments = useCallback(
     async (
-      attachments: Array<Attachment | PendingAttachment>
+      attachments: Array<Attachment | PendingAttachment>,
+      scope?: {
+        projectId?: string
+        conversationId?: string
+      }
     ): Promise<Attachment[]> => {
       const existing = attachments.filter(
         (attachment): attachment is Attachment => !isPendingAttachment(attachment)
@@ -1128,6 +1132,12 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         'metadata',
         JSON.stringify(pending.map((attachment) => serializeAttachment(attachment)))
       )
+      if (scope?.projectId) {
+        formData.append('projectId', scope.projectId)
+      }
+      if (scope?.conversationId) {
+        formData.append('conversationId', scope.conversationId)
+      }
       pending.forEach((attachment) => {
         formData.append('files', attachment.file, attachment.name)
       })
@@ -1301,6 +1311,21 @@ export function ChatProvider({ children }: { children: ReactNode }) {
                 workingTitle: event.title ?? previous.workingTitle ?? 'Working notes',
                 workingNotes: event.notes,
               }))
+              break
+            }
+            case 'sources': {
+              applyConversationPatch(event.conversationId, (conversation) =>
+                updateConversationSnapshot(conversation, {
+                  messages: conversation.messages.map((message) =>
+                    message.id === event.messageId
+                      ? {
+                          ...message,
+                          sources: event.sources,
+                        }
+                      : message
+                  ),
+                })
+              )
               break
             }
             case 'done': {
@@ -1613,7 +1638,10 @@ export function ChatProvider({ children }: { children: ReactNode }) {
           messageId: placeholder.id,
         })
 
-        const uploadedAttachments = await uploadAttachments(attachments)
+        const uploadedAttachments = await uploadAttachments(attachments, {
+          projectId: options.projectId,
+          conversationId: conversation.id,
+        })
 
         const preparedOptimisticConversation = updateConversationSnapshot(conversation, {
           mode: resolvedSend.resolvedMode,
