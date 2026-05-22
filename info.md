@@ -24,7 +24,7 @@ Zenquanta AI is a Next.js App Router AI workspace with six branded assistant fam
 - `Pulse` for current-context and research-style work
 - `Prism` for image generation
 
-The app includes a real chat workspace, Supabase-backed auth and persistence, OpenRouter model calls, user/admin dashboards, manual plan requests, usage tracking, file uploads, and public assistant pages.
+The app includes a real chat workspace, Supabase-backed auth/storage, Neon-backed app persistence, OpenRouter model calls, user/admin dashboards, manual plan requests, usage tracking, file uploads, and public assistant pages.
 
 Important entrypoints:
 
@@ -45,7 +45,8 @@ Framework and stack:
 - Radix UI primitives
 - lucide-react icons
 - Vercel Analytics
-- Supabase
+- Neon Postgres for app data
+- Supabase Auth and Supabase Storage
 - OpenRouter
 
 Package-manager state is mixed:
@@ -63,7 +64,7 @@ Available scripts in `package.json`:
 
 Observed verification issue:
 
-- `npm run lint` fails because ESLint 9 cannot find `eslint.config.js`.
+- `npm run lint` fails because the repo is missing an ESLint flat config file.
 
 ## Major Folders And Files
 
@@ -77,11 +78,12 @@ Observed verification issue:
 - `components/ui/`: shadcn/Radix UI primitives.
 - `lib/ai/`: chat orchestration, OpenRouter client, memory handling, and system prompts.
 - `lib/config/`: assistant mappings, model routing, mode display config, presets, pricing, and image models.
-- `lib/storage/`: Supabase REST-backed stores for conversations, settings, projects, prompts, profiles, subscriptions, usage events, plan requests, attachments, and admin views.
+- `lib/storage/`: Neon-backed stores for conversations, settings, projects, prompts, profiles, subscriptions, usage events, plan requests, recommendations, and admin views, plus Supabase Storage helpers for attachments.
 - `lib/billing/`: usage estimation, enforcement, and logging.
 - `lib/router/`: local prompt classifier and assistant recommendation rules.
 - `types/index.ts`: shared domain types.
-- `supabase/migrations/`: database and storage schema.
+- `neon/migrations/`: current app database schema for Neon.
+- `supabase/migrations/`: historical Supabase database migrations and current storage/auth setup context.
 - `data/seed/`: seeded/demo conversations and default settings.
 
 ## Implemented Features
@@ -123,7 +125,7 @@ The main mock behavior is OpenRouter fallback:
 
 ## Backend, APIs, Auth, Database, And Billing
 
-There is a backend implemented with Next route handlers and Supabase REST/Auth/Storage wrappers.
+There is a backend implemented with Next route handlers, Neon SQL-backed data stores, and Supabase Auth/Storage wrappers.
 
 Main API routes include:
 
@@ -297,7 +299,12 @@ Environment variables listed in `.env.example`:
 - `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`
 - `SUPABASE_SECRET_KEY`
 
-Code also accepts aliases:
+Neon database connection:
+
+- `DATABASE_URL`
+- accepted aliases: `NEON_DATABASE_URL`, `POSTGRES_URL`
+
+Supabase Auth/Storage code also accepts aliases:
 
 - `SUPABASE_URL`
 - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
@@ -306,11 +313,12 @@ Code also accepts aliases:
 
 Important implementation detail:
 
-- Server storage calls in `lib/storage/supabase.ts` use the configured Supabase API key directly. Most server persistence likely requires `SUPABASE_SECRET_KEY` or `SUPABASE_SERVICE_ROLE_KEY`, because the stores are not forwarding the user's Supabase JWT to REST.
+- Server data persistence now goes through Neon SQL in `lib/storage/neon.ts`.
+- Supabase remains required for Auth and private attachment storage.
 
 ## Incomplete Or Risky Areas
 
-- `npm run lint` is currently broken because ESLint 9 needs `eslint.config.js`.
+- `npm run lint` is currently broken because the repo is missing an ESLint flat config file.
 - `next.config.mjs` has `typescript.ignoreBuildErrors: true`, which can hide real TypeScript failures.
 - `lib/storage/profiles.ts` includes a hardcoded admin fallback identity.
 - No automated test script exists in `package.json`.
@@ -326,7 +334,7 @@ Important implementation detail:
 ## Safest Next Build Order
 
 1. Fix project verification first:
-   - Add an ESLint 9 config.
+   - Add an ESLint flat config.
    - Stop ignoring TypeScript build errors.
    - Add a `typecheck` script.
    - Confirm `build` and typecheck pass.
@@ -337,11 +345,13 @@ Important implementation detail:
 3. Harden auth and admin:
    - Remove the hardcoded admin fallback.
    - Add stronger validation for admin forms/routes.
-   - Document required Supabase service-key behavior.
+   - Document required Supabase Auth/Storage key behavior.
 4. Make incomplete UI honest:
    - Implement real web search/retrieval for Pulse, or hide/disable the `webSearch` toggle.
 5. Improve persistence robustness:
    - Avoid full message delete/reinsert saves.
+   - Apply and validate the Neon migration against a real Neon database.
+   - Backfill any existing Supabase Postgres production data before cutting traffic over.
    - Store generated images durably.
    - Improve attachment and PDF extraction.
 6. Add tests around:
