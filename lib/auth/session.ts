@@ -1,32 +1,33 @@
+import {
+  createHash,
+  randomBytes,
+  scrypt as scryptCallback,
+  timingSafeEqual,
+} from 'crypto'
+import { promisify } from 'util'
+import { and, eq, gt, isNull } from 'drizzle-orm'
 import { NextRequest, NextResponse } from 'next/server'
 import { AuthUser } from '@/types'
+import { getDatabaseClient } from '@/lib/db/client'
+import {
+  zenAuthCredentials,
+  zenAuthSessions,
+  zenProfiles,
+  zenUsers,
+} from '@/lib/db/schema'
+import { neonProfilesRepository, neonUsersRepository } from '@/lib/db/repositories'
 
-const ACCESS_TOKEN_COOKIE = 'zenquanta-access-token'
-const REFRESH_TOKEN_COOKIE = 'zenquanta-refresh-token'
+const scrypt = promisify(scryptCallback)
+
+const SESSION_COOKIE = 'zenquanta-session-token'
+const LEGACY_ACCESS_TOKEN_COOKIE = 'zenquanta-access-token'
+const LEGACY_REFRESH_TOKEN_COOKIE = 'zenquanta-refresh-token'
 const COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 30
-const LOGIN_ID_EMAIL_DOMAIN = 'login.zenquanta.local'
-
-type SupabaseUserMetadata = {
-  login_id?: string | null
+const PASSWORD_KEY_LENGTH = 64
+const PASSWORD_SCRYPT_PARAMS = {
+  algorithm: 'scrypt',
+  keyLength: PASSWORD_KEY_LENGTH,
 }
-
-type SupabaseAuthUser = {
-  id: string
-  email?: string | null
-  user_metadata?: SupabaseUserMetadata | null
-}
-
-type SupabaseSessionResponse = {
-  access_token?: string
-  refresh_token?: string
-  user?: SupabaseAuthUser | null
-  session?: {
-    access_token?: string
-    refresh_token?: string
-  } | null
-}
-
-type SupabaseAuthType = 'magiclink' | 'recovery' | 'invite' | 'signup' | 'email'
 
 export interface RequestAuthSession {
   user: AuthUser | null
@@ -36,27 +37,8 @@ export interface RequestAuthSession {
   shouldClearCookies?: boolean
 }
 
-function normalizeSupabaseUrl(value: string): string {
-  return value.trim().replace(/\/$/, '')
-}
-
 function normalizeLoginId(value: string): string {
   return value.trim().toLowerCase()
-}
-
-function loginIdToSyntheticEmail(loginId: string): string {
-  return `${loginId}@${LOGIN_ID_EMAIL_DOMAIN}`
-}
-
-function syntheticEmailToLoginId(email: string | null | undefined): string | null {
-  const normalizedEmail = email?.trim().toLowerCase()
-  const suffix = `@${LOGIN_ID_EMAIL_DOMAIN}`
-
-  if (!normalizedEmail || !normalizedEmail.endsWith(suffix)) {
-    return null
-  }
-
-  return normalizedEmail.slice(0, -suffix.length)
 }
 
 export function parseLoginId(value: string): string {
@@ -71,108 +53,66 @@ export function parseLoginId(value: string): string {
   return loginId
 }
 
-function toAuthUser(user: SupabaseAuthUser | null | undefined): AuthUser | null {
-  if (!user?.id) return null
+function hashToken(token: string): string {
+  return createHash('sha256').update(token).digest('hex')
+}
+
+function createSessionToken(): string {
+  return randomBytes(32).toString('base64url')
+}
+
+function addSeconds(date: Date, seconds: number): Date {
+  return new Date(date.getTime() + seconds * 1000)
+}
+
+async function hashPassword(password: string): Promise<{
+  passwordHash: string
+  passwordSalt: string
+  passwordParams: Record<string, unknown>
+}> {
+  const passwordSalt = randomBytes(16).toString('base64url')
+  const derived = (await scrypt(
+    password,
+    passwordSalt,
+    PASSWORD_KEY_LENGTH
+  )) as Buffer
 
   return {
-    id: user.id,
-    loginId:
-      user.user_metadata?.login_id?.trim()?.toLowerCase() ??
-      syntheticEmailToLoginId(user.email) ??
-      null,
-    email: user.email ?? null,
+    passwordHash: derived.toString('base64'),
+    passwordSalt,
+    passwordParams: PASSWORD_SCRYPT_PARAMS,
   }
 }
 
-export function getSupabaseAuthConfig() {
-  const url =
-    process.env.NEXT_PUBLIC_SUPABASE_URL?.trim() ??
-    process.env.SUPABASE_URL?.trim() ??
-    ''
-  const publishableKey =
-    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY?.trim() ??
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim() ??
-    process.env.SUPABASE_ANON_KEY?.trim() ??
-    ''
+async function verifyPassword(input: {
+  password: string
+  passwordHash: string
+  passwordSalt: string
+}): Promise<boolean> {
+  const expected = Buffer.from(input.passwordHash, 'base64')
+  const actual = (await scrypt(
+    input.password,
+    input.passwordSalt,
+    expected.length
+  )) as Buffer
 
+  if (actual.length !== expected.length) return false
+
+  return timingSafeEqual(actual, expected)
+}
+
+function rowToAuthUser(input: {
+  id: string
+  loginId: string | null
+  email: string | null
+  role: string
+}): AuthUser {
   return {
-    url: url ? normalizeSupabaseUrl(url) : '',
-    publishableKey,
+    id: input.id,
+    loginId: input.loginId,
+    email: input.email,
+    role: input.role === 'admin' ? 'admin' : 'user',
   }
-}
-
-export function hasSupabaseAuthConfig(): boolean {
-  const config = getSupabaseAuthConfig()
-  return Boolean(config.url && config.publishableKey)
-}
-
-function getSupabaseAdminAuthConfig() {
-  const url =
-    process.env.NEXT_PUBLIC_SUPABASE_URL?.trim() ??
-    process.env.SUPABASE_URL?.trim() ??
-    ''
-  const secretKey =
-    process.env.SUPABASE_SECRET_KEY?.trim() ??
-    process.env.SUPABASE_SERVICE_ROLE_KEY?.trim() ??
-    ''
-
-  return {
-    url: url ? normalizeSupabaseUrl(url) : '',
-    secretKey,
-  }
-}
-
-export function hasSupabaseAdminAuthConfig(): boolean {
-  const config = getSupabaseAdminAuthConfig()
-  return Boolean(config.url && config.secretKey)
-}
-
-async function requestSupabaseAuth<T>(
-  path: string,
-  init: {
-    method?: 'GET' | 'POST' | 'PUT'
-    accessToken?: string
-    body?: unknown
-    apiKey?: string
-  } = {}
-): Promise<T> {
-  const config = getSupabaseAuthConfig()
-  const apiKey = init.apiKey?.trim() ?? config.publishableKey
-
-  if (!config.url || !apiKey) {
-    throw new Error('Supabase auth configuration is missing.')
-  }
-
-  const response = await fetch(`${config.url}/auth/v1${path}`, {
-    method: init.method ?? 'GET',
-    headers: {
-      apikey: apiKey,
-      Authorization: `Bearer ${init.accessToken ?? apiKey}`,
-      ...(typeof init.body !== 'undefined'
-        ? { 'Content-Type': 'application/json' }
-        : {}),
-    },
-    ...(typeof init.body !== 'undefined'
-      ? { body: JSON.stringify(init.body) }
-      : {}),
-    cache: 'no-store',
-  })
-
-  const payload = await response.json().catch(() => null)
-
-  if (!response.ok) {
-    const message =
-      (payload as { msg?: string; error_description?: string; message?: string } | null)
-        ?.msg ??
-      (payload as { error_description?: string; message?: string } | null)
-        ?.error_description ??
-      (payload as { message?: string } | null)?.message ??
-      `Supabase auth request failed with status ${response.status}.`
-
-    throw new Error(message)
-  }
-
-  return payload as T
 }
 
 function serializeCookie(
@@ -215,35 +155,36 @@ function readCookieStoreValue(
 
 export function appendAuthCookies(
   headers: Headers,
-  session: Pick<RequestAuthSession, 'accessToken' | 'refreshToken'>
+  session: Pick<RequestAuthSession, 'accessToken'>
 ): void {
   if (session.accessToken) {
     headers.append(
       'Set-Cookie',
-      serializeCookie(ACCESS_TOKEN_COOKIE, session.accessToken, {
+      serializeCookie(SESSION_COOKIE, session.accessToken, {
         maxAge: COOKIE_MAX_AGE_SECONDS,
       })
     )
   }
 
-  if (session.refreshToken) {
-    headers.append(
-      'Set-Cookie',
-      serializeCookie(REFRESH_TOKEN_COOKIE, session.refreshToken, {
-        maxAge: COOKIE_MAX_AGE_SECONDS,
-      })
-    )
-  }
-}
-
-export function appendClearedAuthCookies(headers: Headers): void {
   headers.append(
     'Set-Cookie',
-    serializeCookie(ACCESS_TOKEN_COOKIE, '', { maxAge: 0 })
+    serializeCookie(LEGACY_ACCESS_TOKEN_COOKIE, '', { maxAge: 0 })
   )
   headers.append(
     'Set-Cookie',
-    serializeCookie(REFRESH_TOKEN_COOKIE, '', { maxAge: 0 })
+    serializeCookie(LEGACY_REFRESH_TOKEN_COOKIE, '', { maxAge: 0 })
+  )
+}
+
+export function appendClearedAuthCookies(headers: Headers): void {
+  headers.append('Set-Cookie', serializeCookie(SESSION_COOKIE, '', { maxAge: 0 }))
+  headers.append(
+    'Set-Cookie',
+    serializeCookie(LEGACY_ACCESS_TOKEN_COOKIE, '', { maxAge: 0 })
+  )
+  headers.append(
+    'Set-Cookie',
+    serializeCookie(LEGACY_REFRESH_TOKEN_COOKIE, '', { maxAge: 0 })
   )
 }
 
@@ -260,257 +201,193 @@ export function createUnauthorizedResponse(clearCookies = false) {
   return response
 }
 
-export async function sendMagicLink(email: string, redirectTo: string): Promise<void> {
-  await requestSupabaseAuth('/otp', {
-    method: 'POST',
-    body: {
-      email,
-      create_user: true,
-      data: {},
-      gotrue_meta_security: {},
-      options: {
-        email_redirect_to: redirectTo,
-      },
-    },
-  })
+async function createSessionForUser(input: {
+  user: AuthUser
+  userAgent?: string | null
+  ipAddress?: string | null
+}): Promise<RequestAuthSession> {
+  const token = createSessionToken()
+  const expiresAt = addSeconds(new Date(), COOKIE_MAX_AGE_SECONDS)
+
+  await getDatabaseClient()
+    .insert(zenAuthSessions)
+    .values({
+      userId: input.user.id,
+      tokenHash: hashToken(token),
+      userAgent: input.userAgent ?? null,
+      ipAddress: input.ipAddress ?? null,
+      expiresAt,
+      lastSeenAt: new Date(),
+    })
+
+  return {
+    user: input.user,
+    accessToken: token,
+  }
 }
 
-export async function sendPasswordResetEmail(
-  email: string,
-  redirectTo: string
-): Promise<void> {
-  await requestSupabaseAuth('/recover', {
-    method: 'POST',
-    body: {
-      email,
-      code_challenge: null,
-      code_challenge_method: null,
-      gotrue_meta_security: {},
-      options: {
-        email_redirect_to: redirectTo,
-      },
-    },
-  })
+function getRequestMetadata(request: NextRequest): {
+  userAgent: string | null
+  ipAddress: string | null
+} {
+  return {
+    userAgent: request.headers.get('user-agent'),
+    ipAddress:
+      request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ??
+      request.headers.get('x-real-ip'),
+  }
 }
 
-export async function signUpWithPassword(
-  email: string,
+export async function createLocalAccount(
+  loginId: string,
+  password: string
+): Promise<AuthUser> {
+  const passwordRecord = await hashPassword(password)
+  const user = await neonUsersRepository.createLocalUser({
+    loginId,
+    ...passwordRecord,
+  })
+  const profile = await neonProfilesRepository.ensureFromAuthUser({
+    id: user.id,
+    loginId: user.loginId,
+    email: user.email,
+    role: user.role,
+  })
+
+  return {
+    id: user.id,
+    loginId: user.loginId,
+    email: user.email,
+    role: profile.role,
+  }
+}
+
+export async function signInWithLocalCredentials(
+  loginId: string,
   password: string,
-  redirectTo: string
-): Promise<{ needsEmailVerification: boolean }> {
-  const response = await requestSupabaseAuth<SupabaseSessionResponse>('/signup', {
-    method: 'POST',
-    body: {
-      email,
-      password,
-      options: {
-        email_redirect_to: redirectTo,
-      },
-    },
+  request?: NextRequest
+): Promise<RequestAuthSession> {
+  const credential = await neonUsersRepository.getCredentialByLoginId(loginId)
+
+  if (!credential) {
+    throw new Error('Invalid login credentials.')
+  }
+
+  const isValidPassword = await verifyPassword({
+    password,
+    passwordHash: credential.passwordHash,
+    passwordSalt: credential.passwordSalt,
   })
 
-  return {
-    needsEmailVerification: true,
+  if (!isValidPassword) {
+    throw new Error('Invalid login credentials.')
   }
+
+  const profile = await neonProfilesRepository.ensureFromAuthUser({
+    id: credential.user.id,
+    loginId: credential.user.loginId,
+    email: credential.user.email,
+    role: credential.user.role,
+  })
+  const metadata = request
+    ? getRequestMetadata(request)
+    : { userAgent: null, ipAddress: null }
+
+  return createSessionForUser({
+    user: {
+      id: credential.user.id,
+      loginId: credential.user.loginId,
+      email: credential.user.email,
+      role: profile.role,
+    },
+    userAgent: metadata.userAgent,
+    ipAddress: metadata.ipAddress,
+  })
 }
 
-export async function createLoginIdAccount(
-  loginId: string,
+export async function updateLocalPassword(
+  sessionToken: string,
   password: string
 ): Promise<void> {
-  const adminConfig = getSupabaseAdminAuthConfig()
-
-  if (!adminConfig.url || !adminConfig.secretKey) {
-    throw new Error('Supabase admin auth configuration is missing.')
+  const session = await readSessionToken(sessionToken)
+  if (!session.user) {
+    throw new Error('Your password reset session has expired. Request help from an admin.')
   }
 
-  try {
-    await requestSupabaseAuth('/admin/users', {
-      method: 'POST',
-      apiKey: adminConfig.secretKey,
-      body: {
-        email: loginIdToSyntheticEmail(loginId),
-        password,
-        email_confirm: true,
-        user_metadata: {
-          login_id: loginId,
-        },
-      },
-    })
-  } catch (error) {
-    const message = error instanceof Error ? error.message.toLowerCase() : ''
-
-    if (message.includes('already') || message.includes('registered')) {
-      throw new Error('That ID is already taken.')
-    }
-
-    throw error
-  }
-}
-
-export async function signInWithPassword(
-  email: string,
-  password: string
-): Promise<RequestAuthSession> {
-  const session = await requestSupabaseAuth<SupabaseSessionResponse>(
-    '/token?grant_type=password',
-    {
-      method: 'POST',
-      body: {
-        email,
-        password,
-      },
-    }
-  )
-
-  const accessToken = session.access_token ?? session.session?.access_token ?? ''
-  const refreshToken = session.refresh_token ?? session.session?.refresh_token ?? ''
-  const user = toAuthUser(session.user)
-
-  if (!accessToken || !refreshToken || !user) {
-    throw new Error('Supabase did not return a valid password session.')
-  }
-
-  return {
-    user,
-    accessToken,
-    refreshToken,
-  }
-}
-
-export async function signInWithLoginId(
-  loginId: string,
-  password: string
-): Promise<RequestAuthSession> {
-  return await signInWithPassword(loginIdToSyntheticEmail(loginId), password)
-}
-
-export async function updatePassword(
-  accessToken: string,
-  password: string
-): Promise<void> {
-  await requestSupabaseAuth('/user', {
-    method: 'PUT',
-    accessToken,
-    body: {
-      password,
-    },
+  await neonUsersRepository.updateLocalPassword({
+    userId: session.user.id,
+    ...(await hashPassword(password)),
   })
 }
 
-export async function verifyMagicLink(
-  tokenHash: string,
-  type: SupabaseAuthType
-): Promise<RequestAuthSession> {
-  const session = await requestSupabaseAuth<SupabaseSessionResponse>('/verify', {
-    method: 'POST',
-    body: {
-      token_hash: tokenHash,
-      type,
-    },
-  })
-
-  return {
-    user: toAuthUser(session.user),
-    accessToken: session.access_token ?? session.session?.access_token,
-    refreshToken: session.refresh_token ?? session.session?.refresh_token,
+async function readSessionToken(token: string): Promise<RequestAuthSession> {
+  if (!token) {
+    return { user: null }
   }
-}
 
-async function fetchUser(accessToken: string): Promise<AuthUser | null> {
-  try {
-    const user = await requestSupabaseAuth<SupabaseAuthUser>('/user', {
-      method: 'GET',
-      accessToken,
+  const rows = await getDatabaseClient()
+    .select({
+      session: zenAuthSessions,
+      user: zenUsers,
+      profile: zenProfiles,
     })
-
-    return toAuthUser(user)
-  } catch {
-    return null
-  }
-}
-
-async function refreshSession(refreshToken: string): Promise<RequestAuthSession | null> {
-  try {
-    const session = await requestSupabaseAuth<SupabaseSessionResponse>(
-      '/token?grant_type=refresh_token',
-      {
-        method: 'POST',
-        body: {
-          refresh_token: refreshToken,
-        },
-      }
+    .from(zenAuthSessions)
+    .innerJoin(zenUsers, eq(zenAuthSessions.userId, zenUsers.id))
+    .leftJoin(zenProfiles, eq(zenProfiles.userId, zenUsers.id))
+    .where(
+      and(
+        eq(zenAuthSessions.tokenHash, hashToken(token)),
+        isNull(zenAuthSessions.revokedAt),
+        gt(zenAuthSessions.expiresAt, new Date())
+      )
     )
+    .limit(1)
 
+  const row = rows[0]
+  if (!row) {
     return {
-      user: toAuthUser(session.user),
-      accessToken: session.access_token,
-      refreshToken: session.refresh_token,
-      refreshed: true,
+      user: null,
+      shouldClearCookies: true,
     }
-  } catch {
-    return null
+  }
+
+  await getDatabaseClient()
+    .update(zenAuthSessions)
+    .set({
+      lastSeenAt: new Date(),
+      updatedAt: new Date(),
+    })
+    .where(eq(zenAuthSessions.id, row.session.id))
+
+  return {
+    user: rowToAuthUser({
+      id: row.user.id,
+      loginId: row.profile?.loginId ?? row.user.loginId,
+      email: row.profile?.email ?? row.user.email,
+      role: row.profile?.role ?? row.user.role,
+    }),
+    accessToken: token,
   }
 }
 
 export async function readRequestAuthSession(
   request: Pick<NextRequest, 'cookies'>
 ): Promise<RequestAuthSession> {
-  const accessToken = readCookieValue(request, ACCESS_TOKEN_COOKIE)
-  const refreshToken = readCookieValue(request, REFRESH_TOKEN_COOKIE)
+  const token =
+    readCookieValue(request, SESSION_COOKIE) ||
+    readCookieValue(request, LEGACY_ACCESS_TOKEN_COOKIE)
 
-  return await readAccessAndRefreshTokenSession({
-    accessToken,
-    refreshToken,
-  })
+  return readSessionToken(token)
 }
 
 export async function readCookieStoreAuthSession(cookieStore: {
   get(name: string): { value?: string } | undefined
 }): Promise<RequestAuthSession> {
-  const accessToken = readCookieStoreValue(cookieStore, ACCESS_TOKEN_COOKIE)
-  const refreshToken = readCookieStoreValue(cookieStore, REFRESH_TOKEN_COOKIE)
+  const token =
+    readCookieStoreValue(cookieStore, SESSION_COOKIE) ||
+    readCookieStoreValue(cookieStore, LEGACY_ACCESS_TOKEN_COOKIE)
 
-  return await readAccessAndRefreshTokenSession({
-    accessToken,
-    refreshToken,
-  })
-}
-
-async function readAccessAndRefreshTokenSession(input: {
-  accessToken: string
-  refreshToken: string
-}): Promise<RequestAuthSession> {
-  const accessToken = input.accessToken
-  const refreshToken = input.refreshToken
-
-  if (!accessToken && !refreshToken) {
-    return { user: null }
-  }
-
-  if (accessToken) {
-    const user = await fetchUser(accessToken)
-
-    if (user) {
-      return {
-        user,
-        accessToken,
-        refreshToken: refreshToken || undefined,
-      }
-    }
-  }
-
-  if (refreshToken) {
-    const refreshed = await refreshSession(refreshToken)
-    if (refreshed?.user) {
-      return refreshed
-    }
-  }
-
-  return {
-    user: null,
-    shouldClearCookies: true,
-  }
+  return readSessionToken(token)
 }
 
 export async function requireAuthenticatedUser(request: NextRequest) {
@@ -529,17 +406,14 @@ export async function requireAuthenticatedUser(request: NextRequest) {
   }
 }
 
-export async function signOutFromSupabase(
-  accessToken: string | undefined
-): Promise<void> {
-  if (!accessToken) return
+export async function revokeSession(sessionToken: string | undefined): Promise<void> {
+  if (!sessionToken) return
 
-  try {
-    await requestSupabaseAuth('/logout', {
-      method: 'POST',
-      accessToken,
+  await getDatabaseClient()
+    .update(zenAuthSessions)
+    .set({
+      revokedAt: new Date(),
+      updatedAt: new Date(),
     })
-  } catch {
-    // Clear local cookies even if upstream logout fails.
-  }
+    .where(eq(zenAuthSessions.tokenHash, hashToken(sessionToken)))
 }
