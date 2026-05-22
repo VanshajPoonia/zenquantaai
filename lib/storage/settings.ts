@@ -4,7 +4,9 @@ import {
   OPENROUTER_DEFAULT_BASE_URL,
 } from '@/lib/config'
 import { AppSettings, AppSettingsPatch } from '@/types'
-import { neonQuery } from './neon'
+import { supabaseRequest } from './supabase'
+
+const SETTINGS_TABLE = 'zen_user_settings'
 
 type SettingsRow = {
   user_id: string
@@ -69,12 +71,13 @@ function normalizeSettings(input: Partial<AppSettings>): AppSettings {
   }
 }
 
-class NeonSettingsStore implements SettingsStore {
+class SupabaseSettingsStore implements SettingsStore {
   async get(userId: string): Promise<AppSettings> {
-    const rows = await neonQuery<SettingsRow>(
-      'select * from public.zen_user_settings where user_id = $1',
-      [userId]
-    ).catch(() => [])
+    const rows = await supabaseRequest<SettingsRow[]>(SETTINGS_TABLE, {
+      query: {
+        user_id: `eq.${userId}`,
+      },
+    }).catch(() => [])
 
     const payload = rows[0]?.payload ?? {}
     return normalizeSettings(payload)
@@ -83,16 +86,14 @@ class NeonSettingsStore implements SettingsStore {
   async save(userId: string, settings: AppSettings): Promise<AppSettings> {
     const normalized = normalizeSettings(settings)
 
-    await neonQuery<SettingsRow>(
-      `
-        insert into public.zen_user_settings (user_id, payload)
-        values ($1, $2::jsonb)
-        on conflict (user_id) do update
-        set payload = excluded.payload,
-            updated_at = timezone('utc', now())
-      `,
-      [userId, JSON.stringify(normalized)]
-    )
+    await supabaseRequest<SettingsRow[]>(SETTINGS_TABLE, {
+      method: 'POST',
+      body: {
+        user_id: userId,
+        payload: normalized,
+      },
+      prefer: 'resolution=merge-duplicates,return=representation',
+    })
 
     return normalized
   }
@@ -121,4 +122,4 @@ class NeonSettingsStore implements SettingsStore {
   }
 }
 
-export const settingsStore: SettingsStore = new NeonSettingsStore()
+export const settingsStore: SettingsStore = new SupabaseSettingsStore()

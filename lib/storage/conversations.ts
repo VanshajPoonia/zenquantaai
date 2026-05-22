@@ -1,6 +1,5 @@
 import { createSessionSettings, DEFAULT_PROJECT_ID } from '@/lib/config'
-import { createSupabaseSignedUrl } from './supabase'
-import { neonQuery } from './neon'
+import { createSupabaseSignedUrl, supabaseRequest } from './supabase'
 import {
   createConversation,
   sortConversationSummaries,
@@ -8,6 +7,9 @@ import {
   updateConversationSnapshot,
 } from '@/lib/utils/chat'
 import { Conversation, ConversationMutation, ConversationSummary, Message } from '@/types'
+
+const CONVERSATIONS_TABLE = 'zen_conversations'
+const MESSAGES_TABLE = 'zen_messages'
 
 type ConversationRow = {
   id: string
@@ -184,57 +186,26 @@ async function fetchConversationRecord(
   userId: string,
   id: string
 ): Promise<ConversationRow | null> {
-  const rows = await loadConversationRows(userId, id)
+  const rows = await supabaseRequest<ConversationRow[]>(CONVERSATIONS_TABLE, {
+    query: {
+      user_id: `eq.${userId}`,
+      id: `eq.${id}`,
+      select: '*,messages:zen_messages(*)',
+    },
+  })
 
   return rows[0] ?? null
 }
 
-async function loadConversationRows(
-  userId: string,
-  id?: string
-): Promise<ConversationRow[]> {
-  const rows = await neonQuery<ConversationRow>(
-    `
-      select *
-      from public.zen_conversations
-      where user_id = $1
-        and ($2::text is null or id = $2)
-      order by updated_at desc
-    `,
-    [userId, id ?? null]
-  )
-
-  if (rows.length === 0) {
-    return rows
-  }
-
-  const messages = await neonQuery<MessageRow>(
-    `
-      select *
-      from public.zen_messages
-      where conversation_id = any($1::text[])
-      order by created_at asc
-    `,
-    [rows.map((row) => row.id)]
-  )
-  const messagesByConversation = new Map<string, MessageRow[]>()
-
-  for (const message of messages) {
-    messagesByConversation.set(message.conversation_id, [
-      ...(messagesByConversation.get(message.conversation_id) ?? []),
-      message,
-    ])
-  }
-
-  return rows.map((row) => ({
-    ...row,
-    messages: messagesByConversation.get(row.id) ?? [],
-  }))
-}
-
-class NeonConversationStore implements ConversationStore {
+class SupabaseConversationStore implements ConversationStore {
   async list(userId: string): Promise<Conversation[]> {
-    const rows = await loadConversationRows(userId)
+    const rows = await supabaseRequest<ConversationRow[]>(CONVERSATIONS_TABLE, {
+      query: {
+        user_id: `eq.${userId}`,
+        select: '*,messages:zen_messages(*)',
+        order: 'updated_at.desc',
+      },
+    })
 
     return await Promise.all(rows.map(rowToConversation))
   }
@@ -273,142 +244,34 @@ class NeonConversationStore implements ConversationStore {
       projectId: conversation.projectId ?? DEFAULT_PROJECT_ID,
     })
 
-    const row = conversationToRow(userId, normalizedConversation)
+    await supabaseRequest<ConversationRow[]>(CONVERSATIONS_TABLE, {
+      method: 'POST',
+      body: conversationToRow(userId, normalizedConversation),
+      prefer: 'resolution=merge-duplicates,return=representation',
+    })
 
-    const savedRows = await neonQuery<ConversationRow>(
-      `
-        insert into public.zen_conversations (
-          id,
-          user_id,
-          project_id,
-          title,
-          mode,
-          is_pinned,
-          preview,
-          message_count,
-          session_settings,
-          usage,
-          memory_summary,
-          memory_updated_at,
-          created_at,
-          updated_at
-        )
-        values ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10::jsonb, $11, $12, $13, $14)
-        on conflict (id) do update
-        set project_id = excluded.project_id,
-            title = excluded.title,
-            mode = excluded.mode,
-            is_pinned = excluded.is_pinned,
-            preview = excluded.preview,
-            message_count = excluded.message_count,
-            session_settings = excluded.session_settings,
-            usage = excluded.usage,
-            memory_summary = excluded.memory_summary,
-            memory_updated_at = excluded.memory_updated_at,
-            updated_at = excluded.updated_at
-        where public.zen_conversations.user_id = excluded.user_id
-        returning *
-      `,
-      [
-        row.id,
-        row.user_id,
-        row.project_id,
-        row.title,
-        row.mode,
-        row.is_pinned,
-        row.preview,
-        row.message_count,
-        JSON.stringify(row.session_settings),
-        row.usage ? JSON.stringify(row.usage) : null,
-        row.memory_summary,
-        row.memory_updated_at,
-        row.created_at,
-        row.updated_at,
-      ]
-    )
-
-    if (!savedRows[0]) {
-      throw new Error('Conversation already exists for another user.')
-    }
-
-    await neonQuery(
-      `
-        delete from public.zen_messages
-        where conversation_id = $1
-          and exists (
-            select 1
-            from public.zen_conversations
-            where id = $1 and user_id = $2
-          )
-      `,
-      [normalizedConversation.id, userId]
-    )
+    await supabaseRequest(MESSAGES_TABLE, {
+      method: 'DELETE',
+      query: {
+        conversation_id: `eq.${normalizedConversation.id}`,
+      },
+      prefer: 'return=minimal',
+    })
 
     if (normalizedConversation.messages.length > 0) {
-      await neonQuery<MessageRow>(
-        `
-          insert into public.zen_messages (
-            id,
-            conversation_id,
-            role,
-            content,
-            mode,
-            status,
-            model,
-            provider,
-            error,
-            parent_user_message_id,
-            branch_label,
-            attachments,
-            usage,
-            created_at
-          )
-          select
-            id,
-            conversation_id,
-            role,
-            content,
-            mode,
-            status,
-            model,
-            provider,
-            error,
-            parent_user_message_id,
-            branch_label,
-            attachments,
-            usage,
-            created_at
-          from jsonb_to_recordset($1::jsonb) as message_rows(
-            id text,
-            conversation_id text,
-            role text,
-            content text,
-            mode text,
-            status text,
-            model text,
-            provider text,
-            error text,
-            parent_user_message_id text,
-            branch_label text,
-            attachments jsonb,
-            usage jsonb,
-            created_at timestamptz
-          )
-        `,
-        [
-          JSON.stringify(
-            normalizedConversation.messages.map((message) =>
-              messageToRow(normalizedConversation.id, message)
-            )
-          ),
-        ]
-      )
+      await supabaseRequest<MessageRow[]>(MESSAGES_TABLE, {
+        method: 'POST',
+        body: normalizedConversation.messages.map((message) =>
+          messageToRow(normalizedConversation.id, message)
+        ),
+        prefer: 'resolution=merge-duplicates,return=representation',
+      })
     }
 
     const saved = await this.get(userId, normalizedConversation.id)
 
     if (!saved) {
-      throw new Error('Unable to load saved conversation from Neon.')
+      throw new Error('Unable to load saved conversation from Supabase.')
     }
 
     return saved
@@ -429,23 +292,23 @@ class NeonConversationStore implements ConversationStore {
   }
 
   async delete(userId: string, id: string): Promise<void> {
-    await neonQuery(
-      `
-        delete from public.zen_messages
-        where conversation_id in (
-          select conversation.id
-          from public.zen_conversations conversation
-          where conversation.user_id = $1 and conversation.id = $2
-        )
-      `,
-      [userId, id]
-    )
+    await supabaseRequest(MESSAGES_TABLE, {
+      method: 'DELETE',
+      query: {
+        conversation_id: `eq.${id}`,
+      },
+      prefer: 'return=minimal',
+    })
 
-    await neonQuery(
-      'delete from public.zen_conversations where user_id = $1 and id = $2',
-      [userId, id]
-    )
+    await supabaseRequest(CONVERSATIONS_TABLE, {
+      method: 'DELETE',
+      query: {
+        user_id: `eq.${userId}`,
+        id: `eq.${id}`,
+      },
+      prefer: 'return=minimal',
+    })
   }
 }
 
-export const conversationStore: ConversationStore = new NeonConversationStore()
+export const conversationStore: ConversationStore = new SupabaseConversationStore()
