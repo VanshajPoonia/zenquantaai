@@ -4,9 +4,9 @@
 
 Zenquanta AI is a Next.js App Router AI workspace. It is not the old four-mode app; agents must treat the current platform as a six-assistant product with Nova, Velora, Axiom, Forge, Pulse, and Prism.
 
-The current app uses TypeScript, Tailwind CSS, shadcn/ui-style components, Supabase, a fresh Neon Postgres database, and OpenRouter. Text chat is handled by `/api/chat`. Prism image generation is handled by `/api/images/generate`. Supabase still backs auth sessions and private attachment storage. Neon now backs settings, prompt library, assistant recommendation telemetry, projects, conversations, messages, conversation memory, subscriptions/manual plans, usage records, plan requests, admin audit logs, dashboard data, admin data, and local browser import for app data. OpenRouter is the only AI gateway currently represented in the code.
+The current app uses TypeScript, Tailwind CSS, shadcn/ui-style components, Neon Postgres, neutral private file storage, Tavily web search, OpenAI-compatible embeddings, and OpenRouter. Text chat is handled by `/api/chat`. Prism image generation is handled by `/api/images/generate`. Pulse and the `webSearch` setting use a server-only Tavily search utility to inject source context into text chat when configured. Uploaded text/code files can be extracted, chunked, embedded, stored in Neon with pgvector, and retrieved as private project/conversation knowledge when `fileContext` is enabled. Neon backs credentials auth, settings, prompt library, assistant recommendation telemetry, projects, conversations, messages, conversation memory, subscriptions/manual plans, usage records, plan requests, admin audit logs, dashboard data, admin data, file metadata, generated-image metadata, and local browser import for app data. New uploads and generated images use the neutral storage abstraction. OpenRouter is the only AI model gateway currently represented in the code.
 
-Current direction: keep plan upgrades manual through plan requests and admin activation. Payment automation is out of scope unless explicitly requested later. Neon starts fresh; do not import, backfill, copy, or preserve Supabase database rows. Supabase Auth and Supabase Storage require separate future decisions.
+Current direction: keep plan upgrades manual through plan requests and admin activation. Payment automation is out of scope unless explicitly requested later. Neon starts fresh; do not import, backfill, copy, or preserve Supabase database or auth rows. Do not import, backfill, copy, or preserve old Supabase Storage objects.
 
 ## Required Reading Before Work
 
@@ -27,10 +27,13 @@ Useful source files to inspect for most changes:
 - `lib/config/pricing.ts`
 - `lib/ai/chat.ts`
 - `lib/ai/openrouter.ts`
+- `lib/search/web-search.ts`
+- `lib/rag/*`
 - `lib/db/client.ts`
 - `lib/db/repositories/index.ts`
 - `lib/db/schema.ts`
-- `lib/storage/supabase.ts`
+- `lib/storage/object-store.ts`
+- `lib/storage/attachments.ts`
 - `app/api/chat/route.ts`
 - `app/api/images/generate/route.ts`
 
@@ -47,11 +50,11 @@ Useful source files to inspect for most changes:
 - `lib/ai/`: OpenRouter calls, chat orchestration, memory, and prompts.
 - `lib/config/`: assistant, mode, model, image model, pricing, and preset config.
 - `lib/db/`: server-only Neon client, fresh Drizzle schema foundation, and server-only repository layer.
-- `lib/storage/`: current Supabase REST-backed data access plus Supabase Storage helpers.
+- `lib/storage/`: neutral file storage helpers and browser-local import helpers.
 - `lib/billing/`: cost calculation, enforcement, and usage logging.
 - `lib/router/`: local prompt precheck and assistant recommendations.
 - `neon/migrations/`: Neon database schema setup.
-- `supabase/migrations/`: database and storage setup.
+- `supabase/migrations/`: historical database and storage setup reference.
 - `types/`: shared TypeScript domain types.
 
 ## Coding Conventions
@@ -71,16 +74,22 @@ Useful source files to inspect for most changes:
 - Prism image generation returns JSON from `/api/images/generate`.
 - Model routing belongs in `lib/config/*`.
 - Prompt and generation orchestration belongs in `lib/ai/*`.
+- Pulse/webSearch retrieval belongs in `lib/search/*`; Tavily keys must remain server-only.
+- Uploaded-file knowledge extraction, embeddings, chunking, and retrieval belong in `lib/rag/*`; embedding keys must remain server-only.
 - Fresh Neon database foundation belongs in `lib/db/*`.
 - Neon repositories in `lib/db/repositories/*` are the fresh database access layer. File metadata and generated-image metadata repositories remain future scaffolding until explicit storage/durability milestones.
-- Current active Neon-backed API/routes/data paths are `/api/settings`, `/api/prompts`, `/api/prompts/[id]`, `/api/assistant-recommendations`, `/api/projects`, `/api/projects/[id]`, `/api/conversations`, `/api/conversations/[id]`, conversation and billing persistence inside `/api/chat` and `/api/images/generate`, `/api/images/history`, `/api/dashboard`, `/dashboard`, `/pricing`, `/api/plan-requests`, `/api/admin/*`, `/admin`, auth profile/role hydration, and local browser import app-data writes.
+- Current active Neon-backed API/routes/data paths are `/api/auth/*`, `/api/settings`, `/api/prompts`, `/api/prompts/[id]`, `/api/assistant-recommendations`, `/api/projects`, `/api/projects/[id]`, `/api/conversations`, `/api/conversations/[id]`, conversation and billing persistence inside `/api/chat` and `/api/images/generate`, `/api/images/history`, `/api/dashboard`, `/dashboard`, `/pricing`, `/api/plan-requests`, `/api/admin/*`, `/admin`, auth profile/role hydration, and local browser import app-data writes.
 - The fresh Neon repository layer covers users/auth identity mapping, profiles, subscriptions, usage, plan requests, admin audit logs, projects, conversations/messages/memory, prompts, settings, assistant recommendations, file metadata, and generated image metadata.
 - Repositories should create fresh Neon records going forward. Do not add Supabase data import, copy, backfill, or preservation logic.
 - When a repository receives only a `userId`, use the Neon user anchor helper before inserting user-owned rows so fresh `zen_users` foreign keys are satisfied.
-- Supabase-backed runtime code remains in `lib/storage/*` for auth support history and storage helpers, but active app database slices should prefer the fresh Neon repositories once migrated.
-- Supabase remains current for Auth and private attachment Storage.
+- New private file runtime code uses the neutral object-store abstraction in `lib/storage/object-store.ts`.
+- The storage abstraction supports local development storage plus S3-compatible/R2 production storage through server-only env vars.
+- Store file metadata and generated-image metadata in Neon.
+- Store uploaded-file text chunks and embeddings in Neon `zen_file_chunks`; raw files stay private in object storage.
+- Supabase runtime clients and old Supabase-backed storage modules have been removed.
+- Do not write Supabase-to-new-storage import, backfill, copy, or preservation scripts.
 - Do not write Supabase-to-Neon import, backfill, copy, or preservation migrations.
-- Do not assume Supabase Auth or Supabase Storage have been removed.
+- Do not assume old Supabase-hosted files remain available after the fresh storage cutover.
 - Usage enforcement and logging belong in `lib/billing/*`.
 - Client chat state is centralized in `lib/chat-context.tsx`.
 - Assistant recommendation rules belong in `lib/router/*`.
@@ -115,7 +124,7 @@ Known command issues:
 - Do not change routes, APIs, auth, billing, storage, styling, or runtime behavior unless explicitly requested.
 - Keep changes scoped to the requested files and behavior.
 - Do not invent features. If uncertain, mark the item as unclear and cite the file to inspect next.
-- Do not describe Pulse as having real web search unless code implements retrieval/tooling. Current repo shows Pulse branding and a `webSearch` setting, but real search/retrieval is not confirmed.
+- Pulse has real Tavily-backed web search when `TAVILY_API_KEY` is configured. If search is unavailable, the chat path should degrade without claiming live verification.
 - Do not plan Stripe checkout, webhooks, customer portal, subscription automation, or payment automation unless explicitly requested later.
 - Keep plan upgrades manual and admin-driven for now.
 
