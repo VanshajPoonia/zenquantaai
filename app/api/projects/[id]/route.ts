@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { appendAuthCookies, requireAuthenticatedUser } from '@/lib/auth/session'
-import { projectStore } from '@/lib/storage'
+import {
+  neonProfilesRepository,
+  neonProjectsRepository,
+} from '@/lib/db/repositories'
 
 export const runtime = 'nodejs'
 
@@ -11,6 +14,7 @@ export async function PATCH(
   const auth = await requireAuthenticatedUser(request)
   if ('response' in auth) return auth.response
 
+  await neonProfilesRepository.ensureFromAuthUser(auth.user)
   const { id } = await params
   const body = (await request.json().catch(() => null)) as
     | {
@@ -20,7 +24,7 @@ export async function PATCH(
       }
     | null
 
-  const project = await projectStore.update(auth.user.id, id, {
+  const project = await neonProjectsRepository.update(auth.user.id, id, {
     ...(typeof body?.name === 'string' ? { name: body.name.trim() } : {}),
     ...(typeof body?.description !== 'undefined'
       ? { description: body.description?.trim() || undefined }
@@ -48,8 +52,9 @@ export async function DELETE(
   const auth = await requireAuthenticatedUser(request)
   if ('response' in auth) return auth.response
 
+  await neonProfilesRepository.ensureFromAuthUser(auth.user)
   const { id } = await params
-  await projectStore.delete(auth.user.id, id)
+  await neonProjectsRepository.delete(auth.user.id, id)
 
   const response = NextResponse.json({ ok: true })
 

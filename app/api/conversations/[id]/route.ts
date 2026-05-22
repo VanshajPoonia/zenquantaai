@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { appendAuthCookies, requireAuthenticatedUser } from '@/lib/auth/session'
-import { conversationStore } from '@/lib/storage'
+import {
+  neonConversationRepository,
+  neonProfilesRepository,
+} from '@/lib/db/repositories'
 import { ConversationMutation } from '@/types'
 
 export const runtime = 'nodejs'
@@ -12,8 +15,9 @@ export async function GET(
   const auth = await requireAuthenticatedUser(request)
   if ('response' in auth) return auth.response
 
+  await neonProfilesRepository.ensureFromAuthUser(auth.user)
   const { id } = await params
-  const conversation = await conversationStore.get(auth.user.id, id)
+  const conversation = await neonConversationRepository.get(auth.user.id, id)
 
   if (!conversation) {
     return NextResponse.json({ error: 'Conversation not found.' }, { status: 404 })
@@ -35,9 +39,10 @@ export async function PATCH(
   const auth = await requireAuthenticatedUser(request)
   if ('response' in auth) return auth.response
 
+  await neonProfilesRepository.ensureFromAuthUser(auth.user)
   const { id } = await params
   const body = (await request.json().catch(() => ({}))) as ConversationMutation
-  const conversation = await conversationStore.patch(auth.user.id, id, body)
+  const conversation = await neonConversationRepository.patch(auth.user.id, id, body)
 
   if (!conversation) {
     return NextResponse.json({ error: 'Conversation not found.' }, { status: 404 })
@@ -59,8 +64,9 @@ export async function DELETE(
   const auth = await requireAuthenticatedUser(request)
   if ('response' in auth) return auth.response
 
+  await neonProfilesRepository.ensureFromAuthUser(auth.user)
   const { id } = await params
-  await conversationStore.delete(auth.user.id, id)
+  await neonConversationRepository.delete(auth.user.id, id)
 
   const response = NextResponse.json({ ok: true })
 

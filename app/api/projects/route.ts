@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { appendAuthCookies, requireAuthenticatedUser } from '@/lib/auth/session'
-import { projectStore } from '@/lib/storage'
+import {
+  neonProfilesRepository,
+  neonProjectsRepository,
+} from '@/lib/db/repositories'
 
 export const runtime = 'nodejs'
 
@@ -8,7 +11,8 @@ export async function GET(request: NextRequest) {
   const auth = await requireAuthenticatedUser(request)
   if ('response' in auth) return auth.response
 
-  const projects = await projectStore.list(auth.user.id)
+  await neonProfilesRepository.ensureFromAuthUser(auth.user)
+  const projects = await neonProjectsRepository.list(auth.user.id)
   const response = NextResponse.json(projects)
 
   if (auth.session.refreshed) {
@@ -22,6 +26,7 @@ export async function POST(request: NextRequest) {
   const auth = await requireAuthenticatedUser(request)
   if ('response' in auth) return auth.response
 
+  await neonProfilesRepository.ensureFromAuthUser(auth.user)
   const body = (await request.json().catch(() => null)) as
     | {
         name?: string
@@ -36,7 +41,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'name is required.' }, { status: 400 })
   }
 
-  const project = await projectStore.create(auth.user.id, {
+  const project = await neonProjectsRepository.create(auth.user.id, {
     name,
     description: body?.description?.trim() || undefined,
     color: body?.color?.trim() || 'general',

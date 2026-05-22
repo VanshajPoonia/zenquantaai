@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { appendAuthCookies, requireAuthenticatedUser } from '@/lib/auth/session'
-import { promptStore } from '@/lib/storage'
+import {
+  neonProfilesRepository,
+  neonPromptsRepository,
+} from '@/lib/db/repositories'
 import { AIMode } from '@/types'
 
 export const runtime = 'nodejs'
@@ -12,6 +15,7 @@ export async function PATCH(
   const auth = await requireAuthenticatedUser(request)
   if ('response' in auth) return auth.response
 
+  await neonProfilesRepository.ensureFromAuthUser(auth.user)
   const { id } = await params
   const body = (await request.json().catch(() => null)) as
     | {
@@ -21,7 +25,7 @@ export async function PATCH(
       }
     | null
 
-  const prompt = await promptStore.update(auth.user.id, id, {
+  const prompt = await neonPromptsRepository.update(auth.user.id, id, {
     ...(typeof body?.title === 'string' ? { title: body.title.trim() } : {}),
     ...(typeof body?.content === 'string'
       ? { content: body.content.trim() }
@@ -49,8 +53,9 @@ export async function DELETE(
   const auth = await requireAuthenticatedUser(request)
   if ('response' in auth) return auth.response
 
+  await neonProfilesRepository.ensureFromAuthUser(auth.user)
   const { id } = await params
-  await promptStore.delete(auth.user.id, id)
+  await neonPromptsRepository.delete(auth.user.id, id)
 
   const response = NextResponse.json({ ok: true })
 

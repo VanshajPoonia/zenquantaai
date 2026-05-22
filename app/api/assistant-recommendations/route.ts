@@ -3,7 +3,10 @@ import {
   appendAuthCookies,
   requireAuthenticatedUser,
 } from '@/lib/auth/session'
-import { assistantRecommendationEventsStore } from '@/lib/storage'
+import {
+  neonAssistantRecommendationEventsRepository,
+  neonProfilesRepository,
+} from '@/lib/db/repositories'
 import {
   AssistantRecommendationEvent,
   RecommendationOutcome,
@@ -25,6 +28,7 @@ export async function POST(request: NextRequest) {
   const auth = await requireAuthenticatedUser(request)
   if ('response' in auth) return auth.response
 
+  await neonProfilesRepository.ensureFromAuthUser(auth.user)
   const body = (await request.json().catch(() => null)) as RecommendationEventBody | null
 
   if (
@@ -40,7 +44,7 @@ export async function POST(request: NextRequest) {
     )
   }
 
-  const event = await assistantRecommendationEventsStore.create({
+  const event = await neonAssistantRecommendationEventsRepository.create({
     userId: auth.user.id,
     conversationId: body.conversationId ?? null,
     currentAssistant: body.currentAssistant,

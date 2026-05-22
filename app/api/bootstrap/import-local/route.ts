@@ -2,11 +2,12 @@ import { NextRequest, NextResponse } from 'next/server'
 import { appendAuthCookies, requireAuthenticatedUser } from '@/lib/auth/session'
 import { DEFAULT_PROJECT_ID } from '@/lib/config'
 import {
-  conversationStore,
-  projectStore,
-  promptStore,
-  settingsStore,
-} from '@/lib/storage'
+  neonConversationRepository,
+  neonProfilesRepository,
+  neonProjectsRepository,
+  neonPromptsRepository,
+  neonSettingsRepository,
+} from '@/lib/db/repositories'
 import { uploadImportedAttachment } from '@/lib/storage/attachments'
 import { updateConversationSnapshot } from '@/lib/utils/chat'
 import { AppSettings, Conversation, Project, PromptLibraryItem } from '@/types'
@@ -39,6 +40,7 @@ async function uploadConversationAttachments(
 export async function POST(request: NextRequest) {
   const auth = await requireAuthenticatedUser(request)
   if ('response' in auth) return auth.response
+  await neonProfilesRepository.ensureFromAuthUser(auth.user)
 
   const body = (await request.json().catch(() => null)) as
     | {
@@ -53,10 +55,10 @@ export async function POST(request: NextRequest) {
   const prompts = body?.prompts ?? []
   const conversations = body?.conversations ?? []
 
-  await projectStore.list(auth.user.id)
+  await neonProjectsRepository.list(auth.user.id)
 
   for (const project of projects) {
-    await projectStore.create(auth.user.id, {
+    await neonProjectsRepository.create(auth.user.id, {
       id: project.id,
       name: project.name,
       description: project.description,
@@ -65,7 +67,7 @@ export async function POST(request: NextRequest) {
   }
 
   for (const prompt of prompts) {
-    await promptStore.create(auth.user.id, {
+    await neonPromptsRepository.create(auth.user.id, {
       id: prompt.id,
       title: prompt.title,
       content: prompt.content,
@@ -74,7 +76,7 @@ export async function POST(request: NextRequest) {
   }
 
   if (body?.settings) {
-    await settingsStore.save(auth.user.id, body.settings)
+    await neonSettingsRepository.save(auth.user.id, body.settings)
   }
 
   for (const conversation of conversations) {
@@ -82,7 +84,7 @@ export async function POST(request: NextRequest) {
       auth.user.id,
       conversation
     )
-    await conversationStore.save(auth.user.id, uploadedConversation)
+    await neonConversationRepository.save(auth.user.id, uploadedConversation)
   }
 
   const response = NextResponse.json({

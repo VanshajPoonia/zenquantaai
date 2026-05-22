@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { appendAuthCookies, requireAuthenticatedUser } from '@/lib/auth/session'
-import { promptStore } from '@/lib/storage'
+import {
+  neonProfilesRepository,
+  neonPromptsRepository,
+} from '@/lib/db/repositories'
 import { AIMode } from '@/types'
 
 export const runtime = 'nodejs'
@@ -9,7 +12,8 @@ export async function GET(request: NextRequest) {
   const auth = await requireAuthenticatedUser(request)
   if ('response' in auth) return auth.response
 
-  const prompts = await promptStore.list(auth.user.id)
+  await neonProfilesRepository.ensureFromAuthUser(auth.user)
+  const prompts = await neonPromptsRepository.list(auth.user.id)
   const response = NextResponse.json(prompts)
 
   if (auth.session.refreshed) {
@@ -23,6 +27,7 @@ export async function POST(request: NextRequest) {
   const auth = await requireAuthenticatedUser(request)
   if ('response' in auth) return auth.response
 
+  await neonProfilesRepository.ensureFromAuthUser(auth.user)
   const body = (await request.json().catch(() => null)) as
     | {
         title?: string
@@ -41,7 +46,7 @@ export async function POST(request: NextRequest) {
     )
   }
 
-  const prompt = await promptStore.create(auth.user.id, {
+  const prompt = await neonPromptsRepository.create(auth.user.id, {
     title,
     content,
     mode: body?.mode ?? 'any',
