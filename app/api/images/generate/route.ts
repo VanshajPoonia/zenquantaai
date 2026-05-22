@@ -18,6 +18,7 @@ import {
   neonSubscriptionsRepository,
   neonUsageLimitOverridesRepository,
 } from '@/lib/db/repositories'
+import { storeLatestGeneratedImageInConversation } from '@/lib/storage/generated-images'
 import { createMessage } from '@/lib/utils/chat'
 import { ImageGenerateRequest, ImageGenerateResponse, ChatRequest } from '@/types'
 
@@ -176,9 +177,17 @@ export async function POST(request: NextRequest) {
       }
     )
 
+    const durableConversation = await storeLatestGeneratedImageInConversation({
+      userId: auth.user.id,
+      conversation: completedConversation,
+      prompt: prepared.userMessage.content,
+      model: routeConfig.model,
+      sourceUrl: generated.imageUrl ?? null,
+    })
+
     const savedConversation = await neonConversationRepository.save(
       auth.user.id,
-      completedConversation
+      durableConversation
     )
 
     await logImageUsage({

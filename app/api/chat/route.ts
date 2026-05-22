@@ -25,6 +25,15 @@ import { calculateTextUsageEstimate } from '@/lib/billing/costs'
 import { enforceTextUsage, getEffectiveSubscription } from '@/lib/billing/enforce'
 import { logTextUsage } from '@/lib/billing/log-usage'
 import { getAssistantFamilyFromMode } from '@/lib/config/assistants'
+import {
+  buildWebSearchQuery,
+  searchWebForContext,
+  shouldUseWebSearch,
+} from '@/lib/search/web-search'
+import {
+  linkAttachmentKnowledgeScope,
+  retrieveFileKnowledgeContext,
+} from '@/lib/rag/retrieval'
 import { estimatePromptTokens } from '@/lib/utils/cost'
 
 export const runtime = 'nodejs'
@@ -37,9 +46,29 @@ function debugChatRoute(stage: string, details?: Record<string, unknown>) {
 }
 
 function buildWorkingNotes(
-  phase: 'understanding' | 'organizing' | 'drafting' | 'refining' | 'finalizing'
+  phase:
+    | 'searching'
+    | 'search-unavailable'
+    | 'retrieving-files'
+    | 'understanding'
+    | 'organizing'
+    | 'drafting'
+    | 'refining'
+    | 'finalizing'
 ): string[] {
   const textNotes = {
+    searching: [
+      'Searching the web for current source snippets.',
+      'Preparing source context for the response.',
+    ],
+    'search-unavailable': [
+      'Web search was requested, but no source context is available.',
+      'Continuing without claiming live verification.',
+    ],
+    'retrieving-files': [
+      'Retrieving relevant excerpts from uploaded files.',
+      'Keeping raw files private and using only the most relevant chunks.',
+    ],
     understanding: [
       'Reading the request and identifying the outcome you are asking for.',
       'Picking the right response shape before drafting the answer.',
@@ -149,11 +178,6 @@ export async function POST(request: NextRequest) {
         payload.settings.modelOverride,
         subscription.tier
       )
-      const promptText = buildPromptTextForUsage(
-        prepared.generationConversation,
-        payload.settings,
-        billingMode
-      )
       const allowedModels = getAllowedModelsForTier(subscription.tier)
 
       const overrideAllowsModel =
@@ -162,6 +186,41 @@ export async function POST(request: NextRequest) {
       if (!allowedModels.includes(routeConfig.model) && !overrideAllowsModel) {
         throw new Error('That assistant profile is not available on your current plan.')
       }
+
+      const webSearchRequested = shouldUseWebSearch(
+        prepared.assistantMode,
+        payload.settings
+      )
+      const webSearchContext = webSearchRequested
+        ? await searchWebForContext(buildWebSearchQuery(prepared.userMessage.content))
+        : undefined
+      const attachmentFileIds = await linkAttachmentKnowledgeScope({
+        userId: auth.user.id,
+        attachments: prepared.userMessage.attachments,
+        projectId: prepared.conversation.projectId,
+        conversationId: prepared.conversation.id,
+        messageId: prepared.userMessage.id,
+      })
+      const fileKnowledgeContext = payload.settings.fileContext
+        ? await retrieveFileKnowledgeContext({
+            userId: auth.user.id,
+            query: prepared.userMessage.content,
+            projectId: prepared.conversation.projectId,
+            conversationId: prepared.conversation.id,
+            fileIds: attachmentFileIds,
+          })
+        : undefined
+      const messageSources = [
+        ...(webSearchContext?.sources ?? []),
+        ...(fileKnowledgeContext?.sources ?? []),
+      ]
+      const promptText = buildPromptTextForUsage(
+        prepared.generationConversation,
+        payload.settings,
+        billingMode,
+        webSearchContext,
+        fileKnowledgeContext
+      )
 
       enforceTextUsage({
         subscription,
@@ -206,9 +265,27 @@ export async function POST(request: NextRequest) {
           conversationId: persistedConversation.id,
           messageId: placeholder.id,
           title: WORKING_NOTES_TITLE,
-          notes: buildWorkingNotes('understanding'),
+          notes:
+            fileKnowledgeContext?.sources.length
+              ? buildWorkingNotes('retrieving-files')
+              : webSearchRequested && webSearchContext?.sources.length
+              ? buildWorkingNotes('searching')
+              : webSearchRequested
+                ? buildWorkingNotes('search-unavailable')
+                : buildWorkingNotes('understanding'),
         })
       )
+
+      if (messageSources.length) {
+        await writer.write(
+          encodeStreamEvent({
+            type: 'sources',
+            conversationId: persistedConversation.id,
+            messageId: placeholder.id,
+            sources: messageSources,
+          })
+        )
+      }
 
       await writer.write(
         encodeStreamEvent({
@@ -238,6 +315,8 @@ export async function POST(request: NextRequest) {
         mode: prepared.assistantMode,
         action: payload.action,
         tier: subscription.tier,
+        webSearchContext,
+        fileKnowledgeContext,
       })) {
         accumulated += chunk
         receivedChunkCount += 1
@@ -255,10 +334,10 @@ export async function POST(request: NextRequest) {
           encodeStreamEvent({
             type: 'delta',
             conversationId: persistedConversation.id,
-          messageId: placeholder.id,
-          delta: chunk,
-        })
-      )
+            messageId: placeholder.id,
+            delta: chunk,
+          })
+        )
 
         const phase =
           accumulated.length < 80
@@ -316,6 +395,9 @@ export async function POST(request: NextRequest) {
           tier: subscription.tier,
           usageOverride: clientUsage,
           modelOverride: routeConfig.model,
+          webSearchContext,
+          fileKnowledgeContext,
+          sources: messageSources,
         }
       )
 
@@ -347,6 +429,7 @@ export async function POST(request: NextRequest) {
             content: accumulated || 'No response returned.',
             status: 'complete',
             usage: savedConversation.messages.at(-1)?.usage,
+            sources: savedConversation.messages.at(-1)?.sources,
           },
           usage: savedConversation.messages.at(-1)?.usage,
         })

@@ -89,7 +89,7 @@ export default async function DashboardPage({
         {adminRequired ? (
           <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 px-5 py-4 text-sm text-amber-100">
             Admin access is enabled only for accounts with the admin role. If you
-            just updated your role in Supabase, refresh this page and try again.
+            just updated your role, refresh this page and try again.
           </div>
         ) : null}
 
