@@ -1,8 +1,6 @@
 import { PromptLibraryItem } from '@/types'
 import { createId, nowIso } from '@/lib/utils/chat'
-import { supabaseRequest } from './supabase'
-
-const PROMPTS_TABLE = 'zen_prompt_library'
+import { neonQuery } from './neon'
 
 type PromptRow = {
   id: string
@@ -51,14 +49,17 @@ function promptToRow(userId: string, prompt: PromptLibraryItem): PromptRow {
   }
 }
 
-class SupabasePromptStore implements PromptStore {
+class NeonPromptStore implements PromptStore {
   async list(userId: string): Promise<PromptLibraryItem[]> {
-    const rows = await supabaseRequest<PromptRow[]>(PROMPTS_TABLE, {
-      query: {
-        user_id: `eq.${userId}`,
-        order: 'updated_at.desc',
-      },
-    })
+    const rows = await neonQuery<PromptRow>(
+      `
+        select *
+        from public.zen_prompt_library
+        where user_id = $1
+        order by updated_at desc
+      `,
+      [userId]
+    )
 
     return rows.map(rowToPrompt)
   }
@@ -77,11 +78,36 @@ class SupabasePromptStore implements PromptStore {
       updatedAt: now,
     }
 
-    const rows = await supabaseRequest<PromptRow[]>(PROMPTS_TABLE, {
-      method: 'POST',
-      body: promptToRow(userId, prompt),
-      prefer: 'resolution=merge-duplicates,return=representation',
-    })
+    const row = promptToRow(userId, prompt)
+    const rows = await neonQuery<PromptRow>(
+      `
+        insert into public.zen_prompt_library (
+          id,
+          user_id,
+          title,
+          content,
+          mode,
+          created_at,
+          updated_at
+        )
+        values ($1, $2, $3, $4, $5, $6, $7)
+        on conflict (user_id, id) do update
+        set title = excluded.title,
+            content = excluded.content,
+            mode = excluded.mode,
+            updated_at = excluded.updated_at
+        returning *
+      `,
+      [
+        row.id,
+        row.user_id,
+        row.title,
+        row.content,
+        row.mode,
+        row.created_at,
+        row.updated_at,
+      ]
+    )
 
     return rowToPrompt(rows[0] ?? promptToRow(userId, prompt))
   }
@@ -91,31 +117,35 @@ class SupabasePromptStore implements PromptStore {
     promptId: string,
     input: Partial<Pick<PromptLibraryItem, 'title' | 'content' | 'mode'>>
   ): Promise<PromptLibraryItem | null> {
-    const rows = await supabaseRequest<PromptRow[]>(PROMPTS_TABLE, {
-      method: 'PATCH',
-      query: {
-        user_id: `eq.${userId}`,
-        id: `eq.${promptId}`,
-      },
-      body: {
-        ...input,
-        updated_at: nowIso(),
-      },
-    })
+    const rows = await neonQuery<PromptRow>(
+      `
+        update public.zen_prompt_library
+        set title = coalesce($3, title),
+            content = coalesce($4, content),
+            mode = coalesce($5, mode),
+            updated_at = $6
+        where user_id = $1 and id = $2
+        returning *
+      `,
+      [
+        userId,
+        promptId,
+        typeof input.title === 'string' ? input.title : null,
+        typeof input.content === 'string' ? input.content : null,
+        typeof input.mode !== 'undefined' ? input.mode : null,
+        nowIso(),
+      ]
+    )
 
     return rows[0] ? rowToPrompt(rows[0]) : null
   }
 
   async delete(userId: string, promptId: string): Promise<void> {
-    await supabaseRequest(PROMPTS_TABLE, {
-      method: 'DELETE',
-      query: {
-        user_id: `eq.${userId}`,
-        id: `eq.${promptId}`,
-      },
-      prefer: 'return=minimal',
-    })
+    await neonQuery(
+      'delete from public.zen_prompt_library where user_id = $1 and id = $2',
+      [userId, promptId]
+    )
   }
 }
 
-export const promptStore: PromptStore = new SupabasePromptStore()
+export const promptStore: PromptStore = new NeonPromptStore()
