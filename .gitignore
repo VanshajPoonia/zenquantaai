@@ -17,4 +17,5 @@ node_modules
 .next/
 .DS_Store
 data/runtime/*.json
+.storage/
 tsconfig.tsbuildinfo
