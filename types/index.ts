@@ -149,6 +149,45 @@ export interface UsageEstimate {
   imageCount?: number
 }
 
+export type MessageSourceKind = 'web' | 'file'
+
+export interface MessageSource {
+  id: string
+  title: string
+  url: string
+  domain: string
+  snippet: string
+  kind?: MessageSourceKind
+  score?: number
+  publishedAt?: string
+  fileId?: string
+  chunkId?: string
+}
+
+export interface WebSearchSource extends MessageSource {
+  kind?: 'web'
+}
+
+export interface FileKnowledgeSource extends MessageSource {
+  kind: 'file'
+  fileId: string
+  chunkId: string
+  chunkIndex: number
+}
+
+export interface FileKnowledgeContext {
+  query: string
+  retrievedAt: string
+  sources: FileKnowledgeSource[]
+}
+
+export interface WebSearchContext {
+  query: string
+  searchedAt: string
+  sources: WebSearchSource[]
+  unavailableReason?: 'not_configured' | 'request_failed' | 'no_results'
+}
+
 export interface Message {
   id: string
   role: MessageRole
@@ -161,6 +200,7 @@ export interface Message {
   error?: string
   attachments?: Attachment[]
   usage?: UsageEstimate
+  sources?: MessageSource[]
   parentUserMessageId?: string
   branchLabel?: string
   assistantFamily?: AssistantFamily
@@ -347,6 +387,12 @@ export type StreamEvent =
       notes: string[]
     }
   | {
+      type: 'sources'
+      conversationId: string
+      messageId: string
+      sources: MessageSource[]
+    }
+  | {
       type: 'done'
       conversation: Conversation
       message: Message
@@ -388,6 +434,8 @@ export interface Attachment {
   createdAt: string
   bucket?: string
   storagePath?: string
+  fileId?: string
+  storageProvider?: 'external' | 'local'
   previewUrl?: string
   textContent?: string
   textExcerpt?: string

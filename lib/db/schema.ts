@@ -13,6 +13,7 @@ import {
   timestamp,
   uniqueIndex,
   uuid,
+  vector,
 } from 'drizzle-orm/pg-core'
 
 const timestamps = {
@@ -76,6 +77,50 @@ export const zenAuthIdentities = pgTable(
       table.providerUserId
     ),
     index('zen_auth_identities_user_idx').on(table.userId),
+  ]
+)
+
+export const zenAuthCredentials = pgTable(
+  'zen_auth_credentials',
+  {
+    userId: uuid('user_id')
+      .primaryKey()
+      .references(() => zenUsers.id, { onDelete: 'cascade' }),
+    loginId: text('login_id').notNull().unique(),
+    passwordHash: text('password_hash').notNull(),
+    passwordSalt: text('password_salt').notNull(),
+    passwordParams: jsonb('password_params').notNull().default({}),
+    passwordUpdatedAt: timestamp('password_updated_at', {
+      withTimezone: true,
+    })
+      .notNull()
+      .defaultNow(),
+    ...timestamps,
+  },
+  (table) => [index('zen_auth_credentials_login_id_idx').on(table.loginId)]
+)
+
+export const zenAuthSessions = pgTable(
+  'zen_auth_sessions',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => zenUsers.id, { onDelete: 'cascade' }),
+    tokenHash: text('token_hash').notNull().unique(),
+    userAgent: text('user_agent'),
+    ipAddress: text('ip_address'),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    lastSeenAt: timestamp('last_seen_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    revokedAt: timestamp('revoked_at', { withTimezone: true }),
+    ...timestamps,
+  },
+  (table) => [
+    index('zen_auth_sessions_user_idx').on(table.userId),
+    index('zen_auth_sessions_token_hash_idx').on(table.tokenHash),
+    index('zen_auth_sessions_expires_idx').on(table.expiresAt),
   ]
 )
 
@@ -266,6 +311,7 @@ export const zenMessages = pgTable(
     branchLabel: text('branch_label'),
     attachments: jsonb('attachments').notNull().default([]),
     usage: jsonb('usage'),
+    sources: jsonb('sources').notNull().default([]),
     createdAt: timestamp('created_at', { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -570,8 +616,9 @@ export const zenFiles = pgTable(
     conversationId: text('conversation_id').references(() => zenConversations.id, {
       onDelete: 'set null',
     }),
+    projectId: text('project_id'),
     messageId: text('message_id'),
-    provider: text('provider').notNull().default('supabase'),
+    provider: text('provider').notNull().default('local'),
     bucket: text('bucket'),
     storagePath: text('storage_path'),
     publicUrl: text('public_url'),
@@ -588,12 +635,48 @@ export const zenFiles = pgTable(
     index('zen_files_conversation_idx').on(table.conversationId),
     check(
       'zen_files_provider_check',
-      sql`${table.provider} in ('supabase', 'external', 'local')`
+      sql`${table.provider} in ('external', 'local')`
     ),
     check(
       'zen_files_visibility_check',
       sql`${table.visibility} in ('private', 'public')`
     ),
+  ]
+)
+
+export const zenFileChunks = pgTable(
+  'zen_file_chunks',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => zenUsers.id, { onDelete: 'cascade' }),
+    projectId: text('project_id'),
+    conversationId: text('conversation_id').references(() => zenConversations.id, {
+      onDelete: 'set null',
+    }),
+    messageId: text('message_id'),
+    fileId: uuid('file_id')
+      .notNull()
+      .references(() => zenFiles.id, { onDelete: 'cascade' }),
+    chunkIndex: integer('chunk_index').notNull(),
+    content: text('content').notNull(),
+    contentHash: text('content_hash').notNull(),
+    tokenCountEstimate: integer('token_count_estimate').notNull().default(0),
+    embeddingModel: text('embedding_model').notNull(),
+    embedding: vector('embedding', { dimensions: 1536 }).notNull(),
+    metadata: jsonb('metadata').notNull().default({}),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex('zen_file_chunks_file_index_idx').on(
+      table.fileId,
+      table.chunkIndex
+    ),
+    index('zen_file_chunks_user_created_idx').on(table.userId, table.createdAt),
+    index('zen_file_chunks_user_project_idx').on(table.userId, table.projectId),
+    index('zen_file_chunks_conversation_idx').on(table.conversationId),
+    index('zen_file_chunks_file_idx').on(table.fileId),
   ]
 )
 
@@ -638,7 +721,7 @@ export const zenGeneratedImages = pgTable(
     ),
     check(
       'zen_generated_images_storage_provider_check',
-      sql`${table.storageProvider} is null or ${table.storageProvider} in ('supabase', 'external', 'local')`
+      sql`${table.storageProvider} is null or ${table.storageProvider} in ('external', 'local')`
     ),
     check(
       'zen_generated_images_status_check',
