@@ -1,23 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import {
   appendAuthCookies,
-  createLoginIdAccount,
-  hasSupabaseAuthConfig,
-  hasSupabaseAdminAuthConfig,
+  createLocalAccount,
   parseLoginId,
-  signInWithLoginId,
+  signInWithLocalCredentials,
 } from '@/lib/auth/session'
 
 export const runtime = 'nodejs'
 
 export async function POST(request: NextRequest) {
-  if (!hasSupabaseAdminAuthConfig() || !hasSupabaseAuthConfig()) {
-    return NextResponse.json(
-      { error: 'Supabase auth is not configured.' },
-      { status: 500 }
-    )
-  }
-
   const body = (await request.json().catch(() => null)) as
     | { identifier?: string; password?: string }
     | null
@@ -54,8 +45,19 @@ export async function POST(request: NextRequest) {
     )
   }
 
-  await createLoginIdAccount(loginId, password)
-  const session = await signInWithLoginId(loginId, password)
+  try {
+    await createLocalAccount(loginId, password)
+  } catch (error) {
+    const message = error instanceof Error ? error.message : ''
+
+    if (message.toLowerCase().includes('already')) {
+      return NextResponse.json({ error: 'That ID is already taken.' }, { status: 409 })
+    }
+
+    throw error
+  }
+
+  const session = await signInWithLocalCredentials(loginId, password, request)
 
   const response = NextResponse.json({
     ok: true,

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import {
   appendClearedAuthCookies,
   readRequestAuthSession,
-  updatePassword,
+  updateLocalPassword,
 } from '@/lib/auth/session'
 
 export const runtime = 'nodejs'
@@ -12,7 +12,7 @@ export async function POST(request: NextRequest) {
 
   if (!session.user || !session.accessToken) {
     const response = NextResponse.json(
-      { error: 'Your password reset session has expired. Request a new link.' },
+      { error: 'Your session has expired. Sign in again or contact admin for help.' },
       { status: 401 }
     )
 
@@ -35,7 +35,7 @@ export async function POST(request: NextRequest) {
     )
   }
 
-  await updatePassword(session.accessToken, password)
+  await updateLocalPassword(session.accessToken, password)
 
   return NextResponse.json({
     ok: true,

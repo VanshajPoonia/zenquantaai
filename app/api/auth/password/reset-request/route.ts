@@ -1,32 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server'
-import {
-  hasSupabaseAuthConfig,
-  sendPasswordResetEmail,
-} from '@/lib/auth/session'
 
 export const runtime = 'nodejs'
 
 export async function POST(request: NextRequest) {
-  if (!hasSupabaseAuthConfig()) {
+  const body = (await request.json().catch(() => null)) as
+    | { email?: string; identifier?: string }
+    | null
+  const contact = body?.email?.trim().toLowerCase() ?? body?.identifier?.trim()
+
+  if (!contact) {
     return NextResponse.json(
-      { error: 'Supabase auth is not configured.' },
-      { status: 500 }
+      { error: 'An ID or contact email is required.' },
+      { status: 400 }
     )
   }
 
-  const body = (await request.json().catch(() => null)) as
-    | { email?: string }
-    | null
-  const email = body?.email?.trim().toLowerCase()
-
-  if (!email) {
-    return NextResponse.json({ error: 'Email is required.' }, { status: 400 })
-  }
-
-  await sendPasswordResetEmail(email, `${request.nextUrl.origin}/auth/callback`)
-
   return NextResponse.json({
     ok: true,
-    message: 'Check your inbox for the password reset link.',
+    message:
+      'Password reset is admin-assisted right now. Contact support and include your Zenquanta ID.',
   })
 }

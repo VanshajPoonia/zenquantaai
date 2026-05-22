@@ -1,21 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import {
   appendAuthCookies,
-  hasSupabaseAuthConfig,
   parseLoginId,
-  signInWithLoginId,
+  signInWithLocalCredentials,
 } from '@/lib/auth/session'
 
 export const runtime = 'nodejs'
 
 export async function POST(request: NextRequest) {
-  if (!hasSupabaseAuthConfig()) {
-    return NextResponse.json(
-      { error: 'Supabase auth is not configured.' },
-      { status: 500 }
-    )
-  }
-
   const body = (await request.json().catch(() => null)) as
     | { identifier?: string; password?: string }
     | null
@@ -48,7 +40,7 @@ export async function POST(request: NextRequest) {
   let session
 
   try {
-    session = await signInWithLoginId(loginId, password)
+    session = await signInWithLocalCredentials(loginId, password, request)
   } catch (error) {
     const message = error instanceof Error ? error.message.toLowerCase() : ''
 
