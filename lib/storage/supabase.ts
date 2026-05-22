@@ -1,3 +1,13 @@
+type SupabaseMethod = 'GET' | 'POST' | 'PATCH' | 'DELETE'
+
+interface SupabaseRequestInit {
+  method?: SupabaseMethod
+  query?: Record<string, string | number | undefined>
+  body?: unknown
+  prefer?: string
+  apiKey?: string
+}
+
 function normalizeSupabaseUrl(value: string): string {
   return value.trim().replace(/\/$/, '')
 }
@@ -74,6 +84,28 @@ async function requestJson<T>(
   }
 
   return (await response.json().catch(() => null)) as T
+}
+
+export async function supabaseRequest<T>(
+  table: string,
+  init: SupabaseRequestInit = {}
+): Promise<T> {
+  const config = getSupabaseRuntimeConfig()
+  const url = new URL(`${config.url}/rest/v1/${table}`)
+
+  for (const [key, value] of Object.entries(init.query ?? {})) {
+    if (typeof value === 'undefined') continue
+    url.searchParams.set(key, String(value))
+  }
+
+  return await requestJson<T>(url.toString(), {
+    method: init.method ?? 'GET',
+    prefer: init.prefer ?? 'return=representation',
+    ...(typeof init.body !== 'undefined'
+      ? { body: JSON.stringify(init.body) }
+      : {}),
+    apiKey: init.apiKey,
+  })
 }
 
 export async function supabaseStorageUpload(input: {
