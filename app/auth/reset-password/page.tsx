@@ -23,6 +23,10 @@ export default function ResetPasswordPage() {
   }, [])
 
   const authError = useMemo(() => {
+    if (authParam === 'unsupported') {
+      return 'Email reset links are not available right now. Contact admin for help resetting your password.'
+    }
+
     if (authParam === 'failed') {
       return 'That reset link could not be verified. Please request a new one.'
     }

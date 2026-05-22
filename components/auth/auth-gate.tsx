@@ -79,8 +79,7 @@ export function AuthGate() {
 
         <p className="mb-6 text-sm leading-7 text-muted-foreground">
           Keep your chats, projects, prompts, and uploads synced to your
-          account. Use a simple ID and password for now while we keep the rest of
-          the Zenquanta workspace connected to Supabase in the background.
+          account. Use your Zenquanta ID and password to access the workspace.
         </p>
 
         <div className="space-y-4">
