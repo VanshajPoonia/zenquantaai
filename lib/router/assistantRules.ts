@@ -32,9 +32,9 @@ const FILE_NAME_PATTERN =
 const CODE_INTENT_PATTERN =
   /\b(debug|fix|refactor|implement|write code|api route|endpoint|function|component|hook|typescript|javascript|python|next\.?js|react|node|schema|query|class|stack trace|bug|compile|deployment error|database migration|orm|sql query)\b/i
 const CURRENT_INFO_PATTERN =
-  /\b(latest|today|current|recent|recently|news|market update|what happened|breaking|this week|right now|up to date|current events|live update|as of today)\b/i
+  /\b(latest|today|current|recent|recently|news|market update|what happened|breaking|this week|right now|up to date|current events|live update|as of today|web search|search the web|browse|look this up|find sources|cite sources)\b/i
 const CURRENT_RESEARCH_PATTERN =
-  /\b(research the latest|look up current|what's new in|recent launch|recent update|market news|industry update)\b/i
+  /\b(research the latest|look up current|what's new in|recent launch|recent update|market news|industry update|current status of|latest reports? on)\b/i
 const CREATIVE_PATTERN =
   /\b(story|storytelling|brand story|rewrite|rephrase|tone|voice|script|screenplay|slogan|tagline|headline|ad copy|campaign|poem|lyrics|creative|brand voice|naming|positioning)\b/i
 const CREATIVE_STRONG_PATTERN =

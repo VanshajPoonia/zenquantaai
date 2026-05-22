@@ -82,7 +82,7 @@ function collectFacts(messages: Message[]): string[] {
         .map(normalizeWhitespace)
         .filter(
           (line) =>
-            /\b(?:deadline|timeline|scope|project|constraint|must|required|target|goal|database|supabase|vercel|auth|api)\b/i.test(
+            /\b(?:deadline|timeline|scope|project|constraint|must|required|target|goal|database|supa(?:base)?|vercel|auth|api)\b/i.test(
               line
             ) || /\d/.test(line)
         )

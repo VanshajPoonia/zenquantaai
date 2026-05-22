@@ -48,6 +48,7 @@ export function createMessage(input: {
   error?: string
   attachments?: Attachment[]
   usage?: Message['usage']
+  sources?: Message['sources']
   parentUserMessageId?: string
   branchLabel?: string
 }): Message {

@@ -31,11 +31,15 @@ import {
   ChatAction,
   ChatRequest,
   Conversation,
+  FileKnowledgeContext,
+  MessageSource,
   Message,
   SessionSettings,
   SubscriptionTier,
   StreamEvent,
   UsageEstimate,
+  WebSearchContext,
+  WebSearchSource,
 } from '@/types'
 import { buildSystemPrompt } from './prompts'
 import {
@@ -134,7 +138,21 @@ export async function generateImageFromPrompt(input: {
   }
 }
 
-function buildMockResponse(mode: AIMode, prompt: string): string {
+function formatMockSources(sources: WebSearchSource[] | undefined): string {
+  if (!sources?.length) return ''
+
+  return [
+    '',
+    '## Sources',
+    ...sources.map((source) => `[${source.id}] ${source.title} - ${source.url}`),
+  ].join('\n')
+}
+
+function buildMockResponse(
+  mode: AIMode,
+  prompt: string,
+  webSearchContext?: WebSearchContext
+): string {
   switch (mode) {
     case 'general':
       return `# Helpful Answer
@@ -206,7 +224,7 @@ ${prompt}
 - identify the current signal
 - highlight likely changes or risks
 - separate confirmed facts from inference
-- end with the next practical action`
+- end with the next practical action${formatMockSources(webSearchContext?.sources)}`
     case 'image':
       return `# Visual Direction
 
@@ -229,7 +247,9 @@ function formatAttachmentBlock(
     '[Attached context]',
     ...attachments.map((attachment) => {
       const detail = attachment.textContent
-        ? `\n${attachment.textContent}`
+        ? `\n${attachment.textContent.slice(0, 1_500)}${
+            attachment.textContent.length > 1_500 ? '\n[attachment excerpt truncated]' : ''
+          }`
         : '\nNo extracted text available.'
 
       return `File: ${attachment.name} (${attachment.kind}, ${attachment.mimeType})${detail}`
@@ -237,10 +257,64 @@ function formatAttachmentBlock(
   ].join('\n\n')
 }
 
+function formatFileKnowledgeBlock(context: FileKnowledgeContext | undefined): string {
+  if (!context?.sources.length) return ''
+
+  return [
+    '[Uploaded file knowledge]',
+    `Retrieval time: ${context.retrievedAt}`,
+    `Query: ${context.query}`,
+    '',
+    'Use these private uploaded-file excerpts only when relevant. Cite them inline with file source labels like [F1] and [F2]. Do not claim access to full raw files beyond these excerpts.',
+    '',
+    ...context.sources.map((source) =>
+      [
+        `[${source.id}] ${source.title}`,
+        `Source: ${source.domain}`,
+        `Excerpt: ${source.snippet}`,
+      ].join('\n')
+    ),
+  ].join('\n\n')
+}
+
+function formatWebSearchBlock(context: WebSearchContext | undefined): string {
+  if (!context) return ''
+
+  if (context.sources.length === 0) {
+    return [
+      '[Web search status]',
+      `Search was requested for: ${context.query || 'the latest user request'}`,
+      `Status: ${context.unavailableReason ?? 'no_results'}.`,
+      'No external source snippets are available in this request. Do not claim that you searched the web, verified current facts, or cite sources. If the answer depends on current information, say the source context is unavailable.',
+    ].join('\n')
+  }
+
+  return [
+    '[Web search context]',
+    `Search time: ${context.searchedAt}`,
+    `Query: ${context.query}`,
+    '',
+    'Use these source snippets for current or research-style claims. Cite them inline with bracketed numbers like [1] and [2]. If the snippets are insufficient, say so plainly instead of inventing facts.',
+    '',
+    ...context.sources.map((source) =>
+      [
+        `[${source.id}] ${source.title}`,
+        `URL: ${source.url}`,
+        source.publishedAt ? `Published/updated: ${source.publishedAt}` : '',
+        `Snippet: ${source.snippet}`,
+      ]
+        .filter(Boolean)
+        .join('\n')
+    ),
+  ].join('\n\n')
+}
+
 function buildOpenRouterMessages(
   conversation: Conversation,
   settings: SessionSettings,
-  mode: AIMode
+  mode: AIMode,
+  webSearchContext?: WebSearchContext,
+  fileKnowledgeContext?: FileKnowledgeContext
 ): Array<{
   role: 'system' | 'user' | 'assistant'
   content: string
@@ -251,9 +325,17 @@ function buildOpenRouterMessages(
     settings.memory && conversation.memorySummary
       ? buildMemoryBlock(conversation.memorySummary)
       : ''
+  const webSearchBlock = formatWebSearchBlock(webSearchContext)
+  const fileKnowledgeBlock = formatFileKnowledgeBlock(fileKnowledgeContext)
 
   return [
     { role: 'system', content: systemPrompt },
+    ...(webSearchBlock
+      ? [{ role: 'system' as const, content: webSearchBlock }]
+      : []),
+    ...(fileKnowledgeBlock
+      ? [{ role: 'system' as const, content: fileKnowledgeBlock }]
+      : []),
     ...(memoryBlock
       ? [{ role: 'system' as const, content: memoryBlock }]
       : []),
@@ -274,9 +356,17 @@ function buildOpenRouterMessages(
 export function buildPromptTextForUsage(
   conversation: Conversation,
   settings: SessionSettings,
-  mode: AIMode
+  mode: AIMode,
+  webSearchContext?: WebSearchContext,
+  fileKnowledgeContext?: FileKnowledgeContext
 ): string {
-  return buildOpenRouterMessages(conversation, settings, mode)
+  return buildOpenRouterMessages(
+    conversation,
+    settings,
+    mode,
+    webSearchContext,
+    fileKnowledgeContext
+  )
     .map((message) => message.content)
     .join('\n\n')
 }
@@ -287,6 +377,8 @@ export async function* generateAssistantStream(input: {
   mode: AIMode
   action?: ChatAction
   tier?: SubscriptionTier
+  webSearchContext?: WebSearchContext
+  fileKnowledgeContext?: FileKnowledgeContext
 }): AsyncIterable<string> {
   if (input.mode === 'image' || input.action === 'generate-image') {
     throw new Error('Image generation must use the dedicated image route.')
@@ -303,7 +395,10 @@ export async function* generateAssistantStream(input: {
       .find((message) => message.role === 'user')?.content ?? 'the user request'
 
   if (!hasOpenRouterConfig()) {
-    for await (const chunk of streamText(buildMockResponse(input.mode, latestPrompt), 16)) {
+    for await (const chunk of streamText(
+      buildMockResponse(input.mode, latestPrompt, input.webSearchContext),
+      16
+    )) {
       yield chunk
     }
     return
@@ -314,7 +409,9 @@ export async function* generateAssistantStream(input: {
     messages: buildOpenRouterMessages(
       input.conversation,
       input.settings,
-      input.mode
+      input.mode,
+      input.webSearchContext,
+      input.fileKnowledgeContext
     ),
     temperature: input.settings.temperature,
     maxTokens: input.settings.maxTokens,
@@ -686,6 +783,9 @@ export async function completeConversationWithAssistant(
     tier?: SubscriptionTier
     usageOverride?: UsageEstimate
     modelOverride?: string
+    webSearchContext?: WebSearchContext
+    fileKnowledgeContext?: FileKnowledgeContext
+    sources?: MessageSource[]
     generatedImageResultOverride?: {
       attachment: Attachment
       content: string
@@ -711,7 +811,9 @@ export async function completeConversationWithAssistant(
   const promptText = buildPromptTextForUsage(
     generationConversation,
     conversation.sessionSettings,
-    generationMode
+    generationMode,
+    options?.webSearchContext,
+    options?.fileKnowledgeContext
   )
   const usage = estimateUsage({
     config: activeConfig,
@@ -728,6 +830,7 @@ export async function completeConversationWithAssistant(
     status: 'complete' as const,
     error: undefined,
     usage: options?.usageOverride ?? usage,
+    sources: options?.sources ?? assistantMessage.sources,
   }
 
   const completedConversation = updateConversationSnapshot(conversation, {
