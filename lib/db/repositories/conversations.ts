@@ -3,7 +3,7 @@ import 'server-only'
 import { and, asc, desc, eq, inArray } from 'drizzle-orm'
 import { createSessionSettings, DEFAULT_PROJECT_ID } from '@/lib/config'
 import { getAssistantFamilyFromMode } from '@/lib/config/assistants'
-import { createSupabaseSignedUrl } from '@/lib/storage/supabase'
+import { createPrivateFileUrl } from '@/lib/storage/object-store'
 import {
   createConversation,
   sortConversationSummaries,
@@ -15,6 +15,7 @@ import {
   Conversation,
   ConversationMutation,
   ConversationSummary,
+  MessageSource,
   Message,
   SessionSettings,
   UsageEstimate,
@@ -45,16 +46,12 @@ async function hydrateAttachments<T extends { attachments?: Message['attachments
         return attachment
       }
 
-      try {
-        return {
-          ...attachment,
-          previewUrl: await createSupabaseSignedUrl({
-            bucket: attachment.bucket,
-            path: attachment.storagePath,
-          }),
-        }
-      } catch {
-        return attachment
+      return {
+        ...attachment,
+        previewUrl: createPrivateFileUrl({
+          bucket: attachment.bucket,
+          storagePath: attachment.storagePath,
+        }),
       }
     })
   )
@@ -90,6 +87,7 @@ async function rowToConversation(row: ConversationRow): Promise<Conversation> {
           usage: messageRow.usage
             ? toJsonObject<UsageEstimate>(messageRow.usage, {} as UsageEstimate)
             : undefined,
+          sources: toJsonArray<MessageSource>(messageRow.sources),
           parentUserMessageId: messageRow.parentUserMessageId ?? undefined,
           branchLabel: messageRow.branchLabel ?? undefined,
         })
@@ -158,6 +156,7 @@ function messageToInsert(conversationId: string, message: Message) {
     branchLabel: message.branchLabel ?? null,
     attachments: message.attachments ?? [],
     usage: message.usage ?? null,
+    sources: message.sources ?? [],
     createdAt: toDate(message.createdAt),
   }
 }
