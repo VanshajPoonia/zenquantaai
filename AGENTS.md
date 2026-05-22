@@ -4,9 +4,9 @@
 
 Zenquanta AI is a Next.js App Router AI workspace. It is not the old four-mode app; agents must treat the current platform as a six-assistant product with Nova, Velora, Axiom, Forge, Pulse, and Prism.
 
-The current app uses TypeScript, Tailwind CSS, shadcn/ui-style components, Supabase, a Neon Postgres foundation, and OpenRouter. Text chat is handled by `/api/chat`. Prism image generation is handled by `/api/images/generate`. Supabase still backs runtime app persistence, auth sessions, and private attachment storage. Neon has been added as a foundation only and is not wired into runtime stores or API routes yet. OpenRouter is the only AI gateway currently represented in the code.
+The current app uses TypeScript, Tailwind CSS, shadcn/ui-style components, Supabase, a fresh Neon Postgres database, and OpenRouter. Text chat is handled by `/api/chat`. Prism image generation is handled by `/api/images/generate`. Supabase still backs auth sessions and private attachment storage. Neon now backs settings, prompt library, assistant recommendation telemetry, projects, conversations, messages, conversation memory, subscriptions/manual plans, usage records, plan requests, admin audit logs, dashboard data, admin data, and local browser import for app data. OpenRouter is the only AI gateway currently represented in the code.
 
-Current direction: keep plan upgrades manual through plan requests and admin activation. Payment automation is out of scope unless explicitly requested later. Neon should replace the Postgres/database layer in a later phased migration, while Supabase Auth and Supabase Storage require separate future decisions.
+Current direction: keep plan upgrades manual through plan requests and admin activation. Payment automation is out of scope unless explicitly requested later. Neon starts fresh; do not import, backfill, copy, or preserve Supabase database rows. Supabase Auth and Supabase Storage require separate future decisions.
 
 ## Required Reading Before Work
 
@@ -46,7 +46,7 @@ Useful source files to inspect for most changes:
 - `components/ui/`: shadcn/Radix UI primitives.
 - `lib/ai/`: OpenRouter calls, chat orchestration, memory, and prompts.
 - `lib/config/`: assistant, mode, model, image model, pricing, and preset config.
-- `lib/db/`: server-only Neon client, Drizzle schema foundation, and parallel Neon repositories.
+- `lib/db/`: server-only Neon client, fresh Drizzle schema foundation, and server-only repository layer.
 - `lib/storage/`: current Supabase REST-backed data access plus Supabase Storage helpers.
 - `lib/billing/`: cost calculation, enforcement, and usage logging.
 - `lib/router/`: local prompt precheck and assistant recommendations.
@@ -71,10 +71,15 @@ Useful source files to inspect for most changes:
 - Prism image generation returns JSON from `/api/images/generate`.
 - Model routing belongs in `lib/config/*`.
 - Prompt and generation orchestration belongs in `lib/ai/*`.
-- Neon database foundation belongs in `lib/db/*`.
-- Neon repositories in `lib/db/repositories/*` are migration targets only until a route or store is explicitly moved.
-- Current runtime persistence remains in `lib/storage/*` and is Supabase-backed until a later explicit migration.
-- Supabase remains current for app persistence, auth, and private attachment storage.
+- Fresh Neon database foundation belongs in `lib/db/*`.
+- Neon repositories in `lib/db/repositories/*` are the fresh database access layer. File metadata and generated-image metadata repositories remain future scaffolding until explicit storage/durability milestones.
+- Current active Neon-backed API/routes/data paths are `/api/settings`, `/api/prompts`, `/api/prompts/[id]`, `/api/assistant-recommendations`, `/api/projects`, `/api/projects/[id]`, `/api/conversations`, `/api/conversations/[id]`, conversation and billing persistence inside `/api/chat` and `/api/images/generate`, `/api/images/history`, `/api/dashboard`, `/dashboard`, `/pricing`, `/api/plan-requests`, `/api/admin/*`, `/admin`, auth profile/role hydration, and local browser import app-data writes.
+- The fresh Neon repository layer covers users/auth identity mapping, profiles, subscriptions, usage, plan requests, admin audit logs, projects, conversations/messages/memory, prompts, settings, assistant recommendations, file metadata, and generated image metadata.
+- Repositories should create fresh Neon records going forward. Do not add Supabase data import, copy, backfill, or preservation logic.
+- When a repository receives only a `userId`, use the Neon user anchor helper before inserting user-owned rows so fresh `zen_users` foreign keys are satisfied.
+- Supabase-backed runtime code remains in `lib/storage/*` for auth support history and storage helpers, but active app database slices should prefer the fresh Neon repositories once migrated.
+- Supabase remains current for Auth and private attachment Storage.
+- Do not write Supabase-to-Neon import, backfill, copy, or preservation migrations.
 - Do not assume Supabase Auth or Supabase Storage have been removed.
 - Usage enforcement and logging belong in `lib/billing/*`.
 - Client chat state is centralized in `lib/chat-context.tsx`.

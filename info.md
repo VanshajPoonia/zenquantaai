@@ -315,8 +315,9 @@ Supabase Auth/Storage code also accepts aliases:
 Important implementation detail:
 
 - Server data persistence currently goes through Supabase REST in `lib/storage/supabase.ts`.
-- Neon foundation utilities live in `lib/db/` and are not wired into runtime stores yet.
-- Supabase remains required for app persistence, Auth, and private attachment storage.
+- Fresh Neon foundation utilities live in `lib/db/` and are not wired into runtime stores yet.
+- Supabase remains required for current app persistence, Auth, and private attachment storage.
+- Existing Supabase database rows should not be imported, copied, or backfilled into Neon.
 
 ## Incomplete Or Risky Areas
 
@@ -352,8 +353,8 @@ Important implementation detail:
    - Implement real web search/retrieval for Pulse, or hide/disable the `webSearch` toggle.
 5. Improve persistence robustness:
    - Avoid full message delete/reinsert saves.
-   - Apply and validate the Neon migration against a real Neon database.
-   - Backfill any existing Supabase Postgres production data before cutting traffic over.
+   - Apply and validate the fresh Neon migration against a real Neon database.
+   - Plan later route migrations without copying Supabase database rows.
    - Store generated images durably.
    - Improve attachment and PDF extraction.
 6. Add tests around:
