@@ -1,6 +1,6 @@
 # Zenquanta AI
 
-Zenquanta AI is a premium multi-assistant workspace built with Next.js, TypeScript, Tailwind CSS, shadcn/ui, Supabase, and OpenRouter.
+Zenquanta AI is a premium multi-assistant workspace built with Next.js, TypeScript, Tailwind CSS, shadcn/ui, Neon Postgres, Supabase Auth/Storage, and OpenRouter.
 
 This is no longer the older four-mode chat app. The current platform includes:
 
@@ -40,7 +40,8 @@ Zenquanta combines a branded multi-assistant UI with tier-aware backend routing:
 
 - chats are organized by assistant family and project
 - OpenRouter is the only AI gateway
-- Supabase handles auth, sync, storage, subscriptions, usage records, plan requests, and admin data
+- Neon Postgres handles app data persistence
+- Supabase still handles auth and private attachment storage
 - text assistants route through `/api/chat`
 - `Prism` routes through `/api/images/generate`
 - text and image usage are billed and tracked separately
@@ -140,8 +141,8 @@ Displayed usage multipliers:
 - shadcn/ui
 - OpenRouter
 - Supabase Auth
-- Supabase Postgres
 - Supabase Storage
+- Neon Postgres
 
 ## Auth Flow
 
@@ -257,6 +258,8 @@ cp .env.example .env.local
 OPENROUTER_API_KEY=
 OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
 
+DATABASE_URL=
+
 NEXT_PUBLIC_SUPABASE_URL=
 NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=
 SUPABASE_SECRET_KEY=
@@ -274,7 +277,17 @@ npm run dev
 http://localhost:3000
 ```
 
+## Neon Database Setup
+
+Apply the Neon schema migration first:
+
+1. `neon/migrations/20260522_zenquanta_neon_initial.sql`
+
+This creates the `zen_*` application tables in Neon without Supabase RLS, `auth.uid()`, `auth.users` foreign keys, or Supabase Storage objects.
+
 ## Supabase Setup
+
+Supabase is still required for Auth and the private `zen-attachments` storage bucket. The app no longer uses Supabase Postgres as the primary application database.
 
 After creating your Supabase project, apply the migrations in this order:
 
@@ -435,7 +448,8 @@ types/
 ## Notes
 
 - OpenRouter is the only AI gateway.
-- Supabase is the source of truth after sign-in.
+- Neon Postgres is the source of truth for app data after sign-in.
+- Supabase remains the source of truth for auth sessions and private attachment storage.
 - `.env.local` is for local secrets and should never be committed.
 - the publishable Supabase key is safe for `NEXT_PUBLIC_*`
 - the Supabase secret key must remain server-only
