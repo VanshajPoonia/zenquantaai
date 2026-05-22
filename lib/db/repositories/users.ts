@@ -3,7 +3,12 @@ import 'server-only'
 import { and, desc, eq } from 'drizzle-orm'
 import { AuthUser, Role } from '@/types'
 import { getDatabaseClient } from '../client'
-import { zenAuthIdentities, zenProfiles, zenUsers } from '../schema'
+import {
+  zenAuthCredentials,
+  zenAuthIdentities,
+  zenProfiles,
+  zenUsers,
+} from '../schema'
 import { toIsoString, toNullableIsoString } from './helpers'
 
 type UserRow = typeof zenUsers.$inferSelect
@@ -119,23 +124,24 @@ class NeonUsersRepository {
 
   async ensureFromAuthUser(user: AuthUser): Promise<NeonUserRecord> {
     const role = (user.role as Role | null | undefined) ?? 'user'
+    const loginId = user.loginId?.trim().toLowerCase() ?? null
 
     await getDatabaseClient()
       .insert(zenUsers)
       .values({
         id: user.id,
-        externalAuthProvider: 'supabase',
+        externalAuthProvider: 'local',
         externalAuthUserId: user.id,
-        loginId: user.loginId ?? null,
+        loginId,
         email: user.email ?? null,
         role,
       })
       .onConflictDoUpdate({
         target: zenUsers.id,
         set: {
-          externalAuthProvider: 'supabase',
+          externalAuthProvider: 'local',
           externalAuthUserId: user.id,
-          loginId: user.loginId ?? null,
+          loginId,
           email: user.email ?? null,
           role,
           updatedAt: new Date(),
@@ -146,8 +152,8 @@ class NeonUsersRepository {
       .insert(zenAuthIdentities)
       .values({
         userId: user.id,
-        provider: 'supabase',
-        providerUserId: user.id,
+        provider: 'local',
+        providerUserId: loginId ?? user.id,
         providerEmail: user.email ?? null,
         lastSeenAt: new Date(),
       })
@@ -167,6 +173,131 @@ class NeonUsersRepository {
     }
 
     return ensured
+  }
+
+  async createLocalUser(input: {
+    loginId: string
+    passwordHash: string
+    passwordSalt: string
+    passwordParams: Record<string, unknown>
+  }): Promise<NeonUserRecord> {
+    const loginId = input.loginId.trim().toLowerCase()
+
+    const existingCredential = await getDatabaseClient()
+      .select({ userId: zenAuthCredentials.userId })
+      .from(zenAuthCredentials)
+      .where(eq(zenAuthCredentials.loginId, loginId))
+      .limit(1)
+
+    if (existingCredential[0]) {
+      throw new Error('That ID is already taken.')
+    }
+
+    const createdUsers = await getDatabaseClient()
+      .insert(zenUsers)
+      .values({
+        externalAuthProvider: 'local',
+        loginId,
+        role: 'user',
+      })
+      .returning()
+
+    const createdUser = createdUsers[0]
+
+    await getDatabaseClient()
+      .update(zenUsers)
+      .set({
+        externalAuthUserId: createdUser.id,
+        updatedAt: new Date(),
+      })
+      .where(eq(zenUsers.id, createdUser.id))
+
+    await getDatabaseClient()
+      .insert(zenAuthCredentials)
+      .values({
+        userId: createdUser.id,
+        loginId,
+        passwordHash: input.passwordHash,
+        passwordSalt: input.passwordSalt,
+        passwordParams: input.passwordParams,
+      })
+
+    await getDatabaseClient()
+      .insert(zenAuthIdentities)
+      .values({
+        userId: createdUser.id,
+        provider: 'local',
+        providerUserId: loginId,
+        lastSeenAt: new Date(),
+      })
+
+    await getDatabaseClient()
+      .insert(zenProfiles)
+      .values({
+        userId: createdUser.id,
+        loginId,
+        role: 'user',
+      })
+      .onConflictDoNothing({ target: zenProfiles.userId })
+
+    const user = await this.get(createdUser.id)
+    if (!user) {
+      throw new Error('Unable to create local Neon user.')
+    }
+
+    return user
+  }
+
+  async getCredentialByLoginId(loginId: string): Promise<{
+    user: NeonUserRecord
+    passwordHash: string
+    passwordSalt: string
+    passwordParams: Record<string, unknown>
+  } | null> {
+    const rows = await getDatabaseClient()
+      .select({
+        user: zenUsers,
+        credential: zenAuthCredentials,
+      })
+      .from(zenAuthCredentials)
+      .innerJoin(zenUsers, eq(zenAuthCredentials.userId, zenUsers.id))
+      .where(eq(zenAuthCredentials.loginId, loginId.trim().toLowerCase()))
+      .limit(1)
+
+    const row = rows[0]
+    if (!row) return null
+
+    return {
+      user: rowToUser(row.user),
+      passwordHash: row.credential.passwordHash,
+      passwordSalt: row.credential.passwordSalt,
+      passwordParams:
+        row.credential.passwordParams &&
+        typeof row.credential.passwordParams === 'object' &&
+        !Array.isArray(row.credential.passwordParams)
+          ? (row.credential.passwordParams as Record<string, unknown>)
+          : {},
+    }
+  }
+
+  async updateLocalPassword(input: {
+    userId: string
+    passwordHash: string
+    passwordSalt: string
+    passwordParams: Record<string, unknown>
+  }): Promise<void> {
+    await this.ensureUserReference(input.userId)
+
+    await getDatabaseClient()
+      .update(zenAuthCredentials)
+      .set({
+        passwordHash: input.passwordHash,
+        passwordSalt: input.passwordSalt,
+        passwordParams: input.passwordParams,
+        passwordUpdatedAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(eq(zenAuthCredentials.userId, input.userId))
   }
 
   async listIdentities(userId: string): Promise<NeonAuthIdentityRecord[]> {

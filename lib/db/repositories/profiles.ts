@@ -68,7 +68,7 @@ class NeonProfilesRepository {
     const forcedAdminRole: Role | undefined = isHardcodedAdminIdentity(user)
       ? 'admin'
       : undefined
-    const role = forcedAdminRole ?? user.role ?? existing?.role ?? 'user'
+    const role = forcedAdminRole ?? existing?.role ?? user.role ?? 'user'
 
     await neonUsersRepository.ensureFromAuthUser({
       ...user,
