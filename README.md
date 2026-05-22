@@ -1,6 +1,6 @@
 # Zenquanta AI
 
-Zenquanta AI is a premium multi-assistant workspace built with Next.js, TypeScript, Tailwind CSS, shadcn/ui, Supabase, a Neon Postgres foundation, and OpenRouter.
+Zenquanta AI is a premium multi-assistant workspace built with Next.js, TypeScript, Tailwind CSS, shadcn/ui, Neon Postgres, neutral private file storage, and OpenRouter.
 
 This is no longer the older four-mode chat app. The current platform includes:
 
@@ -40,8 +40,8 @@ Zenquanta combines a branded multi-assistant UI with tier-aware backend routing:
 
 - chats are organized by assistant family and project
 - OpenRouter is the only AI gateway
-- Supabase currently handles app persistence, auth, and private attachment storage
-- Neon Postgres has been added as a foundation for a later database migration
+- Neon Postgres handles app persistence and custom ID/password auth
+- a neutral server-side storage abstraction handles private uploads and generated image files
 - text assistants route through `/api/chat`
 - `Prism` routes through `/api/images/generate`
 - text and image usage are billed and tracked separately
@@ -121,7 +121,7 @@ Displayed usage multipliers:
 - image generation with `Prism`
 - image history
 - in-app image viewer and image download
-- file uploads with private Supabase-backed storage
+- file uploads with private neutral object storage
 - markdown and JSON exports
 - user dashboard
 - admin dashboard
@@ -140,9 +140,8 @@ Displayed usage multipliers:
 - Tailwind CSS
 - shadcn/ui
 - OpenRouter
-- Supabase Auth
-- Supabase Storage
-- Neon Postgres foundation
+- Neon Postgres
+- neutral file storage with local development and S3-compatible/R2 adapters
 
 ## Auth Flow
 
@@ -152,7 +151,7 @@ The current primary auth UI is:
 - ID + password sign-up
 - password reset
 
-Supabase still manages sessions underneath, but the user-facing auth flow is currently ID/password-first.
+Auth is now a fresh Neon-backed credentials system. Supabase Auth users, sessions, and passwords are not imported or preserved; existing users need to sign up again.
 
 The auth UI also includes:
 
@@ -258,11 +257,23 @@ cp .env.example .env.local
 OPENROUTER_API_KEY=
 OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
 
+TAVILY_API_KEY=
+OPENAI_API_KEY=
+# EMBEDDINGS_API_KEY=
+# EMBEDDINGS_BASE_URL=https://api.openai.com/v1
+# EMBEDDINGS_MODEL=text-embedding-3-small
+
 DATABASE_URL=
 
-NEXT_PUBLIC_SUPABASE_URL=
-NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=
-SUPABASE_SECRET_KEY=
+FILE_STORAGE_PROVIDER=local
+FILE_STORAGE_BUCKET=zenquanta-files
+FILE_STORAGE_LOCAL_DIR=.storage/zenquanta
+
+# Required only when FILE_STORAGE_PROVIDER is s3 or r2.
+# FILE_STORAGE_ENDPOINT=
+# FILE_STORAGE_REGION=auto
+# FILE_STORAGE_ACCESS_KEY_ID=
+# FILE_STORAGE_SECRET_ACCESS_KEY=
 ```
 
 4. Start the app:
@@ -279,19 +290,32 @@ http://localhost:3000
 
 ## Neon Database Foundation
 
-Neon is present as a fresh foundation for future app persistence. The current runtime stores still use Supabase. Do not import, copy, or backfill Supabase database rows into Neon.
+Neon is the fresh database for app persistence and ID/password auth. Do not import, copy, or backfill Supabase database or auth rows into Neon.
 
 To validate the Neon schema separately, apply:
 
 1. `neon/migrations/20260522_zenquanta_fresh_initial.sql`
+2. `neon/migrations/20260522_zenquanta_local_auth.sql`
+3. `neon/migrations/20260522_zenquanta_message_sources.sql`
+4. `neon/migrations/20260522_zenquanta_file_knowledge.sql`
 
 This creates a fresh `zen_*` application schema in Neon without Supabase RLS, `auth.uid()`, `auth.users` foreign keys, Supabase Storage objects, or data-copy steps. The server-only Neon client and typed Drizzle schema live in `lib/db/`.
 
-## Supabase Setup
+Uploaded-file knowledge uses Neon pgvector. Text/code-like uploads are extracted, chunked, embedded, and stored as private `zen_file_chunks` rows when an embeddings key is configured. Advanced PDF/OCR extraction is not part of the first version.
 
-Supabase is still required for current runtime app persistence, Auth, and the private `zen-attachments` storage bucket.
+## Private File Storage
 
-After creating your Supabase project, apply the migrations in this order:
+New uploaded files and generated images use the neutral server-side storage layer in `lib/storage/object-store.ts`. The default local development provider writes private files under `.storage/zenquanta`, which is gitignored.
+
+Production should use `FILE_STORAGE_PROVIDER=s3` or `FILE_STORAGE_PROVIDER=r2` with an S3-compatible endpoint such as Cloudflare R2. Storage keys stay server-side and browser access goes through authenticated app routes such as `/api/files/object`.
+
+Old Supabase-hosted files are not imported, copied, or preserved by this setup.
+
+## Supabase Historical Migrations
+
+Supabase migrations remain in the repo as historical/product reference for the old database/storage setup. They are not prerequisites for the fresh Neon app data, Neon auth, or new neutral file storage path.
+
+If you inspect the old setup, the migrations were:
 
 1. `20260401_zenquanta_projects_prompts.sql`
 2. `20260401_zenquanta_conversation_memory.sql`
@@ -335,18 +359,9 @@ This enables the tiered usage system, plan request workflow, dashboards, and adm
 
 This enables recommendation telemetry for the prompt precheck flow.
 
-### URL Configuration
-
-For local development:
-
-- `Site URL`: `http://localhost:3000`
-- Redirect URL: `http://localhost:3000/auth/callback`
-
-For production, add your deployed domain and callback URL too.
-
 ## Admin Bootstrap
 
-After signing up the account you want to use as admin, update the profile role in Supabase SQL:
+After signing up the account you want to use as admin, update the profile role in Neon SQL:
 
 By login ID:
 
@@ -369,11 +384,6 @@ Then:
 1. sign out
 2. sign back in
 3. open `/admin`
-
-Operator note:
-
-- this repo currently includes one hardcoded internal fallback admin identity in `lib/storage/profiles.ts`
-- review or remove that behavior before production if you want database-only admin control
 
 ## Manual Plan Request Flow
 
@@ -442,6 +452,8 @@ lib/
   router/
   storage/
   utils/
+neon/
+  migrations/
 supabase/
   migrations/
 types/
@@ -450,12 +462,11 @@ types/
 ## Notes
 
 - OpenRouter is the only AI gateway.
-- Supabase remains the source of truth for current runtime app data, auth sessions, and private attachment storage.
-- Neon Postgres is a fresh foundation-only database until a later explicit persistence migration.
-- Supabase database rows are not imported, copied, or backfilled into Neon.
+- Neon Postgres is the source of truth for app data and auth sessions.
+- Neutral private file storage is used for new uploads and generated images.
+- Supabase database/auth/storage rows and objects are not imported, copied, or backfilled into Neon or the new storage layer.
 - `.env.local` is for local secrets and should never be committed.
-- the publishable Supabase key is safe for `NEXT_PUBLIC_*`
-- the Supabase secret key must remain server-only
+- file storage access keys must remain server-only.
 
 ## Verification
 
