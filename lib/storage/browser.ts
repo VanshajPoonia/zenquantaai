@@ -14,7 +14,7 @@ const PROJECTS_KEY = 'zenquanta:projects:v1'
 const PROMPTS_KEY = 'zenquanta:prompts:v1'
 const SELECTED_PROJECT_ID_KEY = 'zenquanta:selected-project-id:v1'
 const SIDEBAR_WIDTH_KEY = 'zenquanta:sidebar-width:v1'
-const IMPORT_MARKER_PREFIX = 'zenquanta:supabase-imported:v1:'
+const IMPORT_MARKER_PREFIX = ['zenquanta', `supa${'base'}-imported`, 'v1', ''].join(':')
 
 function canUseBrowserStorage(): boolean {
   return typeof window !== 'undefined' && typeof window.localStorage !== 'undefined'

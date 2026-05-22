@@ -11,6 +11,8 @@ export async function POST(request: NextRequest) {
 
   const formData = await request.formData()
   const metadataRaw = formData.get('metadata')
+  const projectId = formData.get('projectId')
+  const conversationId = formData.get('conversationId')
   const fileEntries = formData.getAll('files')
 
   if (!metadataRaw || typeof metadataRaw !== 'string') {
@@ -39,6 +41,9 @@ export async function POST(request: NextRequest) {
         fileName: meta.name || file.name,
         mimeType: meta.mimeType || file.type || 'application/octet-stream',
         bytes: Buffer.from(await file.arrayBuffer()),
+        projectId: typeof projectId === 'string' && projectId ? projectId : null,
+        conversationId:
+          typeof conversationId === 'string' && conversationId ? conversationId : null,
       })
 
       return {

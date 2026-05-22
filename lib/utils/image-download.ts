@@ -44,7 +44,7 @@ export async function downloadAttachmentImage(attachment: Attachment): Promise<v
   try {
     const response = await fetch(attachment.previewUrl, {
       cache: 'no-store',
-      credentials: 'omit',
+      credentials: 'same-origin',
     })
 
     if (!response.ok) {
