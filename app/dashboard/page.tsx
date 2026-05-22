@@ -1,12 +1,12 @@
 import Link from 'next/link'
 import { requireServerUser } from '@/lib/auth/require-admin'
 import {
-  conversationStore,
-  imageGenerationEventsStore,
-  planRequestsStore,
-  subscriptionsStore,
-  usageEventsStore,
-} from '@/lib/storage'
+  neonConversationRepository,
+  neonImageGenerationEventsRepository,
+  neonPlanRequestsRepository,
+  neonSubscriptionsRepository,
+  neonUsageEventsRepository,
+} from '@/lib/db/repositories'
 import {
   getAssistantUsageBreakdown,
   getDisplayedCreditsSnapshot,
@@ -30,11 +30,11 @@ export default async function DashboardPage({
   const adminRequired = params.admin === 'required'
   const [subscription, usageEvents, imageEvents, requests, conversations] =
     await Promise.all([
-      subscriptionsStore.ensureForUser(user),
-      usageEventsStore.listByUser(user.id),
-      imageGenerationEventsStore.listByUser(user.id),
-      planRequestsStore.listByUser(user.id),
-      conversationStore.list(user.id),
+      neonSubscriptionsRepository.ensureForUser(user),
+      neonUsageEventsRepository.listByUser(user.id),
+      neonImageGenerationEventsRepository.listByUser(user.id),
+      neonPlanRequestsRepository.listByUser(user.id),
+      neonConversationRepository.list(user.id),
     ])
 
   const displayedTextCostUsd = usageEvents.reduce(

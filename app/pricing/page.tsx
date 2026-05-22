@@ -6,7 +6,10 @@ import {
 } from '@/lib/config'
 import { AssistantFamily } from '@/types'
 import { requireServerUser } from '@/lib/auth/require-admin'
-import { planRequestsStore, subscriptionsStore } from '@/lib/storage'
+import {
+  neonPlanRequestsRepository,
+  neonSubscriptionsRepository,
+} from '@/lib/db/repositories'
 import { requestPlanAction } from './actions'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -20,8 +23,9 @@ export default async function PricingPage({
   searchParams: Promise<Record<string, string | string[] | undefined>>
 }) {
   const { user } = await requireServerUser()
-  const subscription = await subscriptionsStore.ensureForUser(user)
-  const pendingRequest = await planRequestsStore.getLatestPendingForUser(user.id)
+  const subscription = await neonSubscriptionsRepository.ensureForUser(user)
+  const pendingRequest =
+    await neonPlanRequestsRepository.getLatestPendingForUser(user.id)
   const params = await searchParams
   const requested = params.requested === '1'
   const error =

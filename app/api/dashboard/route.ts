@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { appendAuthCookies, requireAuthenticatedUser } from '@/lib/auth/session'
 import {
-  conversationStore,
-  imageGenerationEventsStore,
-  planRequestsStore,
-  subscriptionsStore,
-  usageEventsStore,
-} from '@/lib/storage'
+  neonConversationRepository,
+  neonImageGenerationEventsRepository,
+  neonPlanRequestsRepository,
+  neonProfilesRepository,
+  neonSubscriptionsRepository,
+  neonUsageEventsRepository,
+} from '@/lib/db/repositories'
 import { getAssistantUsageBreakdown, getDisplayedCreditsSnapshot } from '@/lib/billing/costs'
 import { usdToDisplayedCredits } from '@/lib/config'
 
@@ -15,14 +16,15 @@ export const runtime = 'nodejs'
 export async function GET(request: NextRequest) {
   const auth = await requireAuthenticatedUser(request)
   if ('response' in auth) return auth.response
+  await neonProfilesRepository.ensureFromAuthUser(auth.user)
 
   const [subscription, textEvents, imageEvents, requests, conversations] =
     await Promise.all([
-      subscriptionsStore.ensureForUser(auth.user),
-      usageEventsStore.listByUser(auth.user.id),
-      imageGenerationEventsStore.listByUser(auth.user.id),
-      planRequestsStore.listByUser(auth.user.id),
-      conversationStore.list(auth.user.id),
+      neonSubscriptionsRepository.ensureForUser(auth.user),
+      neonUsageEventsRepository.listByUser(auth.user.id),
+      neonImageGenerationEventsRepository.listByUser(auth.user.id),
+      neonPlanRequestsRepository.listByUser(auth.user.id),
+      neonConversationRepository.list(auth.user.id),
     ])
 
   const displayedTextCostUsd = textEvents.reduce(

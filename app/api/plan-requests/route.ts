@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { appendAuthCookies, requireAuthenticatedUser } from '@/lib/auth/session'
-import { planRequestsStore, subscriptionsStore } from '@/lib/storage'
+import {
+  neonPlanRequestsRepository,
+  neonSubscriptionsRepository,
+} from '@/lib/db/repositories'
 
 export const runtime = 'nodejs'
 
@@ -8,7 +11,7 @@ export async function GET(request: NextRequest) {
   const auth = await requireAuthenticatedUser(request)
   if ('response' in auth) return auth.response
 
-  const items = await planRequestsStore.listByUser(auth.user.id)
+  const items = await neonPlanRequestsRepository.listByUser(auth.user.id)
   const headers = new Headers()
 
   if (auth.session.refreshed) {
@@ -37,8 +40,8 @@ export async function POST(request: NextRequest) {
     )
   }
 
-  const subscription = await subscriptionsStore.ensureForUser(auth.user)
-  const pending = await planRequestsStore.getLatestPendingForUser(auth.user.id)
+  const subscription = await neonSubscriptionsRepository.ensureForUser(auth.user)
+  const pending = await neonPlanRequestsRepository.getLatestPendingForUser(auth.user.id)
 
   if (pending) {
     return NextResponse.json(
@@ -47,7 +50,7 @@ export async function POST(request: NextRequest) {
     )
   }
 
-  const requestRow = await planRequestsStore.create({
+  const requestRow = await neonPlanRequestsRepository.create({
     userId: auth.user.id,
     currentTier: subscription.tier,
     requestedTier: body.requestedTier,

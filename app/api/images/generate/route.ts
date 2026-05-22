@@ -11,7 +11,13 @@ import {
 import { calculateImageUsageEstimate } from '@/lib/billing/costs'
 import { enforceImageUsage, getEffectiveSubscription } from '@/lib/billing/enforce'
 import { logImageUsage } from '@/lib/billing/log-usage'
-import { settingsStore, subscriptionsStore, usageLimitOverridesStore, conversationStore } from '@/lib/storage'
+import {
+  neonConversationRepository,
+  neonProfilesRepository,
+  neonSettingsRepository,
+  neonSubscriptionsRepository,
+  neonUsageLimitOverridesRepository,
+} from '@/lib/db/repositories'
 import { createMessage } from '@/lib/utils/chat'
 import { ImageGenerateRequest, ImageGenerateResponse, ChatRequest } from '@/types'
 
@@ -33,6 +39,7 @@ function debugImageRoute(stage: string, details?: Record<string, unknown>) {
 export async function POST(request: NextRequest) {
   const auth = await requireAuthenticatedUser(request)
   if ('response' in auth) return auth.response
+  await neonProfilesRepository.ensureFromAuthUser(auth.user)
 
   const body = (await request.json().catch(() => null)) as Partial<ImageGenerateRequest> | null
   const action = body?.action ?? 'send'
@@ -42,13 +49,13 @@ export async function POST(request: NextRequest) {
   }
 
   const storedConversation = body?.conversationId
-    ? await conversationStore.get(auth.user.id, body.conversationId)
+    ? await neonConversationRepository.get(auth.user.id, body.conversationId)
     : null
 
   const requestMode = body?.targetMode === 'image' ? 'image' : body?.mode ?? 'image'
-  const appSettings = await settingsStore.get(auth.user.id)
-  const subscription = await subscriptionsStore.ensureForUser(auth.user)
-  const override = await usageLimitOverridesStore.getByUserId(auth.user.id)
+  const appSettings = await neonSettingsRepository.get(auth.user.id)
+  const subscription = await neonSubscriptionsRepository.ensureForUser(auth.user)
+  const override = await neonUsageLimitOverridesRepository.getByUserId(auth.user.id)
   const effectiveSubscription = getEffectiveSubscription(subscription, override)
   const resolvedSettings = resolveSessionSettings(
     requestMode,
@@ -129,7 +136,7 @@ export async function POST(request: NextRequest) {
       model: routeConfig.model,
     })
 
-    const persistedConversation = await conversationStore.save(
+    const persistedConversation = await neonConversationRepository.save(
       auth.user.id,
       prepared.conversation
     )
@@ -169,7 +176,7 @@ export async function POST(request: NextRequest) {
       }
     )
 
-    const savedConversation = await conversationStore.save(
+    const savedConversation = await neonConversationRepository.save(
       auth.user.id,
       completedConversation
     )

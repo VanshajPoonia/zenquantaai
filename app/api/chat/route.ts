@@ -5,11 +5,12 @@ import {
 } from '@/lib/auth/session'
 import { createSessionSettings, getAllowedModelsForTier, resolveModelConfig } from '@/lib/config'
 import {
-  conversationStore,
-  settingsStore,
-  subscriptionsStore,
-  usageLimitOverridesStore,
-} from '@/lib/storage'
+  neonConversationRepository,
+  neonProfilesRepository,
+  neonSettingsRepository,
+  neonSubscriptionsRepository,
+  neonUsageLimitOverridesRepository,
+} from '@/lib/db/repositories'
 import { encodeStreamEvent } from '@/lib/utils/stream'
 import { ChatRequest } from '@/types'
 import {
@@ -72,6 +73,7 @@ function toErrorMessage(error: unknown): string {
 export async function POST(request: NextRequest) {
   const auth = await requireAuthenticatedUser(request)
   if ('response' in auth) return auth.response
+  await neonProfilesRepository.ensureFromAuthUser(auth.user)
 
   const body = (await request.json().catch(() => null)) as Partial<ChatRequest> | null
 
@@ -94,12 +96,12 @@ export async function POST(request: NextRequest) {
   }
 
   const storedConversation = body.conversationId
-    ? await conversationStore.get(auth.user.id, body.conversationId)
+    ? await neonConversationRepository.get(auth.user.id, body.conversationId)
     : null
 
-  const appSettings = await settingsStore.get(auth.user.id)
-  const subscription = await subscriptionsStore.ensureForUser(auth.user)
-  const override = await usageLimitOverridesStore.getByUserId(auth.user.id)
+  const appSettings = await neonSettingsRepository.get(auth.user.id)
+  const subscription = await neonSubscriptionsRepository.ensureForUser(auth.user)
+  const override = await neonUsageLimitOverridesRepository.getByUserId(auth.user.id)
   const effectiveSubscription = getEffectiveSubscription(subscription, override)
   const resolvedSettings = resolveSessionSettings(
     body.mode,
@@ -169,7 +171,7 @@ export async function POST(request: NextRequest) {
         walletType: routeConfig.walletType,
       })
 
-      const persistedConversation = await conversationStore.save(
+      const persistedConversation = await neonConversationRepository.save(
         auth.user.id,
         prepared.conversation
       )
@@ -317,7 +319,7 @@ export async function POST(request: NextRequest) {
         }
       )
 
-      const savedConversation = await conversationStore.save(
+      const savedConversation = await neonConversationRepository.save(
         auth.user.id,
         completedConversation
       )

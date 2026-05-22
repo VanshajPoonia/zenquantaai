@@ -2,7 +2,10 @@
 
 import { redirect } from 'next/navigation'
 import { requireServerUser } from '@/lib/auth/require-admin'
-import { planRequestsStore, subscriptionsStore } from '@/lib/storage'
+import {
+  neonPlanRequestsRepository,
+  neonSubscriptionsRepository,
+} from '@/lib/db/repositories'
 
 export async function requestPlanAction(formData: FormData) {
   const { user } = await requireServerUser()
@@ -19,8 +22,8 @@ export async function requestPlanAction(formData: FormData) {
     redirect('/pricing?error=invalid-plan')
   }
 
-  const subscription = await subscriptionsStore.ensureForUser(user)
-  const pending = await planRequestsStore.getLatestPendingForUser(user.id)
+  const subscription = await neonSubscriptionsRepository.ensureForUser(user)
+  const pending = await neonPlanRequestsRepository.getLatestPendingForUser(user.id)
   const tierRank = {
     free: 0,
     basic: 1,
@@ -37,7 +40,7 @@ export async function requestPlanAction(formData: FormData) {
     redirect('/pricing?error=already-covered')
   }
 
-  await planRequestsStore.create({
+  await neonPlanRequestsRepository.create({
     userId: user.id,
     currentTier: subscription.tier,
     requestedTier,

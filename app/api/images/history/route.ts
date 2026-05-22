@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { appendAuthCookies, requireAuthenticatedUser } from '@/lib/auth/session'
-import { imageGenerationEventsStore } from '@/lib/storage'
+import { neonImageGenerationEventsRepository } from '@/lib/db/repositories'
 
 export const runtime = 'nodejs'
 
@@ -8,7 +8,7 @@ export async function GET(request: NextRequest) {
   const auth = await requireAuthenticatedUser(request)
   if ('response' in auth) return auth.response
 
-  const history = await imageGenerationEventsStore.listByUser(auth.user.id)
+  const history = await neonImageGenerationEventsRepository.listByUser(auth.user.id)
   const headers = new Headers()
 
   if (auth.session.refreshed) {
