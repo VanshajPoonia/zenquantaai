@@ -1,6 +1,6 @@
 # Zenquanta AI
 
-Zenquanta AI is a premium multi-assistant workspace built with Next.js, TypeScript, Tailwind CSS, shadcn/ui, Neon Postgres, Supabase Auth/Storage, and OpenRouter.
+Zenquanta AI is a premium multi-assistant workspace built with Next.js, TypeScript, Tailwind CSS, shadcn/ui, Supabase, a Neon Postgres foundation, and OpenRouter.
 
 This is no longer the older four-mode chat app. The current platform includes:
 
@@ -40,8 +40,8 @@ Zenquanta combines a branded multi-assistant UI with tier-aware backend routing:
 
 - chats are organized by assistant family and project
 - OpenRouter is the only AI gateway
-- Neon Postgres handles app data persistence
-- Supabase still handles auth and private attachment storage
+- Supabase currently handles app persistence, auth, and private attachment storage
+- Neon Postgres has been added as a foundation for a later database migration
 - text assistants route through `/api/chat`
 - `Prism` routes through `/api/images/generate`
 - text and image usage are billed and tracked separately
@@ -142,7 +142,7 @@ Displayed usage multipliers:
 - OpenRouter
 - Supabase Auth
 - Supabase Storage
-- Neon Postgres
+- Neon Postgres foundation
 
 ## Auth Flow
 
@@ -277,17 +277,19 @@ npm run dev
 http://localhost:3000
 ```
 
-## Neon Database Setup
+## Neon Database Foundation
 
-Apply the Neon schema migration first:
+Neon is present as a foundation for a future persistence migration. The current runtime stores still use Supabase.
+
+To validate the Neon schema separately, apply:
 
 1. `neon/migrations/20260522_zenquanta_neon_initial.sql`
 
-This creates the `zen_*` application tables in Neon without Supabase RLS, `auth.uid()`, `auth.users` foreign keys, or Supabase Storage objects.
+This creates the `zen_*` application tables in Neon without Supabase RLS, `auth.uid()`, `auth.users` foreign keys, or Supabase Storage objects. The server-only Neon client and typed Drizzle schema live in `lib/db/`.
 
 ## Supabase Setup
 
-Supabase is still required for Auth and the private `zen-attachments` storage bucket. The app no longer uses Supabase Postgres as the primary application database.
+Supabase is still required for current runtime app persistence, Auth, and the private `zen-attachments` storage bucket.
 
 After creating your Supabase project, apply the migrations in this order:
 
@@ -448,8 +450,8 @@ types/
 ## Notes
 
 - OpenRouter is the only AI gateway.
-- Neon Postgres is the source of truth for app data after sign-in.
-- Supabase remains the source of truth for auth sessions and private attachment storage.
+- Supabase remains the source of truth for app data, auth sessions, and private attachment storage.
+- Neon Postgres is foundation-only until a later explicit persistence migration.
 - `.env.local` is for local secrets and should never be committed.
 - the publishable Supabase key is safe for `NEXT_PUBLIC_*`
 - the Supabase secret key must remain server-only

@@ -24,7 +24,7 @@ Zenquanta AI is a Next.js App Router AI workspace with six branded assistant fam
 - `Pulse` for current-context and research-style work
 - `Prism` for image generation
 
-The app includes a real chat workspace, Supabase-backed auth/storage, Neon-backed app persistence, OpenRouter model calls, user/admin dashboards, manual plan requests, usage tracking, file uploads, and public assistant pages.
+The app includes a real chat workspace, Supabase-backed persistence/auth/storage, a Neon foundation for future database migration, OpenRouter model calls, user/admin dashboards, manual plan requests, usage tracking, file uploads, and public assistant pages.
 
 Important entrypoints:
 
@@ -45,8 +45,8 @@ Framework and stack:
 - Radix UI primitives
 - lucide-react icons
 - Vercel Analytics
-- Neon Postgres for app data
-- Supabase Auth and Supabase Storage
+- Supabase for current app persistence, Auth, and Storage
+- Neon Postgres foundation for planned app data migration
 - OpenRouter
 
 Package-manager state is mixed:
@@ -78,7 +78,8 @@ Observed verification issue:
 - `components/ui/`: shadcn/Radix UI primitives.
 - `lib/ai/`: chat orchestration, OpenRouter client, memory handling, and system prompts.
 - `lib/config/`: assistant mappings, model routing, mode display config, presets, pricing, and image models.
-- `lib/storage/`: Neon-backed stores for conversations, settings, projects, prompts, profiles, subscriptions, usage events, plan requests, recommendations, and admin views, plus Supabase Storage helpers for attachments.
+- `lib/db/`: server-only Neon client and Drizzle schema foundation.
+- `lib/storage/`: Supabase REST-backed stores for conversations, settings, projects, prompts, profiles, subscriptions, usage events, plan requests, recommendations, and admin views, plus Supabase Storage helpers for attachments.
 - `lib/billing/`: usage estimation, enforcement, and logging.
 - `lib/router/`: local prompt classifier and assistant recommendation rules.
 - `types/index.ts`: shared domain types.
@@ -125,7 +126,7 @@ The main mock behavior is OpenRouter fallback:
 
 ## Backend, APIs, Auth, Database, And Billing
 
-There is a backend implemented with Next route handlers, Neon SQL-backed data stores, and Supabase Auth/Storage wrappers.
+There is a backend implemented with Next route handlers, Supabase REST-backed data stores, and Supabase Auth/Storage wrappers.
 
 Main API routes include:
 
@@ -313,8 +314,9 @@ Supabase Auth/Storage code also accepts aliases:
 
 Important implementation detail:
 
-- Server data persistence now goes through Neon SQL in `lib/storage/neon.ts`.
-- Supabase remains required for Auth and private attachment storage.
+- Server data persistence currently goes through Supabase REST in `lib/storage/supabase.ts`.
+- Neon foundation utilities live in `lib/db/` and are not wired into runtime stores yet.
+- Supabase remains required for app persistence, Auth, and private attachment storage.
 
 ## Incomplete Or Risky Areas
 

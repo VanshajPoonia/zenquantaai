@@ -2,9 +2,9 @@
 
 ## Current Status
 
-The repository contains a real Zenquanta AI platform backed by Neon Postgres for app data, Supabase for Auth/Storage, and OpenRouter for AI transport. Shared AI project memory files exist at the repo root.
+The repository contains a real Zenquanta AI platform backed by Supabase for current app persistence/Auth/Storage, a Neon Postgres foundation for planned migration, and OpenRouter for AI transport. Shared AI project memory files exist at the repo root.
 
-Current direction: plan upgrades remain manual/admin-driven, payment automation is out of scope unless explicitly requested, and database persistence has moved to Neon Postgres while Supabase Auth and Supabase Storage remain.
+Current direction: plan upgrades remain manual/admin-driven, payment automation is out of scope unless explicitly requested, and Neon is foundation-only until a later explicit persistence migration.
 
 ## Completed Work
 
@@ -25,15 +25,31 @@ Current direction: plan upgrades remain manual/admin-driven, payment automation 
 
 ### 2026-05-22 - Neon Database Migration Implementation
 
-- Added Neon database driver dependency and `lib/storage/neon.ts`.
+- Initially added Neon database driver dependency and a storage-layer Neon helper.
 - Added `neon/migrations/20260522_zenquanta_neon_initial.sql` for the `zen_*` application schema without Supabase RLS, `auth.uid()`, `auth.users` foreign keys, or Supabase Storage objects.
 - Migrated the app data stores in `lib/storage/*` from Supabase REST calls to Neon SQL while preserving route/API contracts.
 - Kept Supabase Auth and Supabase Storage in place for sessions and private attachment files.
 
+### 2026-05-22 - Neon Foundation Boundary Correction
+
+- Corrected the milestone back to foundation-only.
+- Restored runtime `lib/storage/*` persistence stores to Supabase REST.
+- Moved the Neon foundation to `lib/db/client.ts` and `lib/db/schema.ts`.
+- Kept the Neon SQL schema migration and env documentation for later migration work.
+- Confirmed Supabase remains current for runtime app persistence, Auth, and Storage.
+
+### 2026-05-22 - Neon Repository Layer
+
+- Added parallel server-only Neon repositories under `lib/db/repositories/*`.
+- Covered profiles, subscriptions, usage, image generation events, plan requests, admin audit logs, projects, conversations/messages, prompts, settings, and assistant recommendation events.
+- Kept routes, auth, billing, UI, file storage, and `lib/storage/*` runtime wiring on Supabase.
+- Documented that repositories are migration targets only until routes are explicitly swapped.
+
 ## Current Work
 
-- Neon database persistence implementation is complete at the code/schema level.
-- Supabase Auth and Supabase Storage remain active.
+- Neon database foundation is complete at the code/schema level.
+- Parallel Neon repositories exist for later route-by-route migration.
+- Runtime app persistence, Supabase Auth, and Supabase Storage remain active on Supabase.
 - Local verification has run for TypeScript and production build; lint still needs ESLint flat config work.
 
 ## Proposed Next Work
@@ -43,7 +59,9 @@ Current direction: plan upgrades remain manual/admin-driven, payment automation 
 - Decide whether the repo should standardize on npm or pnpm.
 - Remove or replace the hardcoded fallback admin identity before production.
 - Either implement real web search/retrieval for Pulse or make the UI clear that `webSearch` is not active.
-- Apply and validate the Neon migration in a real Neon database.
+- Apply and validate the Neon foundation migration in a real Neon database.
+- Plan a later explicit store/API migration from Supabase REST to Neon repositories.
+- Swap one feature area at a time from `lib/storage/*` to `lib/db/repositories/*`, verify behavior, then continue.
 - Backfill existing Supabase Postgres data into Neon if preserving production data is required.
 - Record separate decisions for auth and file storage before replacing Supabase Auth or Supabase Storage.
 
@@ -57,8 +75,8 @@ Current direction: plan upgrades remain manual/admin-driven, payment automation 
 ## Architecture Concerns
 
 - Text and image transports are intentionally separate and should remain separate.
-- Neon Postgres is the source of truth for app data after sign-in.
-- Supabase remains the source of truth for auth sessions and private attachment storage.
+- Supabase remains the source of truth for app data, auth sessions, and private attachment storage.
+- Neon Postgres is present as the planned database migration target, not current runtime persistence.
 - OpenRouter is the only AI gateway.
 - Billing is currently manual/admin-driven, not payment-provider-driven.
 - Server-only secrets must remain out of client components.

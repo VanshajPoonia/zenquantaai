@@ -17,8 +17,10 @@ This is the current six-assistant platform, not the old four-mode version.
 - TypeScript
 - Tailwind CSS v4
 - shadcn/ui-style components built on Radix UI
-- Neon Postgres for app data persistence
-- Supabase Auth and Storage
+- Supabase for current app persistence, Auth, and Storage
+- Neon Postgres foundation for planned database migration
+- Drizzle schema definitions for Neon foundation
+- Parallel Neon repositories for later route-by-route migration
 - OpenRouter for AI model access
 - Vercel Analytics
 
@@ -95,7 +97,11 @@ Current user-facing auth is ID/password-first. Login IDs are converted to synthe
 
 ## Database Status
 
-Neon Postgres is now the primary app database target. The initial Neon schema lives in `neon/migrations/20260522_zenquanta_neon_initial.sql`.
+Supabase Postgres remains the current runtime app database. The app stores in `lib/storage/*` use Supabase REST through `lib/storage/supabase.ts`.
+
+Neon Postgres has been added as a foundation for a later database migration. The initial Neon schema lives in `neon/migrations/20260522_zenquanta_neon_initial.sql`, and typed Drizzle table definitions live in `lib/db/schema.ts`.
+
+Parallel Neon repositories now live in `lib/db/repositories/*`. They are not wired into runtime routes yet; current app behavior still uses `lib/storage/*`.
 
 The Neon migration creates:
 
@@ -104,7 +110,7 @@ The Neon migration creates:
 - profiles, subscriptions, usage overrides, usage events, image events, plan requests, and admin audit logs
 - assistant recommendation events
 
-Supabase migrations still exist because Supabase Auth and Supabase Storage remain in use, and historical setup/schema context has not been removed.
+Supabase migrations still exist because Supabase remains the active runtime system for app persistence, Auth, and Storage.
 
 Neon migration order:
 
@@ -165,13 +171,21 @@ Text assistant routing and response profile overrides are centralized in config.
 
 ## Neon Postgres Migration Status
 
-Supabase has not been removed. Supabase currently handles auth sessions and private attachment storage.
+Supabase has not been removed. Supabase currently handles runtime app persistence, auth sessions, and private attachment storage.
 
-Implemented migration direction:
+Implemented foundation:
 
-1. Migrate Postgres-backed persistence from Supabase to Neon Postgres first.
-2. Preserve Supabase Auth and Supabase Storage during the first database migration phase.
-3. Decide later whether auth and storage should remain on Supabase or move to separate services.
+1. Add Neon dependency and server-only client in `lib/db/client.ts`.
+2. Add typed Drizzle schema definitions in `lib/db/schema.ts`.
+3. Add handwritten Neon SQL schema migration for the current `zen_*` tables.
+4. Add parallel Neon repositories in `lib/db/repositories/*`.
+
+Planned migration direction:
+
+1. Migrate Postgres-backed persistence from Supabase to Neon Postgres in a later explicit store/API migration.
+2. Swap one feature area at a time from `lib/storage/*` to `lib/db/repositories/*`, verify behavior, then continue.
+3. Preserve Supabase Auth and Supabase Storage during the first database migration phase.
+4. Decide later whether auth and storage should remain on Supabase or move to separate services.
 
 Neon is not a direct replacement for Supabase Auth or Supabase Storage. Any implementation plan should inventory current tables, storage buckets, auth identity usage, RLS/policy assumptions, admin data, usage records, plan requests, and subscription records before changing runtime code.
 
@@ -197,8 +211,9 @@ Backend logic is implemented with Next route handlers and server actions:
 
 - route handlers under `app/api/*`
 - server actions in `app/admin/actions.ts` and `app/pricing/actions.ts`
-- Neon database helper in `lib/storage/neon.ts`
-- Supabase Storage helpers in `lib/storage/supabase.ts`
+- Neon database foundation in `lib/db/client.ts` and `lib/db/schema.ts`
+- Parallel Neon repositories in `lib/db/repositories/*`
+- Supabase REST and Storage helpers in `lib/storage/supabase.ts`
 - auth helpers in `lib/auth/session.ts`
 - billing helpers in `lib/billing/*`
 
@@ -238,4 +253,4 @@ Accepted aliases in code include:
 - `lib/storage/profiles.ts` contains a hardcoded fallback admin identity that should be reviewed before production.
 - Supabase Storage uses configured API keys directly; service-role configuration should be handled carefully.
 - Conversation saves currently delete and reinsert messages, which may be risky for large histories or concurrent writes.
-- Auth identity and storage URLs are still split between Supabase and Neon-backed app data.
+- Neon repositories are not active runtime persistence yet; routes and storage stores should not import them until a later migration milestone.

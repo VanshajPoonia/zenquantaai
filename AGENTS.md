@@ -4,9 +4,9 @@
 
 Zenquanta AI is a Next.js App Router AI workspace. It is not the old four-mode app; agents must treat the current platform as a six-assistant product with Nova, Velora, Axiom, Forge, Pulse, and Prism.
 
-The current app uses TypeScript, Tailwind CSS, shadcn/ui-style components, Neon Postgres, Supabase Auth/Storage, and OpenRouter. Text chat is handled by `/api/chat`. Prism image generation is handled by `/api/images/generate`. Neon is used for app data persistence. Supabase is still used for auth sessions and private attachment storage. OpenRouter is the only AI gateway currently represented in the code.
+The current app uses TypeScript, Tailwind CSS, shadcn/ui-style components, Supabase, a Neon Postgres foundation, and OpenRouter. Text chat is handled by `/api/chat`. Prism image generation is handled by `/api/images/generate`. Supabase still backs runtime app persistence, auth sessions, and private attachment storage. Neon has been added as a foundation only and is not wired into runtime stores or API routes yet. OpenRouter is the only AI gateway currently represented in the code.
 
-Current direction: keep plan upgrades manual through plan requests and admin activation. Payment automation is out of scope unless explicitly requested later. Supabase Auth and Supabase Storage require separate future decisions because Neon only replaced the Postgres/database layer.
+Current direction: keep plan upgrades manual through plan requests and admin activation. Payment automation is out of scope unless explicitly requested later. Neon should replace the Postgres/database layer in a later phased migration, while Supabase Auth and Supabase Storage require separate future decisions.
 
 ## Required Reading Before Work
 
@@ -27,7 +27,9 @@ Useful source files to inspect for most changes:
 - `lib/config/pricing.ts`
 - `lib/ai/chat.ts`
 - `lib/ai/openrouter.ts`
-- `lib/storage/neon.ts`
+- `lib/db/client.ts`
+- `lib/db/repositories/index.ts`
+- `lib/db/schema.ts`
 - `lib/storage/supabase.ts`
 - `app/api/chat/route.ts`
 - `app/api/images/generate/route.ts`
@@ -44,7 +46,8 @@ Useful source files to inspect for most changes:
 - `components/ui/`: shadcn/Radix UI primitives.
 - `lib/ai/`: OpenRouter calls, chat orchestration, memory, and prompts.
 - `lib/config/`: assistant, mode, model, image model, pricing, and preset config.
-- `lib/storage/`: Neon-backed data access plus Supabase Storage helpers.
+- `lib/db/`: server-only Neon client, Drizzle schema foundation, and parallel Neon repositories.
+- `lib/storage/`: current Supabase REST-backed data access plus Supabase Storage helpers.
 - `lib/billing/`: cost calculation, enforcement, and usage logging.
 - `lib/router/`: local prompt precheck and assistant recommendations.
 - `neon/migrations/`: Neon database schema setup.
@@ -68,8 +71,10 @@ Useful source files to inspect for most changes:
 - Prism image generation returns JSON from `/api/images/generate`.
 - Model routing belongs in `lib/config/*`.
 - Prompt and generation orchestration belongs in `lib/ai/*`.
-- Neon database persistence belongs in `lib/storage/*`.
-- Supabase remains current for auth and private attachment storage.
+- Neon database foundation belongs in `lib/db/*`.
+- Neon repositories in `lib/db/repositories/*` are migration targets only until a route or store is explicitly moved.
+- Current runtime persistence remains in `lib/storage/*` and is Supabase-backed until a later explicit migration.
+- Supabase remains current for app persistence, auth, and private attachment storage.
 - Do not assume Supabase Auth or Supabase Storage have been removed.
 - Usage enforcement and logging belong in `lib/billing/*`.
 - Client chat state is centralized in `lib/chat-context.tsx`.
