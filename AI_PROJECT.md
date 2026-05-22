@@ -17,23 +17,27 @@ This is the current six-assistant platform, not the old four-mode version.
 - TypeScript
 - Tailwind CSS v4
 - shadcn/ui-style components built on Radix UI
-- Supabase for Auth and Storage
+- neutral private file storage for uploads and generated images
 - Fresh Neon Postgres for migrated app persistence
 - Drizzle schema definitions for the fresh Neon foundation
 - Neon repositories for fresh database access and explicit route migrations
+- Tavily for Pulse/webSearch source retrieval
+- OpenAI-compatible embeddings for uploaded-file knowledge retrieval
 - OpenRouter for AI model access
 - Vercel Analytics
 
 ## Implemented Features
 
 - Authenticated workspace.
-- ID/password auth backed by Supabase.
+- ID/password auth backed by fresh Neon credentials.
 - Six assistant families.
 - Streamed text chat.
 - Prism image generation.
 - Conversation persistence.
 - Conversation-scoped memory summaries.
-- File uploads through Supabase Storage.
+- File uploads through the neutral storage abstraction.
+- Text/code uploaded-file knowledge indexing and retrieval with Neon pgvector.
+- Generated image files stored through the neutral storage abstraction.
 - Local prompt precheck and assistant recommendations.
 - Projects.
 - Prompt library.
@@ -50,7 +54,7 @@ This is the current six-assistant platform, not the old four-mode version.
 - `Velora`: creative writing, tone, copy, and ideation.
 - `Axiom`: structured reasoning and decision support.
 - `Forge`: coding, debugging, architecture, and implementation.
-- `Pulse`: current-context and research-style branded assistant.
+- `Pulse`: current-context and research-style assistant with Tavily-backed web search when configured.
 - `Prism`: image generation.
 
 Mode mapping:
@@ -86,14 +90,14 @@ Mode mapping:
 - `/api/assistant-recommendations`: recommendation telemetry.
 - `/api/plan-requests`: user plan requests.
 - `/api/admin/*`: admin overview, users, and plan requests.
-- `/api/auth/*`: session, sign-in, sign-up, sign-out, magic link, and password reset/update.
+- `/api/auth/*`: session, sign-in, sign-up, sign-out, unsupported magic-link compatibility, and password reset/update.
 - `/api/bootstrap/import-local`: local browser data import into the server-backed stores.
 
 ## Auth Status
 
-Auth is implemented through Supabase Auth in `lib/auth/session.ts`.
+Auth is implemented as custom Neon-backed credentials auth in `lib/auth/session.ts`.
 
-Current user-facing auth is ID/password-first. Login IDs are converted to synthetic emails using the `login.zenquanta.local` domain. Auth cookies are managed by the app.
+Current user-facing auth is ID/password-first. Passwords are hashed with per-user salts, sessions use opaque HTTP-only cookies, and auth rows live in Neon. Supabase Auth users, sessions, and passwords are not imported or preserved; existing users need to sign up again.
 
 ## Database Status
 
@@ -128,18 +132,22 @@ These routes use clean Neon records going forward. Existing Supabase rows are no
 
 The Neon migration creates:
 
-- app-owned users and auth identity mapping placeholders
+- app-owned users, auth identity mapping, credentials, and sessions
 - profiles, subscriptions, manual plan requests, usage overrides, text/image usage events, and admin audit logs
 - projects, conversations, messages, conversation memory fields, prompt library, and user settings
 - assistant recommendation events, file metadata, and generated image metadata
+- uploaded-file text chunks and pgvector embeddings for private project knowledge
 
-Supabase migrations still exist because Supabase remains active for Auth and private attachment Storage. They are reference/current-runtime setup only, not prerequisites for Neon.
+Supabase migrations still exist as historical/product reference only. They are not prerequisites for Neon auth, Neon app data, or the neutral file storage path.
 
 Neon migration order:
 
 1. `20260522_zenquanta_fresh_initial.sql`
+2. `20260522_zenquanta_local_auth.sql`
+3. `20260522_zenquanta_message_sources.sql`
+4. `20260522_zenquanta_file_knowledge.sql`
 
-Supabase migration order documented in `README.md`:
+Historical Supabase migration order documented in `README.md`:
 
 1. `20260401_zenquanta_projects_prompts.sql`
 2. `20260401_zenquanta_conversation_memory.sql`
@@ -174,13 +182,24 @@ Not implemented:
 
 ## Storage Status
 
-Supabase Storage is used for attachments through the private `zen-attachments` bucket. Attachment upload code lives in `lib/storage/attachments.ts` and `app/api/attachments/route.ts`.
+Supabase Storage has been replaced for new files by a neutral server-side object storage abstraction in `lib/storage/object-store.ts`.
 
-Generated image durability should be reviewed. Provider/data URLs can be attached to messages, but generated-image storage is not clearly equivalent to uploaded attachment storage.
+Current behavior:
+
+- uploads go through `/api/attachments`
+- authenticated file reads go through `/api/files/object`
+- upload metadata is stored in `zen_files`
+- generated image metadata is stored in `zen_generated_images`
+- local development storage writes under `.storage/zenquanta`
+- production storage should use `FILE_STORAGE_PROVIDER=s3` or `FILE_STORAGE_PROVIDER=r2` with an S3-compatible endpoint such as Cloudflare R2
+
+Old Supabase-hosted files are not imported, copied, or preserved.
+
+Uploaded text/code files can be indexed for project knowledge. The first version extracts safe text-like files only, chunks text server-side, stores embeddings in Neon `zen_file_chunks` with pgvector, and retrieves scoped chunks for chat when `fileContext` is enabled. Raw files remain private in object storage. Advanced PDF/OCR handling is not part of this first version.
 
 ## Model Routing Status
 
-OpenRouter is the only AI gateway in current code.
+OpenRouter is the only AI generation gateway in current code. Tavily is used only for server-side web search context. OpenAI-compatible embeddings are used only for private uploaded-file retrieval when configured.
 
 Key files:
 
@@ -188,13 +207,15 @@ Key files:
 - `lib/config/models.ts`
 - `lib/config/image-models.ts`
 - `lib/ai/openrouter.ts`
+- `lib/search/web-search.ts`
+- `lib/rag/*`
 - `lib/ai/chat.ts`
 
 Text assistant routing and response profile overrides are centralized in config. Prism image routing is separate from text chat.
 
 ## Neon Postgres Migration Status
 
-Supabase has not been removed. Supabase currently handles auth sessions and private attachment storage.
+Supabase is no longer an active runtime dependency for fresh auth, app data, uploads, or generated-image storage. Historical Supabase migrations still exist in the repo as reference from earlier milestones, but Supabase runtime clients and old Supabase-backed storage modules have been removed.
 
 Implemented foundation and migration slices:
 
@@ -205,17 +226,18 @@ Implemented foundation and migration slices:
 5. Migrate the first low-risk runtime routes: settings, prompts, and assistant recommendation telemetry.
 6. Migrate projects, conversations, messages, and conversation memory to Neon, including chat/image persistence saves and dashboard recent conversations.
 7. Move usage, image history, manual plan requests, subscriptions, usage overrides, admin audit logs, dashboard data, admin routes, admin pages, pricing plan request flows, and profile/role hydration to fresh Neon repositories.
-8. Keep Supabase Auth and Supabase Storage until separate decisions are made.
+8. Replace Supabase Auth with fresh Neon credentials auth.
+9. Replace Supabase Storage with neutral private file storage.
 
 Planned migration direction:
 
-1. Start fresh in Neon. Do not import or backfill Supabase database rows.
+1. Start fresh in Neon. Do not import or backfill Supabase database or auth rows.
 2. Use Supabase database/schema only as reference for product capabilities.
 3. Continue migrating runtime routes to Neon through explicit, bounded milestones.
-4. Preserve Supabase Auth and Supabase Storage until separate decisions are made.
-5. Decide later whether auth and storage should remain on Supabase or move to separate services.
+4. Use the neutral file storage layer for new uploads and generated images.
+5. Do not import Supabase Auth users, sessions, or passwords.
 
-Neon is not a direct replacement for Supabase Auth or Supabase Storage. Do not create Supabase-to-Neon copy/import migrations.
+Do not create Supabase-to-Neon copy/import migrations.
 
 ## Frontend Structure
 
@@ -241,7 +263,9 @@ Backend logic is implemented with Next route handlers and server actions:
 - server actions in `app/admin/actions.ts` and `app/pricing/actions.ts`
 - Neon database foundation in `lib/db/client.ts` and `lib/db/schema.ts`
 - Parallel Neon repositories in `lib/db/repositories/*`
-- Supabase REST and Storage helpers in `lib/storage/supabase.ts`
+- neutral file storage helpers in `lib/storage/object-store.ts`, `lib/storage/attachments.ts`, and `lib/storage/generated-images.ts`
+- web search helpers in `lib/search/web-search.ts`
+- historical Supabase migrations in `supabase/migrations/*`
 - auth helpers in `lib/auth/session.ts`
 - billing helpers in `lib/billing/*`
 
@@ -251,36 +275,41 @@ Required or expected variables:
 
 - `OPENROUTER_API_KEY`
 - `OPENROUTER_BASE_URL`
+- `TAVILY_API_KEY`
+- `OPENAI_API_KEY`
+- `EMBEDDINGS_API_KEY`
+- `EMBEDDINGS_BASE_URL`
+- `EMBEDDINGS_MODEL`
 - `DATABASE_URL`
-- `NEXT_PUBLIC_SUPABASE_URL`
-- `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`
-- `SUPABASE_SECRET_KEY`
+- `FILE_STORAGE_PROVIDER`
+- `FILE_STORAGE_BUCKET`
+- `FILE_STORAGE_LOCAL_DIR`
+- `FILE_STORAGE_ENDPOINT`
+- `FILE_STORAGE_REGION`
+- `FILE_STORAGE_ACCESS_KEY_ID`
+- `FILE_STORAGE_SECRET_ACCESS_KEY`
 
 Accepted aliases in code include:
 
-- `SUPABASE_URL`
-- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
-- `SUPABASE_ANON_KEY`
-- `SUPABASE_SERVICE_ROLE_KEY`
 - `NEON_DATABASE_URL`
 - `POSTGRES_URL`
 
 ## Known Incomplete Systems
 
 - No payment automation or automated subscription billing; manual plan requests and admin activation remain the intended flow.
-- Pulse has current-context branding, and `webSearch` appears in settings, but real web search/retrieval was not confirmed in code.
+- Pulse web search depends on `TAVILY_API_KEY`; without it, Pulse/webSearch degrades without claiming live verification.
+- Uploaded-file knowledge depends on an embeddings key and the pgvector migration; unsupported/binary/PDF/OCR-heavy files are not indexed in v1.
 - No automated test script is defined.
 - No `typecheck` script is defined.
-- Auth and storage replacement decisions are still incomplete.
+- Old Supabase-hosted files are intentionally not migrated into the new storage layer.
 
 ## Known Risks
 
 - `npm run lint` may fail because the repo is missing an ESLint flat config file.
 - `next.config.mjs` sets `typescript.ignoreBuildErrors: true`.
 - Package manager is ambiguous: `pnpm-lock.yaml` exists, while `README.md` documents `npm install`.
-- `lib/storage/profiles.ts` contains a hardcoded fallback admin identity that should be reviewed before production.
-- Supabase Storage uses configured API keys directly; service-role configuration should be handled carefully.
+- File storage access keys must remain server-only.
 - Conversation saves currently delete and reinsert messages, which may be risky for large histories or concurrent writes.
 - Neon starts fresh and does not preserve old Supabase rows.
 - Settings, prompts, assistant recommendation telemetry, projects, conversations, messages, conversation memory, billing/admin data, usage records, plan requests, dashboard data, image history, and admin mutations are wired to Neon.
-- Supabase remains required for Auth and private attachment storage.
+- S3-compatible/R2 storage configuration must be validated before production if local storage is not acceptable.

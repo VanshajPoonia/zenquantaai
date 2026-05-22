@@ -2,9 +2,9 @@
 
 ## Current Status
 
-The repository contains a real Zenquanta AI platform backed by Neon for migrated runtime app data, Supabase for Auth/Storage, and OpenRouter for AI transport. Shared AI project memory files exist at the repo root.
+The repository contains a real Zenquanta AI platform backed by Neon for runtime app data and credentials auth, neutral private file storage for new uploads/generated images, and OpenRouter for AI transport. Shared AI project memory files exist at the repo root.
 
-Current direction: plan upgrades remain manual/admin-driven, payment automation is out of scope unless explicitly requested, and Neon starts fresh without importing Supabase database rows.
+Current direction: plan upgrades remain manual/admin-driven, payment automation is out of scope unless explicitly requested, and Neon/storage start fresh without importing Supabase database rows or storage objects.
 
 ## Completed Work
 
@@ -98,13 +98,51 @@ Current direction: plan upgrades remain manual/admin-driven, payment automation 
 - Preserved manual plan requests and admin activation; no payment automation was added.
 - Did not import, copy, backfill, or preserve Supabase usage, subscription, or plan request rows.
 
+### 2026-05-22 - Fresh Neon Credentials Auth
+
+- Replaced Supabase Auth with custom Neon-backed ID/password credentials auth.
+- Added local auth credentials and session tables.
+- Stored password hashes with per-user salts and used opaque HTTP-only session cookies.
+- Kept Supabase only for private attachment Storage.
+- Did not import, copy, backfill, or preserve Supabase Auth users, sessions, or passwords; existing users need to sign up again.
+
+### 2026-05-22 - Neutral Private File Storage
+
+- Replaced active Supabase Storage upload/signing paths with a neutral server-only object storage abstraction.
+- Added local development storage and S3-compatible/R2 production storage support.
+- Added authenticated private file reads through `/api/files/object`.
+- Stored new upload metadata in `zen_files` and generated-image metadata in `zen_generated_images`.
+- Persisted newly generated Prism images into the same storage layer before saving conversation messages.
+- Did not import, copy, backfill, or preserve old Supabase Storage objects.
+
+### 2026-05-22 - Supabase Runtime Removal
+
+- Removed remaining Supabase runtime clients and old Supabase-backed storage/data modules.
+- Kept `supabase/migrations/*` as historical reference only and documented that they are not part of active setup.
+- Kept Neon Postgres, Neon credentials auth, neutral private file storage, OpenRouter, and manual plan/admin activation as the active platform stack.
+- Did not import, copy, backfill, or preserve old Supabase rows, users, sessions, passwords, or storage objects.
+
+### 2026-05-22 - Pulse Tavily Web Search
+
+- Added real server-side Tavily search for Pulse and the existing `webSearch` setting.
+- Added source metadata to streamed and persisted assistant messages.
+- Kept OpenRouter as the only AI model gateway and kept web search provider keys server-only.
+- Search degrades without source claims when `TAVILY_API_KEY` is not configured.
+
+### 2026-05-22 - Uploaded File Knowledge V1
+
+- Added first-version project knowledge/RAG for uploaded text and code-like files.
+- Added server-side text extraction, chunking, OpenAI-compatible embeddings, and Neon pgvector chunk storage.
+- Wired `/api/chat` to retrieve scoped file chunks when `fileContext` is enabled and inject only relevant excerpts.
+- Kept raw files private in object storage and left advanced PDF/OCR handling for later.
+
 ## Current Work
 
 - Neon database foundation is complete at the code/schema level.
 - Neon repositories exist as future route-by-route migration scaffolding and now cover the fresh schema, including user anchors, file metadata, and generated image metadata.
 - Settings, prompt library, assistant recommendation telemetry, projects, conversations, messages, conversation memory, subscriptions/manual plans, usage overrides, text/image usage records, plan requests, dashboard data, image history, admin data, and profile/role hydration are now backed by fresh Neon repositories.
 - Chat and image routes still use existing assistant execution paths, but their conversation, billing enforcement, and usage logging data now use Neon.
-- Supabase Auth and Supabase Storage remain active.
+- Neutral private file storage is active for new uploads and generated images.
 - Local verification has run for TypeScript and production build; lint still needs ESLint flat config work.
 
 ## Proposed Next Work
@@ -112,14 +150,13 @@ Current direction: plan upgrades remain manual/admin-driven, payment automation 
 - Add or fix ESLint flat configuration.
 - Add a `typecheck` script such as `tsc --noEmit`.
 - Decide whether the repo should standardize on npm or pnpm.
-- Remove or replace the hardcoded fallback admin identity before production.
-- Either implement real web search/retrieval for Pulse or make the UI clear that `webSearch` is not active.
+- Validate Tavily production limits and source display behavior for Pulse/webSearch.
+- Validate embeddings provider cost/limits and pgvector query quality for uploaded-file knowledge.
 - Apply and validate the fresh Neon foundation migration in a real Neon database.
 - Plan remaining non-storage database route migrations, if any, as explicit bounded milestones.
-- Decide the Supabase Auth replacement or retention strategy.
-- Decide the Supabase Storage replacement or retention strategy.
+- Validate S3-compatible/R2 configuration for production storage.
 - Do not backfill existing Supabase Postgres data into Neon.
-- Record separate decisions for auth and file storage before replacing Supabase Auth or Supabase Storage.
+- Keep historical Supabase migrations as reference-only unless the team explicitly decides to remove or archive them elsewhere.
 
 ## Active Bugs / Issues
 
@@ -131,9 +168,11 @@ Current direction: plan upgrades remain manual/admin-driven, payment automation 
 ## Architecture Concerns
 
 - Text and image transports are intentionally separate and should remain separate.
-- Neon is the source of truth for migrated runtime app data; Supabase remains the source for auth sessions and private attachment storage.
+- Neon is the source of truth for runtime app data and auth sessions; neutral object storage is the source for new private uploads and generated images.
 - Neon Postgres is a fresh database foundation, not an imported copy of Supabase data.
-- OpenRouter is the only AI gateway.
+- OpenRouter is the only AI model gateway.
+- Tavily is the server-side web search provider for Pulse/webSearch source context.
+- Uploaded-file knowledge uses server-only embeddings and Neon pgvector; raw files remain private.
 - Billing is currently manual/admin-driven, not payment-provider-driven.
 - Server-only secrets must remain out of client components.
 
@@ -146,14 +185,14 @@ Current direction: plan upgrades remain manual/admin-driven, payment automation 
 
 ## Known Risks
 
-- Hardcoded fallback admin identity in `lib/storage/profiles.ts`.
 - Missing ESLint flat config.
 - Hidden TypeScript build errors.
 - Package manager ambiguity.
-- Visible `webSearch` setting without confirmed retrieval implementation.
+- Pulse/webSearch requires `TAVILY_API_KEY` for live retrieval; without it the chat path continues without source claims.
+- Uploaded-file knowledge requires an embeddings key and pgvector migration; unsupported files are skipped rather than blocking uploads.
 - Payment automation is out of scope unless explicitly requested.
 - Partial Neon migration can create split-system risk; future route migrations should be explicit and bounded.
-- Auth/session and attachment storage still depend on Supabase.
+- Supabase runtime clients and old Supabase-backed storage/data modules have been removed; only historical migrations remain.
 
 ## AI Handoff Summaries
 
@@ -163,7 +202,6 @@ Shared memory files were created to give Codex, Claude Code, and future agents a
 
 ## Future Feature Ideas
 
-- Real web search/retrieval for Pulse.
 - Durable generated-image storage.
 - Automated test suite for auth, billing, routing, recommendations, and chat streaming.
 - Safer incremental conversation persistence.
@@ -172,6 +210,5 @@ Shared memory files were created to give Codex, Claude Code, and future agents a
 ## Open Questions
 
 - Should the package manager be standardized on pnpm or npm?
-- Should `webSearch` be hidden until retrieval is implemented?
-- Should generated images be uploaded into Supabase Storage like user attachments?
+- Should local storage remain the default development adapter, or should all deployed environments require R2/S3?
 - Should admin role management become database-only with no hardcoded fallback?
