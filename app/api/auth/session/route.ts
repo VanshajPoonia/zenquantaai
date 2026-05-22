@@ -4,7 +4,7 @@ import {
   appendClearedAuthCookies,
   readRequestAuthSession,
 } from '@/lib/auth/session'
-import { profilesStore } from '@/lib/storage'
+import { neonProfilesRepository } from '@/lib/db/repositories'
 
 export const runtime = 'nodejs'
 
@@ -24,7 +24,7 @@ export async function GET(request: NextRequest) {
     return response
   }
 
-  const profile = await profilesStore.ensureFromAuthUser(session.user)
+  const profile = await neonProfilesRepository.ensureFromAuthUser(session.user)
 
   const response = NextResponse.json({
     user: {

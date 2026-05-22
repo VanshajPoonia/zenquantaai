@@ -3,13 +3,13 @@
 import { redirect } from 'next/navigation'
 import { requireAdmin } from '@/lib/auth/require-admin'
 import {
-  adminAuditLogsStore,
   buildTierRebasedUsageOverridePatch,
-  planRequestsStore,
-  profilesStore,
-  subscriptionsStore,
-  usageLimitOverridesStore,
-} from '@/lib/storage'
+  neonAdminAuditLogsRepository,
+  neonPlanRequestsRepository,
+  neonProfilesRepository,
+  neonSubscriptionsRepository,
+  neonUsageLimitOverridesRepository,
+} from '@/lib/db/repositories'
 
 export async function updatePlanRequestStatusAction(formData: FormData) {
   const { user } = await requireAdmin()
@@ -21,7 +21,7 @@ export async function updatePlanRequestStatusAction(formData: FormData) {
     redirect('/admin?error=missing-request')
   }
 
-  const requests = await planRequestsStore.list()
+  const requests = await neonPlanRequestsRepository.list()
   const request = requests.find((item) => item.id === requestId)
   if (!request) {
     redirect('/admin?error=request-not-found')
@@ -31,13 +31,14 @@ export async function updatePlanRequestStatusAction(formData: FormData) {
     redirect('/admin?error=invalid-status')
   }
 
-  await planRequestsStore.updateStatus(requestId, status, adminNote)
+  await neonPlanRequestsRepository.updateStatus(requestId, status, adminNote)
 
   if (status === 'activated') {
-    const currentSubscription = await subscriptionsStore.getByUserId(request.userId)
-    const currentOverride = await usageLimitOverridesStore.getByUserId(request.userId)
+    const currentSubscription = await neonSubscriptionsRepository.getByUserId(request.userId)
+    const currentOverride =
+      await neonUsageLimitOverridesRepository.getByUserId(request.userId)
 
-    await subscriptionsStore.updateTier(request.userId, request.requestedTier)
+    await neonSubscriptionsRepository.updateTier(request.userId, request.requestedTier)
 
     if (currentSubscription) {
       const overridePatch = buildTierRebasedUsageOverridePatch({
@@ -47,12 +48,12 @@ export async function updatePlanRequestStatusAction(formData: FormData) {
       })
 
       if (Object.keys(overridePatch).length > 0) {
-        await usageLimitOverridesStore.upsert(request.userId, overridePatch)
+        await neonUsageLimitOverridesRepository.upsert(request.userId, overridePatch)
       }
     }
   }
 
-  await adminAuditLogsStore.create({
+  await neonAdminAuditLogsRepository.create({
     adminUserId: user.id,
     targetUserId: request.userId,
     action: `plan_request_${status}`,
@@ -76,8 +77,9 @@ export async function updateUserAdminAction(formData: FormData) {
     redirect('/admin?error=missing-user')
   }
 
-  const currentSubscription = await subscriptionsStore.getByUserId(targetUserId)
-  const currentOverride = await usageLimitOverridesStore.getByUserId(targetUserId)
+  const currentSubscription = await neonSubscriptionsRepository.getByUserId(targetUserId)
+  const currentOverride =
+    await neonUsageLimitOverridesRepository.getByUserId(targetUserId)
 
   const tier = formData.get('tier')?.toString()
   const status = formData.get('status')?.toString()
@@ -115,14 +117,14 @@ export async function updateUserAdminAction(formData: FormData) {
     tier === 'prime'
   ) {
     if (typeof note === 'undefined') {
-      await subscriptionsStore.updateTier(targetUserId, tier)
+      await neonSubscriptionsRepository.updateTier(targetUserId, tier)
     } else {
-      await subscriptionsStore.updateTier(targetUserId, tier, note)
+      await neonSubscriptionsRepository.updateTier(targetUserId, tier, note)
     }
   }
 
   if (status === 'active' || status === 'paused' || status === 'cancelled') {
-    await subscriptionsStore.updateStatus(targetUserId, status)
+    await neonSubscriptionsRepository.updateStatus(targetUserId, status)
   }
 
   if (currentSubscription && nextTier) {
@@ -145,7 +147,7 @@ export async function updateUserAdminAction(formData: FormData) {
       },
     })
 
-    await usageLimitOverridesStore.upsert(targetUserId, {
+    await neonUsageLimitOverridesRepository.upsert(targetUserId, {
       ...overridePatch,
       allowedModelOverrides,
       notes: typeof note === 'undefined' ? undefined : note,
@@ -153,10 +155,10 @@ export async function updateUserAdminAction(formData: FormData) {
   }
 
   if (role === 'user' || role === 'admin') {
-    await profilesStore.updateRole(targetUserId, role)
+    await neonProfilesRepository.updateRole(targetUserId, role)
   }
 
-  await adminAuditLogsStore.create({
+  await neonAdminAuditLogsRepository.create({
     adminUserId: user.id,
     targetUserId,
     action: 'admin_user_update',

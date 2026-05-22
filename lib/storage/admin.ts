@@ -11,12 +11,14 @@ import {
   UsageLimitOverride,
 } from '@/types'
 import { PLAN_CONFIGS, usdToDisplayedCredits } from '@/lib/config'
+import {
+  neonAssistantRecommendationEventsRepository,
+  neonConversationRepository,
+} from '@/lib/db/repositories'
 import { profilesStore } from './profiles'
 import { subscriptionsStore, usageLimitOverridesStore } from './subscriptions'
 import { imageGenerationEventsStore, usageEventsStore } from './usage-events'
 import { adminAuditLogsStore, planRequestsStore } from './plan-requests'
-import { conversationStore } from './conversations'
-import { assistantRecommendationEventsStore } from './assistant-recommendations'
 
 export interface AdminOverview {
   activeUsers: number
@@ -62,7 +64,7 @@ export interface AdminUserDetail {
   imageEvents: ImageGenerationEvent[]
   recommendationEvents: AssistantRecommendationEvent[]
   auditLogs: AdminAuditLog[]
-  conversations: Awaited<ReturnType<typeof conversationStore.list>>
+  conversations: Awaited<ReturnType<typeof neonConversationRepository.list>>
   assistantBreakdown: DashboardUsageSummary['assistantBreakdown']
   modelBreakdown: Array<{
     model: string
@@ -268,9 +270,9 @@ class AdminStore {
         planRequestsStore.listByUser(userId),
         usageEventsStore.listByUser(userId),
         imageGenerationEventsStore.listByUser(userId),
-        assistantRecommendationEventsStore.listByUser(userId),
+        neonAssistantRecommendationEventsRepository.listByUser(userId),
         adminAuditLogsStore.listByTargetUser(userId),
-        conversationStore.list(userId),
+        neonConversationRepository.list(userId),
       ])
 
     if (!subscription) return null
@@ -320,7 +322,7 @@ class AdminStore {
   }
 
   async getAssistantRecommendationAnalyticsSummary(): Promise<AssistantRecommendationAnalyticsSummary> {
-    return assistantRecommendationEventsStore.getAnalyticsSummary()
+    return neonAssistantRecommendationEventsRepository.getAnalyticsSummary()
   }
 }
 

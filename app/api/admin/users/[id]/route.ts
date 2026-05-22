@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAdminApiUser } from '@/lib/auth/require-admin'
 import {
-  adminAuditLogsStore,
-  adminStore,
+  neonAdminAuditLogsRepository,
+  neonAdminRepository,
+  neonProfilesRepository,
+  neonSubscriptionsRepository,
+  neonUsageLimitOverridesRepository,
   buildTierRebasedUsageOverridePatch,
-  profilesStore,
-  subscriptionsStore,
-  usageLimitOverridesStore,
-} from '@/lib/storage'
+} from '@/lib/db/repositories'
 import { SubscriptionTier } from '@/types'
 
 export const runtime = 'nodejs'
@@ -20,7 +20,7 @@ export async function GET(
   if ('response' in auth) return auth.response
 
   const { id } = await context.params
-  const detail = await adminStore.getUserDetail(id)
+  const detail = await neonAdminRepository.getUserDetail(id)
 
   if (!detail) {
     return NextResponse.json({ error: 'User not found.' }, { status: 404 })
@@ -58,8 +58,8 @@ export async function PATCH(
     return NextResponse.json({ error: 'Update payload is required.' }, { status: 400 })
   }
 
-  let updatedSubscription = await subscriptionsStore.getByUserId(id)
-  const currentOverride = await usageLimitOverridesStore.getByUserId(id)
+  let updatedSubscription = await neonSubscriptionsRepository.getByUserId(id)
+  const currentOverride = await neonUsageLimitOverridesRepository.getByUserId(id)
 
   if (!updatedSubscription) {
     return NextResponse.json({ error: 'User subscription not found.' }, { status: 404 })
@@ -69,7 +69,7 @@ export async function PATCH(
   const nextTier = body.tier ?? updatedSubscription.tier
 
   if (body.tier) {
-    updatedSubscription = await subscriptionsStore.updateTier(
+    updatedSubscription = await neonSubscriptionsRepository.updateTier(
       id,
       body.tier,
       body.note ?? null
@@ -77,7 +77,7 @@ export async function PATCH(
   }
 
   if (body.status) {
-    updatedSubscription = await subscriptionsStore.updateStatus(id, body.status)
+    updatedSubscription = await neonSubscriptionsRepository.updateStatus(id, body.status)
   }
 
   if (
@@ -106,7 +106,7 @@ export async function PATCH(
       },
     })
 
-    await usageLimitOverridesStore.upsert(id, {
+    await neonUsageLimitOverridesRepository.upsert(id, {
       ...overridePatch,
       allowedModelOverrides: body.allowedModelOverrides,
       notes: body.note,
@@ -114,17 +114,17 @@ export async function PATCH(
   }
 
   if (body.role) {
-    await profilesStore.updateRole(id, body.role)
+    await neonProfilesRepository.updateRole(id, body.role)
   }
 
-  await adminAuditLogsStore.create({
+  await neonAdminAuditLogsRepository.create({
     adminUserId: auth.user.id,
     targetUserId: id,
     action: 'admin_user_update',
     details: body as Record<string, unknown>,
   })
 
-  const detail = await adminStore.getUserDetail(id)
+  const detail = await neonAdminRepository.getUserDetail(id)
 
   return NextResponse.json({ detail })
 }

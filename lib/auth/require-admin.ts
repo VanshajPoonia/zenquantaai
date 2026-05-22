@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
 import { readCookieStoreAuthSession, requireAuthenticatedUser } from './session'
-import { profilesStore } from '@/lib/storage'
+import { neonProfilesRepository } from '@/lib/db/repositories'
 
 export async function requireServerUser() {
   const cookieStore = await cookies()
@@ -12,7 +12,7 @@ export async function requireServerUser() {
     redirect('/')
   }
 
-  const profile = await profilesStore.ensureFromAuthUser(session.user)
+  const profile = await neonProfilesRepository.ensureFromAuthUser(session.user)
   const user = {
     ...session.user,
     role: profile.role,
@@ -42,7 +42,7 @@ export async function requireAdminApiUser(request: NextRequest) {
     return auth
   }
 
-  const profile = await profilesStore.ensureFromAuthUser(auth.user)
+  const profile = await neonProfilesRepository.ensureFromAuthUser(auth.user)
 
   if (profile?.role !== 'admin') {
     return {

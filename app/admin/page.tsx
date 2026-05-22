@@ -1,7 +1,10 @@
 import Link from 'next/link'
 import type { ReactNode } from 'react'
 import { requireAdmin } from '@/lib/auth/require-admin'
-import { adminStore, planRequestsStore } from '@/lib/storage'
+import {
+  neonAdminRepository,
+  neonPlanRequestsRepository,
+} from '@/lib/db/repositories'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -20,9 +23,9 @@ export default async function AdminPage({
   await requireAdmin()
   const params = searchParams ? await searchParams : {}
   const [overview, userRows, requests] = await Promise.all([
-    adminStore.getOverview(),
-    adminStore.listUserRows(),
-    planRequestsStore.list(),
+    neonAdminRepository.getOverview(),
+    neonAdminRepository.listUserRows(),
+    neonPlanRequestsRepository.list(),
   ])
   const updated = params?.updated === '1'
 

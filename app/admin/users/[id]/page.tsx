@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { requireAdmin } from '@/lib/auth/require-admin'
-import { adminStore } from '@/lib/storage'
+import { neonAdminRepository } from '@/lib/db/repositories'
 import { updateUserAdminAction } from '../../actions'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -16,7 +16,7 @@ export default async function AdminUserDetailPage({
 }) {
   await requireAdmin()
   const { id } = await params
-  const detail = await adminStore.getUserDetail(id)
+  const detail = await neonAdminRepository.getUserDetail(id)
 
   if (!detail) {
     notFound()

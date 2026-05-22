@@ -1,13 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAdminApiUser } from '@/lib/auth/require-admin'
 import {
-  adminAuditLogsStore,
   buildTierRebasedUsageOverridePatch,
-  planRequestsStore,
-  profilesStore,
-  subscriptionsStore,
-  usageLimitOverridesStore,
-} from '@/lib/storage'
+  neonAdminAuditLogsRepository,
+  neonPlanRequestsRepository,
+  neonSubscriptionsRepository,
+  neonUsageLimitOverridesRepository,
+} from '@/lib/db/repositories'
 
 export const runtime = 'nodejs'
 
@@ -30,23 +29,23 @@ export async function PATCH(
     return NextResponse.json({ error: 'Status is required.' }, { status: 400 })
   }
 
-  const requests = await planRequestsStore.list()
+  const requests = await neonPlanRequestsRepository.list()
   const existing = requests.find((item) => item.id === id)
   if (!existing) {
     return NextResponse.json({ error: 'Request not found.' }, { status: 404 })
   }
 
-  const updated = await planRequestsStore.updateStatus(
+  const updated = await neonPlanRequestsRepository.updateStatus(
     id,
     body.status,
     body.adminNote?.trim()
   )
 
   if (body.status === 'activated') {
-    const currentSubscription = await subscriptionsStore.getByUserId(existing.userId)
-    const currentOverride = await usageLimitOverridesStore.getByUserId(existing.userId)
+    const currentSubscription = await neonSubscriptionsRepository.getByUserId(existing.userId)
+    const currentOverride = await neonUsageLimitOverridesRepository.getByUserId(existing.userId)
 
-    await subscriptionsStore.updateTier(existing.userId, existing.requestedTier)
+    await neonSubscriptionsRepository.updateTier(existing.userId, existing.requestedTier)
 
     if (currentSubscription) {
       const overridePatch = buildTierRebasedUsageOverridePatch({
@@ -56,12 +55,12 @@ export async function PATCH(
       })
 
       if (Object.keys(overridePatch).length > 0) {
-        await usageLimitOverridesStore.upsert(existing.userId, overridePatch)
+        await neonUsageLimitOverridesRepository.upsert(existing.userId, overridePatch)
       }
     }
   }
 
-  await adminAuditLogsStore.create({
+  await neonAdminAuditLogsRepository.create({
     adminUserId: auth.user.id,
     targetUserId: existing.userId,
     action: `plan_request_${body.status}`,
