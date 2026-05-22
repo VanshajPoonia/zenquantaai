@@ -10,7 +10,7 @@ type GeneratedImageRow = typeof zenGeneratedImages.$inferSelect
 type GeneratedImageInsert = typeof zenGeneratedImages.$inferInsert
 
 export type NeonGeneratedImageProvider = 'openrouter' | 'external' | 'local'
-export type NeonGeneratedImageStorageProvider = 'supabase' | 'external' | 'local'
+export type NeonGeneratedImageStorageProvider = 'external' | 'local'
 export type NeonGeneratedImageStatus = 'created' | 'stored' | 'failed' | 'deleted'
 
 export interface NeonGeneratedImageMetadata {

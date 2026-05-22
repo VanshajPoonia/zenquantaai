@@ -1,6 +1,6 @@
 import 'server-only'
 
-import { and, desc, eq } from 'drizzle-orm'
+import { and, desc, eq, inArray } from 'drizzle-orm'
 import { getDatabaseClient } from '../client'
 import { zenFiles } from '../schema'
 import { compactObject, toIsoString } from './helpers'
@@ -9,13 +9,14 @@ import { neonUsersRepository } from './users'
 type FileRow = typeof zenFiles.$inferSelect
 type FileInsert = typeof zenFiles.$inferInsert
 
-export type NeonFileProvider = 'supabase' | 'external' | 'local'
+export type NeonFileProvider = 'external' | 'local'
 export type NeonFileVisibility = 'private' | 'public'
 
 export interface NeonFileMetadata {
   id: string
   userId: string
   conversationId: string | null
+  projectId: string | null
   messageId: string | null
   provider: NeonFileProvider
   bucket: string | null
@@ -47,6 +48,7 @@ function rowToFile(row: FileRow): NeonFileMetadata {
     id: row.id,
     userId: row.userId,
     conversationId: row.conversationId,
+    projectId: row.projectId,
     messageId: row.messageId,
     provider: row.provider as NeonFileProvider,
     bucket: row.bucket,
@@ -112,6 +114,7 @@ class NeonFilesRepository {
       id: input.id,
       userId: input.userId,
       conversationId: input.conversationId,
+      projectId: input.projectId,
       messageId: input.messageId,
       provider: input.provider,
       bucket: input.bucket,
@@ -140,6 +143,7 @@ class NeonFilesRepository {
   ): Promise<NeonFileMetadata | null> {
     const values = compactObject<Partial<FileInsert>>({
       conversationId: patch.conversationId,
+      projectId: patch.projectId,
       messageId: patch.messageId,
       provider: patch.provider,
       bucket: patch.bucket,
@@ -161,6 +165,28 @@ class NeonFilesRepository {
       .returning()
 
     return rows[0] ? rowToFile(rows[0]) : null
+  }
+
+  async updateScopeForFiles(
+    userId: string,
+    fileIds: string[],
+    scope: {
+      projectId?: string | null
+      conversationId?: string | null
+      messageId?: string | null
+    }
+  ): Promise<void> {
+    if (fileIds.length === 0) return
+
+    await getDatabaseClient()
+      .update(zenFiles)
+      .set({
+        projectId: scope.projectId ?? null,
+        conversationId: scope.conversationId ?? null,
+        messageId: scope.messageId ?? null,
+        updatedAt: new Date(),
+      })
+      .where(and(eq(zenFiles.userId, userId), inArray(zenFiles.id, fileIds)))
   }
 
   async delete(userId: string, id: string): Promise<void> {

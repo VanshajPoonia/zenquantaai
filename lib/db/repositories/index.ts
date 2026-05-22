@@ -3,7 +3,9 @@ import 'server-only'
 export { neonAdminRepository } from './admin'
 export { neonAssistantRecommendationEventsRepository } from './assistant-recommendations'
 export { neonConversationRepository } from './conversations'
+export { neonFileChunksRepository } from './file-chunks'
 export { neonFilesRepository } from './files'
+export type { NeonFileMetadata } from './files'
 export { neonGeneratedImagesRepository } from './generated-images'
 export {
   neonAdminAuditLogsRepository,
