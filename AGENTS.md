@@ -4,7 +4,9 @@
 
 Zenquanta AI is a Next.js App Router AI workspace. It is not the old four-mode app; agents must treat the current platform as a six-assistant product with Nova, Velora, Axiom, Forge, Pulse, and Prism.
 
-The current app uses TypeScript, Tailwind CSS, shadcn/ui-style components, Supabase, and OpenRouter. Text chat is handled by `/api/chat`. Prism image generation is handled by `/api/images/generate`. Supabase is used for auth, Postgres data, storage, subscriptions, usage records, plan requests, and admin data. OpenRouter is the only AI gateway currently represented in the code.
+The current app uses TypeScript, Tailwind CSS, shadcn/ui-style components, Neon Postgres, Supabase Auth/Storage, and OpenRouter. Text chat is handled by `/api/chat`. Prism image generation is handled by `/api/images/generate`. Neon is used for app data persistence. Supabase is still used for auth sessions and private attachment storage. OpenRouter is the only AI gateway currently represented in the code.
+
+Current direction: keep plan upgrades manual through plan requests and admin activation. Payment automation is out of scope unless explicitly requested later. Supabase Auth and Supabase Storage require separate future decisions because Neon only replaced the Postgres/database layer.
 
 ## Required Reading Before Work
 
@@ -25,6 +27,7 @@ Useful source files to inspect for most changes:
 - `lib/config/pricing.ts`
 - `lib/ai/chat.ts`
 - `lib/ai/openrouter.ts`
+- `lib/storage/neon.ts`
 - `lib/storage/supabase.ts`
 - `app/api/chat/route.ts`
 - `app/api/images/generate/route.ts`
@@ -41,9 +44,10 @@ Useful source files to inspect for most changes:
 - `components/ui/`: shadcn/Radix UI primitives.
 - `lib/ai/`: OpenRouter calls, chat orchestration, memory, and prompts.
 - `lib/config/`: assistant, mode, model, image model, pricing, and preset config.
-- `lib/storage/`: Supabase-backed data access.
+- `lib/storage/`: Neon-backed data access plus Supabase Storage helpers.
 - `lib/billing/`: cost calculation, enforcement, and usage logging.
 - `lib/router/`: local prompt precheck and assistant recommendations.
+- `neon/migrations/`: Neon database schema setup.
 - `supabase/migrations/`: database and storage setup.
 - `types/`: shared TypeScript domain types.
 
@@ -64,7 +68,9 @@ Useful source files to inspect for most changes:
 - Prism image generation returns JSON from `/api/images/generate`.
 - Model routing belongs in `lib/config/*`.
 - Prompt and generation orchestration belongs in `lib/ai/*`.
-- Supabase persistence belongs in `lib/storage/*`.
+- Neon database persistence belongs in `lib/storage/*`.
+- Supabase remains current for auth and private attachment storage.
+- Do not assume Supabase Auth or Supabase Storage have been removed.
 - Usage enforcement and logging belong in `lib/billing/*`.
 - Client chat state is centralized in `lib/chat-context.tsx`.
 - Assistant recommendation rules belong in `lib/router/*`.
@@ -81,7 +87,7 @@ Current commands from `package.json`:
 
 Known command issues:
 
-- `npm run lint` may fail because ESLint 9 expects `eslint.config.js`.
+- `npm run lint` may fail because the repo is missing an ESLint flat config file.
 - There is no `typecheck` script. Recommended check: `npx tsc --noEmit`.
 - `next.config.mjs` currently sets `typescript.ignoreBuildErrors: true`, so build may hide TypeScript errors.
 
@@ -100,7 +106,8 @@ Known command issues:
 - Keep changes scoped to the requested files and behavior.
 - Do not invent features. If uncertain, mark the item as unclear and cite the file to inspect next.
 - Do not describe Pulse as having real web search unless code implements retrieval/tooling. Current repo shows Pulse branding and a `webSearch` setting, but real search/retrieval is not confirmed.
-- Do not add Stripe language as implemented; plan upgrades are manual and admin-driven.
+- Do not plan Stripe checkout, webhooks, customer portal, subscription automation, or payment automation unless explicitly requested later.
+- Keep plan upgrades manual and admin-driven for now.
 
 ## Handoff Rules
 

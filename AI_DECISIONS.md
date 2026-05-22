@@ -10,15 +10,33 @@ Evidence:
 - Runtime client lives in `lib/ai/openrouter.ts`.
 - `OPENROUTER_API_KEY` and `OPENROUTER_BASE_URL` are the AI gateway env vars.
 
-## Supabase Is The Source Of Truth After Sign-In
+## Neon Is The App Data Source Of Truth After Sign-In
 
-Decision: Persist authenticated user data in Supabase.
+Decision: Persist authenticated application data in Neon Postgres while keeping Supabase Auth and Supabase Storage.
 
 Evidence:
 
-- Supabase-backed stores live in `lib/storage/*`.
+- Neon-backed stores live in `lib/storage/*`.
 - Auth is implemented in `lib/auth/session.ts`.
-- Migrations create conversations, projects, prompts, settings, profiles, subscriptions, usage events, plan requests, admin audit logs, recommendation events, and storage policies.
+- Neon migrations create conversations, projects, prompts, settings, profiles, subscriptions, usage events, plan requests, admin audit logs, and recommendation events.
+
+Note: Supabase remains current for auth and private attachment storage.
+
+## Database Persistence Should Migrate To Neon Postgres
+
+Decision: Migrate the Postgres/database layer from Supabase to Neon Postgres in phases.
+
+Planned sequence:
+
+1. Move Postgres-backed persistence first. Completed for the app stores.
+2. Keep Supabase Auth and Supabase Storage during the first phase. (inferred)
+3. Decide separately whether auth and file storage should remain on Supabase or move later. (inferred)
+
+Reason:
+
+- Supabase currently handles more than Postgres.
+- Neon is a Postgres database target, not a direct replacement for Supabase Auth or Supabase Storage.
+- Usage records, plan requests, subscriptions, admin data, conversations, projects, prompts, settings, recommendation events, and message data now use the Neon data layer.
 
 ## Text And Image Transport Are Separate
 
@@ -39,7 +57,7 @@ Evidence:
 - `lib/config/assistants.ts` maps modes to `nova`, `velora`, `axiom`, `forge`, `pulse`, and `prism`.
 - Public assistant pages exist for all six families.
 
-## Manual Plan Request Flow Instead Of Stripe Automation
+## Manual Plan Request Flow
 
 Decision: Plan upgrades are manual and admin-driven.
 
@@ -47,7 +65,16 @@ Evidence:
 
 - Plan request routes and admin actions exist.
 - Pricing page submits manual requests.
-- No Stripe checkout or webhook implementation was found.
+- No automated checkout, customer portal, or billing webhook implementation was found.
+
+## Payment Automation Is Out Of Scope
+
+Decision: Do not plan payment automation unless explicitly requested later.
+
+Reason:
+
+- The current product direction keeps plan upgrades as manual plan requests plus admin activation.
+- Subscription and usage state still matter, but they should not imply automated payments.
 
 ## Separate Usage Buckets
 
