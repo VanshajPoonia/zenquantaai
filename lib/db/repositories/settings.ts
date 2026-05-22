@@ -10,6 +10,7 @@ import { AppSettings, AppSettingsPatch } from '@/types'
 import { getDatabaseClient } from '../client'
 import { zenUserSettings } from '../schema'
 import { toJsonObject } from './helpers'
+import { neonUsersRepository } from './users'
 
 function normalizeSettings(input: Partial<AppSettings>): AppSettings {
   const defaultMode = input.defaultMode ?? DEFAULT_APP_SETTINGS.defaultMode
@@ -74,6 +75,8 @@ class NeonSettingsRepository {
   }
 
   async save(userId: string, settings: AppSettings): Promise<AppSettings> {
+    await neonUsersRepository.ensureUserReference(userId)
+
     const normalized = normalizeSettings(settings)
 
     await getDatabaseClient()

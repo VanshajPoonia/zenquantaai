@@ -5,6 +5,7 @@ import { ImageGenerationEvent, UsageEvent } from '@/types'
 import { getDatabaseClient } from '../client'
 import { zenImageGenerationEvents, zenUsageEvents } from '../schema'
 import { toIsoString, toJsonArray, toNumber } from './helpers'
+import { neonUsersRepository } from './users'
 
 type UsageEventRow = typeof zenUsageEvents.$inferSelect
 type ImageEventRow = typeof zenImageGenerationEvents.$inferSelect
@@ -77,6 +78,8 @@ class NeonUsageEventsRepository {
   }
 
   async create(event: Omit<UsageEvent, 'id' | 'createdAt'>): Promise<UsageEvent> {
+    await neonUsersRepository.ensureUserReference(event.userId)
+
     const rows = await getDatabaseClient()
       .insert(zenUsageEvents)
       .values({
@@ -126,6 +129,8 @@ class NeonImageGenerationEventsRepository {
   async create(
     event: Omit<ImageGenerationEvent, 'id' | 'createdAt'>
   ): Promise<ImageGenerationEvent> {
+    await neonUsersRepository.ensureUserReference(event.userId)
+
     const rows = await getDatabaseClient()
       .insert(zenImageGenerationEvents)
       .values({

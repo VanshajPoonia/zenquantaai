@@ -6,6 +6,7 @@ import { PromptLibraryItem } from '@/types'
 import { getDatabaseClient } from '../client'
 import { zenPromptLibrary } from '../schema'
 import { toDate, toIsoString } from './helpers'
+import { neonUsersRepository } from './users'
 
 type PromptRow = typeof zenPromptLibrary.$inferSelect
 
@@ -35,6 +36,8 @@ class NeonPromptsRepository {
     userId: string,
     input: Pick<PromptLibraryItem, 'title' | 'content' | 'mode'> & { id?: string }
   ): Promise<PromptLibraryItem> {
+    await neonUsersRepository.ensureUserReference(userId)
+
     const now = nowIso()
     const prompt: PromptLibraryItem = {
       id: input.id ?? createId('prompt'),

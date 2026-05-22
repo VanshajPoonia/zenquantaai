@@ -7,8 +7,9 @@ import {
   RecommendationOutcome,
 } from '@/types'
 import { getDatabaseClient } from '../client'
-import { zenAssistantRecommendationEvents } from '../schema'
+import { zenAssistantRecommendationEvents, zenConversations } from '../schema'
 import { toIsoString, toJsonArray, toNumber } from './helpers'
+import { neonUsersRepository } from './users'
 
 type AssistantRecommendationEventRow =
   typeof zenAssistantRecommendationEvents.$inferSelect
@@ -101,11 +102,24 @@ class NeonAssistantRecommendationEventsRepository {
   async create(
     event: Omit<AssistantRecommendationEvent, 'id' | 'createdAt'>
   ): Promise<AssistantRecommendationEvent> {
+    await neonUsersRepository.ensureUserReference(event.userId)
+    let conversationId = event.conversationId ?? null
+
+    if (conversationId) {
+      const conversation = await getDatabaseClient()
+        .select({ id: zenConversations.id })
+        .from(zenConversations)
+        .where(eq(zenConversations.id, conversationId))
+        .limit(1)
+
+      conversationId = conversation[0]?.id ?? null
+    }
+
     const rows = await getDatabaseClient()
       .insert(zenAssistantRecommendationEvents)
       .values({
         userId: event.userId,
-        conversationId: event.conversationId ?? null,
+        conversationId,
         currentAssistant: event.currentAssistant,
         recommendedAssistant: event.recommendedAssistant,
         confidence: String(event.confidence),

@@ -12,6 +12,7 @@ import { getDatabaseClient } from '../client'
 import { zenSubscriptions, zenUsageLimitOverrides } from '../schema'
 import { compactObject, toIsoString, toNumber } from './helpers'
 import { neonProfilesRepository } from './profiles'
+import { neonUsersRepository } from './users'
 
 type SubscriptionRow = typeof zenSubscriptions.$inferSelect
 type SubscriptionInsert = typeof zenSubscriptions.$inferInsert
@@ -238,6 +239,8 @@ class NeonUsageLimitOverridesRepository {
     userId: string,
     patch: Partial<UsageLimitOverride>
   ): Promise<UsageLimitOverride> {
+    await neonUsersRepository.ensureUserReference(userId)
+
     const values = compactObject<OverrideInsert>({
       userId,
       coreTokensIncluded: patch.coreTokensIncluded,
@@ -359,27 +362,42 @@ class NeonSubscriptionsRepository {
     tier: SubscriptionTier,
     note?: string | null
   ) {
+    await neonUsersRepository.ensureUserReference(userId)
+
+    const values = {
+      ...buildPlanInsert(userId, tier),
+      notes: note ?? null,
+      updatedAt: new Date(),
+    }
+
     const rows = await getDatabaseClient()
-      .update(zenSubscriptions)
-      .set({
-        ...buildPlanInsert(userId, tier),
-        notes: note ?? null,
-        updatedAt: new Date(),
+      .insert(zenSubscriptions)
+      .values(values)
+      .onConflictDoUpdate({
+        target: zenSubscriptions.userId,
+        set: values,
       })
-      .where(eq(zenSubscriptions.userId, userId))
       .returning()
 
     return rowToSubscription(rows[0])
   }
 
   async updateStatus(userId: string, status: Subscription['status']) {
+    await neonUsersRepository.ensureUserReference(userId)
+
     const rows = await getDatabaseClient()
-      .update(zenSubscriptions)
-      .set({
+      .insert(zenSubscriptions)
+      .values({
+        ...buildPlanInsert(userId, 'free'),
         status,
-        updatedAt: new Date(),
       })
-      .where(eq(zenSubscriptions.userId, userId))
+      .onConflictDoUpdate({
+        target: zenSubscriptions.userId,
+        set: {
+          status,
+          updatedAt: new Date(),
+        },
+      })
       .returning()
 
     return rowToSubscription(rows[0])
@@ -389,6 +407,8 @@ class NeonSubscriptionsRepository {
     userId: string,
     patch: Partial<Subscription>
   ): Promise<Subscription> {
+    await neonUsersRepository.ensureUserReference(userId)
+
     const values = compactObject<Partial<SubscriptionInsert>>({
       ...(typeof patch.planPriceUsd !== 'undefined'
         ? { planPriceUsd: String(patch.planPriceUsd) }
@@ -413,9 +433,15 @@ class NeonSubscriptionsRepository {
     })
 
     const rows = await getDatabaseClient()
-      .update(zenSubscriptions)
-      .set(values)
-      .where(eq(zenSubscriptions.userId, userId))
+      .insert(zenSubscriptions)
+      .values({
+        ...buildPlanInsert(userId, patch.tier ?? 'free'),
+        ...values,
+      })
+      .onConflictDoUpdate({
+        target: zenSubscriptions.userId,
+        set: values,
+      })
       .returning()
 
     return rowToSubscription(rows[0])

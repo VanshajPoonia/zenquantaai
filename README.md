@@ -279,13 +279,13 @@ http://localhost:3000
 
 ## Neon Database Foundation
 
-Neon is present as a foundation for a future persistence migration. The current runtime stores still use Supabase.
+Neon is present as a fresh foundation for future app persistence. The current runtime stores still use Supabase. Do not import, copy, or backfill Supabase database rows into Neon.
 
 To validate the Neon schema separately, apply:
 
-1. `neon/migrations/20260522_zenquanta_neon_initial.sql`
+1. `neon/migrations/20260522_zenquanta_fresh_initial.sql`
 
-This creates the `zen_*` application tables in Neon without Supabase RLS, `auth.uid()`, `auth.users` foreign keys, or Supabase Storage objects. The server-only Neon client and typed Drizzle schema live in `lib/db/`.
+This creates a fresh `zen_*` application schema in Neon without Supabase RLS, `auth.uid()`, `auth.users` foreign keys, Supabase Storage objects, or data-copy steps. The server-only Neon client and typed Drizzle schema live in `lib/db/`.
 
 ## Supabase Setup
 
@@ -450,8 +450,9 @@ types/
 ## Notes
 
 - OpenRouter is the only AI gateway.
-- Supabase remains the source of truth for app data, auth sessions, and private attachment storage.
-- Neon Postgres is foundation-only until a later explicit persistence migration.
+- Supabase remains the source of truth for current runtime app data, auth sessions, and private attachment storage.
+- Neon Postgres is a fresh foundation-only database until a later explicit persistence migration.
+- Supabase database rows are not imported, copied, or backfilled into Neon.
 - `.env.local` is for local secrets and should never be committed.
 - the publishable Supabase key is safe for `NEXT_PUBLIC_*`
 - the Supabase secret key must remain server-only

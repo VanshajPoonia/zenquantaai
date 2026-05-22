@@ -5,6 +5,7 @@ import { AuthUser, Profile, Role } from '@/types'
 import { getDatabaseClient } from '../client'
 import { zenProfiles } from '../schema'
 import { toIsoString } from './helpers'
+import { neonUsersRepository } from './users'
 
 type ProfileRow = typeof zenProfiles.$inferSelect
 
@@ -67,6 +68,12 @@ class NeonProfilesRepository {
     const forcedAdminRole: Role | undefined = isHardcodedAdminIdentity(user)
       ? 'admin'
       : undefined
+    const role = forcedAdminRole ?? user.role ?? existing?.role ?? 'user'
+
+    await neonUsersRepository.ensureFromAuthUser({
+      ...user,
+      role,
+    })
 
     if (existing) {
       const needsUpdate =
@@ -96,14 +103,14 @@ class NeonProfilesRepository {
         userId: user.id,
         loginId: user.loginId ?? null,
         email: user.email ?? null,
-        role: forcedAdminRole ?? 'user',
+        role,
       })
       .onConflictDoUpdate({
         target: zenProfiles.userId,
         set: {
           loginId: user.loginId ?? null,
           email: user.email ?? null,
-          role: forcedAdminRole ?? 'user',
+          role,
           updatedAt: new Date(),
         },
       })
@@ -113,16 +120,32 @@ class NeonProfilesRepository {
   }
 
   async updateRole(userId: string, role: Role): Promise<Profile> {
+    await neonUsersRepository.updateRole(userId, role)
+
     const rows = await getDatabaseClient()
-      .update(zenProfiles)
-      .set({
+      .insert(zenProfiles)
+      .values({
+        userId,
         role,
-        updatedAt: new Date(),
       })
-      .where(eq(zenProfiles.userId, userId))
+      .onConflictDoUpdate({
+        target: zenProfiles.userId,
+        set: {
+          role,
+          updatedAt: new Date(),
+        },
+      })
       .returning()
 
-    return rowToProfile(rows[0])
+    if (rows[0]) return rowToProfile(rows[0])
+
+    const fallback = await getDatabaseClient()
+      .select()
+      .from(zenProfiles)
+      .where(eq(zenProfiles.userId, userId))
+      .limit(1)
+
+    return rowToProfile(fallback[0])
   }
 }
 

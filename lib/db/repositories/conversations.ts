@@ -2,6 +2,7 @@ import 'server-only'
 
 import { and, asc, desc, eq, inArray } from 'drizzle-orm'
 import { createSessionSettings, DEFAULT_PROJECT_ID } from '@/lib/config'
+import { getAssistantFamilyFromMode } from '@/lib/config/assistants'
 import { createSupabaseSignedUrl } from '@/lib/storage/supabase'
 import {
   createConversation,
@@ -28,6 +29,7 @@ import {
   toNullableDate,
   toNullableIsoString,
 } from './helpers'
+import { neonUsersRepository } from './users'
 
 type ConversationRow = typeof zenConversations.$inferSelect & {
   messages?: MessageRow[]
@@ -81,6 +83,9 @@ async function rowToConversation(row: ConversationRow): Promise<Conversation> {
           model: messageRow.model ?? undefined,
           provider: (messageRow.provider as Message['provider'] | null) ?? undefined,
           error: messageRow.error ?? undefined,
+          assistantFamily:
+            (messageRow.assistantFamily as Message['assistantFamily'] | null) ??
+            undefined,
           attachments: toJsonArray<Attachment>(messageRow.attachments),
           usage: messageRow.usage
             ? toJsonObject<UsageEstimate>(messageRow.usage, {} as UsageEstimate)
@@ -124,6 +129,7 @@ function conversationToInsert(userId: string, conversation: Conversation) {
     projectId: conversation.projectId ?? DEFAULT_PROJECT_ID,
     title: conversation.title,
     mode: conversation.mode,
+    assistantFamily: getAssistantFamilyFromMode(conversation.mode),
     isPinned: conversation.isPinned,
     preview: conversation.preview,
     messageCount: conversation.messageCount,
@@ -143,6 +149,7 @@ function messageToInsert(conversationId: string, message: Message) {
     role: message.role,
     content: message.content,
     mode: message.mode,
+    assistantFamily: message.assistantFamily ?? null,
     status: message.status ?? null,
     model: message.model ?? null,
     provider: message.provider ?? null,
@@ -236,6 +243,8 @@ class NeonConversationsRepository {
   }
 
   async save(userId: string, conversation: Conversation): Promise<Conversation> {
+    await neonUsersRepository.ensureUserReference(userId)
+
     const db = getDatabaseClient()
     const normalizedConversation = updateConversationSnapshot(conversation, {
       projectId: conversation.projectId ?? DEFAULT_PROJECT_ID,

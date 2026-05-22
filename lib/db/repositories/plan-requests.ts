@@ -5,6 +5,7 @@ import { PlanChangeRequest, PlanRequestStatus, SubscriptionTier } from '@/types'
 import { getDatabaseClient } from '../client'
 import { zenAdminAuditLogs, zenPlanChangeRequests } from '../schema'
 import { toIsoString, toJsonObject, toNullableIsoString } from './helpers'
+import { neonUsersRepository } from './users'
 
 type PlanRequestRow = typeof zenPlanChangeRequests.$inferSelect
 type AuditLogRow = typeof zenAdminAuditLogs.$inferSelect
@@ -81,6 +82,8 @@ class NeonPlanRequestsRepository {
     note?: string
     contact?: string
   }): Promise<PlanChangeRequest> {
+    await neonUsersRepository.ensureUserReference(input.userId)
+
     const rows = await getDatabaseClient()
       .insert(zenPlanChangeRequests)
       .values({
@@ -126,6 +129,11 @@ class NeonAdminAuditLogsRepository {
     action: string
     details: Record<string, unknown>
   }) {
+    await Promise.all([
+      neonUsersRepository.ensureUserReference(input.adminUserId),
+      neonUsersRepository.ensureUserReference(input.targetUserId),
+    ])
+
     const rows = await getDatabaseClient()
       .insert(zenAdminAuditLogs)
       .values({

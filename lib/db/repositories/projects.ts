@@ -11,6 +11,7 @@ import { Project } from '@/types'
 import { getDatabaseClient } from '../client'
 import { zenProjects } from '../schema'
 import { toDate, toIsoString } from './helpers'
+import { neonUsersRepository } from './users'
 
 function normalizeProject(input: Project): Project {
   return {
@@ -78,6 +79,8 @@ class NeonProjectsRepository {
     userId: string,
     input: Pick<Project, 'name' | 'description' | 'color'> & { id?: string }
   ): Promise<Project> {
+    await neonUsersRepository.ensureUserReference(userId)
+
     const now = nowIso()
     const project = normalizeProject({
       id: input.id ?? createId('proj'),
