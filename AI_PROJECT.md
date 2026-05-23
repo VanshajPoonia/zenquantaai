@@ -41,12 +41,19 @@ This is the current six-assistant platform, not the old four-mode version.
 - Local prompt precheck and assistant recommendations.
 - Projects.
 - Prompt library.
+- Reusable prompt workflows with ordered assistant-family steps.
+- Text model comparison mode with selectable best-response save-in.
 - User dashboard.
 - Admin dashboard.
+- Admin cost and margin analytics with period, plan, assistant, and user filters.
 - Per-user admin controls.
 - Manual plan request flow.
 - Usage tracking for text and image requests.
 - Public assistant pages.
+
+Prompt workflow v1 runs are intentionally simple: each step is queued as a normal chat or Prism image send using the chosen assistant family. There is no background automation engine, and normal usage logging remains the billing/usage source of truth.
+
+Model comparison v1 is text-only. Users can compare multiple available text assistants through OpenRouter, review model/assistant/latency/displayed usage, and save one chosen response into the conversation. Prism image comparison is not part of this first slice.
 
 ## Assistant Families
 
@@ -84,6 +91,8 @@ Mode mapping:
 - `/api/conversations` and `/api/conversations/[id]`: conversation persistence.
 - `/api/projects` and `/api/projects/[id]`: project management.
 - `/api/prompts` and `/api/prompts/[id]`: prompt library.
+- `/api/prompt-workflows`, `/api/prompt-workflows/[id]`, and `/api/prompt-workflows/[id]/runs`: reusable workflow CRUD and lightweight run tracking.
+- `/api/model-comparisons` and `/api/model-comparisons/[id]/choose`: text assistant/model comparison and chosen response save-in.
 - `/api/settings`: user settings.
 - `/api/attachments`: attachment upload.
 - `/api/dashboard`: user dashboard data.
@@ -105,13 +114,18 @@ Neon Postgres is the active runtime database for migrated app data. Supabase Pos
 
 The fresh Neon schema lives in `neon/migrations/20260522_zenquanta_fresh_initial.sql`, and typed Drizzle table definitions live in `lib/db/schema.ts`.
 
-Neon repositories live in `lib/db/repositories/*`. They cover fresh Neon users/auth identity mapping, profiles, subscriptions, usage, plan requests, admin audit logs, projects, conversations/messages/memory, prompts, settings, assistant recommendations, file metadata, and generated image metadata.
+Neon repositories live in `lib/db/repositories/*`. They cover fresh Neon users/auth identity mapping, profiles, subscriptions, usage, plan requests, admin audit logs, projects, conversations/messages/memory, prompts, prompt workflows and run records, text model comparisons and candidates, settings, assistant recommendations, file metadata, and generated image metadata.
 
 Active Neon runtime data paths are:
 
 - `/api/settings`
 - `/api/prompts`
 - `/api/prompts/[id]`
+- `/api/prompt-workflows`
+- `/api/prompt-workflows/[id]`
+- `/api/prompt-workflows/[id]/runs`
+- `/api/model-comparisons`
+- `/api/model-comparisons/[id]/choose`
 - `/api/assistant-recommendations`
 - `/api/projects`
 - `/api/projects/[id]`
@@ -134,7 +148,7 @@ The Neon migration creates:
 
 - app-owned users, auth identity mapping, credentials, and sessions
 - profiles, subscriptions, manual plan requests, usage overrides, text/image usage events, and admin audit logs
-- projects, conversations, messages, conversation memory fields, prompt library, and user settings
+- projects, conversations, messages, conversation memory fields, prompt library, prompt workflows, text model comparisons, and user settings
 - assistant recommendation events, file metadata, and generated image metadata
 - uploaded-file text chunks and pgvector embeddings for private project knowledge
 
@@ -146,6 +160,8 @@ Neon migration order:
 2. `20260522_zenquanta_local_auth.sql`
 3. `20260522_zenquanta_message_sources.sql`
 4. `20260522_zenquanta_file_knowledge.sql`
+5. `20260522_zenquanta_prompt_workflows.sql`
+6. `20260522_zenquanta_model_comparisons.sql`
 
 Historical Supabase migration order documented in `README.md`:
 
@@ -170,6 +186,7 @@ Implemented:
 - daily image limits
 - text usage events
 - image generation events
+- admin-only raw/displayed cost and margin analytics
 - manual admin activation
 - usage limit overrides
 
@@ -228,6 +245,8 @@ Implemented foundation and migration slices:
 7. Move usage, image history, manual plan requests, subscriptions, usage overrides, admin audit logs, dashboard data, admin routes, admin pages, pricing plan request flows, and profile/role hydration to fresh Neon repositories.
 8. Replace Supabase Auth with fresh Neon credentials auth.
 9. Replace Supabase Storage with neutral private file storage.
+10. Add Neon-backed prompt workflows and lightweight workflow run tracking.
+11. Add text model comparison records and candidate persistence.
 
 Planned migration direction:
 
@@ -311,5 +330,5 @@ Accepted aliases in code include:
 - File storage access keys must remain server-only.
 - Conversation saves currently delete and reinsert messages, which may be risky for large histories or concurrent writes.
 - Neon starts fresh and does not preserve old Supabase rows.
-- Settings, prompts, assistant recommendation telemetry, projects, conversations, messages, conversation memory, billing/admin data, usage records, plan requests, dashboard data, image history, and admin mutations are wired to Neon.
+- Settings, prompts, prompt workflows, text model comparisons, assistant recommendation telemetry, projects, conversations, messages, conversation memory, billing/admin data, usage records, plan requests, dashboard data, image history, and admin mutations are wired to Neon.
 - S3-compatible/R2 storage configuration must be validated before production if local storage is not acceptable.

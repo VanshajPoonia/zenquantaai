@@ -93,6 +93,8 @@ Neon currently provides a server-only client, Drizzle schema definitions, a serv
 - projects
 - conversations and messages
 - prompt library
+- prompt workflows, ordered steps, and run/step-run metadata
+- text model comparisons and generated candidates
 - user settings
 - profiles and admin roles
 - subscriptions and usage overrides
@@ -113,6 +115,11 @@ Current Neon-backed runtime routes:
 - `/api/settings`
 - `/api/prompts`
 - `/api/prompts/[id]`
+- `/api/prompt-workflows`
+- `/api/prompt-workflows/[id]`
+- `/api/prompt-workflows/[id]/runs`
+- `/api/model-comparisons`
+- `/api/model-comparisons/[id]/choose`
 - `/api/assistant-recommendations`
 - `/api/projects`
 - `/api/projects/[id]`
@@ -153,6 +160,8 @@ Fresh foundation migration available for Neon:
 2. `neon/migrations/20260522_zenquanta_local_auth.sql`
 3. `neon/migrations/20260522_zenquanta_message_sources.sql`
 4. `neon/migrations/20260522_zenquanta_file_knowledge.sql`
+5. `neon/migrations/20260522_zenquanta_prompt_workflows.sql`
+6. `neon/migrations/20260522_zenquanta_model_comparisons.sql`
 
 Apply with a Postgres client or Neon SQL editor. CLI example:
 
@@ -191,9 +200,13 @@ Before changing persistence code again:
 7. Send a text prompt and verify `/api/chat` streaming.
 8. With `TAVILY_API_KEY` configured, send a Pulse or `webSearch` prompt and verify sources appear.
 9. With an embeddings key configured, upload a text/code file, enable `fileContext`, and verify chat cites uploaded-file sources.
-10. Generate an image with Prism and verify `/api/images/generate`.
-11. Check `/dashboard` for usage.
-12. If using admin flows, ensure the user has an admin role in `zen_profiles`.
+10. Create and run a prompt workflow with at least two assistant-family steps and verify the steps queue into one conversation.
+11. Run a text model comparison, review candidates, and save one response into the conversation.
+12. Generate an image with Prism and verify `/api/images/generate`.
+13. Check `/dashboard` for usage.
+14. If using admin flows, ensure the user has an admin role in `zen_profiles`.
+15. Check `/admin` with current-month defaults and optional date range, plan, assistant, and user filters.
+16. Confirm admin raw-cost views do not change user-facing `/dashboard` displayed-cost responses.
 
 ## Production Safety Checks
 
@@ -208,6 +221,7 @@ Before changing persistence code again:
 - Confirm pgvector is available in Neon before enabling uploaded-file knowledge.
 - Confirm Pulse/webSearch source display and no-key degradation before presenting live retrieval in production.
 - Do not claim automated payments, checkout, customer portal, webhooks, or subscription automation. Manual plan requests and admin activation are the intended flow unless explicitly changed later.
+- Confirm raw model cost remains admin-only and user dashboards expose displayed usage only.
 
 ## Common Failure Points
 
@@ -215,6 +229,8 @@ Before changing persistence code again:
 - Missing Tavily key causes Pulse/webSearch to answer without live source context and without source claims.
 - Missing embeddings key skips uploaded-file indexing/retrieval without blocking uploads.
 - Missing pgvector extension or file knowledge migration breaks chunk storage and retrieval.
+- Missing prompt workflow migration breaks workflow CRUD and run tracking, while one-off prompts still use `zen_prompt_library`.
+- Missing model comparison migration breaks comparison mode, while normal chat remains separate.
 - Missing Neon `DATABASE_URL` breaks auth, settings, prompt library, assistant recommendation, project, conversation, chat persistence, image persistence, billing/admin, usage, dashboard, plan request, image history, profile/role hydration, and local import app-data paths.
 - Missing S3-compatible/R2 env vars breaks attachment and generated-image storage when `FILE_STORAGE_PROVIDER` is `s3` or `r2`.
 - Lint can fail because ESLint flat config is missing.
@@ -223,6 +239,7 @@ Before changing persistence code again:
 - Tavily request failures should degrade without claiming live verification.
 - Advanced PDF/OCR extraction is not implemented in uploaded-file knowledge v1.
 - Manual plan requests are not payment automation.
+- Admin margin analytics are operational estimates from stored usage and active plan prices, not payment-provider revenue.
 - Partial Neon route migration can create mixed Supabase/Neon data sources if the data boundary is not planned first.
 - Supabase Auth users, sessions, and passwords are intentionally not copied into Neon.
 - Fresh schema parity checks matter for admin data, usage records, subscriptions, plan requests, conversations, projects, prompts, and settings.

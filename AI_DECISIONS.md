@@ -37,6 +37,35 @@ Evidence:
 
 Note: Raw files remain private in object storage. Advanced PDF/OCR handling is out of scope for this first version.
 
+## Prompt Workflows Use The Existing Chat Queue
+
+Decision: Reusable prompt workflows are persisted in Neon, but v1 execution uses the existing queued chat/image send path instead of a new automation engine.
+
+Evidence:
+
+- Workflow schema and repository code live with the Neon database layer.
+- Workflow CRUD routes are additive under `/api/prompt-workflows`.
+- Workflow steps target assistant families and map back to existing Zenquanta modes.
+- Running a workflow queues each step as a normal text chat or Prism image request.
+
+Note: Workflow run and step-run rows are lightweight usage metadata. Billing and usage accounting still come from the normal text/image usage events.
+
+## Model Comparison Uses Text Assistants Only In V1
+
+Decision: Model comparison v1 compares text assistants through OpenRouter and does not include Prism image generation.
+
+Evidence:
+
+- `/api/model-comparisons` generates text candidates with the existing OpenRouter text path.
+- Comparison candidates store assistant family, model, latency, content, sources, and displayed usage metadata in Neon.
+- Usage logging runs for every successful candidate, while only the selected candidate is saved into the conversation.
+- `/api/model-comparisons/[id]/choose` appends the chosen response as the assistant message.
+
+Reason:
+
+- Text chat and Prism image generation use separate transports and separate usage wallets.
+- Keeping comparison text-only avoids mixing side-by-side text responses with image-credit generation in the first version.
+
 ## Neutral Private File Storage Replaces Supabase Storage
 
 Decision: Use a neutral private object storage abstraction for new uploads and generated images.
@@ -87,8 +116,8 @@ Decision: Use the completed Neon repository layer for migrated runtime database 
 Evidence:
 
 - Parallel repositories live in `lib/db/repositories/*`.
-- Repository exports use `neon*Repository` names and cover the fresh Neon schema, including users/auth identities, file metadata, and generated image metadata.
-- Active Neon-backed runtime data now includes auth, settings, prompt library, assistant recommendation telemetry, projects, conversations, messages, conversation memory, subscriptions, usage overrides, text usage events, image generation events, plan requests, admin audit logs, dashboard data, image history, pricing plan request flows, admin data, and profile/role hydration.
+- Repository exports use `neon*Repository` names and cover the fresh Neon schema, including users/auth identities, file metadata, generated image metadata, prompt workflow records, and model comparison records.
+- Active Neon-backed runtime data now includes auth, settings, prompt library, prompt workflows, text model comparisons, assistant recommendation telemetry, projects, conversations, messages, conversation memory, subscriptions, usage overrides, text usage events, image generation events, plan requests, admin audit logs, dashboard data, image history, pricing plan request flows, admin data, and profile/role hydration.
 - The repository export names use a `neon*Repository` prefix to reduce accidental swaps.
 
 Note: Repositories create fresh Neon records going forward and must not import, copy, backfill, or preserve Supabase database rows.
@@ -140,6 +169,18 @@ Evidence:
 - Plan request routes and admin actions exist.
 - Pricing page submits manual requests.
 - No automated checkout, customer portal, or billing webhook implementation was found.
+
+## Admin Cost Analytics Use Stored Neon Usage Data
+
+Decision: Admin cost and margin views read real stored Neon usage, image generation, subscription, override, profile, and plan request data.
+
+Evidence:
+
+- Admin analytics live in `lib/db/repositories/admin.ts`.
+- `/admin` and `/api/admin/overview` support date range, plan, assistant, and user filters.
+- Admin views include raw model cost, displayed usage, estimated gross margin, plan-level margin, text/image split, high raw-cost users, users near limits, model rankings, and assistant rankings.
+
+Note: Raw cost is admin-only. User dashboard surfaces should continue to show displayed usage only.
 
 ## Payment Automation Is Out Of Scope
 

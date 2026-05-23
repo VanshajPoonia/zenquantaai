@@ -2,7 +2,7 @@
 
 ## Current Status
 
-The repository contains a real Zenquanta AI platform backed by Neon for runtime app data and credentials auth, neutral private file storage for new uploads/generated images, and OpenRouter for AI transport. Shared AI project memory files exist at the repo root.
+The repository contains a real Zenquanta AI platform backed by Neon for runtime app data and credentials auth, neutral private file storage for new uploads/generated images, and OpenRouter for AI transport. Shared AI project memory files exist at the repo root. The prompt library now includes reusable Neon-backed prompt workflows, the composer includes text model comparison mode, and the admin dashboard includes filtered cost/margin analytics.
 
 Current direction: plan upgrades remain manual/admin-driven, payment automation is out of scope unless explicitly requested, and Neon/storage start fresh without importing Supabase database rows or storage objects.
 
@@ -136,6 +136,31 @@ Current direction: plan upgrades remain manual/admin-driven, payment automation 
 - Wired `/api/chat` to retrieve scoped file chunks when `fileContext` is enabled and inject only relevant excerpts.
 - Kept raw files private in object storage and left advanced PDF/OCR handling for later.
 
+### 2026-05-22 - Reusable Prompt Workflows V1
+
+- Added Neon-backed reusable prompt workflows as an extension of the existing prompt library.
+- Added ordered workflow steps that target Nova, Velora, Axiom, Forge, Pulse, or Prism and support `{{variable}}` placeholders.
+- Added workflow CRUD APIs and lightweight workflow run/step-run tracking.
+- Wired the composer prompt popover with Prompts and Workflows tabs.
+- Kept workflow execution simple: each step queues a normal chat or Prism image send, so existing chat/image routes, billing, memory, file context, and web search remain the execution path.
+- Did not add payment automation, background jobs, or Supabase import/backfill logic.
+
+### 2026-05-22 - Text Model Comparison V1
+
+- Added a text-only comparison mode that sends one prompt to multiple available text assistants through OpenRouter.
+- Added Neon tables, repository, and APIs for comparison records and generated candidates.
+- Logged usage for every successful candidate and stored displayed usage/latency/model metadata for comparison.
+- Added a composer comparison dialog with side-by-side candidate review and a "Save as best" action.
+- Saving a candidate appends only the selected response to the conversation.
+- Kept normal chat, Prism image generation, billing model, and manual plan upgrades unchanged.
+
+### 2026-05-23 - Admin Cost And Margin Controls
+
+- Added filter-aware admin analytics over Neon usage, image, subscription, override, profile, and plan request data.
+- Added admin dashboard controls for date range, plan, assistant, and user filtering.
+- Added admin-only visibility for raw model cost, displayed usage, estimated plan margin, text/image cost split, risky users near limits, high raw-cost users, expensive models, and assistant usage.
+- Kept manual plan requests, admin activation, user dashboard displayed-cost behavior, and payment automation scope unchanged.
+
 ## Current Work
 
 - Neon database foundation is complete at the code/schema level.
@@ -143,6 +168,9 @@ Current direction: plan upgrades remain manual/admin-driven, payment automation 
 - Settings, prompt library, assistant recommendation telemetry, projects, conversations, messages, conversation memory, subscriptions/manual plans, usage overrides, text/image usage records, plan requests, dashboard data, image history, admin data, and profile/role hydration are now backed by fresh Neon repositories.
 - Chat and image routes still use existing assistant execution paths, but their conversation, billing enforcement, and usage logging data now use Neon.
 - Neutral private file storage is active for new uploads and generated images.
+- Reusable prompt workflows are active in the composer prompt library popover.
+- Text model comparison is active in the composer for text prompts.
+- Admin cost and margin analytics are active on `/admin` and are backed by stored Neon usage data.
 - Local verification has run for TypeScript and production build; lint still needs ESLint flat config work.
 
 ## Proposed Next Work
@@ -173,6 +201,8 @@ Current direction: plan upgrades remain manual/admin-driven, payment automation 
 - OpenRouter is the only AI model gateway.
 - Tavily is the server-side web search provider for Pulse/webSearch source context.
 - Uploaded-file knowledge uses server-only embeddings and Neon pgvector; raw files remain private.
+- Prompt workflows run through the existing queued send path; they are not a durable background automation engine.
+- Model comparison v1 is text-only; Prism/image comparison remains separate because image generation uses a different transport and wallet.
 - Billing is currently manual/admin-driven, not payment-provider-driven.
 - Server-only secrets must remain out of client components.
 
@@ -203,6 +233,7 @@ Shared memory files were created to give Codex, Claude Code, and future agents a
 ## Future Feature Ideas
 
 - Durable generated-image storage.
+- Workflow templates, sharing, duplication, and richer run history.
 - Automated test suite for auth, billing, routing, recommendations, and chat streaming.
 - Safer incremental conversation persistence.
 - Auth and storage strategy decision after the database migration plan is clear.
