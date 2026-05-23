@@ -27,7 +27,11 @@ import {
   ImageGenerateResponse,
   PendingAttachment,
   Project,
+  ModelComparison,
   PromptLibraryItem,
+  PromptWorkflow,
+  PromptWorkflowInput,
+  PromptWorkflowRun,
   SendLifecycleStatus,
   SessionSettings,
   StreamEvent,
@@ -77,6 +81,7 @@ import {
   downloadTextFile,
 } from '@/lib/utils/export'
 import { serializeAttachment, toAttachmentContext } from '@/lib/utils/files'
+import { expandWorkflowTemplate } from '@/lib/utils/prompt-workflows'
 
 interface SendMessageInput {
   content: string
@@ -100,6 +105,13 @@ interface SavePromptInput {
   title: string
   content: string
   mode: AIMode | 'any'
+}
+
+type SavePromptWorkflowInput = PromptWorkflowInput & { id?: string }
+
+interface RunModelComparisonInput {
+  content: string
+  targetModes: AIMode[]
 }
 
 interface AuthSessionResponse {
@@ -159,6 +171,22 @@ interface ChatContextType {
   promptLibrary: PromptLibraryItem[]
   savePrompt: (input: SavePromptInput) => Promise<PromptLibraryItem | null>
   deletePrompt: (promptId: string) => Promise<void>
+  promptWorkflows: PromptWorkflow[]
+  savePromptWorkflow: (
+    input: SavePromptWorkflowInput
+  ) => Promise<PromptWorkflow | null>
+  deletePromptWorkflow: (workflowId: string) => Promise<void>
+  runPromptWorkflow: (
+    workflowId: string,
+    variableValues?: Record<string, string>
+  ) => Promise<void>
+  runModelComparison: (
+    input: RunModelComparisonInput
+  ) => Promise<ModelComparison | null>
+  chooseModelComparisonResponse: (
+    comparisonId: string,
+    candidateId: string
+  ) => Promise<Conversation | null>
   beginPromptPrecheck: () => void
   awaitRecommendationDecision: () => void
   clearPromptPrecheck: () => void
@@ -217,6 +245,12 @@ function sortPrompts(prompts: PromptLibraryItem[]): PromptLibraryItem[] {
   )
 }
 
+function sortPromptWorkflows(workflows: PromptWorkflow[]): PromptWorkflow[] {
+  return [...workflows].sort(
+    (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+  )
+}
+
 function isPendingAttachment(
   attachment: Attachment | PendingAttachment
 ): attachment is PendingAttachment {
@@ -253,6 +287,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const [selectedProjectIdState, setSelectedProjectIdState] =
     useState<ProjectFilterId>('all')
   const [promptLibrary, setPromptLibrary] = useState<PromptLibraryItem[]>([])
+  const [promptWorkflows, setPromptWorkflows] = useState<PromptWorkflow[]>([])
   const [queuedPrompts, setQueuedPrompts] = useState<QueuedPrompt[]>([])
   const streamAbortRef = useRef<AbortController | null>(null)
   const activeSendIdRef = useRef<string | null>(null)
@@ -311,6 +346,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     setCurrentChatState(null)
     setProjects([])
     setPromptLibrary([])
+    setPromptWorkflows([])
     setQueuedPrompts([])
     setCurrentModeState(DEFAULT_APP_SETTINGS.defaultMode)
     setAppSettings(DEFAULT_APP_SETTINGS)
@@ -506,17 +542,19 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     async (user: NonNullable<AuthState['user']>) => {
       await runLocalImport(user.id)
 
-      const [settings, nextProjects, nextPrompts, nextConversations] =
+      const [settings, nextProjects, nextPrompts, nextWorkflows, nextConversations] =
         await Promise.all([
           requestJson<AppSettings>('/api/settings'),
           requestJson<Project[]>('/api/projects'),
           requestJson<PromptLibraryItem[]>('/api/prompts'),
+          requestJson<PromptWorkflow[]>('/api/prompt-workflows'),
           requestJson<Conversation[]>('/api/conversations'),
         ])
 
       const normalizedSettings = normalizeAppSettingsState(settings)
       const normalizedProjects = sortProjects(nextProjects)
       const normalizedPrompts = sortPrompts(nextPrompts)
+      const normalizedWorkflows = sortPromptWorkflows(nextWorkflows)
       const normalizedConversations = sortConversationList(nextConversations)
       const currentChatId = readBrowserCurrentChatId()
       const activeConversation =
@@ -528,6 +566,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       setAppSettings(normalizedSettings)
       setProjects(normalizedProjects)
       setPromptLibrary(normalizedPrompts)
+      setPromptWorkflows(normalizedWorkflows)
       setSelectedProjectIdState(
         storedProjectId &&
           normalizedProjects.some((project) => project.id === storedProjectId)
@@ -989,6 +1028,68 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       setPromptLibrary(nextPrompts)
     },
     [promptLibrary, requestJson]
+  )
+
+  const savePromptWorkflow = useCallback(
+    async (input: SavePromptWorkflowInput) => {
+      const trimmedTitle = input.title.trim()
+      const normalizedSteps = input.steps
+        .map((step, index) => ({
+          ...step,
+          title: step.title?.trim() || null,
+          template: step.template.trim(),
+          order: index + 1,
+        }))
+        .filter((step) => step.template)
+
+      if (!trimmedTitle || normalizedSteps.length === 0) {
+        return null
+      }
+
+      try {
+        const workflow = await requestJson<PromptWorkflow>(
+          input.id ? `/api/prompt-workflows/${input.id}` : '/api/prompt-workflows',
+          {
+            method: input.id ? 'PATCH' : 'POST',
+            body: JSON.stringify({
+              title: trimmedTitle,
+              description: input.description?.trim() || null,
+              projectId: input.projectId ?? null,
+              variables: input.variables,
+              steps: normalizedSteps,
+            }),
+          }
+        )
+
+        const nextWorkflows = sortPromptWorkflows([
+          workflow,
+          ...promptWorkflows.filter((item) => item.id !== workflow.id),
+        ])
+        setPromptWorkflows(nextWorkflows)
+        return workflow
+      } catch (error) {
+        console.error('Failed to save workflow.', error)
+        return null
+      }
+    },
+    [promptWorkflows, requestJson]
+  )
+
+  const deletePromptWorkflow = useCallback(
+    async (workflowId: string) => {
+      try {
+        await requestJson(`/api/prompt-workflows/${workflowId}`, {
+          method: 'DELETE',
+        })
+      } catch (error) {
+        console.error('Failed to delete workflow.', error)
+      }
+
+      setPromptWorkflows((previous) =>
+        previous.filter((workflow) => workflow.id !== workflowId)
+      )
+    },
+    [requestJson]
   )
 
   const applyLocalError = useCallback(
@@ -1748,6 +1849,98 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     executeSendMessage,
   })
 
+  const runPromptWorkflow = useCallback(
+    async (workflowId: string, variableValues: Record<string, string> = {}) => {
+      const workflow = promptWorkflows.find((item) => item.id === workflowId)
+      if (!workflow) return
+
+      const orderedSteps = [...workflow.steps].sort((a, b) => a.order - b.order)
+      const runnableSteps = orderedSteps
+        .map((step) => ({
+          step,
+          content: expandWorkflowTemplate(step.template, variableValues).trim(),
+        }))
+        .filter((item) => item.content.length > 0)
+
+      if (runnableSteps.length === 0) return
+
+      await requestJson<PromptWorkflowRun>(
+        `/api/prompt-workflows/${workflow.id}/runs`,
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            conversationId: currentChatRef.current?.id ?? null,
+            projectId:
+              selectedProjectId === 'all'
+                ? workflow.projectId ?? DEFAULT_PROJECT_ID
+                : selectedProjectId,
+            variableValues,
+          }),
+        }
+      )
+
+      for (const { step, content } of runnableSteps) {
+        await sendMessage({
+          content,
+          kind: step.mode === 'image' ? 'image' : 'chat',
+          modeOverride: step.mode,
+        })
+      }
+    },
+    [promptWorkflows, requestJson, selectedProjectId, sendMessage]
+  )
+
+  const runModelComparison = useCallback(
+    async ({ content, targetModes }: RunModelComparisonInput) => {
+      const trimmedContent = content.trim()
+      if (!trimmedContent || targetModes.length < 2) return null
+
+      try {
+        const result = await requestJson<{
+          comparison: ModelComparison
+          conversation: Conversation
+        }>('/api/model-comparisons', {
+          method: 'POST',
+          body: JSON.stringify({
+            content: trimmedContent,
+            mode: currentMode,
+            targetModes,
+            conversationId: currentChatRef.current?.id,
+            settings: sessionSettings,
+          }),
+        })
+
+        upsertConversation(result.conversation)
+        return result.comparison
+      } catch (error) {
+        console.error('Failed to compare models.', error)
+        return null
+      }
+    },
+    [currentMode, requestJson, sessionSettings, upsertConversation]
+  )
+
+  const chooseModelComparisonResponse = useCallback(
+    async (comparisonId: string, candidateId: string) => {
+      try {
+        const result = await requestJson<{
+          comparison: ModelComparison | null
+          conversation: Conversation
+        }>(`/api/model-comparisons/${comparisonId}/choose`, {
+          method: 'POST',
+          body: JSON.stringify({ candidateId }),
+        })
+
+        upsertConversation(result.conversation)
+        return result.conversation
+      } catch (error) {
+        console.error('Failed to save comparison response.', error)
+        return null
+      }
+    },
+    [requestJson, upsertConversation]
+  )
+
   const regenerateLastResponse = useCallback(async () => {
     if (!currentChat) return
 
@@ -2083,11 +2276,11 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       mode: nextPrompt.mode,
       kind: nextPrompt.input.kind,
       modeOverride: nextPrompt.input.modeOverride,
-      conversationId: nextPrompt.conversationId,
+      conversationId: nextPrompt.conversationId ?? currentChatRef.current?.id,
     })
 
     void executeSendMessage(nextPrompt.input, {
-      conversationId: nextPrompt.conversationId,
+      conversationId: nextPrompt.conversationId ?? currentChatRef.current?.id,
       mode: nextPrompt.mode,
       settings: nextPrompt.settings,
       projectId: nextPrompt.projectId,
@@ -2149,6 +2342,12 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       promptLibrary,
       savePrompt,
       deletePrompt,
+      promptWorkflows,
+      savePromptWorkflow,
+      deletePromptWorkflow,
+      runPromptWorkflow,
+      runModelComparison,
+      chooseModelComparisonResponse,
       beginPromptPrecheck,
       awaitRecommendationDecision,
       clearPromptPrecheck,
@@ -2161,6 +2360,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       awaitRecommendationDecision,
       beginPromptPrecheck,
       chats,
+      chooseModelComparisonResponse,
       clearPromptPrecheck,
       conversations,
       createNewChat,
@@ -2169,6 +2369,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       currentMode,
       deleteChat,
       deletePrompt,
+      deletePromptWorkflow,
       editLastUserMessage,
       exportCurrentChat,
       goHome,
@@ -2182,14 +2383,18 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       moveCurrentChatToProject,
       projects,
       promptLibrary,
+      promptWorkflows,
       regenerateLastResponse,
       requestMagicLink,
       requestPasswordSignIn,
       requestPasswordSignUp,
       requestPasswordReset,
       retryLastMessage,
+      runModelComparison,
+      runPromptWorkflow,
       saveAppSettings,
       savePrompt,
+      savePromptWorkflow,
       searchQuery,
       selectedProjectId,
       sendMessage,
