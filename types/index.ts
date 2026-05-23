@@ -299,6 +299,135 @@ export interface PromptLibraryItem {
   updatedAt: string
 }
 
+export interface PromptWorkflowVariable {
+  name: string
+  label?: string
+  defaultValue?: string
+  required?: boolean
+}
+
+export interface PromptWorkflowStep {
+  id: string
+  title?: string | null
+  order: number
+  assistantFamily: AssistantFamily
+  mode: AIMode
+  template: string
+  variableNames: string[]
+  createdAt: string
+  updatedAt: string
+}
+
+export interface PromptWorkflow {
+  id: string
+  title: string
+  description?: string | null
+  projectId?: string | null
+  variables: PromptWorkflowVariable[]
+  steps: PromptWorkflowStep[]
+  createdAt: string
+  updatedAt: string
+}
+
+export interface PromptWorkflowStepInput {
+  id?: string
+  title?: string | null
+  order?: number
+  assistantFamily: AssistantFamily
+  mode?: AIMode
+  template: string
+  variableNames?: string[]
+}
+
+export interface PromptWorkflowInput {
+  title: string
+  description?: string | null
+  projectId?: string | null
+  variables?: PromptWorkflowVariable[]
+  steps: PromptWorkflowStepInput[]
+}
+
+export type PromptWorkflowRunStatus =
+  | 'queued'
+  | 'running'
+  | 'complete'
+  | 'failed'
+  | 'cancelled'
+
+export interface PromptWorkflowStepRun {
+  id: string
+  runId: string
+  workflowStepId?: string | null
+  stepOrder: number
+  assistantFamily: AssistantFamily
+  mode: AIMode
+  messageId?: string | null
+  status: PromptWorkflowRunStatus
+  error?: string | null
+  startedAt?: string | null
+  completedAt?: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export interface PromptWorkflowRun {
+  id: string
+  workflowId?: string | null
+  userId: string
+  conversationId?: string | null
+  projectId?: string | null
+  status: PromptWorkflowRunStatus
+  variableValues: Record<string, string>
+  error?: string | null
+  startedAt: string
+  completedAt?: string | null
+  createdAt: string
+  updatedAt: string
+  stepRuns: PromptWorkflowStepRun[]
+}
+
+export type ModelComparisonStatus = 'running' | 'complete' | 'failed'
+
+export interface ModelComparisonCandidate {
+  id: string
+  comparisonId: string
+  mode: AIMode
+  assistantFamily: AssistantFamily
+  model: string
+  label: string
+  content: string
+  status: 'complete' | 'error'
+  error?: string | null
+  latencyMs?: number | null
+  usage?: UsageEstimate
+  sources?: MessageSource[]
+  createdAt: string
+  updatedAt: string
+}
+
+export interface ModelComparison {
+  id: string
+  userId: string
+  conversationId: string
+  promptMessageId: string
+  projectId?: string | null
+  prompt: string
+  status: ModelComparisonStatus
+  selectedCandidateId?: string | null
+  settings: SessionSettings
+  candidates: ModelComparisonCandidate[]
+  createdAt: string
+  updatedAt: string
+}
+
+export interface ModelComparisonRequest {
+  content: string
+  mode: AIMode
+  targetModes: AIMode[]
+  conversationId?: string
+  settings: SessionSettings
+}
+
 export interface ChatRequest {
   action: ChatAction
   conversationId?: string

@@ -366,6 +366,211 @@ export const zenPromptLibrary = pgTable(
   ]
 )
 
+export const zenPromptWorkflows = pgTable(
+  'zen_prompt_workflows',
+  {
+    id: text('id').primaryKey(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => zenUsers.id, { onDelete: 'cascade' }),
+    projectId: text('project_id'),
+    title: text('title').notNull(),
+    description: text('description'),
+    variables: jsonb('variables').notNull().default([]),
+    ...timestamps,
+  },
+  (table) => [
+    index('zen_prompt_workflows_user_updated_idx').on(
+      table.userId,
+      table.updatedAt
+    ),
+    index('zen_prompt_workflows_user_project_idx').on(
+      table.userId,
+      table.projectId
+    ),
+  ]
+)
+
+export const zenPromptWorkflowSteps = pgTable(
+  'zen_prompt_workflow_steps',
+  {
+    id: text('id').primaryKey(),
+    workflowId: text('workflow_id')
+      .notNull()
+      .references(() => zenPromptWorkflows.id, { onDelete: 'cascade' }),
+    stepOrder: integer('step_order').notNull(),
+    assistantFamily: text('assistant_family').notNull(),
+    mode: text('mode').notNull(),
+    title: text('title'),
+    template: text('template').notNull(),
+    variableNames: jsonb('variable_names').notNull().default([]),
+    metadata: jsonb('metadata').notNull().default({}),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex('zen_prompt_workflow_steps_workflow_order_idx').on(
+      table.workflowId,
+      table.stepOrder
+    ),
+    index('zen_prompt_workflow_steps_workflow_idx').on(table.workflowId),
+    check(
+      'zen_prompt_workflow_steps_assistant_family_check',
+      sql`${table.assistantFamily} in ('nova', 'velora', 'axiom', 'forge', 'pulse', 'prism')`
+    ),
+    check(
+      'zen_prompt_workflow_steps_mode_check',
+      sql`${table.mode} in ('general', 'creative', 'logic', 'code', 'live', 'image')`
+    ),
+  ]
+)
+
+export const zenPromptWorkflowRuns = pgTable(
+  'zen_prompt_workflow_runs',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    workflowId: text('workflow_id').references(() => zenPromptWorkflows.id, {
+      onDelete: 'set null',
+    }),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => zenUsers.id, { onDelete: 'cascade' }),
+    conversationId: text('conversation_id').references(() => zenConversations.id, {
+      onDelete: 'set null',
+    }),
+    projectId: text('project_id'),
+    status: text('status').notNull().default('queued'),
+    variableValues: jsonb('variable_values').notNull().default({}),
+    error: text('error'),
+    startedAt: timestamp('started_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    completedAt: timestamp('completed_at', { withTimezone: true }),
+    ...timestamps,
+  },
+  (table) => [
+    index('zen_prompt_workflow_runs_user_created_idx').on(
+      table.userId,
+      table.createdAt
+    ),
+    index('zen_prompt_workflow_runs_workflow_created_idx').on(
+      table.workflowId,
+      table.createdAt
+    ),
+    index('zen_prompt_workflow_runs_conversation_idx').on(table.conversationId),
+    check(
+      'zen_prompt_workflow_runs_status_check',
+      sql`${table.status} in ('queued', 'running', 'complete', 'failed', 'cancelled')`
+    ),
+  ]
+)
+
+export const zenPromptWorkflowStepRuns = pgTable(
+  'zen_prompt_workflow_step_runs',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    runId: uuid('run_id')
+      .notNull()
+      .references(() => zenPromptWorkflowRuns.id, { onDelete: 'cascade' }),
+    workflowStepId: text('workflow_step_id').references(
+      () => zenPromptWorkflowSteps.id,
+      { onDelete: 'set null' }
+    ),
+    stepOrder: integer('step_order').notNull(),
+    assistantFamily: text('assistant_family').notNull(),
+    mode: text('mode').notNull(),
+    messageId: text('message_id'),
+    status: text('status').notNull().default('queued'),
+    error: text('error'),
+    startedAt: timestamp('started_at', { withTimezone: true }),
+    completedAt: timestamp('completed_at', { withTimezone: true }),
+    ...timestamps,
+  },
+  (table) => [
+    index('zen_prompt_workflow_step_runs_run_idx').on(table.runId),
+    check(
+      'zen_prompt_workflow_step_runs_assistant_family_check',
+      sql`${table.assistantFamily} in ('nova', 'velora', 'axiom', 'forge', 'pulse', 'prism')`
+    ),
+    check(
+      'zen_prompt_workflow_step_runs_mode_check',
+      sql`${table.mode} in ('general', 'creative', 'logic', 'code', 'live', 'image')`
+    ),
+    check(
+      'zen_prompt_workflow_step_runs_status_check',
+      sql`${table.status} in ('queued', 'running', 'complete', 'failed', 'cancelled')`
+    ),
+  ]
+)
+
+export const zenModelComparisons = pgTable(
+  'zen_model_comparisons',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => zenUsers.id, { onDelete: 'cascade' }),
+    conversationId: text('conversation_id')
+      .notNull()
+      .references(() => zenConversations.id, { onDelete: 'cascade' }),
+    promptMessageId: text('prompt_message_id').notNull(),
+    projectId: text('project_id'),
+    prompt: text('prompt').notNull(),
+    status: text('status').notNull().default('running'),
+    selectedCandidateId: uuid('selected_candidate_id'),
+    settings: jsonb('settings').notNull().default({}),
+    ...timestamps,
+  },
+  (table) => [
+    index('zen_model_comparisons_user_created_idx').on(
+      table.userId,
+      table.createdAt
+    ),
+    index('zen_model_comparisons_conversation_idx').on(table.conversationId),
+    check(
+      'zen_model_comparisons_status_check',
+      sql`${table.status} in ('running', 'complete', 'failed')`
+    ),
+  ]
+)
+
+export const zenModelComparisonCandidates = pgTable(
+  'zen_model_comparison_candidates',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    comparisonId: uuid('comparison_id')
+      .notNull()
+      .references(() => zenModelComparisons.id, { onDelete: 'cascade' }),
+    mode: text('mode').notNull(),
+    assistantFamily: text('assistant_family').notNull(),
+    model: text('model').notNull(),
+    label: text('label').notNull(),
+    content: text('content').notNull().default(''),
+    status: text('status').notNull().default('complete'),
+    error: text('error'),
+    latencyMs: integer('latency_ms'),
+    usage: jsonb('usage'),
+    sources: jsonb('sources').notNull().default([]),
+    ...timestamps,
+  },
+  (table) => [
+    index('zen_model_comparison_candidates_comparison_idx').on(
+      table.comparisonId
+    ),
+    check(
+      'zen_model_comparison_candidates_mode_check',
+      sql`${table.mode} in ('general', 'creative', 'logic', 'code', 'live')`
+    ),
+    check(
+      'zen_model_comparison_candidates_assistant_family_check',
+      sql`${table.assistantFamily} in ('nova', 'velora', 'axiom', 'forge', 'pulse')`
+    ),
+    check(
+      'zen_model_comparison_candidates_status_check',
+      sql`${table.status} in ('complete', 'error')`
+    ),
+  ]
+)
+
 export const zenUserSettings = pgTable('zen_user_settings', {
   userId: uuid('user_id')
     .primaryKey()
