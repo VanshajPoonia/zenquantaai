@@ -7,11 +7,13 @@ export { neonFileChunksRepository } from './file-chunks'
 export { neonFilesRepository } from './files'
 export type { NeonFileMetadata } from './files'
 export { neonGeneratedImagesRepository } from './generated-images'
+export { neonModelComparisonsRepository } from './model-comparisons'
 export {
   neonAdminAuditLogsRepository,
   neonPlanRequestsRepository,
 } from './plan-requests'
 export { neonProfilesRepository } from './profiles'
+export { neonPromptWorkflowsRepository } from './prompt-workflows'
 export { neonProjectsRepository } from './projects'
 export { neonPromptsRepository } from './prompts'
 export { neonSettingsRepository } from './settings'
