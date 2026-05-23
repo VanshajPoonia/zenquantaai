@@ -13,7 +13,14 @@ import { CompactPlanLimitFields } from '@/components/admin/plan-limit-fields'
 import { updatePlanRequestStatusAction, updateUserAdminAction } from './actions'
 
 const USER_GRID_COLUMNS =
-  'grid-cols-[minmax(19rem,2.5fr)_minmax(7rem,0.8fr)_minmax(7rem,0.8fr)_minmax(7rem,0.8fr)_minmax(7rem,0.8fr)_minmax(7rem,0.8fr)_minmax(8rem,0.9fr)_minmax(8rem,0.9fr)_minmax(8rem,0.9fr)_minmax(7rem,0.8fr)_minmax(7rem,0.8fr)_minmax(10rem,1fr)]'
+  'grid-cols-[minmax(19rem,2.5fr)_minmax(7rem,0.8fr)_minmax(7rem,0.8fr)_minmax(7rem,0.8fr)_minmax(7rem,0.8fr)_minmax(7rem,0.8fr)_minmax(7rem,0.8fr)_minmax(8rem,0.9fr)_minmax(8rem,0.9fr)_minmax(8rem,0.9fr)_minmax(7rem,0.8fr)_minmax(7rem,0.8fr)_minmax(10rem,1fr)]'
+
+const PLAN_TIERS = ['free', 'basic', 'pro', 'ultra', 'prime']
+const ASSISTANT_FAMILIES = ['nova', 'velora', 'axiom', 'forge', 'pulse', 'prism']
+
+function getParam(value: string | string[] | undefined): string | undefined {
+  return Array.isArray(value) ? value[0] : value
+}
 
 export default async function AdminPage({
   searchParams,
@@ -22,12 +29,21 @@ export default async function AdminPage({
 }) {
   await requireAdmin()
   const params = searchParams ? await searchParams : {}
+  const filterInput = {
+    from: getParam(params.from),
+    to: getParam(params.to),
+    tier: getParam(params.tier),
+    assistant: getParam(params.assistant),
+    user: getParam(params.user),
+  }
+  const normalizedFilters =
+    neonAdminRepository.normalizeAnalyticsFilters(filterInput)
   const [overview, userRows, requests] = await Promise.all([
-    neonAdminRepository.getOverview(),
-    neonAdminRepository.listUserRows(),
+    neonAdminRepository.getOverview(filterInput),
+    neonAdminRepository.listUserRows(filterInput),
     neonPlanRequestsRepository.list(),
   ])
-  const updated = params?.updated === '1'
+  const updated = getParam(params?.updated) === '1'
 
   return (
     <main className="min-h-screen bg-background px-4 py-8 sm:px-6 lg:px-10">
@@ -52,24 +68,193 @@ export default async function AdminPage({
           </div>
         ) : null}
 
+        <Card className="rounded-3xl border-border/70 bg-card/70">
+          <CardHeader>
+            <CardTitle>Analytics filters</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <form className="grid gap-3 md:grid-cols-2 xl:grid-cols-[repeat(5,minmax(0,1fr))_auto] xl:items-end">
+              <FilterField label="From">
+                <Input
+                  type="date"
+                  name="from"
+                  defaultValue={normalizedFilters.from}
+                  className="rounded-xl"
+                />
+              </FilterField>
+              <FilterField label="To">
+                <Input
+                  type="date"
+                  name="to"
+                  defaultValue={normalizedFilters.to}
+                  className="rounded-xl"
+                />
+              </FilterField>
+              <FilterField label="Plan">
+                <select
+                  name="tier"
+                  defaultValue={normalizedFilters.tier ?? ''}
+                  className="flex h-10 w-full rounded-xl border border-input bg-background px-3 text-sm text-foreground outline-none transition-colors focus:border-primary/40 focus:ring-2 focus:ring-primary/20"
+                >
+                  <option value="">All plans</option>
+                  {PLAN_TIERS.map((tier) => (
+                    <option key={tier} value={tier}>
+                      {tier}
+                    </option>
+                  ))}
+                </select>
+              </FilterField>
+              <FilterField label="Assistant">
+                <select
+                  name="assistant"
+                  defaultValue={normalizedFilters.assistant ?? ''}
+                  className="flex h-10 w-full rounded-xl border border-input bg-background px-3 text-sm text-foreground outline-none transition-colors focus:border-primary/40 focus:ring-2 focus:ring-primary/20"
+                >
+                  <option value="">All assistants</option>
+                  {ASSISTANT_FAMILIES.map((assistant) => (
+                    <option key={assistant} value={assistant}>
+                      {assistant}
+                    </option>
+                  ))}
+                </select>
+              </FilterField>
+              <FilterField label="User">
+                <Input
+                  name="user"
+                  defaultValue={normalizedFilters.user ?? ''}
+                  placeholder="ID, email, or login"
+                  className="rounded-xl"
+                />
+              </FilterField>
+              <div className="flex gap-2">
+                <Button type="submit" className="rounded-xl">
+                  Apply
+                </Button>
+                <Button asChild variant="outline" className="rounded-xl">
+                  <Link href="/admin">Reset</Link>
+                </Button>
+              </div>
+            </form>
+          </CardContent>
+        </Card>
+
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           <MetricCard label="Active users" value={String(overview.activeUsers)} />
           <MetricCard label="Pending requests" value={String(overview.pendingPlanRequests)} />
-          <MetricCard label="Raw total cost" value={`$${overview.totalRawCostUsd.toFixed(2)}`} />
           <MetricCard
-            label="Displayed total"
-            value={`$${overview.totalDisplayedCostUsd.toFixed(2)}`}
+            label="Raw model cost"
+            value={formatCurrency(overview.totalRawCostUsd)}
+          />
+          <MetricCard
+            label="Displayed usage"
+            value={formatCurrency(overview.totalDisplayedCostUsd)}
           />
           <MetricCard
             label="Revenue"
-            value={`$${overview.estimatedSubscriptionRevenueUsd.toFixed(2)}`}
+            value={formatCurrency(overview.estimatedSubscriptionRevenueUsd)}
           />
           <MetricCard
             label="Gross margin"
-            value={`$${overview.estimatedGrossMarginUsd.toFixed(2)}`}
+            value={formatCurrency(overview.estimatedGrossMarginUsd)}
           />
           <MetricCard label="Requests today" value={String(overview.requestsToday)} />
           <MetricCard label="Prime users" value={String(overview.usersByTier.prime)} />
+        </div>
+
+        <div className="grid gap-5 xl:grid-cols-2">
+          <AnalyticsCard title="Text vs image cost split">
+            <InsightRow
+              label="Text"
+              value={formatCurrency(overview.textVsImageCostSplit.textRawCostUsd)}
+              detail={`${overview.textVsImageCostSplit.textEvents.toLocaleString()} events · ${formatCurrency(overview.textVsImageCostSplit.textDisplayedCostUsd)} displayed`}
+            />
+            <InsightRow
+              label="Image"
+              value={formatCurrency(overview.textVsImageCostSplit.imageRawCostUsd)}
+              detail={`${overview.textVsImageCostSplit.imageCount.toLocaleString()} images · ${formatCurrency(overview.textVsImageCostSplit.imageDisplayedCostUsd)} displayed`}
+            />
+          </AnalyticsCard>
+
+          <AnalyticsCard title="Estimated margin by plan">
+            {overview.marginByPlan.some(
+              (item) => item.activeUsers > 0 || item.rawCostUsd > 0
+            ) ? (
+              overview.marginByPlan.map((item) => (
+                <InsightRow
+                  key={item.tier}
+                  label={item.tier.toUpperCase()}
+                  value={formatCurrency(item.estimatedGrossMarginUsd)}
+                  detail={`${item.activeUsers} active · ${formatCurrency(item.estimatedRevenueUsd)} revenue · ${formatCurrency(item.rawCostUsd)} raw`}
+                />
+              ))
+            ) : (
+              <EmptyAnalyticsState label="No plan margin data for this filter." />
+            )}
+          </AnalyticsCard>
+
+          <AnalyticsCard title="Users close to limits">
+            {overview.usersCloseToLimits.length ? (
+              overview.usersCloseToLimits.map((user) => (
+                <InsightRow
+                  key={user.userId}
+                  label={getDisplayUser(user)}
+                  value={formatPercent(user.highestUsageRatio)}
+                  detail={`${user.tier.toUpperCase()} · ${user.limits
+                    .map((limit) => `${limit.label}: ${formatCompactNumber(limit.used)}/${formatCompactNumber(limit.limit)}`)
+                    .join(' · ')}`}
+                  href={`/admin/users/${user.userId}`}
+                />
+              ))
+            ) : (
+              <EmptyAnalyticsState label="No users are at or above 80% of tracked limits." />
+            )}
+          </AnalyticsCard>
+
+          <AnalyticsCard title="High raw-cost users">
+            {overview.mostExpensiveUsers.length ? (
+              overview.mostExpensiveUsers.map((user) => (
+                <InsightRow
+                  key={user.userId}
+                  label={getDisplayUser(user)}
+                  value={formatCurrency(user.rawCostUsd)}
+                  detail={`${formatCurrency(user.displayedCostUsd)} displayed${user.isUnusuallyHigh ? ' · unusually high' : ''}`}
+                  href={`/admin/users/${user.userId}`}
+                />
+              ))
+            ) : (
+              <EmptyAnalyticsState label="No raw cost has been recorded for this filter." />
+            )}
+          </AnalyticsCard>
+
+          <AnalyticsCard title="Most expensive models">
+            {overview.mostExpensiveModels.length ? (
+              overview.mostExpensiveModels.map((model) => (
+                <InsightRow
+                  key={model.model}
+                  label={model.model}
+                  value={formatCurrency(model.rawCostUsd)}
+                  detail={`${model.events.toLocaleString()} events · ${formatCurrency(model.displayedCostUsd)} displayed`}
+                />
+              ))
+            ) : (
+              <EmptyAnalyticsState label="No model usage has been recorded for this filter." />
+            )}
+          </AnalyticsCard>
+
+          <AnalyticsCard title="Most used assistants">
+            {overview.mostUsedAssistants.length ? (
+              overview.mostUsedAssistants.map((assistant) => (
+                <InsightRow
+                  key={assistant.family}
+                  label={assistant.family.toUpperCase()}
+                  value={assistant.events.toLocaleString()}
+                  detail={`${formatCurrency(assistant.rawCostUsd ?? 0)} raw · ${formatCurrency(assistant.displayedCostUsd)} displayed`}
+                />
+              ))
+            ) : (
+              <EmptyAnalyticsState label="No assistant usage has been recorded for this filter." />
+            )}
+          </AnalyticsCard>
         </div>
 
         <Card className="rounded-3xl border-border/70 bg-card/70">
@@ -78,10 +263,11 @@ export default async function AdminPage({
           </CardHeader>
           <CardContent className="px-0 pb-6">
             <div className="overflow-x-auto px-6">
-              <div className="min-w-[104rem] space-y-3">
+              <div className="min-w-[112rem] space-y-3">
                 <div className={`grid ${USER_GRID_COLUMNS} gap-3 px-4 pb-1`}>
                   <ColumnHeader>User</ColumnHeader>
                   <ColumnHeader>Displayed</ColumnHeader>
+                  <ColumnHeader>Raw</ColumnHeader>
                   <ColumnHeader>Credits Left</ColumnHeader>
                   <ColumnHeader>Tier</ColumnHeader>
                   <ColumnHeader>Status</ColumnHeader>
@@ -121,6 +307,7 @@ export default async function AdminPage({
                     </div>
 
                     <StaticMetricCell value={`$${row.displayedCostUsd.toFixed(2)}`} />
+                    <StaticMetricCell value={`$${row.rawCostUsd.toFixed(2)}`} />
                     <StaticMetricCell value={String(row.remainingDisplayedCredits)} />
 
                     <CompactPlanLimitFields
@@ -257,4 +444,101 @@ function StaticMetricCell({ value }: { value: string }) {
       {value}
     </div>
   )
+}
+
+function FilterField({
+  label,
+  children,
+}: {
+  label: string
+  children: ReactNode
+}) {
+  return (
+    <label className="space-y-2">
+      <span className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+        {label}
+      </span>
+      {children}
+    </label>
+  )
+}
+
+function AnalyticsCard({
+  title,
+  children,
+}: {
+  title: string
+  children: ReactNode
+}) {
+  return (
+    <Card className="rounded-3xl border-border/70 bg-card/70">
+      <CardHeader>
+        <CardTitle>{title}</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3">{children}</CardContent>
+    </Card>
+  )
+}
+
+function InsightRow({
+  label,
+  value,
+  detail,
+  href,
+}: {
+  label: string
+  value: string
+  detail: string
+  href?: string
+}) {
+  const content = (
+    <div className="flex min-w-0 flex-col gap-1">
+      <p className="truncate text-sm font-medium text-foreground">{label}</p>
+      <p className="text-xs text-muted-foreground">{detail}</p>
+    </div>
+  )
+
+  return (
+    <div className="flex items-center justify-between gap-4 rounded-2xl border border-border/60 bg-background/40 px-4 py-3">
+      {href ? (
+        <Link href={href} className="min-w-0 flex-1 hover:text-primary">
+          {content}
+        </Link>
+      ) : (
+        <div className="min-w-0 flex-1">{content}</div>
+      )}
+      <p className="shrink-0 text-sm font-semibold text-foreground">{value}</p>
+    </div>
+  )
+}
+
+function EmptyAnalyticsState({ label }: { label: string }) {
+  return (
+    <div className="rounded-2xl border border-dashed border-border/70 bg-background/30 px-4 py-6 text-sm text-muted-foreground">
+      {label}
+    </div>
+  )
+}
+
+function formatCurrency(value: number): string {
+  return `$${value.toFixed(2)}`
+}
+
+function formatPercent(value: number): string {
+  return `${Math.round(value * 100)}%`
+}
+
+function formatCompactNumber(value: number): string {
+  return Intl.NumberFormat('en', {
+    notation: value >= 10000 ? 'compact' : 'standard',
+    maximumFractionDigits: 1,
+  }).format(value)
+}
+
+function getDisplayUser(user: {
+  userId: string
+  email: string | null
+  loginId: string | null
+}): string {
+  return user.email ?? user.loginId ?? user.userId
 }
