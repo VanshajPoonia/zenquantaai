@@ -161,6 +161,13 @@ Current direction: plan upgrades remain manual/admin-driven, payment automation 
 - Added admin-only visibility for raw model cost, displayed usage, estimated plan margin, text/image cost split, risky users near limits, high raw-cost users, expensive models, and assistant usage.
 - Kept manual plan requests, admin activation, user dashboard displayed-cost behavior, and payment automation scope unchanged.
 
+### 2026-05-24 - Verification Tooling Hardening
+
+- Added an ESLint flat config for the current Next.js/TypeScript app.
+- Added `npm run typecheck` as `tsc --noEmit`.
+- Removed Next's TypeScript build-error ignore setting so `npm run build` runs TypeScript validation.
+- Verified `npm run typecheck`, `npm run build`, and `npm run lint` run successfully, with lint warnings still present as existing cleanup work.
+
 ## Current Work
 
 - Neon database foundation is complete at the code/schema level.
@@ -171,13 +178,12 @@ Current direction: plan upgrades remain manual/admin-driven, payment automation 
 - Reusable prompt workflows are active in the composer prompt library popover.
 - Text model comparison is active in the composer for text prompts.
 - Admin cost and margin analytics are active on `/admin` and are backed by stored Neon usage data.
-- Local verification has run for TypeScript and production build; lint still needs ESLint flat config work.
+- Local verification now includes `npm run typecheck`, production build with TypeScript validation, and ESLint flat-config linting.
 
 ## Proposed Next Work
 
-- Add or fix ESLint flat configuration.
-- Add a `typecheck` script such as `tsc --noEmit`.
 - Decide whether the repo should standardize on npm or pnpm.
+- Clean up existing lint warnings when there is a dedicated cleanup milestone.
 - Validate Tavily production limits and source display behavior for Pulse/webSearch.
 - Validate embeddings provider cost/limits and pgvector query quality for uploaded-file knowledge.
 - Apply and validate the fresh Neon foundation migration in a real Neon database.
@@ -188,8 +194,7 @@ Current direction: plan upgrades remain manual/admin-driven, payment automation 
 
 ## Active Bugs / Issues
 
-- `npm run lint` may fail because the repo is missing an ESLint flat config file.
-- TypeScript build errors may be hidden by `typescript.ignoreBuildErrors: true` in `next.config.mjs`.
+- `npm run lint` runs successfully but currently reports warnings.
 - Package manager guidance is unclear because `pnpm-lock.yaml` exists while `README.md` says `npm install`.
 - Generated image persistence should be reviewed.
 
@@ -209,14 +214,14 @@ Current direction: plan upgrades remain manual/admin-driven, payment automation 
 ## Testing Status
 
 - No dedicated test script is defined in `package.json`.
-- Current scripts are `dev`, `build`, `start`, and `lint`.
-- Recommended typecheck command: `npx tsc --noEmit`.
-- Lint setup needs attention before lint can be relied on.
+- Current scripts are `dev`, `build`, `start`, `lint`, and `typecheck`.
+- `npm run typecheck` runs `tsc --noEmit`.
+- `npm run lint` uses the root ESLint flat config.
+- `npm run build` runs Next production build with TypeScript validation enabled.
 
 ## Known Risks
 
-- Missing ESLint flat config.
-- Hidden TypeScript build errors.
+- Existing lint warnings remain and should be cleaned up in a focused follow-up.
 - Package manager ambiguity.
 - Pulse/webSearch requires `TAVILY_API_KEY` for live retrieval; without it the chat path continues without source claims.
 - Uploaded-file knowledge requires an embeddings key and pgvector migration; unsupported files are skipped rather than blocking uploads.

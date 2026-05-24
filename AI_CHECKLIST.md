@@ -32,9 +32,9 @@ http://localhost:3000
 npm run build
 ```
 
-Known issue:
+Current behavior:
 
-- `next.config.mjs` sets `typescript.ignoreBuildErrors: true`, so build may hide TypeScript errors.
+- Next production build runs TypeScript validation. Keep it that way unless a future task explicitly accepts the risk.
 
 ## Lint
 
@@ -44,16 +44,12 @@ npm run lint
 
 Known issue:
 
-- Lint may fail because the repo is missing an ESLint flat config file.
+- Lint uses the root ESLint flat config. Existing warnings may still need cleanup in a focused lint-debt milestone.
 
 ## Typecheck
 
-No `typecheck` script currently exists.
-
-Recommended command:
-
 ```bash
-npx tsc --noEmit
+npm run typecheck
 ```
 
 ## Required Environment Variables
@@ -210,9 +206,9 @@ Before changing persistence code again:
 
 ## Production Safety Checks
 
-- Add a working ESLint flat config.
-- Add and run a real typecheck command.
-- Consider disabling `typescript.ignoreBuildErrors`.
+- Keep the root ESLint flat config working.
+- Run `npm run typecheck`.
+- Keep `next.config.mjs` from ignoring TypeScript build errors.
 - Confirm file storage credentials are server-only.
 - Confirm `OPENROUTER_API_KEY` is server-only.
 - Confirm `TAVILY_API_KEY` is server-only.
@@ -233,8 +229,8 @@ Before changing persistence code again:
 - Missing model comparison migration breaks comparison mode, while normal chat remains separate.
 - Missing Neon `DATABASE_URL` breaks auth, settings, prompt library, assistant recommendation, project, conversation, chat persistence, image persistence, billing/admin, usage, dashboard, plan request, image history, profile/role hydration, and local import app-data paths.
 - Missing S3-compatible/R2 env vars breaks attachment and generated-image storage when `FILE_STORAGE_PROVIDER` is `s3` or `r2`.
-- Lint can fail because ESLint flat config is missing.
-- TypeScript errors can be hidden by Next config.
+- Existing lint warnings can obscure newer warnings if not cleaned up intentionally.
+- TypeScript errors should fail both `npm run typecheck` and `npm run build`.
 - Package manager mismatch can cause lockfile churn.
 - Tavily request failures should degrade without claiming live verification.
 - Advanced PDF/OCR extraction is not implemented in uploaded-file knowledge v1.

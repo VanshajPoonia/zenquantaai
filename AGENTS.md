@@ -106,12 +106,13 @@ Current commands from `package.json`:
 - Build: `npm run build`
 - Start: `npm run start`
 - Lint: `npm run lint`
+- Typecheck: `npm run typecheck`
 
 Known command issues:
 
-- `npm run lint` may fail because the repo is missing an ESLint flat config file.
-- There is no `typecheck` script. Recommended check: `npx tsc --noEmit`.
-- `next.config.mjs` currently sets `typescript.ignoreBuildErrors: true`, so build may hide TypeScript errors.
+- `npm run lint` uses the ESLint flat config in `eslint.config.mjs`.
+- `npm run typecheck` runs `tsc --noEmit`.
+- `npm run build` should remain meaningful for production because `next.config.mjs` no longer ignores TypeScript build errors.
 
 ## Files To Update When Relevant
 

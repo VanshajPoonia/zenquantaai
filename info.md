@@ -56,9 +56,9 @@ The files in `supabase/migrations/*` remain only as historical/product reference
 - Build: `npm run build`
 - Start: `npm run start`
 - Lint: `npm run lint`
-- Recommended typecheck: `npx tsc --noEmit`
+- Typecheck: `npm run typecheck`
 
-Known issue: `npm run lint` currently fails because the repo is missing an ESLint flat config.
+Verification status: lint uses the root ESLint flat config, typecheck runs `tsc --noEmit`, and production build no longer ignores TypeScript build errors.
 
 ## Environment Variables
 

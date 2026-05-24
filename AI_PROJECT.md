@@ -319,13 +319,13 @@ Accepted aliases in code include:
 - Pulse web search depends on `TAVILY_API_KEY`; without it, Pulse/webSearch degrades without claiming live verification.
 - Uploaded-file knowledge depends on an embeddings key and the pgvector migration; unsupported/binary/PDF/OCR-heavy files are not indexed in v1.
 - No automated test script is defined.
-- No `typecheck` script is defined.
 - Old Supabase-hosted files are intentionally not migrated into the new storage layer.
 
 ## Known Risks
 
-- `npm run lint` may fail because the repo is missing an ESLint flat config file.
-- `next.config.mjs` sets `typescript.ignoreBuildErrors: true`.
+- `npm run lint` now uses `eslint.config.mjs`; current lint status should be checked before releases because warnings may still exist.
+- `npm run typecheck` runs `tsc --noEmit`.
+- `npm run build` no longer ignores TypeScript build errors.
 - Package manager is ambiguous: `pnpm-lock.yaml` exists, while `README.md` documents `npm install`.
 - File storage access keys must remain server-only.
 - Conversation saves currently delete and reinsert messages, which may be risky for large histories or concurrent writes.
