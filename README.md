@@ -298,6 +298,9 @@ To validate the Neon schema separately, apply:
 2. `neon/migrations/20260522_zenquanta_local_auth.sql`
 3. `neon/migrations/20260522_zenquanta_message_sources.sql`
 4. `neon/migrations/20260522_zenquanta_file_knowledge.sql`
+5. `neon/migrations/20260522_zenquanta_prompt_workflows.sql`
+6. `neon/migrations/20260522_zenquanta_model_comparisons.sql`
+7. `neon/migrations/20260524_zenquanta_auth_attempts.sql`
 
 This creates a fresh `zen_*` application schema in Neon without Supabase RLS, `auth.uid()`, `auth.users` foreign keys, Supabase Storage objects, or data-copy steps. The server-only Neon client and typed Drizzle schema live in `lib/db/`.
 

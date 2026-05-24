@@ -158,6 +158,7 @@ Fresh foundation migration available for Neon:
 4. `neon/migrations/20260522_zenquanta_file_knowledge.sql`
 5. `neon/migrations/20260522_zenquanta_prompt_workflows.sql`
 6. `neon/migrations/20260522_zenquanta_model_comparisons.sql`
+7. `neon/migrations/20260524_zenquanta_auth_attempts.sql`
 
 Apply with a Postgres client or Neon SQL editor. CLI example:
 
@@ -214,6 +215,7 @@ Before changing persistence code again:
 - Confirm `TAVILY_API_KEY` is server-only.
 - Confirm `OPENAI_API_KEY` or `EMBEDDINGS_API_KEY` is server-only.
 - Confirm generated images are stored durably if required.
+- Confirm Neon auth-attempt limiting is applied before relying on production ID/password sign-in.
 - Confirm pgvector is available in Neon before enabling uploaded-file knowledge.
 - Confirm Pulse/webSearch source display and no-key degradation before presenting live retrieval in production.
 - Do not claim automated payments, checkout, customer portal, webhooks, or subscription automation. Manual plan requests and admin activation are the intended flow unless explicitly changed later.

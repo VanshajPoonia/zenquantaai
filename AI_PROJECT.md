@@ -106,7 +106,7 @@ Mode mapping:
 
 Auth is implemented as custom Neon-backed credentials auth in `lib/auth/session.ts`.
 
-Current user-facing auth is ID/password-first. Passwords are hashed with per-user salts, sessions use opaque HTTP-only cookies, and auth rows live in Neon. Supabase Auth users, sessions, and passwords are not imported or preserved; existing users need to sign up again.
+Current user-facing auth is ID/password-first. Passwords are hashed with per-user salts, sessions use opaque HTTP-only cookies, and auth rows live in Neon. Sign-in attempts are rate-limited through Neon-backed hashed login/IP attempt rows. Supabase Auth users, sessions, and passwords are not imported or preserved; existing users need to sign up again.
 
 ## Database Status
 
@@ -162,6 +162,7 @@ Neon migration order:
 4. `20260522_zenquanta_file_knowledge.sql`
 5. `20260522_zenquanta_prompt_workflows.sql`
 6. `20260522_zenquanta_model_comparisons.sql`
+7. `20260524_zenquanta_auth_attempts.sql`
 
 Historical Supabase migration order documented in `README.md`:
 

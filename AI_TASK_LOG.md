@@ -168,6 +168,21 @@ Current direction: plan upgrades remain manual/admin-driven, payment automation 
 - Removed Next's TypeScript build-error ignore setting so `npm run build` runs TypeScript validation.
 - Verified `npm run typecheck`, `npm run build`, and `npm run lint` run successfully, with lint warnings still present as existing cleanup work.
 
+### 2026-05-24 - Post-Neon Cutover Hardening
+
+- Added Neon-backed sign-in attempt limiting and stronger local password/session handling.
+- Tightened private object reads, attachment scope validation, and generated-image fetch safety.
+- Added focused validation for manual plan requests, admin mutations, recommendation telemetry, and workflow run conversation scope.
+- Made text/image usage counter updates atomic and dashboard displayed usage period-scoped.
+- Kept Supabase runtime removed, avoided data imports/backfills, and kept manual plan requests/admin activation.
+
+### 2026-05-24 - Pulse Web Search Verification
+
+- Verified the current Pulse/webSearch path uses server-only Tavily retrieval, injects source context into `/api/chat`, streams source metadata, and persists sources on assistant messages.
+- Added a total snippet budget to web search source normalization so retrieved snippets stay bounded before model injection.
+- Expanded current/research prompt signals so Pulse is recommended for more source-backed, verification, and current-landscape prompts.
+- Kept OpenRouter as the only model gateway and did not add Supabase or payment automation.
+
 ## Current Work
 
 - Neon database foundation is complete at the code/schema level.
