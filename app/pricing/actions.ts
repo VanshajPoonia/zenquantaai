@@ -6,6 +6,10 @@ import {
   neonPlanRequestsRepository,
   neonSubscriptionsRepository,
 } from '@/lib/db/repositories'
+import {
+  isPaidSubscriptionTier,
+  requestedTierIsUpgrade,
+} from '@/lib/admin/validation'
 
 export async function requestPlanAction(formData: FormData) {
   const { user } = await requireServerUser()
@@ -13,30 +17,17 @@ export async function requestPlanAction(formData: FormData) {
   const note = formData.get('note')?.toString().trim()
   const contact = formData.get('contact')?.toString().trim()
 
-  if (
-    requestedTier !== 'basic' &&
-    requestedTier !== 'pro' &&
-    requestedTier !== 'ultra' &&
-    requestedTier !== 'prime'
-  ) {
+  if (!isPaidSubscriptionTier(requestedTier)) {
     redirect('/pricing?error=invalid-plan')
   }
 
   const subscription = await neonSubscriptionsRepository.ensureForUser(user)
   const pending = await neonPlanRequestsRepository.getLatestPendingForUser(user.id)
-  const tierRank = {
-    free: 0,
-    basic: 1,
-    pro: 2,
-    ultra: 3,
-    prime: 4,
-  } as const
-
   if (pending) {
     redirect('/pricing?error=pending')
   }
 
-  if (tierRank[requestedTier] <= tierRank[subscription.tier]) {
+  if (!requestedTierIsUpgrade(subscription.tier, requestedTier)) {
     redirect('/pricing?error=already-covered')
   }
 

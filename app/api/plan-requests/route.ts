@@ -4,6 +4,10 @@ import {
   neonPlanRequestsRepository,
   neonSubscriptionsRepository,
 } from '@/lib/db/repositories'
+import {
+  isPaidSubscriptionTier,
+  requestedTierIsUpgrade,
+} from '@/lib/admin/validation'
 
 export const runtime = 'nodejs'
 
@@ -33,7 +37,7 @@ export async function POST(request: NextRequest) {
       }
     | null
 
-  if (!body?.requestedTier) {
+  if (!isPaidSubscriptionTier(body?.requestedTier)) {
     return NextResponse.json(
       { error: 'Requested plan is required.' },
       { status: 400 }
@@ -46,6 +50,13 @@ export async function POST(request: NextRequest) {
   if (pending) {
     return NextResponse.json(
       { error: 'You already have a pending plan request.' },
+      { status: 400 }
+    )
+  }
+
+  if (!requestedTierIsUpgrade(subscription.tier, body.requestedTier)) {
+    return NextResponse.json(
+      { error: 'Your current plan already covers this tier or higher.' },
       { status: 400 }
     )
   }
