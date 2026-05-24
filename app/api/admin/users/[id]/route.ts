@@ -9,6 +9,14 @@ import {
   buildTierRebasedUsageOverridePatch,
 } from '@/lib/db/repositories'
 import { SubscriptionTier } from '@/types'
+import {
+  isRole,
+  isSubscriptionStatus,
+  isSubscriptionTier,
+  parseAllowedModelOverrides,
+  parseNonNegativeInteger,
+  parseOptionalNote,
+} from '@/lib/admin/validation'
 
 export const runtime = 'nodejs'
 
@@ -58,6 +66,70 @@ export async function PATCH(
     return NextResponse.json({ error: 'Update payload is required.' }, { status: 400 })
   }
 
+  const tier =
+    typeof body.tier === 'undefined'
+      ? undefined
+      : isSubscriptionTier(body.tier)
+        ? body.tier
+        : null
+  const status =
+    typeof body.status === 'undefined'
+      ? undefined
+      : isSubscriptionStatus(body.status)
+        ? body.status
+        : null
+  const role =
+    typeof body.role === 'undefined'
+      ? undefined
+      : isRole(body.role)
+        ? body.role
+        : null
+
+  if (tier === null || status === null || role === null) {
+    return NextResponse.json({ error: 'Invalid admin update payload.' }, { status: 400 })
+  }
+
+  let parsed
+  try {
+    parsed = {
+      note: parseOptionalNote(body.note),
+      coreTokensIncluded: parseNonNegativeInteger(
+        body.coreTokensIncluded,
+        'coreTokensIncluded'
+      ),
+      tierTokensIncluded: parseNonNegativeInteger(
+        body.tierTokensIncluded,
+        'tierTokensIncluded'
+      ),
+      imageCreditsIncluded: parseNonNegativeInteger(
+        body.imageCreditsIncluded,
+        'imageCreditsIncluded'
+      ),
+      dailyMessageLimit: parseNonNegativeInteger(
+        body.dailyMessageLimit,
+        'dailyMessageLimit'
+      ),
+      maxInputTokensPerRequest: parseNonNegativeInteger(
+        body.maxInputTokensPerRequest,
+        'maxInputTokensPerRequest'
+      ),
+      maxOutputTokensPerRequest: parseNonNegativeInteger(
+        body.maxOutputTokensPerRequest,
+        'maxOutputTokensPerRequest'
+      ),
+      maxImagesPerDay: parseNonNegativeInteger(
+        body.maxImagesPerDay,
+        'maxImagesPerDay'
+      ),
+      allowedModelOverrides: parseAllowedModelOverrides(body.allowedModelOverrides),
+    }
+  } catch (error) {
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : 'Invalid admin update payload.' },
+      { status: 400 }
+    )
+  }
+
   let updatedSubscription = await neonSubscriptionsRepository.getByUserId(id)
   const currentOverride = await neonUsageLimitOverridesRepository.getByUserId(id)
 
@@ -66,18 +138,18 @@ export async function PATCH(
   }
 
   const currentSubscription = updatedSubscription
-  const nextTier = body.tier ?? updatedSubscription.tier
+  const nextTier = tier ?? updatedSubscription.tier
 
-  if (body.tier) {
+  if (tier) {
     updatedSubscription = await neonSubscriptionsRepository.updateTier(
       id,
-      body.tier,
-      body.note ?? null
+      tier,
+      parsed.note ?? null
     )
   }
 
-  if (body.status) {
-    updatedSubscription = await neonSubscriptionsRepository.updateStatus(id, body.status)
+  if (status) {
+    updatedSubscription = await neonSubscriptionsRepository.updateStatus(id, status)
   }
 
   if (
@@ -96,25 +168,25 @@ export async function PATCH(
       currentOverride,
       nextTier,
       submittedOverrides: {
-        coreTokensIncluded: body.coreTokensIncluded,
-        tierTokensIncluded: body.tierTokensIncluded,
-        imageCreditsIncluded: body.imageCreditsIncluded,
-        dailyMessageLimit: body.dailyMessageLimit,
-        maxInputTokensPerRequest: body.maxInputTokensPerRequest,
-        maxOutputTokensPerRequest: body.maxOutputTokensPerRequest,
-        maxImagesPerDay: body.maxImagesPerDay,
+        coreTokensIncluded: parsed.coreTokensIncluded,
+        tierTokensIncluded: parsed.tierTokensIncluded,
+        imageCreditsIncluded: parsed.imageCreditsIncluded,
+        dailyMessageLimit: parsed.dailyMessageLimit,
+        maxInputTokensPerRequest: parsed.maxInputTokensPerRequest,
+        maxOutputTokensPerRequest: parsed.maxOutputTokensPerRequest,
+        maxImagesPerDay: parsed.maxImagesPerDay,
       },
     })
 
     await neonUsageLimitOverridesRepository.upsert(id, {
       ...overridePatch,
-      allowedModelOverrides: body.allowedModelOverrides,
-      notes: body.note,
+      allowedModelOverrides: parsed.allowedModelOverrides,
+      notes: parsed.note,
     })
   }
 
-  if (body.role) {
-    await neonProfilesRepository.updateRole(id, body.role)
+  if (role) {
+    await neonProfilesRepository.updateRole(id, role)
   }
 
   await neonAdminAuditLogsRepository.create({

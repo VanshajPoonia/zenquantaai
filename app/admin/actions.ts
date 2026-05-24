@@ -10,6 +10,14 @@ import {
   neonSubscriptionsRepository,
   neonUsageLimitOverridesRepository,
 } from '@/lib/db/repositories'
+import {
+  isRole,
+  isSubscriptionStatus,
+  isSubscriptionTier,
+  parseAllowedModelOverrides,
+  parseNonNegativeInteger,
+  parseOptionalNote,
+} from '@/lib/admin/validation'
 
 export async function updatePlanRequestStatusAction(formData: FormData) {
   const { user } = await requireAdmin()
@@ -81,41 +89,83 @@ export async function updateUserAdminAction(formData: FormData) {
   const currentOverride =
     await neonUsageLimitOverridesRepository.getByUserId(targetUserId)
 
-  const tier = formData.get('tier')?.toString()
-  const status = formData.get('status')?.toString()
-  const role = formData.get('role')?.toString()
-  const noteField = formData.get('note')
-  const note =
-    noteField === null ? undefined : noteField.toString().trim() || null
-  const coreTokensIncluded = formData.get('coreTokensIncluded')?.toString()
-  const tierTokensIncluded = formData.get('tierTokensIncluded')?.toString()
-  const imageCreditsIncluded = formData.get('imageCreditsIncluded')?.toString()
-  const dailyMessageLimit = formData.get('dailyMessageLimit')?.toString()
-  const maxInputTokensPerRequest = formData.get('maxInputTokensPerRequest')?.toString()
-  const maxOutputTokensPerRequest = formData.get('maxOutputTokensPerRequest')?.toString()
-  const maxImagesPerDay = formData.get('maxImagesPerDay')?.toString()
-  const allowedModelOverrides = formData
-    .get('allowedModelOverrides')
-    ?.toString()
-    .split(',')
-    .map((value) => value.trim())
-    .filter(Boolean)
-  const nextTier =
-    tier === 'free' ||
-    tier === 'basic' ||
-    tier === 'pro' ||
-    tier === 'ultra' ||
-    tier === 'prime'
-      ? tier
-      : currentSubscription?.tier
+  const tierRaw = formData.get('tier')?.toString()
+  const tier =
+    typeof tierRaw === 'undefined' || tierRaw === ''
+      ? undefined
+      : isSubscriptionTier(tierRaw)
+        ? tierRaw
+        : null
+  const statusRaw = formData.get('status')?.toString()
+  const status =
+    typeof statusRaw === 'undefined' || statusRaw === ''
+      ? undefined
+      : isSubscriptionStatus(statusRaw)
+        ? statusRaw
+        : null
+  const roleRaw = formData.get('role')?.toString()
+  const role =
+    typeof roleRaw === 'undefined' || roleRaw === ''
+      ? undefined
+      : isRole(roleRaw)
+        ? roleRaw
+        : null
 
-  if (
-    tier === 'free' ||
-    tier === 'basic' ||
-    tier === 'pro' ||
-    tier === 'ultra' ||
-    tier === 'prime'
-  ) {
+  if (tier === null || status === null || role === null) {
+    redirect('/admin?error=invalid-user-update')
+  }
+
+  const noteField = formData.get('note')
+  let note: string | null | undefined
+  let coreTokensIncluded: number | undefined
+  let tierTokensIncluded: number | undefined
+  let imageCreditsIncluded: number | undefined
+  let dailyMessageLimit: number | undefined
+  let maxInputTokensPerRequest: number | undefined
+  let maxOutputTokensPerRequest: number | undefined
+  let maxImagesPerDay: number | undefined
+  let allowedModelOverrides: string[] | undefined
+
+  try {
+    note = parseOptionalNote(noteField === null ? undefined : noteField)
+    coreTokensIncluded = parseNonNegativeInteger(
+      formData.get('coreTokensIncluded')?.toString(),
+      'coreTokensIncluded'
+    )
+    tierTokensIncluded = parseNonNegativeInteger(
+      formData.get('tierTokensIncluded')?.toString(),
+      'tierTokensIncluded'
+    )
+    imageCreditsIncluded = parseNonNegativeInteger(
+      formData.get('imageCreditsIncluded')?.toString(),
+      'imageCreditsIncluded'
+    )
+    dailyMessageLimit = parseNonNegativeInteger(
+      formData.get('dailyMessageLimit')?.toString(),
+      'dailyMessageLimit'
+    )
+    maxInputTokensPerRequest = parseNonNegativeInteger(
+      formData.get('maxInputTokensPerRequest')?.toString(),
+      'maxInputTokensPerRequest'
+    )
+    maxOutputTokensPerRequest = parseNonNegativeInteger(
+      formData.get('maxOutputTokensPerRequest')?.toString(),
+      'maxOutputTokensPerRequest'
+    )
+    maxImagesPerDay = parseNonNegativeInteger(
+      formData.get('maxImagesPerDay')?.toString(),
+      'maxImagesPerDay'
+    )
+    allowedModelOverrides = parseAllowedModelOverrides(
+      formData.get('allowedModelOverrides')?.toString()
+    )
+  } catch {
+    redirect('/admin?error=invalid-user-update')
+  }
+
+  const nextTier = tier ?? currentSubscription?.tier
+
+  if (tier) {
     if (typeof note === 'undefined') {
       await neonSubscriptionsRepository.updateTier(targetUserId, tier)
     } else {
@@ -123,7 +173,7 @@ export async function updateUserAdminAction(formData: FormData) {
     }
   }
 
-  if (status === 'active' || status === 'paused' || status === 'cancelled') {
+  if (status) {
     await neonSubscriptionsRepository.updateStatus(targetUserId, status)
   }
 
@@ -133,17 +183,13 @@ export async function updateUserAdminAction(formData: FormData) {
       currentOverride,
       nextTier,
       submittedOverrides: {
-        coreTokensIncluded: coreTokensIncluded ? Number(coreTokensIncluded) : undefined,
-        tierTokensIncluded: tierTokensIncluded ? Number(tierTokensIncluded) : undefined,
-        imageCreditsIncluded: imageCreditsIncluded ? Number(imageCreditsIncluded) : undefined,
-        dailyMessageLimit: dailyMessageLimit ? Number(dailyMessageLimit) : undefined,
-        maxInputTokensPerRequest: maxInputTokensPerRequest
-          ? Number(maxInputTokensPerRequest)
-          : undefined,
-        maxOutputTokensPerRequest: maxOutputTokensPerRequest
-          ? Number(maxOutputTokensPerRequest)
-          : undefined,
-        maxImagesPerDay: maxImagesPerDay ? Number(maxImagesPerDay) : undefined,
+        coreTokensIncluded,
+        tierTokensIncluded,
+        imageCreditsIncluded,
+        dailyMessageLimit,
+        maxInputTokensPerRequest,
+        maxOutputTokensPerRequest,
+        maxImagesPerDay,
       },
     })
 
@@ -154,7 +200,7 @@ export async function updateUserAdminAction(formData: FormData) {
     })
   }
 
-  if (role === 'user' || role === 'admin') {
+  if (role) {
     await neonProfilesRepository.updateRole(targetUserId, role)
   }
 

@@ -29,6 +29,14 @@ export async function PATCH(
     return NextResponse.json({ error: 'Status is required.' }, { status: 400 })
   }
 
+  if (
+    body.status !== 'approved' &&
+    body.status !== 'rejected' &&
+    body.status !== 'activated'
+  ) {
+    return NextResponse.json({ error: 'Invalid status.' }, { status: 400 })
+  }
+
   const requests = await neonPlanRequestsRepository.list()
   const existing = requests.find((item) => item.id === id)
   if (!existing) {
