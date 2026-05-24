@@ -23,17 +23,13 @@ export async function logTextUsage(input: {
     usage: UsageEstimate
   }
 }): Promise<UsageEvent> {
-  const subscription = await neonSubscriptionsRepository.updateManual(input.subscription.userId, {
-    ...(input.event.usage.walletType === 'tier_tokens'
-      ? {
-          tierTokensUsed:
-            input.subscription.tierTokensUsed + input.event.usage.totalTokens,
-        }
-      : {
-          coreTokensUsed:
-            input.subscription.coreTokensUsed + input.event.usage.totalTokens,
-        }),
-    dailyMessageCount: input.subscription.dailyMessageCount + 1,
+  const subscription = await neonSubscriptionsRepository.incrementTextUsage({
+    userId: input.subscription.userId,
+    walletType:
+      input.event.usage.walletType === 'tier_tokens'
+        ? 'tier_tokens'
+        : 'core_tokens',
+    totalTokens: input.event.usage.totalTokens,
   })
 
   return await neonUsageEventsRepository.create({
@@ -60,10 +56,10 @@ export async function logImageUsage(input: {
   subscription: Subscription
   event: Omit<ImageGenerationEvent, 'id' | 'createdAt' | 'subscriptionId'>
 }): Promise<ImageGenerationEvent> {
-  const subscription = await neonSubscriptionsRepository.updateManual(input.subscription.userId, {
-    imageCreditsUsed:
-      input.subscription.imageCreditsUsed + input.event.imageCreditsConsumed,
-    dailyImageCount: input.subscription.dailyImageCount + input.event.imageCount,
+  const subscription = await neonSubscriptionsRepository.incrementImageUsage({
+    userId: input.subscription.userId,
+    imageCreditsConsumed: input.event.imageCreditsConsumed,
+    imageCount: input.event.imageCount,
   })
 
   return await neonImageGenerationEventsRepository.create({

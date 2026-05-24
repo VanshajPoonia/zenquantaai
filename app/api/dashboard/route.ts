@@ -8,7 +8,11 @@ import {
   neonSubscriptionsRepository,
   neonUsageEventsRepository,
 } from '@/lib/db/repositories'
-import { getAssistantUsageBreakdown, getDisplayedCreditsSnapshot } from '@/lib/billing/costs'
+import {
+  filterEventsForSubscriptionPeriod,
+  getAssistantUsageBreakdown,
+  getDisplayedCreditsSnapshot,
+} from '@/lib/billing/costs'
 import { usdToDisplayedCredits } from '@/lib/config'
 
 export const runtime = 'nodejs'
@@ -27,11 +31,14 @@ export async function GET(request: NextRequest) {
       neonConversationRepository.list(auth.user.id),
     ])
 
-  const displayedTextCostUsd = textEvents.reduce(
+  const periodTextEvents = filterEventsForSubscriptionPeriod(textEvents, subscription)
+  const periodImageEvents = filterEventsForSubscriptionPeriod(imageEvents, subscription)
+
+  const displayedTextCostUsd = periodTextEvents.reduce(
     (total, event) => total + event.displayedCostUsd,
     0
   )
-  const displayedImageCostUsd = imageEvents.reduce(
+  const displayedImageCostUsd = periodImageEvents.reduce(
     (total, event) => total + event.displayedCostUsd,
     0
   )
@@ -64,8 +71,8 @@ export async function GET(request: NextRequest) {
         imageDisplayedCostUsd: displayedImageCostUsd,
         totalDisplayedCostUsd,
         assistantBreakdown: getAssistantUsageBreakdown({
-          textEvents,
-          imageEvents,
+          textEvents: periodTextEvents,
+          imageEvents: periodImageEvents,
         }),
       },
       recentConversations: conversations.slice(0, 8),

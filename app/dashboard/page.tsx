@@ -8,6 +8,7 @@ import {
   neonUsageEventsRepository,
 } from '@/lib/db/repositories'
 import {
+  filterEventsForSubscriptionPeriod,
   getAssistantUsageBreakdown,
   getDisplayedCreditsSnapshot,
 } from '@/lib/billing/costs'
@@ -37,11 +38,20 @@ export default async function DashboardPage({
       neonConversationRepository.list(user.id),
     ])
 
-  const displayedTextCostUsd = usageEvents.reduce(
+  const periodUsageEvents = filterEventsForSubscriptionPeriod(
+    usageEvents,
+    subscription
+  )
+  const periodImageEvents = filterEventsForSubscriptionPeriod(
+    imageEvents,
+    subscription
+  )
+
+  const displayedTextCostUsd = periodUsageEvents.reduce(
     (total, event) => total + event.displayedCostUsd,
     0
   )
-  const displayedImageCostUsd = imageEvents.reduce(
+  const displayedImageCostUsd = periodImageEvents.reduce(
     (total, event) => total + event.displayedCostUsd,
     0
   )
@@ -49,8 +59,8 @@ export default async function DashboardPage({
   const displayedBudget = getDisplayedCreditsSnapshot(subscription)
   const usedDisplayedCredits = usdToDisplayedCredits(totalDisplayedCostUsd)
   const assistantBreakdown = getAssistantUsageBreakdown({
-    textEvents: usageEvents,
-    imageEvents,
+    textEvents: periodUsageEvents,
+    imageEvents: periodImageEvents,
   })
   const pendingRequest =
     requests.find((request) => request.status === 'pending') ?? null

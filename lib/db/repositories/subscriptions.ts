@@ -1,6 +1,6 @@
 import 'server-only'
 
-import { desc, eq } from 'drizzle-orm'
+import { desc, eq, sql } from 'drizzle-orm'
 import {
   AuthUser,
   Subscription,
@@ -443,6 +443,56 @@ class NeonSubscriptionsRepository {
         set: values,
       })
       .returning()
+
+    return rowToSubscription(rows[0])
+  }
+
+  async incrementTextUsage(input: {
+    userId: string
+    walletType: 'core_tokens' | 'tier_tokens'
+    totalTokens: number
+  }): Promise<Subscription> {
+    const rows = await getDatabaseClient()
+      .update(zenSubscriptions)
+      .set({
+        ...(input.walletType === 'tier_tokens'
+          ? {
+              tierTokensUsed: sql`${zenSubscriptions.tierTokensUsed} + ${input.totalTokens}`,
+            }
+          : {
+              coreTokensUsed: sql`${zenSubscriptions.coreTokensUsed} + ${input.totalTokens}`,
+            }),
+        dailyMessageCount: sql`${zenSubscriptions.dailyMessageCount} + 1`,
+        updatedAt: new Date(),
+      })
+      .where(eq(zenSubscriptions.userId, input.userId))
+      .returning()
+
+    if (!rows[0]) {
+      throw new Error('Unable to increment text usage for subscription.')
+    }
+
+    return rowToSubscription(rows[0])
+  }
+
+  async incrementImageUsage(input: {
+    userId: string
+    imageCreditsConsumed: number
+    imageCount: number
+  }): Promise<Subscription> {
+    const rows = await getDatabaseClient()
+      .update(zenSubscriptions)
+      .set({
+        imageCreditsUsed: sql`${zenSubscriptions.imageCreditsUsed} + ${input.imageCreditsConsumed}`,
+        dailyImageCount: sql`${zenSubscriptions.dailyImageCount} + ${input.imageCount}`,
+        updatedAt: new Date(),
+      })
+      .where(eq(zenSubscriptions.userId, input.userId))
+      .returning()
+
+    if (!rows[0]) {
+      throw new Error('Unable to increment image usage for subscription.')
+    }
 
     return rowToSubscription(rows[0])
   }

@@ -103,6 +103,19 @@ export function getDisplayedCreditsSnapshot(subscription: Subscription) {
   }
 }
 
+export function filterEventsForSubscriptionPeriod<T extends { createdAt: string }>(
+  events: T[],
+  subscription: Subscription
+): T[] {
+  const startedAt = new Date(subscription.currentPeriodStartedAt).getTime()
+  const endsAt = new Date(subscription.currentPeriodEndsAt).getTime()
+
+  return events.filter((event) => {
+    const createdAt = new Date(event.createdAt).getTime()
+    return createdAt >= startedAt && createdAt <= endsAt
+  })
+}
+
 export function getAssistantUsageBreakdown(input: {
   textEvents: Array<{ assistantFamily: AssistantFamily; displayedCostUsd: number }>
   imageEvents: Array<{ assistantFamily: AssistantFamily; displayedCostUsd: number; imageCount: number }>
