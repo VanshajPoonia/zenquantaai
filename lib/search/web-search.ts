@@ -8,6 +8,7 @@ const MAX_ALLOWED_RESULTS = 8
 const MAX_QUERY_LENGTH = 240
 const MAX_TITLE_LENGTH = 140
 const MAX_SNIPPET_LENGTH = 700
+const MAX_TOTAL_SNIPPET_CONTEXT_LENGTH = 2_800
 
 type TavilySearchResult = {
   title?: unknown
@@ -114,8 +115,11 @@ function normalizeSources(results: unknown): WebSearchSource[] {
 
   const seenUrls = new Set<string>()
   const sources: WebSearchSource[] = []
+  const maxResults = getMaxResults()
+  let totalSnippetLength = 0
 
   for (const result of results) {
+    if (sources.length >= maxResults) break
     if (!result || typeof result !== 'object') continue
 
     const source = toSource(result as TavilySearchResult, sources.length)
@@ -124,8 +128,21 @@ function normalizeSources(results: unknown): WebSearchSource[] {
     const dedupeKey = source.url.toLowerCase()
     if (seenUrls.has(dedupeKey)) continue
 
+    const remainingSnippetBudget =
+      MAX_TOTAL_SNIPPET_CONTEXT_LENGTH - totalSnippetLength
+    if (remainingSnippetBudget <= 80) break
+
+    const cappedSource =
+      source.snippet.length > remainingSnippetBudget
+        ? {
+            ...source,
+            snippet: truncateText(source.snippet, remainingSnippetBudget),
+          }
+        : source
+
     seenUrls.add(dedupeKey)
-    sources.push(source)
+    totalSnippetLength += cappedSource.snippet.length
+    sources.push(cappedSource)
   }
 
   return sources
