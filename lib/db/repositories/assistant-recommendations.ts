@@ -1,6 +1,6 @@
 import 'server-only'
 
-import { desc, eq } from 'drizzle-orm'
+import { and, desc, eq } from 'drizzle-orm'
 import {
   AssistantRecommendationAnalyticsSummary,
   AssistantRecommendationEvent,
@@ -109,7 +109,12 @@ class NeonAssistantRecommendationEventsRepository {
       const conversation = await getDatabaseClient()
         .select({ id: zenConversations.id })
         .from(zenConversations)
-        .where(eq(zenConversations.id, conversationId))
+        .where(
+          and(
+            eq(zenConversations.id, conversationId),
+            eq(zenConversations.userId, event.userId)
+          )
+        )
         .limit(1)
 
       conversationId = conversation[0]?.id ?? null

@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { appendAuthCookies, requireAuthenticatedUser } from '@/lib/auth/session'
 import {
+  neonConversationRepository,
   neonProfilesRepository,
+  neonProjectsRepository,
   neonPromptWorkflowsRepository,
 } from '@/lib/db/repositories'
 
@@ -21,10 +23,32 @@ export async function POST(
     projectId?: string | null
     variableValues?: Record<string, string>
   }
+  const conversationId = body.conversationId?.trim() || null
+  const projectId = body.projectId?.trim() || null
+
+  if (conversationId) {
+    const conversation = await neonConversationRepository.get(
+      auth.user.id,
+      conversationId
+    )
+    if (!conversation) {
+      return NextResponse.json(
+        { error: 'Conversation not found.' },
+        { status: 404 }
+      )
+    }
+  }
+
+  if (projectId) {
+    const projects = await neonProjectsRepository.list(auth.user.id)
+    if (!projects.some((project) => project.id === projectId)) {
+      return NextResponse.json({ error: 'Project not found.' }, { status: 404 })
+    }
+  }
 
   const run = await neonPromptWorkflowsRepository.createRun(auth.user.id, id, {
-    conversationId: body.conversationId ?? null,
-    projectId: body.projectId ?? null,
+    conversationId,
+    projectId,
     variableValues: body.variableValues ?? {},
   })
 

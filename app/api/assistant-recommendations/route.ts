@@ -24,6 +24,16 @@ interface RecommendationEventBody {
   outcome?: RecommendationOutcome
 }
 
+const ASSISTANT_FAMILIES = ['nova', 'velora', 'axiom', 'forge', 'pulse', 'prism']
+const OUTCOMES: RecommendationOutcome[] = [
+  'shown',
+  'accepted',
+  'continued',
+  'cancelled',
+  'autoswitched',
+  'not_shown',
+]
+
 export async function POST(request: NextRequest) {
   const auth = await requireAuthenticatedUser(request)
   if ('response' in auth) return auth.response
@@ -40,6 +50,17 @@ export async function POST(request: NextRequest) {
   ) {
     return NextResponse.json(
       { error: 'Recommendation event payload is incomplete.' },
+      { status: 400 }
+    )
+  }
+
+  if (
+    !ASSISTANT_FAMILIES.includes(body.currentAssistant) ||
+    !ASSISTANT_FAMILIES.includes(body.recommendedAssistant) ||
+    !OUTCOMES.includes(body.outcome)
+  ) {
+    return NextResponse.json(
+      { error: 'Recommendation event payload is invalid.' },
       { status: 400 }
     )
   }
