@@ -21,10 +21,57 @@ function dataUrlToBuffer(dataUrl: string): {
   }
 }
 
+function isPrivateHostname(hostname: string): boolean {
+  const normalized = hostname.trim().toLowerCase()
+  if (
+    normalized === 'localhost' ||
+    normalized.endsWith('.localhost') ||
+    normalized.endsWith('.local')
+  ) {
+    return true
+  }
+
+  const parts = normalized.split('.').map((part) => Number(part))
+  if (parts.length !== 4 || parts.some((part) => !Number.isInteger(part))) {
+    return false
+  }
+
+  const [a, b] = parts
+  return (
+    a === 10 ||
+    a === 127 ||
+    (a === 169 && b === 254) ||
+    (a === 172 && b >= 16 && b <= 31) ||
+    (a === 192 && b === 168)
+  )
+}
+
+function assertSafeGeneratedImageUrl(value: string): void {
+  if (value.startsWith('data:')) {
+    if (!value.startsWith('data:image/')) {
+      throw new Error('Generated image data URL must be an image.')
+    }
+    return
+  }
+
+  let url: URL
+  try {
+    url = new URL(value)
+  } catch {
+    throw new Error('Generated image URL is invalid.')
+  }
+
+  if (url.protocol !== 'https:' || isPrivateHostname(url.hostname)) {
+    throw new Error('Generated image URL is not an allowed external image URL.')
+  }
+}
+
 async function imageUrlToBuffer(url: string): Promise<{
   mimeType: string
   buffer: Buffer
 }> {
+  assertSafeGeneratedImageUrl(url)
+
   if (url.startsWith('data:')) {
     const parsed = dataUrlToBuffer(url)
     if (!parsed) {

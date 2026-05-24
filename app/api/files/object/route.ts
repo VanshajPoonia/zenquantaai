@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server'
 import { appendAuthCookies, requireAuthenticatedUser } from '@/lib/auth/session'
+import { neonFilesRepository } from '@/lib/db/repositories'
 import { getObjectStore } from '@/lib/storage/object-store'
 
 export const runtime = 'nodejs'
@@ -25,7 +26,13 @@ export async function GET(request: NextRequest) {
     return createStorageError('File bucket and path are required.')
   }
 
-  if (!storagePath.startsWith(`${auth.user.id}/`)) {
+  const file = await neonFilesRepository.getByObjectRef({
+    userId: auth.user.id,
+    bucket,
+    storagePath,
+  })
+
+  if (!file || file.visibility !== 'private') {
     return createStorageError('File not found.', 404)
   }
 

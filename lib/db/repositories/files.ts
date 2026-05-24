@@ -107,6 +107,26 @@ class NeonFilesRepository {
     return rows[0] ? rowToFile(rows[0]) : null
   }
 
+  async getByObjectRef(input: {
+    userId: string
+    bucket: string
+    storagePath: string
+  }): Promise<NeonFileMetadata | null> {
+    const rows = await getDatabaseClient()
+      .select()
+      .from(zenFiles)
+      .where(
+        and(
+          eq(zenFiles.userId, input.userId),
+          eq(zenFiles.bucket, input.bucket),
+          eq(zenFiles.storagePath, input.storagePath)
+        )
+      )
+      .limit(1)
+
+    return rows[0] ? rowToFile(rows[0]) : null
+  }
+
   async create(input: CreateFileMetadataInput): Promise<NeonFileMetadata> {
     await neonUsersRepository.ensureUserReference(input.userId)
 
