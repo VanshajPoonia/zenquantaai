@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import {
   appendAuthCookies,
+  isAuthRateLimitError,
   parseLoginId,
   signInWithLocalCredentials,
 } from '@/lib/auth/session'
@@ -42,6 +43,10 @@ export async function POST(request: NextRequest) {
   try {
     session = await signInWithLocalCredentials(loginId, password, request)
   } catch (error) {
+    if (isAuthRateLimitError(error)) {
+      return NextResponse.json({ error: error.message }, { status: error.status })
+    }
+
     const message = error instanceof Error ? error.message.toLowerCase() : ''
 
     if (

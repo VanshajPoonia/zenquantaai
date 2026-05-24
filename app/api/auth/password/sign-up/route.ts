@@ -57,7 +57,9 @@ export async function POST(request: NextRequest) {
     throw error
   }
 
-  const session = await signInWithLocalCredentials(loginId, password, request)
+  const session = await signInWithLocalCredentials(loginId, password, request, {
+    skipRateLimit: true,
+  })
 
   const response = NextResponse.json({
     ok: true,

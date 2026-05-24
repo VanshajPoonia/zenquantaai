@@ -2,32 +2,41 @@ import {
   createHash,
   randomBytes,
   scrypt as scryptCallback,
+  type ScryptOptions,
   timingSafeEqual,
 } from 'crypto'
-import { promisify } from 'util'
-import { and, eq, gt, isNull } from 'drizzle-orm'
+import { and, eq, gt, isNull, ne } from 'drizzle-orm'
 import { NextRequest, NextResponse } from 'next/server'
 import { AuthUser } from '@/types'
 import { getDatabaseClient } from '@/lib/db/client'
 import {
-  zenAuthCredentials,
+  zenAuthAttempts,
   zenAuthSessions,
   zenProfiles,
   zenUsers,
 } from '@/lib/db/schema'
 import { neonProfilesRepository, neonUsersRepository } from '@/lib/db/repositories'
 
-const scrypt = promisify(scryptCallback)
-
 const SESSION_COOKIE = 'zenquanta-session-token'
 const LEGACY_ACCESS_TOKEN_COOKIE = 'zenquanta-access-token'
 const LEGACY_REFRESH_TOKEN_COOKIE = 'zenquanta-refresh-token'
 const COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 30
 const PASSWORD_KEY_LENGTH = 64
+const PASSWORD_SCRYPT_OPTIONS: ScryptOptions = {
+  N: 16384,
+  r: 8,
+  p: 1,
+  maxmem: 32 * 1024 * 1024,
+}
 const PASSWORD_SCRYPT_PARAMS = {
   algorithm: 'scrypt',
   keyLength: PASSWORD_KEY_LENGTH,
+  ...PASSWORD_SCRYPT_OPTIONS,
 }
+const AUTH_ATTEMPT_WINDOW_MS = 15 * 60 * 1000
+const AUTH_ATTEMPT_LOCK_MS = 15 * 60 * 1000
+const AUTH_LOGIN_ID_FAILURE_LIMIT = 5
+const AUTH_IP_FAILURE_LIMIT = 20
 
 export interface RequestAuthSession {
   user: AuthUser | null
@@ -35,6 +44,14 @@ export interface RequestAuthSession {
   refreshToken?: string
   refreshed?: boolean
   shouldClearCookies?: boolean
+}
+
+export class AuthRateLimitError extends Error {
+  status = 429
+}
+
+export function isAuthRateLimitError(error: unknown): error is AuthRateLimitError {
+  return error instanceof AuthRateLimitError
 }
 
 function normalizeLoginId(value: string): string {
@@ -65,17 +82,58 @@ function addSeconds(date: Date, seconds: number): Date {
   return new Date(date.getTime() + seconds * 1000)
 }
 
+function addMilliseconds(date: Date, milliseconds: number): Date {
+  return new Date(date.getTime() + milliseconds)
+}
+
+function scryptOptionsFromParams(
+  params: Record<string, unknown> | null | undefined
+): ScryptOptions {
+  const getNumber = (key: string, fallback: number) => {
+    const value = params?.[key]
+    return typeof value === 'number' && Number.isFinite(value)
+      ? value
+      : fallback
+  }
+
+  return {
+    N: getNumber('N', PASSWORD_SCRYPT_OPTIONS.N as number),
+    r: getNumber('r', PASSWORD_SCRYPT_OPTIONS.r as number),
+    p: getNumber('p', PASSWORD_SCRYPT_OPTIONS.p as number),
+    maxmem: getNumber('maxmem', PASSWORD_SCRYPT_OPTIONS.maxmem as number),
+  }
+}
+
+function derivePasswordKey(
+  password: string,
+  salt: string,
+  keyLength: number,
+  options: ScryptOptions
+): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    scryptCallback(password, salt, keyLength, options, (error, derivedKey) => {
+      if (error) {
+        reject(error)
+        return
+      }
+
+      resolve(derivedKey)
+    })
+  })
+}
+
 async function hashPassword(password: string): Promise<{
   passwordHash: string
   passwordSalt: string
   passwordParams: Record<string, unknown>
 }> {
   const passwordSalt = randomBytes(16).toString('base64url')
-  const derived = (await scrypt(
+  const derived = await derivePasswordKey(
     password,
     passwordSalt,
-    PASSWORD_KEY_LENGTH
-  )) as Buffer
+    PASSWORD_KEY_LENGTH,
+    PASSWORD_SCRYPT_OPTIONS
+  )
 
   return {
     passwordHash: derived.toString('base64'),
@@ -88,13 +146,15 @@ async function verifyPassword(input: {
   password: string
   passwordHash: string
   passwordSalt: string
+  passwordParams?: Record<string, unknown>
 }): Promise<boolean> {
   const expected = Buffer.from(input.passwordHash, 'base64')
-  const actual = (await scrypt(
+  const actual = await derivePasswordKey(
     input.password,
     input.passwordSalt,
-    expected.length
-  )) as Buffer
+    expected.length,
+    scryptOptionsFromParams(input.passwordParams)
+  )
 
   if (actual.length !== expected.length) return false
 
@@ -238,6 +298,129 @@ function getRequestMetadata(request: NextRequest): {
   }
 }
 
+function authAttemptSubjects(loginId: string, ipAddress?: string | null) {
+  return [
+    {
+      scope: 'login_id' as const,
+      subjectHash: hashToken(`login:${normalizeLoginId(loginId)}`),
+      limit: AUTH_LOGIN_ID_FAILURE_LIMIT,
+    },
+    ...(ipAddress
+      ? [
+          {
+            scope: 'ip' as const,
+            subjectHash: hashToken(`ip:${ipAddress}`),
+            limit: AUTH_IP_FAILURE_LIMIT,
+          },
+        ]
+      : []),
+  ]
+}
+
+async function assertAuthAttemptsAllowed(
+  loginId: string,
+  ipAddress?: string | null
+): Promise<void> {
+  const subjects = authAttemptSubjects(loginId, ipAddress)
+  if (subjects.length === 0) return
+
+  const now = new Date()
+  const db = getDatabaseClient()
+
+  for (const subject of subjects) {
+    const rows = await db
+      .select()
+      .from(zenAuthAttempts)
+      .where(
+        and(
+          eq(zenAuthAttempts.scope, subject.scope),
+          eq(zenAuthAttempts.subjectHash, subject.subjectHash)
+        )
+      )
+      .limit(1)
+    const row = rows[0]
+
+    if (row?.lockedUntil && row.lockedUntil.getTime() > now.getTime()) {
+      throw new AuthRateLimitError(
+        'Too many sign-in attempts. Wait 15 minutes and try again.'
+      )
+    }
+  }
+}
+
+async function recordAuthFailure(
+  loginId: string,
+  ipAddress?: string | null
+): Promise<void> {
+  const subjects = authAttemptSubjects(loginId, ipAddress)
+  if (subjects.length === 0) return
+
+  const now = new Date()
+  const windowStart = addMilliseconds(now, -AUTH_ATTEMPT_WINDOW_MS)
+  const db = getDatabaseClient()
+
+  await Promise.all(
+    subjects.map(async (subject) => {
+      const rows = await db
+        .select()
+        .from(zenAuthAttempts)
+        .where(
+          and(
+            eq(zenAuthAttempts.scope, subject.scope),
+            eq(zenAuthAttempts.subjectHash, subject.subjectHash)
+          )
+        )
+        .limit(1)
+      const current = rows[0]
+      const shouldReset =
+        !current || current.firstFailedAt.getTime() < windowStart.getTime()
+      const failedCount = shouldReset ? 1 : current.failedCount + 1
+      const values = {
+        scope: subject.scope,
+        subjectHash: subject.subjectHash,
+        failedCount,
+        firstFailedAt: shouldReset ? now : current.firstFailedAt,
+        lastFailedAt: now,
+        lockedUntil:
+          failedCount >= subject.limit
+            ? addMilliseconds(now, AUTH_ATTEMPT_LOCK_MS)
+            : null,
+        updatedAt: now,
+      }
+
+      await db
+        .insert(zenAuthAttempts)
+        .values(values)
+        .onConflictDoUpdate({
+          target: [zenAuthAttempts.scope, zenAuthAttempts.subjectHash],
+          set: values,
+        })
+    })
+  )
+}
+
+async function clearAuthFailures(
+  loginId: string,
+  ipAddress?: string | null
+): Promise<void> {
+  const subjects = authAttemptSubjects(loginId, ipAddress)
+  if (subjects.length === 0) return
+
+  const db = getDatabaseClient()
+  await Promise.all(
+    subjects.map((subject) =>
+      db
+        .delete(zenAuthAttempts)
+        .where(
+          and(
+            eq(zenAuthAttempts.scope, subject.scope),
+            eq(zenAuthAttempts.subjectHash, subject.subjectHash)
+          )
+        )
+    )
+  )
+}
+
 export async function createLocalAccount(
   loginId: string,
   password: string
@@ -265,11 +448,21 @@ export async function createLocalAccount(
 export async function signInWithLocalCredentials(
   loginId: string,
   password: string,
-  request?: NextRequest
+  request?: NextRequest,
+  options: { skipRateLimit?: boolean } = {}
 ): Promise<RequestAuthSession> {
+  const metadata = request
+    ? getRequestMetadata(request)
+    : { userAgent: null, ipAddress: null }
+
+  if (!options.skipRateLimit) {
+    await assertAuthAttemptsAllowed(loginId, metadata.ipAddress)
+  }
+
   const credential = await neonUsersRepository.getCredentialByLoginId(loginId)
 
   if (!credential) {
+    await recordAuthFailure(loginId, metadata.ipAddress)
     throw new Error('Invalid login credentials.')
   }
 
@@ -277,9 +470,11 @@ export async function signInWithLocalCredentials(
     password,
     passwordHash: credential.passwordHash,
     passwordSalt: credential.passwordSalt,
+    passwordParams: credential.passwordParams,
   })
 
   if (!isValidPassword) {
+    await recordAuthFailure(loginId, metadata.ipAddress)
     throw new Error('Invalid login credentials.')
   }
 
@@ -289,9 +484,7 @@ export async function signInWithLocalCredentials(
     email: credential.user.email,
     role: credential.user.role,
   })
-  const metadata = request
-    ? getRequestMetadata(request)
-    : { userAgent: null, ipAddress: null }
+  await clearAuthFailures(loginId, metadata.ipAddress)
 
   return createSessionForUser({
     user: {
@@ -318,6 +511,8 @@ export async function updateLocalPassword(
     userId: session.user.id,
     ...(await hashPassword(password)),
   })
+
+  await revokeOtherSessions(session.user.id, sessionToken)
 }
 
 async function readSessionToken(token: string): Promise<RequestAuthSession> {
@@ -416,4 +611,23 @@ export async function revokeSession(sessionToken: string | undefined): Promise<v
       updatedAt: new Date(),
     })
     .where(eq(zenAuthSessions.tokenHash, hashToken(sessionToken)))
+}
+
+async function revokeOtherSessions(
+  userId: string,
+  currentSessionToken: string
+): Promise<void> {
+  await getDatabaseClient()
+    .update(zenAuthSessions)
+    .set({
+      revokedAt: new Date(),
+      updatedAt: new Date(),
+    })
+    .where(
+      and(
+        eq(zenAuthSessions.userId, userId),
+        ne(zenAuthSessions.tokenHash, hashToken(currentSessionToken)),
+        isNull(zenAuthSessions.revokedAt)
+      )
+    )
 }

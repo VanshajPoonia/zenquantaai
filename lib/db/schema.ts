@@ -124,6 +124,31 @@ export const zenAuthSessions = pgTable(
   ]
 )
 
+export const zenAuthAttempts = pgTable(
+  'zen_auth_attempts',
+  {
+    scope: text('scope').notNull(),
+    subjectHash: text('subject_hash').notNull(),
+    failedCount: integer('failed_count').notNull().default(0),
+    firstFailedAt: timestamp('first_failed_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    lastFailedAt: timestamp('last_failed_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    lockedUntil: timestamp('locked_until', { withTimezone: true }),
+    ...timestamps,
+  },
+  (table) => [
+    primaryKey({ columns: [table.scope, table.subjectHash] }),
+    index('zen_auth_attempts_locked_until_idx').on(table.lockedUntil),
+    check(
+      'zen_auth_attempts_scope_check',
+      sql`${table.scope} in ('login_id', 'ip')`
+    ),
+  ]
+)
+
 export const zenProfiles = pgTable(
   'zen_profiles',
   {
