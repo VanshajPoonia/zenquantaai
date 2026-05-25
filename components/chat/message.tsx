@@ -667,7 +667,13 @@ export function ChatMessage({
               getModeColorClasses(message.mode)
             )}
           >
-            <ModeIcon mode={message.mode} size="sm" />
+            {message.customAssistant ? (
+              <span className="text-sm leading-none">
+                {message.customAssistant.iconEmoji}
+              </span>
+            ) : (
+              <ModeIcon mode={message.mode} size="sm" />
+            )}
           </div>
           <div className="flex-1">
             <div
@@ -687,6 +693,15 @@ export function ChatMessage({
                 <div className="mb-3 inline-flex items-center gap-1 rounded-full border border-border/60 bg-background/60 px-2.5 py-1 text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
                   <ModeIcon mode={message.mode} size="sm" />
                   {message.branchLabel}
+                </div>
+              ) : null}
+              {message.customAssistant ? (
+                <div className="mb-3 inline-flex items-center gap-1.5 rounded-full border border-border/60 bg-background/60 px-2.5 py-1 text-xs text-muted-foreground">
+                  <span>{message.customAssistant.iconEmoji}</span>
+                  <span>{message.customAssistant.name}</span>
+                  <span className="text-[10px] uppercase tracking-[0.16em]">
+                    {MODE_CONFIGS[message.customAssistant.baseMode].name}
+                  </span>
                 </div>
               ) : null}
               {effectiveStatus === 'streaming' ? (
