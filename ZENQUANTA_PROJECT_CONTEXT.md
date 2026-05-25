@@ -178,3 +178,183 @@ Main app routes:
 - `/auth/reset-password`: password reset/update UI. Password reset is currently admin-assisted, not magic-link automated.
 - `/auth/callback`: compatibility route that redirects unsupported old auth callback flows.
 - `/nova`: public Nova assistant page.
+- `/velora`: public Velora assistant page.
+- `/axiom`: public Axiom assistant page.
+- `/forge`: public Forge assistant page.
+- `/pulse`: public Pulse assistant page.
+- `/prism`: public Prism assistant page.
+
+Static/dynamic build output from the current build:
+
+- Static pages include `/`, `/auth/reset-password`, and the assistant pages.
+- Dynamic pages include `/admin`, `/admin/users/[id]`, `/dashboard`, and `/pricing`.
+
+## 7. Main API Routes
+
+Core AI and media:
+
+- `POST /api/chat`: text-only streamed chat. Authenticates user, resolves settings, enforces text usage, optionally retrieves Tavily web context and uploaded-file context, streams OpenRouter output, persists conversation/messages to Neon, logs text usage, and streams source metadata.
+- `POST /api/images/generate`: Prism image generation. Authenticates user, enforces image usage, generates through OpenRouter image-capable model, stores generated image object through neutral storage, persists conversation/messages to Neon, and logs image usage.
+- `GET /api/images/history`: returns recent image generation events for the authenticated user.
+- `POST /api/model-comparisons`: text-only model/assistant comparison for 2 to 4 available text assistants; logs usage for each successful candidate.
+- `POST /api/model-comparisons/[id]/choose`: saves one completed comparison candidate into the conversation.
+
+Auth:
+
+- `POST /api/auth/password/sign-in`: login ID/password sign-in.
+- `POST /api/auth/password/sign-up`: login ID/password account creation and immediate sign-in.
+- `POST /api/auth/password/reset-request`: admin-assisted password reset message.
+- `POST /api/auth/password/update`: updates password for an authenticated session.
+- `GET /api/auth/session`: returns current authenticated user and role.
+- `POST /api/auth/sign-out`: revokes current session and clears cookies.
+- `POST /api/auth/magic-link`: returns 410 because magic links are not available in the current credentials auth system.
+
+Workspace data:
+
+- `GET/POST /api/conversations`: list or create conversations.
+- `GET/PATCH/DELETE /api/conversations/[id]`: read, mutate, or delete one conversation.
+- `GET/POST /api/projects`: list or create projects.
+- `PATCH/DELETE /api/projects/[id]`: update or delete a project.
+- `GET/POST /api/prompts`: list or create prompt library items.
+- `PATCH/DELETE /api/prompts/[id]`: update or delete prompt library items.
+- `GET/POST /api/prompt-workflows`: list or create prompt workflows.
+- `GET/PATCH/DELETE /api/prompt-workflows/[id]`: read, update, or delete prompt workflows.
+- `POST/PATCH /api/prompt-workflows/[id]/runs`: create workflow run records and update run/step-run status.
+- `GET/POST /api/settings`: read or patch app settings.
+- `GET/POST /api/custom-assistants`: list or create private custom text assistants.
+- `GET/PATCH/DELETE /api/custom-assistants/[id]`: read, update, or delete a private custom text assistant.
+
+Files and storage:
+
+- `POST /api/attachments`: uploads files, stores objects through neutral storage, creates Neon file metadata, and indexes supported text/code files when embeddings are configured.
+- `GET /api/files/object`: authenticated private file read by bucket/path after checking Neon metadata ownership and visibility.
+- `POST /api/bootstrap/import-local`: imports existing browser-local projects, prompts, settings, conversations, and data-URL attachments into Neon/storage for the signed-in user.
+
+Usage, plan, dashboard, and admin:
+
+- `GET /api/dashboard`: user dashboard data with displayed usage only.
+- `GET/POST /api/plan-requests`: list and submit manual plan requests.
+- `GET /api/admin/overview`: admin-only cost/margin and usage overview with filters.
+- `GET /api/admin/users`: admin-only user rows.
+- `GET/PATCH /api/admin/users/[id]`: admin-only user detail and updates.
+- `GET /api/admin/plan-requests`: admin-only plan request list.
+- `PATCH /api/admin/plan-requests/[id]`: admin-only approve/reject/activate plan requests.
+- `POST /api/assistant-recommendations`: logs prompt precheck recommendation telemetry.
+
+## 8. Assistants And AI Routing
+
+Assistant families:
+
+- Nova maps to `general`. It is the broad practical assistant for planning, summaries, recommendations, everyday productivity, and open-ended work.
+- Velora maps to `creative`. It handles creative writing, tone, copy, storytelling, naming, ideation, and brand language.
+- Axiom maps to `logic`. It handles structured reasoning, comparisons, tradeoffs, decision support, and analytical breakdowns.
+- Forge maps to `code`. It handles coding, debugging, architecture, refactors, APIs, and implementation planning.
+- Pulse maps to `live`. It handles current-context, research-style, market scan, latest-information, and source-backed synthesis work.
+- Prism maps to `image`. It handles image generation, visual ideation, product renders, campaign visuals, and art direction.
+
+Mode mapping in `lib/config/assistants.ts`:
+
+- `general` -> `nova`
+- `creative` -> `velora`
+- `logic` -> `axiom`
+- `code` -> `forge`
+- `live` -> `pulse`
+- `image` -> `prism`
+
+OpenRouter use:
+
+- `lib/ai/openrouter.ts` is the only active AI generation client.
+- Text generation uses OpenRouter chat completions with `stream: true` for `/api/chat`.
+- Non-streaming text is also available for comparison-style work.
+- Image generation uses OpenRouter chat completions with image modalities.
+- If `OPENROUTER_API_KEY` is missing, text and image helpers can fall back to mock/local generated responses for development paths. Do not present this as production AI generation.
+
+Text vs image flow:
+
+- `/api/chat` rejects image-mode requests and tells clients to use `/api/images/generate`.
+- `/api/images/generate` resolves only Prism/image requests.
+- Usage wallets are separate: text uses `core_tokens` or `tier_tokens`; Prism uses `image_credits`.
+
+Pulse web search:
+
+- Pulse web search is implemented, not merely pending.
+- `lib/search/web-search.ts` calls Tavily server-side when mode is `live` or `settings.webSearch` is enabled.
+- Search sources are normalized, snippet-bounded, injected into system context, streamed to the client as `sources` events, and persisted on assistant messages.
+- If `TAVILY_API_KEY` is missing or Tavily fails, chat continues with an unavailable-search context that tells the model not to claim live verification.
+
+Current tier model map from `lib/config/assistants.ts`:
+
+- Free and Basic:
+  - Nova: `openai/gpt-4.1-mini`
+  - Velora: `google/gemini-2.5-flash`
+  - Axiom: `deepseek/deepseek-chat-v3.1`
+  - Forge: `qwen/qwen3-coder`
+  - Pulse: `x-ai/grok-4.1-fast`
+  - Prism: `google/gemini-2.5-flash-image`
+- Pro:
+  - Nova: `openai/gpt-5`
+  - Velora: `google/gemini-2.5-pro`
+  - Axiom: `google/gemini-2.5-pro`
+  - Forge: `openai/gpt-5.3-codex`
+  - Pulse: `x-ai/grok-4.20`
+  - Prism: `google/gemini-2.5-flash-image`
+- Ultra:
+  - Nova: `openai/gpt-5.4`
+  - Velora: `anthropic/claude-sonnet-4.6`
+  - Axiom: `google/gemini-3.1-pro-preview`
+  - Forge: `anthropic/claude-sonnet-4.6`
+  - Pulse: `x-ai/grok-4.20`
+  - Prism: `openai/gpt-5-image`
+- Prime:
+  - Nova: `openai/gpt-5.4`
+  - Velora: `anthropic/claude-opus-4.6`
+  - Axiom: `google/gemini-3.1-pro-preview`
+  - Forge: `anthropic/claude-opus-4.6`
+  - Pulse: `x-ai/grok-4.20`
+  - Prism: `openai/gpt-5-image`
+
+Model pricing figures in `lib/config/pricing.ts` are configurable estimates and should be reviewed against current OpenRouter pricing before production billing decisions.
+
+## 9. Database And Neon
+
+Current Neon setup:
+
+- Client: `lib/db/client.ts`.
+- Schema: `lib/db/schema.ts`.
+- Repositories: `lib/db/repositories/*`.
+- Migrations: `neon/migrations/*`.
+- Active env var: `DATABASE_URL`, with `NEON_DATABASE_URL` and `POSTGRES_URL` accepted as aliases.
+
+Fresh Neon migration order:
+
+1. `neon/migrations/20260522_zenquanta_fresh_initial.sql`
+2. `neon/migrations/20260522_zenquanta_local_auth.sql`
+3. `neon/migrations/20260522_zenquanta_message_sources.sql`
+4. `neon/migrations/20260522_zenquanta_file_knowledge.sql`
+5. `neon/migrations/20260522_zenquanta_prompt_workflows.sql`
+6. `neon/migrations/20260522_zenquanta_model_comparisons.sql`
+7. `neon/migrations/20260524_zenquanta_auth_attempts.sql`
+8. `neon/migrations/20260525_zenquanta_custom_assistants.sql`
+
+Key tables/concepts:
+
+- Users/auth:
+  - `zen_users`
+  - `zen_auth_identities`
+  - `zen_auth_credentials`
+  - `zen_auth_sessions`
+  - `zen_auth_attempts`
+  - `zen_profiles`
+- Plans/usage/admin:
+  - `zen_subscriptions`
+  - `zen_usage_limit_overrides`
+  - `zen_usage_events`
+  - `zen_image_generation_events`
+  - `zen_plan_change_requests`
+  - `zen_admin_audit_logs`
+- Workspace:
+  - `zen_projects`
+  - `zen_conversations`
+  - `zen_messages`
+  - `zen_prompt_library`
+  - `zen_user_settings`
