@@ -29,6 +29,8 @@ import {
   PendingAttachment,
   Project,
   ModelComparison,
+  OnboardingRequest,
+  OnboardingResponse,
   PromptLibraryItem,
   PromptWorkflow,
   PromptWorkflowInput,
@@ -118,6 +120,13 @@ interface RunModelComparisonInput {
   targetModes: AIMode[]
 }
 
+type WorkspaceTool = 'prompt-library' | 'model-comparison' | 'custom-assistants'
+
+interface WorkspaceToolRequest {
+  requestId: number
+  tool: WorkspaceTool
+}
+
 interface AuthSessionResponse {
   authenticated: boolean
   user: AuthState['user']
@@ -137,6 +146,7 @@ interface ChatContextType {
   chats: ConversationSummary[]
   currentChat: Chat | null
   setCurrentChat: (chat: ConversationSummary | Conversation | null) => void
+  openConversation: (conversationId: string) => Promise<Conversation | null>
   goHome: () => void
   createNewChat: () => Promise<void>
   deleteChat: (chatId: string) => Promise<void>
@@ -155,6 +165,12 @@ interface ChatContextType {
   updateSessionSettings: (settings: Partial<SessionSettings>) => void
   appSettings: AppSettings
   saveAppSettings: (settings: AppSettingsPatch) => Promise<AppSettings>
+  isOnboardingOpen: boolean
+  openOnboarding: () => void
+  skipOnboarding: () => Promise<void>
+  completeOnboarding: (
+    input: Omit<Extract<OnboardingRequest, { action: 'complete' }>, 'action'>
+  ) => Promise<OnboardingResponse>
   apiSettings: APISettings
   updateApiSettings: (settings: Partial<APISettings>) => Promise<void>
   isSidebarOpen: boolean
@@ -201,6 +217,9 @@ interface ChatContextType {
   beginPromptPrecheck: () => void
   awaitRecommendationDecision: () => void
   clearPromptPrecheck: () => void
+  workspaceToolRequest: WorkspaceToolRequest | null
+  openWorkspaceTool: (tool: WorkspaceTool) => void
+  clearWorkspaceToolRequest: (requestId: number) => void
 }
 
 const ChatContext = createContext<ChatContextType | undefined>(undefined)
@@ -227,6 +246,13 @@ function normalizeAppSettingsState(input: AppSettings): AppSettings {
       ...input.assistantRecommendations,
     },
     sessionDefaults: createSessionSettings(input.defaultMode, input.sessionDefaults),
+    onboarding: {
+      ...DEFAULT_APP_SETTINGS.onboarding,
+      ...input.onboarding,
+      installedPromptIds: Array.isArray(input.onboarding?.installedPromptIds)
+        ? input.onboarding.installedPromptIds
+        : [],
+    },
   }
 }
 
@@ -284,6 +310,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     user: null,
   })
   const [authError, setAuthError] = useState<string | null>(null)
+  const [hasLoadedWorkspaceData, setHasLoadedWorkspaceData] = useState(false)
   const [currentMode, setCurrentModeState] = useState<AIMode>(
     DEFAULT_APP_SETTINGS.defaultMode
   )
@@ -303,6 +330,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     clampSidebarWidth(readBrowserSidebarWidth() ?? 288)
   )
   const [isSettingsPanelOpen, setIsSettingsPanelOpen] = useState(false)
+  const [isOnboardingOpen, setIsOnboardingOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [projects, setProjects] = useState<Project[]>([])
   const [selectedProjectIdState, setSelectedProjectIdState] =
@@ -313,12 +341,16 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const [currentCustomAssistantId, setCurrentCustomAssistantId] =
     useState<string | null>(null)
   const [queuedPrompts, setQueuedPrompts] = useState<QueuedPrompt[]>([])
+  const [workspaceToolRequest, setWorkspaceToolRequest] =
+    useState<WorkspaceToolRequest | null>(null)
   const streamAbortRef = useRef<AbortController | null>(null)
   const activeSendIdRef = useRef<string | null>(null)
   const conversationsRef = useRef<Conversation[]>([])
   const currentChatRef = useRef<Conversation | null>(null)
   const queuedPromptsRef = useRef<QueuedPrompt[]>([])
   const isProcessingQueueRef = useRef(false)
+  const workspaceToolRequestIdRef = useRef(0)
+  const hasAutoOpenedOnboardingRef = useRef(false)
 
   const chats = useMemo(
     () => sortConversationSummaries(conversations.map(toConversationSummary)),
@@ -364,6 +396,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     streamAbortRef.current?.abort()
     streamAbortRef.current = null
     activeSendIdRef.current = null
+    setHasLoadedWorkspaceData(false)
     setSendLifecycleStatus('idle')
     setStreamingState({ status: 'idle' })
     setConversations([])
@@ -374,6 +407,9 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     setCustomAssistants([])
     setCurrentCustomAssistantId(null)
     setQueuedPrompts([])
+    setWorkspaceToolRequest(null)
+    setIsOnboardingOpen(false)
+    hasAutoOpenedOnboardingRef.current = false
     setCurrentModeState(DEFAULT_APP_SETTINGS.defaultMode)
     setAppSettings(DEFAULT_APP_SETTINGS)
     setDraftSessionSettings(DEFAULT_APP_SETTINGS.sessionDefaults)
@@ -566,6 +602,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
   const loadAuthedData = useCallback(
     async (user: NonNullable<AuthState['user']>) => {
+      setHasLoadedWorkspaceData(false)
       await runLocalImport(user.id)
 
       const [
@@ -618,6 +655,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
           normalizedSettings.sessionDefaults
         )
       )
+      setHasLoadedWorkspaceData(true)
     },
     [commitState, requestJson, runLocalImport]
   )
@@ -734,6 +772,35 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     }
   }, [authState.status, refreshAuthSessionRole])
 
+  useEffect(() => {
+    if (authState.status !== 'authenticated') return
+    if (!hasLoadedWorkspaceData) return
+    if (hasAutoOpenedOnboardingRef.current) return
+    if (appSettings.onboarding.status !== 'not_started') return
+
+    const hasOnlyDefaultProject = projects.every(
+      (project) => project.id === DEFAULT_PROJECT_ID || project.isDefault
+    )
+    const isEmptyWorkspace =
+      conversations.length === 0 &&
+      promptLibrary.length === 0 &&
+      promptWorkflows.length === 0 &&
+      hasOnlyDefaultProject
+
+    if (!isEmptyWorkspace) return
+
+    hasAutoOpenedOnboardingRef.current = true
+    setIsOnboardingOpen(true)
+  }, [
+    appSettings.onboarding.status,
+    authState.status,
+    conversations.length,
+    hasLoadedWorkspaceData,
+    projects,
+    promptLibrary.length,
+    promptWorkflows.length,
+  ])
+
   const requestMagicLink = useCallback(
     async (email: string) => {
       await requestJson('/api/auth/magic-link', {
@@ -827,6 +894,55 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     },
     [conversations]
   )
+
+  const openConversation = useCallback(
+    async (conversationId: string) => {
+      const existing =
+        conversationsRef.current.find(
+          (conversation) => conversation.id === conversationId
+        ) ?? null
+
+      if (existing) {
+        commitState(conversationsRef.current, existing)
+        setCurrentCustomAssistantId(existing.customAssistantId ?? null)
+        return existing
+      }
+
+      try {
+        const conversation = await requestJson<Conversation>(
+          `/api/conversations/${conversationId}`
+        )
+        const nextConversations = [
+          conversation,
+          ...conversationsRef.current.filter(
+            (item) => item.id !== conversation.id
+          ),
+        ]
+
+        commitState(nextConversations, conversation)
+        setCurrentCustomAssistantId(conversation.customAssistantId ?? null)
+        return conversation
+      } catch (error) {
+        console.error('Failed to open conversation.', error)
+        return null
+      }
+    },
+    [commitState, requestJson]
+  )
+
+  const openWorkspaceTool = useCallback((tool: WorkspaceTool) => {
+    workspaceToolRequestIdRef.current += 1
+    setWorkspaceToolRequest({
+      requestId: workspaceToolRequestIdRef.current,
+      tool,
+    })
+  }, [])
+
+  const clearWorkspaceToolRequest = useCallback((requestId: number) => {
+    setWorkspaceToolRequest((previous) =>
+      previous?.requestId === requestId ? null : previous
+    )
+  }, [])
 
   const setCurrentMode = useCallback(
     (mode: AIMode) => {
@@ -941,6 +1057,68 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       return normalized
     },
     [currentChat, requestJson]
+  )
+
+  const openOnboarding = useCallback(() => {
+    setIsOnboardingOpen(true)
+  }, [])
+
+  const skipOnboarding = useCallback(async () => {
+    const result = await requestJson<OnboardingResponse>('/api/onboarding', {
+      method: 'POST',
+      body: JSON.stringify({ action: 'skip' } satisfies OnboardingRequest),
+    })
+    const normalized = normalizeAppSettingsState(result.settings)
+
+    setAppSettings(normalized)
+    setIsOnboardingOpen(false)
+  }, [requestJson])
+
+  const completeOnboarding = useCallback(
+    async (
+      input: Omit<Extract<OnboardingRequest, { action: 'complete' }>, 'action'>
+    ) => {
+      const result = await requestJson<OnboardingResponse>('/api/onboarding', {
+        method: 'POST',
+        body: JSON.stringify({
+          action: 'complete',
+          ...input,
+        } satisfies OnboardingRequest),
+      })
+      const normalized = normalizeAppSettingsState(result.settings)
+
+      setAppSettings(normalized)
+      setCurrentMode(normalized.defaultMode)
+
+      if (result.project) {
+        setProjects((previous) =>
+          sortProjects([
+            result.project as Project,
+            ...previous.filter((project) => project.id !== result.project?.id),
+          ])
+        )
+        setSelectedProjectId(result.project.id)
+      }
+
+      const createdPrompts = result.prompts ?? []
+      if (createdPrompts.length) {
+        const promptIds = new Set(createdPrompts.map((prompt) => prompt.id))
+        setPromptLibrary((previous) =>
+          sortPrompts([
+            ...createdPrompts,
+            ...previous.filter((prompt) => !promptIds.has(prompt.id)),
+          ])
+        )
+      }
+
+      setIsOnboardingOpen(false)
+
+      return {
+        ...result,
+        settings: normalized,
+      }
+    },
+    [requestJson, setCurrentMode, setSelectedProjectId]
   )
 
   const updateApiSettings = useCallback(
@@ -2619,6 +2797,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       chats,
       currentChat,
       setCurrentChat,
+      openConversation,
       goHome,
       createNewChat,
       deleteChat,
@@ -2637,6 +2816,10 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       updateSessionSettings,
       appSettings,
       saveAppSettings,
+      isOnboardingOpen,
+      openOnboarding,
+      skipOnboarding,
+      completeOnboarding,
       apiSettings: appSettings.gatewayDrafts,
       updateApiSettings,
       isSidebarOpen,
@@ -2671,6 +2854,9 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       beginPromptPrecheck,
       awaitRecommendationDecision,
       clearPromptPrecheck,
+      workspaceToolRequest,
+      openWorkspaceTool,
+      clearWorkspaceToolRequest,
     }),
     [
       appSettings,
@@ -2682,6 +2868,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       chats,
       chooseModelComparisonResponse,
       clearPromptPrecheck,
+      clearWorkspaceToolRequest,
+      completeOnboarding,
       conversations,
       createNewChat,
       createProject,
@@ -2699,6 +2887,10 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       isSettingsPanelOpen,
       isSidebarOpen,
       isStreaming,
+      isOnboardingOpen,
+      openConversation,
+      openOnboarding,
+      openWorkspaceTool,
       queuedPrompts.length,
       setSidebarWidth,
       sidebarWidth,
@@ -2727,6 +2919,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       setCurrentCustomAssistant,
       setCurrentMode,
       setSelectedProjectId,
+      skipOnboarding,
       signOut,
       statusLabel,
       stopStreaming,
@@ -2734,6 +2927,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       togglePinChat,
       updateApiSettings,
       updateSessionSettings,
+      workspaceToolRequest,
     ]
   )
 
