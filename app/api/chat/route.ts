@@ -6,13 +6,16 @@ import {
 import { createSessionSettings, getAllowedModelsForTier, resolveModelConfig } from '@/lib/config'
 import {
   neonConversationRepository,
+  neonCustomAssistantsRepository,
   neonProfilesRepository,
   neonSettingsRepository,
   neonSubscriptionsRepository,
   neonUsageLimitOverridesRepository,
 } from '@/lib/db/repositories'
+import { buildCustomAssistantSnapshot } from '@/lib/custom-assistants/validation'
+import { updateConversationSnapshot } from '@/lib/utils/chat'
 import { encodeStreamEvent } from '@/lib/utils/stream'
-import { ChatRequest } from '@/types'
+import { ChatRequest, CustomAssistant, SessionSettings } from '@/types'
 import {
   buildPromptTextForUsage,
   clampSessionSettingsMaxTokens,
@@ -99,6 +102,31 @@ function toErrorMessage(error: unknown): string {
   return 'An unknown chat error occurred.'
 }
 
+function applyCustomAssistantDefaults(
+  settings: Partial<SessionSettings> | undefined,
+  assistant: CustomAssistant | null
+): Partial<SessionSettings> | undefined {
+  if (!assistant) return settings
+
+  const defaultSettings = assistant.defaultSettings
+  const toolDefaults = defaultSettings.tools ?? {}
+  const fallbackSettings: Partial<SessionSettings> = {
+    temperature: defaultSettings.temperature,
+    maxTokens: defaultSettings.maxTokens,
+    topP: defaultSettings.topP,
+    modelOverride:
+      assistant.defaultModelOverride ?? defaultSettings.modelOverride ?? 'auto',
+    webSearch: toolDefaults.webSearch,
+    memory: toolDefaults.memory,
+    fileContext: toolDefaults.fileContext,
+  }
+
+  return {
+    ...fallbackSettings,
+    ...settings,
+  }
+}
+
 export async function POST(request: NextRequest) {
   const auth = await requireAuthenticatedUser(request)
   if ('response' in auth) return auth.response
@@ -113,9 +141,22 @@ export async function POST(request: NextRequest) {
     )
   }
 
+  const customAssistant = body.customAssistantId
+    ? await neonCustomAssistantsRepository.get(auth.user.id, body.customAssistantId)
+    : null
+
+  if (body.customAssistantId && (!customAssistant || !customAssistant.isEnabled)) {
+    return NextResponse.json(
+      { error: 'Custom assistant not found.' },
+      { status: 404 }
+    )
+  }
+
+  const requestMode = customAssistant?.baseMode ?? body.mode
+
   if (
     body.action === 'generate-image' ||
-    body.mode === 'image' ||
+    requestMode === 'image' ||
     body.targetMode === 'image'
   ) {
     return NextResponse.json(
@@ -132,10 +173,14 @@ export async function POST(request: NextRequest) {
   const subscription = await neonSubscriptionsRepository.ensureForUser(auth.user)
   const override = await neonUsageLimitOverridesRepository.getByUserId(auth.user.id)
   const effectiveSubscription = getEffectiveSubscription(subscription, override)
-  const resolvedSettings = resolveSessionSettings(
-    body.mode,
+  const requestedSettings = applyCustomAssistantDefaults(
     body.settings,
-    createSessionSettings(body.mode, appSettings.sessionDefaults)
+    customAssistant
+  )
+  const resolvedSettings = resolveSessionSettings(
+    requestMode,
+    requestedSettings,
+    createSessionSettings(requestMode, appSettings.sessionDefaults)
   )
   const settings = clampSessionSettingsMaxTokens(
     resolvedSettings,
@@ -154,14 +199,25 @@ export async function POST(request: NextRequest) {
     action: body.action,
     conversationId: storedConversation?.id ?? body.conversationId,
     conversation: storedConversation ?? body.conversation,
-    mode: body.mode,
+    mode: requestMode,
     targetMode: body.targetMode,
     content: body.content,
     settings,
     targetMessageId: body.targetMessageId,
     attachments: body.attachments,
     attachmentContext: body.attachmentContext,
+    customAssistantId: customAssistant?.id ?? null,
   }
+  const customAssistantSnapshot = customAssistant
+    ? buildCustomAssistantSnapshot(customAssistant)
+    : null
+  const customAssistantContext =
+    customAssistant && customAssistantSnapshot
+      ? {
+          assistant: customAssistantSnapshot,
+          systemInstructions: customAssistant.systemInstructions,
+        }
+      : undefined
 
   const stream = new TransformStream()
   const writer = stream.writable.getWriter()
@@ -171,7 +227,53 @@ export async function POST(request: NextRequest) {
     let messageId: string | undefined
 
     try {
-      const prepared = await prepareConversationForChat(payload)
+      const preparedBase = await prepareConversationForChat(payload)
+      const prepared =
+        customAssistant && customAssistantSnapshot
+          ? {
+              ...preparedBase,
+              conversation: updateConversationSnapshot(preparedBase.conversation, {
+                customAssistantId: customAssistant.id,
+                customAssistant: customAssistantSnapshot,
+                messages: preparedBase.conversation.messages.map((message) =>
+                  message.id === preparedBase.userMessage.id
+                    ? {
+                        ...message,
+                        customAssistantId: customAssistant.id,
+                        customAssistant: customAssistantSnapshot,
+                      }
+                    : message
+                ),
+              }),
+              userMessage: {
+                ...preparedBase.userMessage,
+                customAssistantId: customAssistant.id,
+                customAssistant: customAssistantSnapshot,
+              },
+              generationConversation: updateConversationSnapshot(
+                preparedBase.generationConversation,
+                {
+                  customAssistantId: customAssistant.id,
+                  customAssistant: customAssistantSnapshot,
+                  messages: preparedBase.generationConversation.messages.map(
+                    (message) =>
+                      message.id === preparedBase.userMessage.id
+                        ? {
+                            ...message,
+                            customAssistantId: customAssistant.id,
+                            customAssistant: customAssistantSnapshot,
+                          }
+                        : message
+                  ),
+                }
+              ),
+              assistantPlaceholder: {
+                ...preparedBase.assistantPlaceholder,
+                customAssistantId: customAssistant.id,
+                customAssistant: customAssistantSnapshot,
+              },
+            }
+          : preparedBase
       const billingMode = prepared.assistantMode
       const routeConfig = resolveModelConfig(
         billingMode,
@@ -219,7 +321,8 @@ export async function POST(request: NextRequest) {
         payload.settings,
         billingMode,
         webSearchContext,
-        fileKnowledgeContext
+        fileKnowledgeContext,
+        customAssistantContext
       )
 
       enforceTextUsage({
@@ -249,6 +352,8 @@ export async function POST(request: NextRequest) {
         mode: billingMode,
         model: routeConfig.model,
         assistantFamily: getAssistantFamilyFromMode(billingMode),
+        customAssistantId: customAssistant?.id ?? null,
+        customAssistant: customAssistantSnapshot,
       }
 
       await writer.write(
@@ -317,6 +422,7 @@ export async function POST(request: NextRequest) {
         tier: subscription.tier,
         webSearchContext,
         fileKnowledgeContext,
+        customAssistantContext,
       })) {
         accumulated += chunk
         receivedChunkCount += 1
@@ -397,6 +503,7 @@ export async function POST(request: NextRequest) {
           modelOverride: routeConfig.model,
           webSearchContext,
           fileKnowledgeContext,
+          customAssistantContext,
           sources: messageSources,
         }
       )
