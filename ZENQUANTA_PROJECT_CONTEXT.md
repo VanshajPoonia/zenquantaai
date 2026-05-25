@@ -558,3 +558,195 @@ User dashboard:
 - Data source: `/dashboard` server page and `/api/dashboard`.
 - Shows current plan, displayed credits total/used/remaining, text/image displayed usage, assistant breakdown, recent conversations, and recent image generation events.
 
+## 13. Current Verification Status
+
+Current scripts from `package.json`:
+
+- `npm run dev`: `next dev`
+- `npm run build`: `next build`
+- `npm run start`: `next start`
+- `npm run lint`: `eslint .`
+- `npm run typecheck`: `tsc --noEmit`
+
+Current verification run before this export was created:
+
+- `npm run typecheck`: passed.
+- `npm run lint`: passed with 14 warnings and 0 errors.
+- `npm run build`: passed with Next.js 16.2.0 Turbopack, TypeScript validation, and Node `[DEP0205]` deprecation warnings for `module.register()`.
+
+Known verification facts:
+
+- ESLint uses the root flat config in `eslint.config.mjs`.
+- Lint warnings currently include `no-img-element`, unused vars, and hook dependency warnings.
+- `next.config.mjs` no longer ignores TypeScript build errors.
+- `next.config.mjs` only sets `images.unoptimized = true`.
+- `npm run build` runs TypeScript validation.
+- No dedicated test script is defined in `package.json`.
+- Package manager is ambiguous because `README.md` documents npm while `pnpm-lock.yaml` exists.
+
+## 14. Known Risks And Technical Debt
+
+Important current risks found in the repo:
+
+- Package manager ambiguity: `README.md` says `npm install`, but `pnpm-lock.yaml` and `node_modules/.pnpm` exist.
+- Lint passes but has 14 warnings that can hide new warnings if not cleaned up intentionally.
+- Production build passes but prints Node `[DEP0205]` `module.register()` deprecation warnings.
+- Conversation persistence in `neonConversationRepository.save` deletes and reinserts all messages for a conversation, which may be risky for large histories or concurrent writes.
+- Local file storage is development-oriented. Production should validate S3-compatible/R2 storage.
+- Admin role has a hardcoded fallback identity in `lib/db/repositories/profiles.ts`; decide whether admin role management should be database-only.
+- Uploaded-file knowledge v1 skips unsupported/binary/PDF/OCR-heavy files. Advanced PDF/OCR is not implemented.
+- Missing `TAVILY_API_KEY` means Pulse/webSearch continues without live source context.
+- Missing embeddings key means uploaded-file indexing/retrieval is skipped without blocking uploads.
+- Missing pgvector or missing file knowledge migration breaks chunk storage and retrieval.
+- Missing `DATABASE_URL` breaks active auth and app data paths.
+- Model pricing values are configurable estimates and should be reviewed against current OpenRouter pricing before production billing decisions.
+- Admin margin analytics are operational estimates from stored usage and manual plan state, not payment-provider revenue.
+- `info.md` appears stale compared with current `AGENTS.md`, `AI_PROJECT.md`, config, and verification behavior; prefer the active memory files and code inspection over `info.md`.
+- Old Supabase files remain in the repo as historical reference and can confuse future agents if they are mistaken for active runtime setup.
+
+## 15. Recommended Next Steps
+
+Recommended milestones in order:
+
+1. Standardize package manager guidance and lockfile policy.
+2. Clean up existing ESLint warnings in a focused lint-debt milestone.
+3. Harden typecheck/build verification in CI or the chosen deployment pipeline.
+4. Apply and validate fresh Neon migrations in the target Neon environment.
+5. Perform post-Neon security/stability hardening, especially auth, admin role management, and private file access.
+6. Validate Tavily production behavior, limits, source display, and no-key degradation for Pulse/webSearch.
+7. Validate uploaded-file RAG quality, pgvector availability, embeddings costs, and retrieval behavior.
+8. Strengthen prompt workflows with richer run history or templates while keeping execution on normal chat/image routes unless a durable automation milestone is explicitly chosen.
+9. Polish text model comparison UX and operational limits.
+10. Continue admin cost/margin controls and reporting polish without adding payment automation.
+11. Expand private custom assistant builder within text-only and plan-limit constraints.
+
+Do not add Stripe or Supabase migration prompts as next steps unless the project direction is explicitly changed.
+
+## 16. Suggested Codex Prompts Going Forward
+
+Use prompts like these for future milestones:
+
+```text
+Follow the repo workflow. Documentation/code cleanup only: standardize the package manager guidance across README, AI_CHECKLIST, and any setup docs without changing dependencies or lockfiles. Confirm whether npm or pnpm should be canonical from repo evidence first, then update docs only.
+```
+
+```text
+Follow the repo workflow. Fix the current ESLint warnings without changing runtime behavior. Keep edits targeted to the warning sites, run npm run lint, npm run typecheck, and npm run build, and update AI_TASK_LOG.md with what changed.
+```
+
+```text
+Follow the repo workflow. Harden Neon-backed auth and admin access. Review lib/auth/session.ts, lib/auth/require-admin.ts, and lib/db/repositories/profiles.ts for production risks, remove or replace hardcoded admin fallback only if explicitly approved, add focused validation where needed, and do not change billing or payment behavior.
+```
+
+```text
+Follow the repo workflow. Verify Pulse web search end to end. Inspect lib/search/web-search.ts and app/api/chat/route.ts, confirm no-key degradation, source streaming, source persistence, and prompt injection behavior. Make only targeted fixes and keep OpenRouter as the only AI gateway.
+```
+
+```text
+Follow the repo workflow. Improve uploaded-file RAG v1 reliability for text/code files only. Inspect lib/rag/*, /api/attachments, and /api/chat. Do not add PDF/OCR or Supabase. Keep raw files private, embeddings server-only, and chunks in Neon pgvector.
+```
+
+## 17. Files/Folders Map
+
+Project memory and docs:
+
+- `AGENTS.md`: primary workflow, architecture, and non-negotiable rules for agents.
+- `CLAUDE.md`: Claude-specific role notes that point back to `AGENTS.md`.
+- `AI_PROJECT.md`: project state and implementation summary.
+- `AI_TASK_LOG.md`: task history, current status, risks, and handoffs.
+- `AI_DECISIONS.md`: architecture decisions.
+- `AI_CHECKLIST.md`: setup, env vars, migrations, verification, common failure points.
+- `README.md`: user-facing setup/product documentation.
+- `ZENQUANTA_PROJECT_CONTEXT.md`: this self-contained project context export.
+
+App routes:
+
+- `app/`: Next.js App Router pages, layout, globals, and route handlers.
+- `app/page.tsx`: main workspace entry.
+- `app/layout.tsx`: root layout, metadata, Geist fonts, Vercel Analytics.
+- `app/(assistants)/`: public assistant pages.
+- `app/admin/`: admin pages and server actions.
+- `app/auth/`: auth callback and reset-password page.
+- `app/dashboard/`: user dashboard.
+- `app/pricing/`: pricing page and manual plan request action.
+- `app/api/`: all runtime API routes.
+
+Components:
+
+- `components/chat/`: main workspace UI, composer, sidebar, header, messages, prompt library, model comparison, custom assistant button, settings.
+- `components/auth/`: sign-in/sign-up gate.
+- `components/admin/`: admin plan limit controls.
+- `components/assistants/`: public assistant page component.
+- `components/ui/`: local shadcn/Radix-style primitives.
+- `components/icons.tsx`: local icons/logo helpers.
+
+Core libraries:
+
+- `lib/chat-context.tsx`: central client workspace state.
+- `lib/chat/sendMessage.ts`: send pipeline helpers.
+- `lib/ai/`: chat orchestration, memory, OpenRouter client, system prompts.
+- `lib/auth/`: credentials session helpers and admin guards.
+- `lib/billing/`: cost estimates, usage enforcement, usage logging.
+- `lib/config/`: assistants, modes, models, image models, pricing, presets.
+- `lib/custom-assistants/`: validation and bounded custom assistant rules.
+- `lib/db/`: Neon client, Drizzle schema, repositories.
+- `lib/rag/`: text extraction, embeddings, indexing, retrieval.
+- `lib/router/`: prompt classifier and assistant recommendation rules.
+- `lib/search/`: Tavily web search integration.
+- `lib/storage/`: browser-local import helpers, neutral object storage, attachments, generated images.
+- `lib/utils/`: chat, cost, file, export, prompt workflow, stream, image utility helpers.
+
+Database:
+
+- `neon/migrations/`: active fresh Neon migrations.
+- `supabase/migrations/`: historical reference only, not active setup.
+- `supabase/README.md`: explicitly says Supabase SQL files are historical reference only.
+
+Types:
+
+- `types/index.ts`: shared domain types for modes, assistants, auth, settings, messages, conversations, prompts, workflows, model comparisons, attachments, usage, subscriptions, profiles, admin, files, and generated images.
+
+Config and tooling:
+
+- `package.json`: scripts and dependencies.
+- `pnpm-lock.yaml`: existing lockfile that creates package manager ambiguity.
+- `next.config.mjs`: Next config with `images.unoptimized = true`.
+- `tsconfig.json`: strict TypeScript config.
+- `eslint.config.mjs`: ESLint flat config.
+- `.env.example`: expected env var names, but note `.env.example` is currently listed in `.gitignore`.
+
+## 18. Important Constraints For Future AI Agents
+
+Future AI agents must not:
+
+- Add Stripe checkout.
+- Add Stripe webhooks.
+- Add a customer portal.
+- Add automated payment or subscription provider sync.
+- Treat manual plan requests as payment automation.
+- Break manual plan activation or admin-controlled tier updates.
+- Reintroduce Supabase runtime clients for auth, database, or storage.
+- Import old Supabase database rows.
+- Import old Supabase Auth users, sessions, or passwords.
+- Import old Supabase Storage objects.
+- Treat `supabase/migrations/*` as active setup.
+- Expose `OPENROUTER_API_KEY`, `TAVILY_API_KEY`, embeddings keys, database URLs, or file storage credentials to client components.
+- Bypass `lib/billing/*` usage enforcement.
+- Let custom assistants bypass plan/model limits.
+- Mix Prism image generation into `/api/chat`.
+- Route text chat through `/api/images/generate`.
+- Store private files outside the neutral object storage abstraction.
+- Claim live web verification when Tavily is missing or returned no sources.
+- Claim uploaded-file knowledge retrieval when embeddings or pgvector are unavailable.
+- Surface raw model cost to normal user dashboards.
+- Break admin route protection.
+- Build new product features before verification/hardening milestones when the task is about stability.
+
+Future AI agents should:
+
+- Read `AGENTS.md`, `AI_PROJECT.md`, `AI_TASK_LOG.md`, `AI_DECISIONS.md`, and `AI_CHECKLIST.md` before changing code.
+- Inspect actual code before trusting stale docs.
+- Prefer existing local patterns.
+- Keep changes bounded to the requested behavior.
+- Update `AI_TASK_LOG.md` for meaningful work.
+- Run `npm run typecheck`, `npm run lint`, and `npm run build` for production-relevant changes when feasible.
