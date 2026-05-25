@@ -154,6 +154,56 @@ export interface AssistantRecommendationSettings {
   autoSwitchOnHighConfidence: boolean
 }
 
+export type OnboardingStatus = 'not_started' | 'completed' | 'skipped'
+
+export type OnboardingUseCase =
+  | 'school_research'
+  | 'coding'
+  | 'business'
+  | 'marketing_content'
+  | 'personal_productivity'
+  | 'image_generation'
+  | 'all_in_one'
+
+export type StarterPackId =
+  | 'student'
+  | 'founder'
+  | 'developer'
+  | 'content_creator'
+  | 'small_business'
+  | 'research'
+  | 'agency'
+
+export interface OnboardingState {
+  status: OnboardingStatus
+  version: 1
+  useCase?: OnboardingUseCase | null
+  defaultMode?: AIMode | null
+  starterPackId?: StarterPackId | null
+  starterProjectId?: string | null
+  installedPromptIds: string[]
+  completedAt?: string | null
+  skippedAt?: string | null
+  updatedAt?: string | null
+}
+
+export type OnboardingRequest =
+  | { action: 'skip' }
+  | {
+      action: 'complete'
+      useCase: OnboardingUseCase
+      defaultMode?: AIMode
+      starterPackId?: StarterPackId
+      createStarterProject?: boolean
+      installStarterPrompts?: boolean
+    }
+
+export interface OnboardingResponse {
+  settings: AppSettings
+  project?: Project | null
+  prompts?: PromptLibraryItem[]
+}
+
 export interface AppSettings {
   theme: 'dark'
   accentStyle: AccentStyle
@@ -162,15 +212,20 @@ export interface AppSettings {
   assistantRecommendations: AssistantRecommendationSettings
   sessionDefaults: SessionSettings
   gatewayDrafts: OpenRouterSettingsDraft
+  onboarding: OnboardingState
 }
 
 export interface AppSettingsPatch
   extends Partial<
-    Omit<AppSettings, 'assistantRecommendations' | 'sessionDefaults' | 'gatewayDrafts'>
+    Omit<
+      AppSettings,
+      'assistantRecommendations' | 'sessionDefaults' | 'gatewayDrafts' | 'onboarding'
+    >
   > {
   assistantRecommendations?: Partial<AssistantRecommendationSettings>
   sessionDefaults?: Partial<SessionSettings>
   gatewayDrafts?: Partial<OpenRouterSettingsDraft>
+  onboarding?: Partial<OnboardingState>
 }
 
 export interface WalletBalances {
@@ -483,6 +538,47 @@ export interface ModelComparisonRequest {
   targetModes: AIMode[]
   conversationId?: string
   settings: SessionSettings
+}
+
+export type SearchEntityType =
+  | 'project'
+  | 'conversation'
+  | 'message'
+  | 'prompt'
+  | 'prompt_workflow'
+  | 'custom_assistant'
+  | 'file'
+  | 'generated_image'
+  | 'model_comparison'
+
+export type SearchResultTarget =
+  | { type: 'open_project'; projectId: string }
+  | { type: 'open_conversation'; conversationId: string; messageId?: string }
+  | { type: 'open_prompt_library'; promptId?: string; workflowId?: string }
+  | { type: 'run_prompt_workflow'; workflowId: string }
+  | { type: 'switch_custom_assistant'; assistantId: string }
+  | { type: 'open_custom_assistants'; assistantId?: string }
+  | { type: 'open_model_comparison'; comparisonId?: string; conversationId?: string }
+  | { type: 'open_prism_history'; imageId?: string; conversationId?: string }
+  | { type: 'open_url'; url: string }
+
+export interface SearchResult {
+  id: string
+  entityType: SearchEntityType
+  title: string
+  snippet: string
+  url: string
+  target: SearchResultTarget
+  projectId?: string | null
+  conversationId?: string | null
+  createdAt: string
+  updatedAt?: string | null
+  metadata?: Record<string, string | number | boolean | null>
+}
+
+export interface SearchResponse {
+  query: string
+  results: SearchResult[]
 }
 
 export interface ChatRequest {
