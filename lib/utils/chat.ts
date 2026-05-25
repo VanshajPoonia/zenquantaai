@@ -3,6 +3,7 @@ import {
   Attachment,
   Conversation,
   ConversationSummary,
+  CustomAssistantReference,
   Message,
   MessageRole,
   SessionSettings,
@@ -51,6 +52,8 @@ export function createMessage(input: {
   sources?: Message['sources']
   parentUserMessageId?: string
   branchLabel?: string
+  customAssistantId?: string | null
+  customAssistant?: CustomAssistantReference | null
 }): Message {
   return {
     id: createId('msg'),
@@ -80,6 +83,8 @@ export function toConversationSummary(
     sessionSettings: conversation.sessionSettings,
     memorySummary: conversation.memorySummary,
     memoryUpdatedAt: conversation.memoryUpdatedAt,
+    customAssistantId: conversation.customAssistantId,
+    customAssistant: conversation.customAssistant,
   }
 }
 
@@ -105,6 +110,14 @@ export function updateConversationSnapshot(
     attachments,
     memorySummary: next.memorySummary ?? conversation.memorySummary,
     memoryUpdatedAt: next.memoryUpdatedAt ?? conversation.memoryUpdatedAt,
+    customAssistantId:
+      typeof next.customAssistantId !== 'undefined'
+        ? next.customAssistantId
+        : conversation.customAssistantId,
+    customAssistant:
+      typeof next.customAssistant !== 'undefined'
+        ? next.customAssistant
+        : conversation.customAssistant,
     updatedAt: next.updatedAt ?? nowIso(),
   }
 
@@ -178,6 +191,8 @@ export function createConversation(input: {
   usage?: Conversation['usage']
   memorySummary?: string
   memoryUpdatedAt?: string
+  customAssistantId?: string | null
+  customAssistant?: CustomAssistantReference | null
 }): Conversation {
   const createdAt = input.createdAt ?? nowIso()
 
@@ -197,6 +212,8 @@ export function createConversation(input: {
     usage: input.usage,
     memorySummary: input.memorySummary,
     memoryUpdatedAt: input.memoryUpdatedAt,
+    customAssistantId: input.customAssistantId ?? null,
+    customAssistant: input.customAssistant ?? null,
   })
 }
 

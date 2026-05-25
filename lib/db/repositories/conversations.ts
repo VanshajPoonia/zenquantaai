@@ -15,6 +15,7 @@ import {
   Conversation,
   ConversationMutation,
   ConversationSummary,
+  CustomAssistantReference,
   MessageSource,
   Message,
   SessionSettings,
@@ -90,6 +91,13 @@ async function rowToConversation(row: ConversationRow): Promise<Conversation> {
           sources: toJsonArray<MessageSource>(messageRow.sources),
           parentUserMessageId: messageRow.parentUserMessageId ?? undefined,
           branchLabel: messageRow.branchLabel ?? undefined,
+          customAssistantId: messageRow.customAssistantId,
+          customAssistant: messageRow.customAssistant
+            ? toJsonObject<CustomAssistantReference>(
+                messageRow.customAssistant,
+                {} as CustomAssistantReference
+              )
+            : null,
         })
       )
   )
@@ -117,6 +125,13 @@ async function rowToConversation(row: ConversationRow): Promise<Conversation> {
       : undefined,
     memorySummary: row.memorySummary ?? undefined,
     memoryUpdatedAt: toNullableIsoString(row.memoryUpdatedAt) ?? undefined,
+    customAssistantId: row.customAssistantId,
+    customAssistant: row.customAssistant
+      ? toJsonObject<CustomAssistantReference>(
+          row.customAssistant,
+          {} as CustomAssistantReference
+        )
+      : null,
   })
 }
 
@@ -132,6 +147,8 @@ function conversationToInsert(userId: string, conversation: Conversation) {
     preview: conversation.preview,
     messageCount: conversation.messageCount,
     sessionSettings: conversation.sessionSettings,
+    customAssistantId: conversation.customAssistantId ?? null,
+    customAssistant: conversation.customAssistant ?? null,
     usage: conversation.usage ?? null,
     memorySummary: conversation.memorySummary ?? null,
     memoryUpdatedAt: toNullableDate(conversation.memoryUpdatedAt),
@@ -154,6 +171,8 @@ function messageToInsert(conversationId: string, message: Message) {
     error: message.error ?? null,
     parentUserMessageId: message.parentUserMessageId ?? null,
     branchLabel: message.branchLabel ?? null,
+    customAssistantId: message.customAssistantId ?? null,
+    customAssistant: message.customAssistant ?? null,
     attachments: message.attachments ?? [],
     usage: message.usage ?? null,
     sources: message.sources ?? [],
