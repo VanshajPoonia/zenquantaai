@@ -2,6 +2,7 @@ import 'server-only'
 
 export const DEFAULT_EMBEDDING_MODEL = 'text-embedding-3-small'
 export const EMBEDDING_DIMENSIONS = 1536
+const MAX_EMBEDDING_BATCH_SIZE = 64
 
 type EmbeddingResponse = {
   data?: Array<{
@@ -52,8 +53,7 @@ function assertEmbedding(value: unknown): number[] {
   return embedding
 }
 
-export async function createEmbeddings(input: string[]): Promise<number[][]> {
-  const texts = input.map((value) => value.trim()).filter(Boolean)
+async function createEmbeddingBatch(texts: string[]): Promise<number[][]> {
   if (texts.length === 0) return []
 
   const apiKey = getEmbeddingApiKey()
@@ -92,4 +92,19 @@ export async function createEmbeddings(input: string[]): Promise<number[][]> {
   }
 
   return items.map((item) => assertEmbedding(item.embedding))
+}
+
+export async function createEmbeddings(input: string[]): Promise<number[][]> {
+  const texts = input.map((value) => value.trim()).filter(Boolean)
+  const embeddings: number[][] = []
+
+  for (let index = 0; index < texts.length; index += MAX_EMBEDDING_BATCH_SIZE) {
+    embeddings.push(
+      ...(await createEmbeddingBatch(
+        texts.slice(index, index + MAX_EMBEDDING_BATCH_SIZE)
+      ))
+    )
+  }
+
+  return embeddings
 }

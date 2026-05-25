@@ -79,6 +79,11 @@ export async function indexUploadedFileForKnowledge(input: {
 
     const chunks = chunkExtractedText(extracted.text)
     if (chunks.length === 0) {
+      await neonFileChunksRepository.replaceForFile(
+        input.userId,
+        input.file.id,
+        []
+      )
       await neonFilesRepository.patch(input.userId, input.file.id, {
         metadata: withKnowledgeMetadata(input.file, 'empty', {
           reason: 'No chunks were produced from the extracted text.',

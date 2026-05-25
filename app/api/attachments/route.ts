@@ -5,9 +5,40 @@ import {
   neonProjectsRepository,
 } from '@/lib/db/repositories'
 import { uploadAttachmentBinary } from '@/lib/storage/attachments'
-import { Attachment } from '@/types'
+import { Attachment, AttachmentKind } from '@/types'
 
 export const runtime = 'nodejs'
+
+const ATTACHMENT_KINDS: AttachmentKind[] = [
+  'image',
+  'pdf',
+  'text',
+  'code',
+  'document',
+  'spreadsheet',
+  'other',
+]
+
+function isAttachmentMetadata(value: unknown): value is Attachment {
+  if (!value || typeof value !== 'object') return false
+
+  const attachment = value as Partial<Attachment>
+  return (
+    typeof attachment.id === 'string' &&
+    attachment.id.trim().length > 0 &&
+    typeof attachment.name === 'string' &&
+    attachment.name.trim().length > 0 &&
+    typeof attachment.mimeType === 'string' &&
+    attachment.mimeType.trim().length > 0 &&
+    typeof attachment.size === 'number' &&
+    Number.isFinite(attachment.size) &&
+    attachment.size >= 0 &&
+    typeof attachment.createdAt === 'string' &&
+    attachment.createdAt.trim().length > 0 &&
+    typeof attachment.kind === 'string' &&
+    ATTACHMENT_KINDS.includes(attachment.kind as AttachmentKind)
+  )
+}
 
 export async function POST(request: NextRequest) {
   const auth = await requireAuthenticatedUser(request)
@@ -36,6 +67,13 @@ export async function POST(request: NextRequest) {
   })()
 
   if (!metadata) {
+    return NextResponse.json(
+      { error: 'Attachment metadata is invalid.' },
+      { status: 400 }
+    )
+  }
+
+  if (!metadata.every(isAttachmentMetadata)) {
     return NextResponse.json(
       { error: 'Attachment metadata is invalid.' },
       { status: 400 }
