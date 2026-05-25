@@ -44,6 +44,7 @@ export default async function AdminPage({
     neonPlanRequestsRepository.list(),
   ])
   const updated = getParam(params?.updated) === '1'
+  const selectedPeriodLabel = formatPeriodLabel(normalizedFilters)
 
   return (
     <main className="min-h-screen bg-background px-4 py-8 sm:px-6 lg:px-10">
@@ -144,18 +145,22 @@ export default async function AdminPage({
           <MetricCard
             label="Raw model cost"
             value={formatCurrency(overview.totalRawCostUsd)}
+            detail={selectedPeriodLabel}
           />
           <MetricCard
             label="Displayed usage"
             value={formatCurrency(overview.totalDisplayedCostUsd)}
+            detail={selectedPeriodLabel}
           />
           <MetricCard
-            label="Revenue"
+            label="Estimated revenue"
             value={formatCurrency(overview.estimatedSubscriptionRevenueUsd)}
+            detail="Active manual plan state, not payments"
           />
           <MetricCard
-            label="Gross margin"
+            label="Estimated gross margin"
             value={formatCurrency(overview.estimatedGrossMarginUsd)}
+            detail="Estimated revenue minus raw cost"
           />
           <MetricCard label="Requests today" value={String(overview.requestsToday)} />
           <MetricCard label="Prime users" value={String(overview.usersByTier.prime)} />
@@ -184,7 +189,7 @@ export default async function AdminPage({
                   key={item.tier}
                   label={item.tier.toUpperCase()}
                   value={formatCurrency(item.estimatedGrossMarginUsd)}
-                  detail={`${item.activeUsers} active · ${formatCurrency(item.estimatedRevenueUsd)} revenue · ${formatCurrency(item.rawCostUsd)} raw`}
+                  detail={`${item.activeUsers} active · ${formatCurrency(item.estimatedRevenueUsd)} est revenue · ${formatCurrency(item.rawCostUsd)} raw · ${formatMarginRate(item.marginRate)} margin · ${formatCurrency(item.rawCostPerActiveUserUsd)} raw/user`}
                 />
               ))
             ) : (
@@ -200,7 +205,7 @@ export default async function AdminPage({
                   label={getDisplayUser(user)}
                   value={formatPercent(user.highestUsageRatio)}
                   detail={`${user.tier.toUpperCase()} · ${user.limits
-                    .map((limit) => `${limit.label}: ${formatCompactNumber(limit.used)}/${formatCompactNumber(limit.limit)}`)
+                    .map(formatLimitDetail)
                     .join(' · ')}`}
                   href={`/admin/users/${user.userId}`}
                 />
@@ -280,69 +285,88 @@ export default async function AdminPage({
                   <ColumnHeader>Actions</ColumnHeader>
                 </div>
 
-                {userRows.map((row) => (
-                  <form
-                    key={row.subscription.userId}
-                    action={updateUserAdminAction}
-                    className={`grid ${USER_GRID_COLUMNS} items-center gap-3 rounded-2xl border border-border/60 bg-background/40 p-4`}
-                  >
-                    <input type="hidden" name="targetUserId" value={row.subscription.userId} />
-                    <input type="hidden" name="returnTo" value="admin" />
+                {userRows.length ? (
+                  userRows.map((row) => (
+                    <form
+                      key={row.subscription.userId}
+                      action={updateUserAdminAction}
+                      className={`grid ${USER_GRID_COLUMNS} items-center gap-3 rounded-2xl border border-border/60 bg-background/40 p-4`}
+                    >
+                      <input type="hidden" name="targetUserId" value={row.subscription.userId} />
+                      <input type="hidden" name="returnTo" value="admin" />
 
-                    <div className="min-w-0">
-                      <p className="truncate text-base font-medium text-foreground">
-                        {row.profile?.email ?? row.profile?.loginId ?? row.subscription.userId}
-                      </p>
-                      <div className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
-                        <span>{row.subscription.tier.toUpperCase()}</span>
-                        <span className="size-1 rounded-full bg-border" />
-                        <span>{row.subscription.status}</span>
-                        {row.profile?.role === 'admin' ? (
-                          <>
-                            <span className="size-1 rounded-full bg-border" />
-                            <span className="font-medium text-amber-200">Admin</span>
-                          </>
-                        ) : null}
+                      <div className="min-w-0">
+                        <p className="truncate text-base font-medium text-foreground">
+                          {row.profile
+                            ? getDisplayUser({
+                                userId: row.subscription.userId,
+                                displayName: row.profile.displayName,
+                                email: row.profile.email,
+                                loginId: row.profile.loginId,
+                              })
+                            : row.subscription.userId}
+                        </p>
+                        <div className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
+                          <span>{row.subscription.tier.toUpperCase()}</span>
+                          <span className="size-1 rounded-full bg-border" />
+                          <span>{row.subscription.status}</span>
+                          {row.highestUsageRatio >= 0.8 ? (
+                            <>
+                              <span className="size-1 rounded-full bg-border" />
+                              <span>{formatPercent(row.highestUsageRatio)} highest limit use</span>
+                            </>
+                          ) : null}
+                          {row.profile?.role === 'admin' ? (
+                            <>
+                              <span className="size-1 rounded-full bg-border" />
+                              <span className="font-medium text-amber-200">Admin</span>
+                            </>
+                          ) : null}
+                        </div>
                       </div>
-                    </div>
 
-                    <StaticMetricCell value={`$${row.displayedCostUsd.toFixed(2)}`} />
-                    <StaticMetricCell value={`$${row.rawCostUsd.toFixed(2)}`} />
-                    <StaticMetricCell value={String(row.remainingDisplayedCredits)} />
+                      <StaticMetricCell value={`$${row.displayedCostUsd.toFixed(2)}`} />
+                      <StaticMetricCell value={`$${row.rawCostUsd.toFixed(2)}`} />
+                      <StaticMetricCell value={String(row.remainingDisplayedCredits)} />
 
-                    <CompactPlanLimitFields
-                      initialTier={row.subscription.tier}
-                      initialStatus={row.subscription.status}
-                      initialRole={row.profile?.role ?? 'user'}
-                      initialValues={{
-                        coreTokensIncluded:
-                          row.override?.coreTokensIncluded ??
-                          row.subscription.coreTokensIncluded,
-                        tierTokensIncluded:
-                          row.override?.tierTokensIncluded ??
-                          row.subscription.tierTokensIncluded,
-                        imageCreditsIncluded:
-                          row.override?.imageCreditsIncluded ??
-                          row.subscription.imageCreditsIncluded,
-                        dailyMessageLimit:
-                          row.override?.dailyMessageLimit ??
-                          row.subscription.dailyMessageLimit,
-                        maxImagesPerDay:
-                          row.override?.maxImagesPerDay ??
-                          row.subscription.maxImagesPerDay,
-                      }}
-                    />
+                      <CompactPlanLimitFields
+                        initialTier={row.subscription.tier}
+                        initialStatus={row.subscription.status}
+                        initialRole={row.profile?.role ?? 'user'}
+                        initialValues={{
+                          coreTokensIncluded:
+                            row.override?.coreTokensIncluded ??
+                            row.subscription.coreTokensIncluded,
+                          tierTokensIncluded:
+                            row.override?.tierTokensIncluded ??
+                            row.subscription.tierTokensIncluded,
+                          imageCreditsIncluded:
+                            row.override?.imageCreditsIncluded ??
+                            row.subscription.imageCreditsIncluded,
+                          dailyMessageLimit:
+                            row.override?.dailyMessageLimit ??
+                            row.subscription.dailyMessageLimit,
+                          maxImagesPerDay:
+                            row.override?.maxImagesPerDay ??
+                            row.subscription.maxImagesPerDay,
+                        }}
+                      />
 
-                    <div className="flex flex-col gap-2">
-                      <Button type="submit" size="sm" className="w-full rounded-lg">
-                        Save
-                      </Button>
-                      <Button asChild variant="secondary" size="sm" className="w-full rounded-lg">
-                        <Link href={`/admin/users/${row.subscription.userId}`}>Open</Link>
-                      </Button>
-                    </div>
-                  </form>
-                ))}
+                      <div className="flex flex-col gap-2">
+                        <Button type="submit" size="sm" className="w-full rounded-lg">
+                          Save
+                        </Button>
+                        <Button asChild variant="secondary" size="sm" className="w-full rounded-lg">
+                          <Link href={`/admin/users/${row.subscription.userId}`}>Open</Link>
+                        </Button>
+                      </div>
+                    </form>
+                  ))
+                ) : (
+                  <div className="rounded-2xl border border-dashed border-border/70 bg-background/30 px-4 py-6 text-sm text-muted-foreground">
+                    No users match the current filters.
+                  </div>
+                )}
               </div>
             </div>
           </CardContent>
@@ -353,61 +377,65 @@ export default async function AdminPage({
             <CardTitle>Plan requests</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            {requests.map((request) => (
-              <div
-                key={request.id}
-                className="rounded-2xl border border-border/60 bg-background/40 p-4"
-              >
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <p className="font-medium text-foreground">
-                      {request.requestedTier.toUpperCase()}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      Current: {request.currentTier.toUpperCase()}
-                    </p>
+            {requests.length ? (
+              requests.map((request) => (
+                <div
+                  key={request.id}
+                  className="rounded-2xl border border-border/60 bg-background/40 p-4"
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="font-medium text-foreground">
+                        {request.requestedTier.toUpperCase()}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        Current: {request.currentTier.toUpperCase()}
+                      </p>
+                    </div>
+                    <Badge variant={request.status === 'pending' ? 'secondary' : 'outline'}>
+                      {request.status}
+                    </Badge>
                   </div>
-                  <Badge variant={request.status === 'pending' ? 'secondary' : 'outline'}>
-                    {request.status}
-                  </Badge>
+                  {request.note ? (
+                    <p className="mt-3 text-sm text-muted-foreground">{request.note}</p>
+                  ) : null}
+                  <form action={updatePlanRequestStatusAction} className="mt-4 grid gap-2 md:grid-cols-[minmax(0,1fr)_auto] md:items-start">
+                    <input type="hidden" name="requestId" value={request.id} />
+                    <Input name="adminNote" placeholder="Admin note (optional)" />
+                    <div className="flex flex-wrap gap-2 md:justify-end">
+                      <Button
+                        name="status"
+                        value="approved"
+                        size="sm"
+                        variant="secondary"
+                        className="rounded-lg"
+                      >
+                        Approve
+                      </Button>
+                      <Button
+                        name="status"
+                        value="rejected"
+                        size="sm"
+                        variant="destructive"
+                        className="rounded-lg"
+                      >
+                        Reject
+                      </Button>
+                      <Button
+                        name="status"
+                        value="activated"
+                        size="sm"
+                        className="rounded-lg"
+                      >
+                        Activate
+                      </Button>
+                    </div>
+                  </form>
                 </div>
-                {request.note ? (
-                  <p className="mt-3 text-sm text-muted-foreground">{request.note}</p>
-                ) : null}
-                <form action={updatePlanRequestStatusAction} className="mt-4 grid gap-2 md:grid-cols-[minmax(0,1fr)_auto] md:items-start">
-                  <input type="hidden" name="requestId" value={request.id} />
-                  <Input name="adminNote" placeholder="Admin note (optional)" />
-                  <div className="flex flex-wrap gap-2 md:justify-end">
-                    <Button
-                      name="status"
-                      value="approved"
-                      size="sm"
-                      variant="secondary"
-                      className="rounded-lg"
-                    >
-                      Approve
-                    </Button>
-                    <Button
-                      name="status"
-                      value="rejected"
-                      size="sm"
-                      variant="destructive"
-                      className="rounded-lg"
-                    >
-                      Reject
-                    </Button>
-                    <Button
-                      name="status"
-                      value="activated"
-                      size="sm"
-                      className="rounded-lg"
-                    >
-                      Activate
-                    </Button>
-                  </div>
-                </form>
-              </div>
-            ))}
+              ))
+            ) : (
+              <EmptyAnalyticsState label="No manual plan requests have been submitted yet." />
+            )}
           </CardContent>
         </Card>
       </div>
@@ -415,7 +443,15 @@ export default async function AdminPage({
   )
 }
 
-function MetricCard({ label, value }: { label: string; value: string }) {
+function MetricCard({
+  label,
+  value,
+  detail,
+}: {
+  label: string
+  value: string
+  detail?: string
+}) {
   return (
     <Card className="rounded-3xl border-border/70 bg-card/70">
       <CardContent className="space-y-2 p-6">
@@ -425,6 +461,9 @@ function MetricCard({ label, value }: { label: string; value: string }) {
         <p className="text-3xl font-semibold tracking-tight text-foreground">
           {value}
         </p>
+        {detail ? (
+          <p className="text-xs leading-5 text-muted-foreground">{detail}</p>
+        ) : null}
       </CardContent>
     </Card>
   )
@@ -528,6 +567,10 @@ function formatPercent(value: number): string {
   return `${Math.round(value * 100)}%`
 }
 
+function formatMarginRate(value: number | null): string {
+  return value === null ? 'n/a' : formatPercent(value)
+}
+
 function formatCompactNumber(value: number): string {
   return Intl.NumberFormat('en', {
     notation: value >= 10000 ? 'compact' : 'standard',
@@ -535,10 +578,26 @@ function formatCompactNumber(value: number): string {
   }).format(value)
 }
 
+function formatPeriodLabel(filters: { from: string; to: string }): string {
+  if (filters.from === filters.to) return `Selected period: ${filters.from}`
+  return `Selected period: ${filters.from} to ${filters.to}`
+}
+
+function formatLimitDetail(limit: {
+  label: string
+  used: number
+  limit: number
+  remaining: number
+  ratio: number
+}): string {
+  return `${limit.label}: ${formatPercent(limit.ratio)} used (${formatCompactNumber(limit.used)}/${formatCompactNumber(limit.limit)}, ${formatCompactNumber(limit.remaining)} left)`
+}
+
 function getDisplayUser(user: {
   userId: string
+  displayName?: string | null
   email: string | null
   loginId: string | null
 }): string {
-  return user.email ?? user.loginId ?? user.userId
+  return user.displayName ?? user.email ?? user.loginId ?? user.userId
 }
