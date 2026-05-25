@@ -49,6 +49,7 @@ export interface AdminOverview {
     userId: string
     email: string | null
     loginId: string | null
+    displayName: string | null
     displayedCostUsd: number
     rawCostUsd: number
     isUnusuallyHigh: boolean
@@ -60,6 +61,8 @@ export interface AdminOverview {
     rawCostUsd: number
     displayedCostUsd: number
     estimatedGrossMarginUsd: number
+    marginRate: number | null
+    rawCostPerActiveUserUsd: number
   }>
   textVsImageCostSplit: {
     textRawCostUsd: number
@@ -80,6 +83,7 @@ export interface AdminOverview {
     userId: string
     email: string | null
     loginId: string | null
+    displayName: string | null
     tier: SubscriptionTier
     status: Subscription['status']
     highestUsageRatio: number
@@ -87,6 +91,7 @@ export interface AdminOverview {
       label: string
       used: number
       limit: number
+      remaining: number
       ratio: number
     }>
   }>
@@ -119,6 +124,7 @@ export interface AdminUserRow {
   displayedCostUsd: number
   remainingDisplayedCredits: number
   requestsThisPeriod: number
+  highestUsageRatio: number
 }
 
 export interface AdminUserDetail {
@@ -249,6 +255,7 @@ function matchesUserSearch(
   const normalized = userSearch.toLowerCase()
   return [
     subscription.userId,
+    profile?.displayName ?? '',
     profile?.email ?? '',
     profile?.loginId ?? '',
   ].some((value) => value.toLowerCase().includes(normalized))
@@ -270,6 +277,43 @@ function getEffectiveLimit(
 function calculateRatio(used: number, limit: number): number {
   if (limit <= 0) return 0
   return used / limit
+}
+
+function buildLimitUsageDetails(
+  subscription: Subscription,
+  override: UsageLimitOverride | null
+) {
+  return [
+    {
+      label: 'Core tokens',
+      used: subscription.coreTokensUsed,
+      limit: getEffectiveLimit(subscription, override, 'coreTokensIncluded'),
+    },
+    {
+      label: 'Tier tokens',
+      used: subscription.tierTokensUsed,
+      limit: getEffectiveLimit(subscription, override, 'tierTokensIncluded'),
+    },
+    {
+      label: 'Image credits',
+      used: subscription.imageCreditsUsed,
+      limit: getEffectiveLimit(subscription, override, 'imageCreditsIncluded'),
+    },
+    {
+      label: 'Daily messages',
+      used: subscription.dailyMessageCount,
+      limit: getEffectiveLimit(subscription, override, 'dailyMessageLimit'),
+    },
+    {
+      label: 'Daily images',
+      used: subscription.dailyImageCount,
+      limit: getEffectiveLimit(subscription, override, 'maxImagesPerDay'),
+    },
+  ].map((limit) => ({
+    ...limit,
+    remaining: Math.max(0, limit.limit - limit.used),
+    ratio: calculateRatio(limit.used, limit.limit),
+  }))
 }
 
 function median(values: number[]): number {
@@ -423,11 +467,13 @@ class NeonAdminRepository {
         userId: subscription.userId,
         email: profile?.email ?? null,
         loginId: profile?.loginId ?? null,
+        displayName: profile?.displayName ?? null,
         rawCostUsd,
         displayedCostUsd,
       }
     })
     const highCostMedian = median(userRawCosts.map((item) => item.rawCostUsd))
+    const usersWithRawCost = userRawCosts.filter((item) => item.rawCostUsd > 0)
     const mostExpensiveUsers = userRawCosts
       .filter((item) => item.rawCostUsd > 0 || item.displayedCostUsd > 0)
       .sort((a, b) => b.rawCostUsd - a.rawCostUsd)
@@ -435,6 +481,7 @@ class NeonAdminRepository {
       .map((item) => ({
         ...item,
         isUnusuallyHigh:
+          usersWithRawCost.length >= 3 &&
           highCostMedian > 0 && item.rawCostUsd >= highCostMedian * 2,
       }))
 
@@ -471,6 +518,9 @@ class NeonAdminRepository {
       const tierSubscriptions = subscriptionsForFilters.filter(
         (subscription) => subscription.tier === tier
       )
+      const activeTierSubscriptions = tierSubscriptions.filter(
+        (subscription) => subscription.status === 'active'
+      )
       const tierUserIds = new Set(
         tierSubscriptions.map((subscription) => subscription.userId)
       )
@@ -487,21 +537,25 @@ class NeonAdminRepository {
         sum(tierUsage, (event) => event.displayedCostUsd) +
         sum(tierImages, (event) => event.displayedCostUsd)
       const estimatedRevenueUsd = sum(
-        tierSubscriptions.filter(
-          (subscription) => subscription.status === 'active'
-        ),
+        activeTierSubscriptions,
         (subscription) => subscription.planPriceUsd
       )
 
       return {
         tier,
-        activeUsers: tierSubscriptions.filter(
-          (subscription) => subscription.status === 'active'
-        ).length,
+        activeUsers: activeTierSubscriptions.length,
         estimatedRevenueUsd,
         rawCostUsd,
         displayedCostUsd,
         estimatedGrossMarginUsd: estimatedRevenueUsd - rawCostUsd,
+        marginRate:
+          estimatedRevenueUsd > 0
+            ? (estimatedRevenueUsd - rawCostUsd) / estimatedRevenueUsd
+            : null,
+        rawCostPerActiveUserUsd:
+          activeTierSubscriptions.length > 0
+            ? rawCostUsd / activeTierSubscriptions.length
+            : 0,
       }
     })
 
@@ -515,38 +569,9 @@ class NeonAdminRepository {
       .map((subscription) => {
         const profile = profileByUserId.get(subscription.userId) ?? null
         const override = overridesByUserId.get(subscription.userId) ?? null
-        const limits = [
-          {
-            label: 'Core tokens',
-            used: subscription.coreTokensUsed,
-            limit: getEffectiveLimit(subscription, override, 'coreTokensIncluded'),
-          },
-          {
-            label: 'Tier tokens',
-            used: subscription.tierTokensUsed,
-            limit: getEffectiveLimit(subscription, override, 'tierTokensIncluded'),
-          },
-          {
-            label: 'Image credits',
-            used: subscription.imageCreditsUsed,
-            limit: getEffectiveLimit(subscription, override, 'imageCreditsIncluded'),
-          },
-          {
-            label: 'Daily messages',
-            used: subscription.dailyMessageCount,
-            limit: getEffectiveLimit(subscription, override, 'dailyMessageLimit'),
-          },
-          {
-            label: 'Daily images',
-            used: subscription.dailyImageCount,
-            limit: getEffectiveLimit(subscription, override, 'maxImagesPerDay'),
-          },
-        ]
-          .map((limit) => ({
-            ...limit,
-            ratio: calculateRatio(limit.used, limit.limit),
-          }))
-          .filter((limit) => limit.limit > 0 && limit.ratio >= LIMIT_WARNING_RATIO)
+        const limits = buildLimitUsageDetails(subscription, override).filter(
+          (limit) => limit.limit > 0 && limit.ratio >= LIMIT_WARNING_RATIO
+        )
 
         const highestUsageRatio = limits.reduce(
           (highest, limit) => Math.max(highest, limit.ratio),
@@ -557,6 +582,7 @@ class NeonAdminRepository {
           userId: subscription.userId,
           email: profile?.email ?? null,
           loginId: profile?.loginId ?? null,
+          displayName: profile?.displayName ?? null,
           tier: subscription.tier,
           status: subscription.status,
           highestUsageRatio,
@@ -676,6 +702,12 @@ class NeonAdminRepository {
         const displayedCostUsd =
           sum(userUsage, (event) => event.displayedCostUsd) +
           sum(userImages, (event) => event.displayedCostUsd)
+        const riskLimits = buildLimitUsageDetails(subscription, override)
+        const highestUsageRatio = riskLimits.reduce(
+          (highest, limit) =>
+            limit.limit > 0 ? Math.max(highest, limit.ratio) : highest,
+          0
+        )
 
         return {
           profile,
@@ -696,7 +728,17 @@ class NeonAdminRepository {
             displayedCreditsTotal - usdToDisplayedCredits(displayedCostUsd)
           ),
           requestsThisPeriod: userUsage.length + userImages.length,
+          highestUsageRatio,
         }
+      })
+      .sort((a, b) => {
+        if (b.highestUsageRatio !== a.highestUsageRatio) {
+          return b.highestUsageRatio - a.highestUsageRatio
+        }
+        if (b.rawCostUsd !== a.rawCostUsd) {
+          return b.rawCostUsd - a.rawCostUsd
+        }
+        return b.displayedCostUsd - a.displayedCostUsd
       })
   }
 
