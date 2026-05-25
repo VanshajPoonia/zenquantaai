@@ -17,6 +17,7 @@ import {
 } from '@/components/ui/tooltip'
 import { SendIcon, StopIcon, PaperclipIcon, XIcon } from '@/components/icons'
 import { AssistantRecommendationDialog } from './assistant-recommendation-dialog'
+import { CustomAssistantButton } from './custom-assistant-button'
 import { ModelComparisonButton } from './model-comparison-button'
 import { ModeSwitcherCompact } from './mode-switcher'
 import { PromptLibraryButton } from './prompt-library-button'
@@ -264,6 +265,7 @@ export function Composer({ onSend, disabled, initialValue = '' }: ComposerProps)
             {/* Left Actions */}
             <div className="flex items-center gap-2">
               <ModeSwitcherCompact />
+              <CustomAssistantButton />
               <PromptLibraryButton
                 value={value}
                 currentMode={currentMode}
