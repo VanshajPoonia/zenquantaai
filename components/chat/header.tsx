@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { CircleHelp, Shield } from 'lucide-react'
+import { CircleHelp, Search, Shield } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useChatContext } from '@/lib/chat-context'
 import { ModeIcon, getModeAccentClass, getModeTintClass } from '@/lib/mode-utils'
@@ -32,9 +32,14 @@ import {
 interface HeaderProps {
   onOpenSettings: () => void
   onOpenAssistantHelp: () => void
+  onOpenCommandPalette: () => void
 }
 
-export function Header({ onOpenSettings, onOpenAssistantHelp }: HeaderProps) {
+export function Header({
+  onOpenSettings,
+  onOpenAssistantHelp,
+  onOpenCommandPalette,
+}: HeaderProps) {
   const {
     currentMode,
     authState,
@@ -115,6 +120,17 @@ export function Header({ onOpenSettings, onOpenAssistantHelp }: HeaderProps) {
             </Link>
           </Button>
         ) : null}
+
+        <TooltipProvider delayDuration={300}>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button variant="ghost" size="icon" onClick={onOpenCommandPalette}>
+                <Search className="size-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Search workspace</TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
 
         <TooltipProvider delayDuration={300}>
           <Tooltip>
