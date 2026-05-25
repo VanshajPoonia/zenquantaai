@@ -31,6 +31,7 @@ import {
   ChatAction,
   ChatRequest,
   Conversation,
+  CustomAssistantReference,
   FileKnowledgeContext,
   MessageSource,
   Message,
@@ -277,6 +278,32 @@ function formatFileKnowledgeBlock(context: FileKnowledgeContext | undefined): st
   ].join('\n\n')
 }
 
+export interface CustomAssistantRuntimeContext {
+  assistant: CustomAssistantReference
+  systemInstructions: string
+}
+
+function formatCustomAssistantBlock(
+  context: CustomAssistantRuntimeContext | undefined
+): string {
+  const instructions = context?.systemInstructions.trim()
+  if (!context || !instructions) return ''
+
+  return [
+    '[Custom assistant instructions]',
+    `Name: ${context.assistant.name}`,
+    context.assistant.description
+      ? `Description: ${context.assistant.description}`
+      : '',
+    '',
+    'Follow these user-defined assistant instructions while staying within the selected built-in assistant family, safety rules, available tools, and plan/model limits.',
+    '',
+    instructions.slice(0, 6_000),
+  ]
+    .filter(Boolean)
+    .join('\n')
+}
+
 function formatWebSearchBlock(context: WebSearchContext | undefined): string {
   if (!context) return ''
 
@@ -314,7 +341,8 @@ function buildOpenRouterMessages(
   settings: SessionSettings,
   mode: AIMode,
   webSearchContext?: WebSearchContext,
-  fileKnowledgeContext?: FileKnowledgeContext
+  fileKnowledgeContext?: FileKnowledgeContext,
+  customAssistantContext?: CustomAssistantRuntimeContext
 ): Array<{
   role: 'system' | 'user' | 'assistant'
   content: string
@@ -327,9 +355,13 @@ function buildOpenRouterMessages(
       : ''
   const webSearchBlock = formatWebSearchBlock(webSearchContext)
   const fileKnowledgeBlock = formatFileKnowledgeBlock(fileKnowledgeContext)
+  const customAssistantBlock = formatCustomAssistantBlock(customAssistantContext)
 
   return [
     { role: 'system', content: systemPrompt },
+    ...(customAssistantBlock
+      ? [{ role: 'system' as const, content: customAssistantBlock }]
+      : []),
     ...(webSearchBlock
       ? [{ role: 'system' as const, content: webSearchBlock }]
       : []),
@@ -358,14 +390,16 @@ export function buildPromptTextForUsage(
   settings: SessionSettings,
   mode: AIMode,
   webSearchContext?: WebSearchContext,
-  fileKnowledgeContext?: FileKnowledgeContext
+  fileKnowledgeContext?: FileKnowledgeContext,
+  customAssistantContext?: CustomAssistantRuntimeContext
 ): string {
   return buildOpenRouterMessages(
     conversation,
     settings,
     mode,
     webSearchContext,
-    fileKnowledgeContext
+    fileKnowledgeContext,
+    customAssistantContext
   )
     .map((message) => message.content)
     .join('\n\n')
@@ -379,6 +413,7 @@ export async function* generateAssistantStream(input: {
   tier?: SubscriptionTier
   webSearchContext?: WebSearchContext
   fileKnowledgeContext?: FileKnowledgeContext
+  customAssistantContext?: CustomAssistantRuntimeContext
 }): AsyncIterable<string> {
   if (input.mode === 'image' || input.action === 'generate-image') {
     throw new Error('Image generation must use the dedicated image route.')
@@ -411,7 +446,8 @@ export async function* generateAssistantStream(input: {
       input.settings,
       input.mode,
       input.webSearchContext,
-      input.fileKnowledgeContext
+      input.fileKnowledgeContext,
+      input.customAssistantContext
     ),
     temperature: input.settings.temperature,
     maxTokens: input.settings.maxTokens,
@@ -785,6 +821,7 @@ export async function completeConversationWithAssistant(
     modelOverride?: string
     webSearchContext?: WebSearchContext
     fileKnowledgeContext?: FileKnowledgeContext
+    customAssistantContext?: CustomAssistantRuntimeContext
     sources?: MessageSource[]
     generatedImageResultOverride?: {
       attachment: Attachment
@@ -813,7 +850,8 @@ export async function completeConversationWithAssistant(
     conversation.sessionSettings,
     generationMode,
     options?.webSearchContext,
-    options?.fileKnowledgeContext
+    options?.fileKnowledgeContext,
+    options?.customAssistantContext
   )
   const usage = estimateUsage({
     config: activeConfig,
@@ -903,7 +941,7 @@ export async function* streamConversationReply(
 
 export function resolveSessionSettings(
   mode: AIMode,
-  provided: SessionSettings | undefined,
+  provided: Partial<SessionSettings> | undefined,
   fallback: SessionSettings
 ): SessionSettings {
   return {
