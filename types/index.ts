@@ -6,6 +6,8 @@ export type AIMode =
   | 'live'
   | 'image'
 
+export type TextAIMode = Exclude<AIMode, 'image'>
+
 export type AssistantFamily =
   | 'nova'
   | 'velora'
@@ -89,6 +91,57 @@ export interface SessionSettings {
   webSearch: boolean
   memory: boolean
   fileContext: boolean
+}
+
+export interface CustomAssistantToolSettings {
+  webSearch: boolean
+  memory: boolean
+  fileContext: boolean
+}
+
+export interface CustomAssistantDefaults {
+  temperature?: number
+  maxTokens?: number
+  topP?: number
+  modelOverride?: ModelOverrideOption
+  tools?: Partial<CustomAssistantToolSettings>
+}
+
+export interface CustomAssistant {
+  id: string
+  userId: string
+  name: string
+  description: string
+  iconEmoji: string
+  color: string
+  baseMode: TextAIMode
+  systemInstructions: string
+  defaultModelOverride: ModelOverrideOption
+  defaultSettings: CustomAssistantDefaults
+  isEnabled: boolean
+  createdAt: string
+  updatedAt: string
+}
+
+export interface CustomAssistantInput {
+  name: string
+  description?: string
+  iconEmoji?: string
+  color?: string
+  baseMode?: TextAIMode
+  systemInstructions: string
+  defaultModelOverride?: ModelOverrideOption
+  defaultSettings?: CustomAssistantDefaults
+  isEnabled?: boolean
+}
+
+export interface CustomAssistantReference {
+  id: string
+  name: string
+  description?: string
+  iconEmoji: string
+  color: string
+  baseMode: TextAIMode
 }
 
 export interface OpenRouterSettingsDraft {
@@ -204,6 +257,8 @@ export interface Message {
   parentUserMessageId?: string
   branchLabel?: string
   assistantFamily?: AssistantFamily
+  customAssistantId?: string | null
+  customAssistant?: CustomAssistantReference | null
 }
 
 export interface ConversationSummary {
@@ -219,6 +274,8 @@ export interface ConversationSummary {
   sessionSettings: SessionSettings
   memorySummary?: string
   memoryUpdatedAt?: string
+  customAssistantId?: string | null
+  customAssistant?: CustomAssistantReference | null
 }
 
 export interface Conversation extends ConversationSummary {
@@ -439,6 +496,7 @@ export interface ChatRequest {
   targetMessageId?: string
   attachments?: Attachment[]
   attachmentContext?: AttachmentContext[]
+  customAssistantId?: string | null
 }
 
 export interface PendingSend {
@@ -451,6 +509,7 @@ export interface PendingSend {
   conversationId?: string
   projectId: string
   settings: SessionSettings
+  customAssistantId?: string | null
 }
 
 export interface ResolvedSend extends PendingSend {
@@ -693,6 +752,7 @@ export interface Profile {
   userId: string
   loginId: string | null
   email: string | null
+  displayName: string | null
   role: Role
   createdAt: string
   updatedAt: string
