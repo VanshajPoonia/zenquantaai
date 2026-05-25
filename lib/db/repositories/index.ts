@@ -17,6 +17,7 @@ export { neonProfilesRepository } from './profiles'
 export { neonPromptWorkflowsRepository } from './prompt-workflows'
 export { neonProjectsRepository } from './projects'
 export { neonPromptsRepository } from './prompts'
+export { neonSearchRepository } from './search'
 export { neonSettingsRepository } from './settings'
 export {
   buildTierRebasedUsageOverridePatch,
