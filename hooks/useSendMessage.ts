@@ -20,6 +20,7 @@ export interface UseSendMessageInput {
   attachments?: Array<Attachment | PendingAttachment>
   kind?: 'chat' | 'image'
   modeOverride?: AIMode
+  customAssistantId?: string | null
 }
 
 interface PreparedSendDispatch {
@@ -40,10 +41,12 @@ interface QueuedPrompt {
   settings: SessionSettings
   projectId: string
   conversationId?: string
+  customAssistantId?: string | null
 }
 
 export function useSendMessage(input: {
   currentMode: AIMode
+  currentCustomAssistantId?: string | null
   currentChatId?: string
   currentChatSessionSettings?: SessionSettings | null
   draftSessionSettings: SessionSettings
@@ -67,6 +70,8 @@ export function useSendMessage(input: {
   const preparePendingSend = useCallback(
     (payload: UseSendMessageInput): PreparedSendDispatch => {
       const resolvedMode = payload.modeOverride ?? input.currentMode
+      const customAssistantId =
+        payload.customAssistantId ?? input.currentCustomAssistantId ?? null
       const settings = input.normalizeModeSessionSettings(
         resolvedMode,
         input.currentChatSessionSettings ?? input.draftSessionSettings
@@ -84,10 +89,14 @@ export function useSendMessage(input: {
         conversationId: input.currentChatId,
         projectId,
         settings,
+        customAssistantId,
       })
 
       return {
-        input: payload,
+        input: {
+          ...payload,
+          customAssistantId,
+        },
         resolvedSend: resolveSend(pendingSend),
         dispatchOptions: {
           conversationId: input.currentChatId,
@@ -97,14 +106,7 @@ export function useSendMessage(input: {
         },
       }
     },
-    [
-      input.currentChatId,
-      input.currentChatSessionSettings,
-      input.currentMode,
-      input.draftSessionSettings,
-      input.normalizeModeSessionSettings,
-      input.selectedProjectId,
-    ]
+    [input]
   )
 
   const finalizeSend = useCallback(
@@ -144,6 +146,7 @@ export function useSendMessage(input: {
             attachments: prepared.input.attachments,
             kind:
               prepared.resolvedSend.transport === 'image' ? 'image' : 'chat',
+            customAssistantId: prepared.input.customAssistantId,
           },
           prepared.dispatchOptions
         )
@@ -186,11 +189,13 @@ export function useSendMessage(input: {
             kind:
               prepared.resolvedSend.transport === 'image' ? 'image' : 'chat',
             modeOverride: prepared.resolvedSend.resolvedMode,
+            customAssistantId: prepared.input.customAssistantId,
           },
           mode: prepared.resolvedSend.resolvedMode,
           settings: prepared.dispatchOptions.settings,
           projectId: prepared.dispatchOptions.projectId,
           conversationId: prepared.dispatchOptions.conversationId,
+          customAssistantId: prepared.input.customAssistantId,
         })
         debugSendPipeline('request-queued', {
           sendId: prepared.resolvedSend.sendId,

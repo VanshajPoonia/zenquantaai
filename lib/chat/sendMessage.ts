@@ -37,6 +37,7 @@ export function createPendingSend(input: {
   conversationId?: string
   projectId: string
   settings: SessionSettings
+  customAssistantId?: string | null
 }): PendingSend {
   return {
     sendId: createId('send'),
@@ -48,6 +49,7 @@ export function createPendingSend(input: {
     conversationId: input.conversationId,
     projectId: input.projectId,
     settings: input.settings,
+    customAssistantId: input.customAssistantId ?? null,
   }
 }
 
