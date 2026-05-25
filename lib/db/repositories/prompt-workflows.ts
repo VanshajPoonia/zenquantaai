@@ -11,6 +11,7 @@ import {
   PromptWorkflow,
   PromptWorkflowInput,
   PromptWorkflowRun,
+  PromptWorkflowRunStatus,
   PromptWorkflowStep,
   PromptWorkflowStepRun,
 } from '@/types'
@@ -35,6 +36,10 @@ type WorkflowRow = typeof zenPromptWorkflows.$inferSelect
 type WorkflowStepRow = typeof zenPromptWorkflowSteps.$inferSelect
 type WorkflowRunRow = typeof zenPromptWorkflowRuns.$inferSelect
 type WorkflowStepRunRow = typeof zenPromptWorkflowStepRuns.$inferSelect
+
+function isTerminalRunStatus(status: PromptWorkflowRunStatus | undefined): boolean {
+  return status === 'complete' || status === 'failed' || status === 'cancelled'
+}
 
 function rowToStep(row: WorkflowStepRow): PromptWorkflowStep {
   return {
@@ -388,18 +393,56 @@ class NeonPromptWorkflowsRepository {
           status: patch.status,
           conversationId: patch.conversationId,
           error: patch.error,
-          completedAt:
-            patch.status === 'complete' ||
-            patch.status === 'failed' ||
-            patch.status === 'cancelled'
-              ? new Date()
-              : undefined,
+          completedAt: isTerminalRunStatus(patch.status) ? new Date() : undefined,
           updatedAt: new Date(),
         })
       )
       .where(and(eq(zenPromptWorkflowRuns.userId, userId), eq(zenPromptWorkflowRuns.id, id)))
 
     return await this.getRun(userId, id)
+  }
+
+  async updateStepRunStatus(
+    userId: string,
+    runId: string,
+    patch: {
+      workflowStepId?: string | null
+      stepOrder?: number
+      status: PromptWorkflowRunStatus
+      messageId?: string | null
+      error?: string | null
+    }
+  ): Promise<PromptWorkflowRun | null> {
+    const run = await this.getRun(userId, runId)
+    if (!run) return null
+
+    const targetStep = run.stepRuns.find((stepRun) => {
+      if (patch.workflowStepId) {
+        return stepRun.workflowStepId === patch.workflowStepId
+      }
+
+      return typeof patch.stepOrder === 'number'
+        ? stepRun.stepOrder === patch.stepOrder
+        : false
+    })
+
+    if (!targetStep) return null
+
+    await getDatabaseClient()
+      .update(zenPromptWorkflowStepRuns)
+      .set(
+        compactObject({
+          status: patch.status,
+          messageId: patch.messageId,
+          error: patch.error,
+          startedAt: patch.status === 'running' ? new Date() : undefined,
+          completedAt: isTerminalRunStatus(patch.status) ? new Date() : undefined,
+          updatedAt: new Date(),
+        })
+      )
+      .where(eq(zenPromptWorkflowStepRuns.id, targetStep.id))
+
+    return await this.getRun(userId, runId)
   }
 }
 
