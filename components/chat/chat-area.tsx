@@ -101,36 +101,41 @@ export function ChatArea() {
             )}
 
             {currentChat?.messages.map((message) => (
-              <ChatMessage
+              <div
                 key={message.id}
-                message={message}
-                isStreamingMessage={
-                  message.id === streamingState.messageId &&
-                  streamingState.status === 'streaming'
-                }
-                workingTitle={
-                  message.id === streamingState.messageId
-                    ? streamingState.workingTitle
-                    : undefined
-                }
-                workingNotes={
-                  message.id === streamingState.messageId
-                    ? streamingState.workingNotes
-                    : undefined
-                }
-                errorOverride={
-                  message.id === streamingState.messageId &&
-                  streamingState.status === 'error'
-                    ? streamingState.error
-                    : undefined
-                }
-                isLastAssistant={message.id === lastAssistantId}
-                isLastUser={message.id === lastUserId}
-                onRegenerate={regenerateLastResponse}
-                onRetry={retryLastMessage}
-                onEdit={editLastUserMessage}
-                onAskAnotherMode={askAnotherMode}
-              />
+                id={`message-${message.id}`}
+                className="scroll-mt-24"
+              >
+                <ChatMessage
+                  message={message}
+                  isStreamingMessage={
+                    message.id === streamingState.messageId &&
+                    streamingState.status === 'streaming'
+                  }
+                  workingTitle={
+                    message.id === streamingState.messageId
+                      ? streamingState.workingTitle
+                      : undefined
+                  }
+                  workingNotes={
+                    message.id === streamingState.messageId
+                      ? streamingState.workingNotes
+                      : undefined
+                  }
+                  errorOverride={
+                    message.id === streamingState.messageId &&
+                    streamingState.status === 'error'
+                      ? streamingState.error
+                      : undefined
+                  }
+                  isLastAssistant={message.id === lastAssistantId}
+                  isLastUser={message.id === lastUserId}
+                  onRegenerate={regenerateLastResponse}
+                  onRetry={retryLastMessage}
+                  onEdit={editLastUserMessage}
+                  onAskAnotherMode={askAnotherMode}
+                />
+              </div>
             ))}
 
             <div ref={messagesEndRef} />
