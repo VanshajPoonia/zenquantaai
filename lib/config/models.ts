@@ -11,6 +11,7 @@ import {
   getAssistantFamilyFromMode,
   getTierAssistantModelConfig,
 } from './assistants'
+import { ONBOARDING_VERSION } from './onboarding'
 import { PLAN_CONFIGS } from './pricing'
 
 export const OPENROUTER_DEFAULT_BASE_URL = 'https://openrouter.ai/api/v1'
@@ -233,5 +234,17 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   gatewayDrafts: {
     openRouterApiKey: '',
     openRouterBaseUrl: OPENROUTER_DEFAULT_BASE_URL,
+  },
+  onboarding: {
+    status: 'not_started',
+    version: ONBOARDING_VERSION,
+    useCase: null,
+    defaultMode: null,
+    starterPackId: null,
+    starterProjectId: null,
+    installedPromptIds: [],
+    completedAt: null,
+    skippedAt: null,
+    updatedAt: null,
   },
 }
