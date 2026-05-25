@@ -154,12 +154,35 @@ Current direction: plan upgrades remain manual/admin-driven, payment automation 
 - Saving a candidate appends only the selected response to the conversation.
 - Kept normal chat, Prism image generation, billing model, and manual plan upgrades unchanged.
 
+### 2026-05-24 - Model Comparison V1 Polish
+
+- Hardened text model comparison so foreign or missing conversation IDs return controlled `404` errors.
+- Filtered requested comparison assistants to models available on the user's tier or admin override before generation.
+- Added controlled failures for inaccessible target sets and all-candidate generation failure.
+- Surfaced comparison API errors in the composer dialog instead of failing silently.
+- Kept comparison text-only, OpenRouter-only, Neon-backed, and free of payment automation.
+
 ### 2026-05-23 - Admin Cost And Margin Controls
 
 - Added filter-aware admin analytics over Neon usage, image, subscription, override, profile, and plan request data.
 - Added admin dashboard controls for date range, plan, assistant, and user filtering.
 - Added admin-only visibility for raw model cost, displayed usage, estimated plan margin, text/image cost split, risky users near limits, high raw-cost users, expensive models, and assistant usage.
 - Kept manual plan requests, admin activation, user dashboard displayed-cost behavior, and payment automation scope unchanged.
+
+### 2026-05-25 - Admin Cost And Margin Polish
+
+- Polished existing Neon-backed admin analytics without changing billing or plan activation behavior.
+- Added display-name support in admin profile matching/display, clearer selected-period context, and manual-plan revenue labels.
+- Added margin-rate and raw-cost-per-active-user detail to plan margin analytics.
+- Improved risky-user ordering and avoided unusual raw-cost flags when data is too sparse.
+- Kept raw costs admin-only and did not add payment automation.
+
+### 2026-05-25 - Custom Assistant Builder V1
+
+- Added private Neon-backed custom text assistants layered over existing built-in text modes.
+- Added authenticated custom assistant CRUD routes and composer UI for create/edit/select/delete.
+- Wired selected custom assistants into `/api/chat` through base-mode model routing, existing usage limits, and bounded extra system instructions.
+- Kept Nova, Velora, Axiom, Forge, Pulse, and Prism unchanged; image assistants, marketplace sharing, arbitrary raw model selection, Supabase, and payment automation remain out of scope.
 
 ### 2026-05-24 - Verification Tooling Hardening
 
@@ -182,6 +205,20 @@ Current direction: plan upgrades remain manual/admin-driven, payment automation 
 - Added a total snippet budget to web search source normalization so retrieved snippets stay bounded before model injection.
 - Expanded current/research prompt signals so Pulse is recommended for more source-backed, verification, and current-landscape prompts.
 - Kept OpenRouter as the only model gateway and did not add Supabase or payment automation.
+
+### 2026-05-24 - Uploaded File RAG V1 Gap-Fill
+
+- Verified the existing uploaded-file RAG path uses neutral storage, Neon file metadata, pgvector chunks, server-only embeddings, and `/api/chat` retrieval when `fileContext` is enabled.
+- Added stricter attachment metadata validation before uploads are linked to file metadata and knowledge chunks.
+- Batched embedding requests for large text/code uploads and cleared stale chunks when extraction produces no usable chunks.
+- Kept v1 focused on text/code-like files; no Supabase import, OCR/PDF expansion, or payment automation was added.
+
+### 2026-05-24 - Prompt Workflow Tracking Completion
+
+- Added authenticated workflow run and step-run status updates around the existing client-side queued workflow execution path.
+- Kept workflow execution simple: each step still goes through the normal chat or Prism image send path.
+- Preserved prompt library behavior, workflow CRUD, Neon persistence, and normal usage logging as the billing source of truth.
+- Did not add background jobs, Supabase runtime, or payment automation.
 
 ## Current Work
 
