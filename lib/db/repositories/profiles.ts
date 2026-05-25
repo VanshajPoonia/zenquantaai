@@ -37,6 +37,7 @@ function rowToProfile(row: ProfileRow): Profile {
     userId: row.userId,
     loginId: row.loginId,
     email: row.email,
+    displayName: row.displayName,
     role: forcedRole,
     createdAt: toIsoString(row.createdAt),
     updatedAt: toIsoString(row.updatedAt),
@@ -103,6 +104,7 @@ class NeonProfilesRepository {
         userId: user.id,
         loginId: user.loginId ?? null,
         email: user.email ?? null,
+        displayName: user.loginId ?? user.email ?? null,
         role,
       })
       .onConflictDoUpdate({

@@ -198,6 +198,7 @@ class NeonUsersRepository {
       .values({
         externalAuthProvider: 'local',
         loginId,
+        displayName: loginId,
         role: 'user',
       })
       .returning()
@@ -236,6 +237,7 @@ class NeonUsersRepository {
       .values({
         userId: createdUser.id,
         loginId,
+        displayName: loginId,
         role: 'user',
       })
       .onConflictDoNothing({ target: zenProfiles.userId })
