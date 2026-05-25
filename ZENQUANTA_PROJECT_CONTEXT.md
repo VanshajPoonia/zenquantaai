@@ -358,3 +358,203 @@ Key tables/concepts:
   - `zen_messages`
   - `zen_prompt_library`
   - `zen_user_settings`
+- Workflows and comparisons:
+  - `zen_prompt_workflows`
+  - `zen_prompt_workflow_steps`
+  - `zen_prompt_workflow_runs`
+  - `zen_prompt_workflow_step_runs`
+  - `zen_model_comparisons`
+  - `zen_model_comparison_candidates`
+- Custom assistants and recommendations:
+  - `zen_custom_assistants`
+  - `zen_assistant_recommendation_events`
+- Files and images:
+  - `zen_files`
+  - `zen_file_chunks`
+  - `zen_generated_images`
+
+Fresh users/data:
+
+- Sign-up creates `zen_users`, `zen_auth_credentials`, `zen_auth_identities`, and `zen_profiles`.
+- `neonProfilesRepository.ensureFromAuthUser` and `neonUsersRepository.ensureFromAuthUser` align profile/user records for active sessions.
+- `neonSubscriptionsRepository.ensureForUser` creates a default Free subscription when needed.
+- Repositories that receive only `userId` should ensure the user anchor before inserting dependent rows.
+
+What is not migrated:
+
+- Supabase database rows are not imported.
+- Supabase Auth users, sessions, and passwords are not imported.
+- Old Supabase Storage files and objects are not imported.
+- Supabase migrations remain in `supabase/migrations/*` only as historical/product reference.
+
+## 10. Auth
+
+Current auth system:
+
+- Login is ID/password-first.
+- Sign-up requires a unique login ID and a password of at least 8 characters.
+- Login IDs are normalized lowercase and validated by `parseLoginId` in `lib/auth/session.ts`.
+- Passwords are hashed with Node crypto `scrypt`, per-user salts, and stored params.
+- Sessions use random opaque tokens, stored hashed in `zen_auth_sessions`.
+- Browser cookie is HTTP-only, `SameSite=Lax`, path `/`, and `Secure` in production.
+- Active cookie name is `zenquanta-session-token`.
+- Legacy cookies `zenquanta-access-token` and `zenquanta-refresh-token` are cleared by auth helpers.
+- Sessions last 30 days by current `COOKIE_MAX_AGE_SECONDS`.
+- Sign-in attempts are rate-limited in `zen_auth_attempts` by hashed login ID and IP:
+  - login ID failure limit: 5
+  - IP failure limit: 20
+  - window: 15 minutes
+  - lock duration: 15 minutes
+- Password reset request currently returns an admin-assisted reset message.
+- Magic-link route returns 410 because magic links are unsupported in the current auth system.
+
+Route protection:
+
+- API protection uses `requireAuthenticatedUser`.
+- Server page protection uses `requireServerUser`.
+- Admin pages use `requireAdmin`.
+- Admin APIs use `requireAdminApiUser`.
+- Non-admin users are redirected to `/dashboard?admin=required` for server admin pages.
+- Admin APIs return 403 when role is not admin.
+
+Admin role:
+
+- Primary admin role source is `zen_profiles.role`.
+- `lib/db/repositories/profiles.ts` contains a hardcoded admin fallback for `kayla.viehland` and `kayla.viehland@login.zenquanta.local`. This is a known risk/open question if admin role management should become database-only.
+
+Known auth risks/areas to verify:
+
+- Production should verify auth-attempt limiting is applied in the deployed Neon database.
+- Password reset is admin-assisted, not a full self-service token flow.
+- Admin hardcoded fallback should be reviewed before production.
+- Server secrets and database credentials must remain server-only.
+
+## 11. Storage And Files
+
+Current object storage approach:
+
+- Runtime storage is neutral and non-Supabase.
+- Main abstraction: `lib/storage/object-store.ts`.
+- Providers:
+  - `local`: writes under `.storage/zenquanta` by default.
+  - `s3`: S3-compatible endpoint.
+  - `r2`: Cloudflare R2/S3-compatible endpoint.
+- Default bucket: `zenquanta-files`.
+- Local storage is gitignored.
+- S3/R2 require `FILE_STORAGE_ENDPOINT`, `FILE_STORAGE_BUCKET`, `FILE_STORAGE_ACCESS_KEY_ID`, and `FILE_STORAGE_SECRET_ACCESS_KEY`.
+
+Uploads:
+
+- Upload endpoint: `POST /api/attachments`.
+- Max attachment size in `lib/storage/attachments.ts`: 25 MB.
+- Uploads store raw bytes in object storage.
+- Uploads create Neon metadata rows in `zen_files`.
+- Uploads return attachment metadata with private app URLs, not direct bucket URLs.
+
+Private access:
+
+- Authenticated reads go through `GET /api/files/object?bucket=...&path=...`.
+- The route checks `zen_files` for the authenticated user, bucket/path, and `visibility = private`.
+- Responses use `Cache-Control: private, no-store`.
+
+Generated images:
+
+- Prism generation returns an image URL or data URL from OpenRouter.
+- `lib/storage/generated-images.ts` validates generated image URLs, rejects non-image data URLs, rejects non-HTTPS external URLs, and rejects private/local hostnames.
+- Generated images are fetched/stored into neutral object storage.
+- Metadata is written to `zen_generated_images`.
+- Image usage events are written to `zen_image_generation_events`.
+
+Uploaded-file knowledge:
+
+- Supported in v1 for text and code-like files only.
+- Extraction/chunking lives in `lib/rag/extraction.ts`.
+- Embeddings live in `lib/rag/embeddings.ts`.
+- Indexing lives in `lib/rag/indexing.ts`.
+- Retrieval lives in `lib/rag/retrieval.ts`.
+- Chunks are stored in `zen_file_chunks` with 1536-dimension pgvector embeddings.
+- Retrieval happens in `/api/chat` when `fileContext` is enabled and there is project, conversation, or explicit attachment scope.
+- If embeddings are not configured, uploads still succeed and metadata records knowledge status as skipped.
+
+What remains to improve:
+
+- Advanced PDF/OCR extraction is not implemented in uploaded-file knowledge v1.
+- Production S3/R2 configuration must be validated before relying on durable storage.
+- Old Supabase-hosted files are intentionally not migrated or preserved.
+
+## 12. Usage, Plans, And Admin
+
+Plan ladder:
+
+- `free`
+- `basic`
+- `pro`
+- `ultra`
+- `prime`
+
+Plan defaults from `lib/config/pricing.ts`:
+
+| Tier | Price | Core Tokens | Tier Tokens | Image Credits | Daily Messages | Max Input Tokens | Max Output Tokens | Images/Day |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| free | $0 | 1,000,000 | 0 | 50 | 50 | 8,000 | 800 | 2 |
+| basic | $4 | 2,000,000 | 0 | 150 | 250 | 16,000 | 1,500 | 5 |
+| pro | $15 | 3,000,000 | 650,000 | 400 | 700 | 32,000 | 2,500 | 15 |
+| ultra | $59 | 5,000,000 | 2,700,000 | 1,200 | 1,500 | 64,000 | 5,000 | 40 |
+| prime | $200 | 8,000,000 | 8,000,000 | 4,000 | 3,000 | 128,000 | 8,000 | 100 |
+
+Display multipliers:
+
+- `free`: 2.0
+- `basic`: 2.0
+- `pro`: 1.5
+- `ultra`: 1.5
+- `prime`: 1.5
+
+Usage wallets:
+
+- `core_tokens`: lower-cost/default text assistant usage.
+- `tier_tokens`: premium text assistant usage for higher tiers.
+- `image_credits`: Prism image generation usage.
+
+Manual plan request flow:
+
+- User opens `/pricing`.
+- User submits a request for `basic`, `pro`, `ultra`, or `prime`.
+- Request is stored in `zen_plan_change_requests`.
+- Pending request is shown to user.
+- Admin reviews in `/admin`.
+- Admin can approve, reject, or activate.
+- Activation updates subscription tier and can rebase default limits while preserving true custom overrides where intended.
+
+Admin activation:
+
+- Implemented in `app/admin/actions.ts` and `/api/admin/plan-requests/[id]`.
+- Activation calls `neonSubscriptionsRepository.updateTier`.
+- Admin audit log entries are written to `zen_admin_audit_logs`.
+
+Usage tracking:
+
+- Text route enforces usage before generation and logs after successful generation.
+- Image route enforces image limits/credits before generation and logs after successful generation.
+- Subscription counters are incremented atomically with SQL expressions.
+- Dashboard period usage is scoped to current subscription period.
+
+Raw cost vs displayed cost:
+
+- Raw model cost is internal/admin-only.
+- Displayed cost is user-facing usage/credit accounting.
+- User dashboard and `/api/dashboard` expose displayed usage only.
+- Admin dashboard exposes raw cost, displayed usage, estimated revenue, and estimated margin.
+
+Admin dashboard:
+
+- Data source: `lib/db/repositories/admin.ts`.
+- Supports filters for date range, plan, assistant, and user.
+- Shows active users, pending requests, raw model cost, displayed usage, estimated revenue, estimated gross margin, text/image split, high raw-cost users, users close to limits, expensive models, and assistant usage.
+- Estimated revenue is based on active manual plan state, not payment-provider revenue.
+
+User dashboard:
+
+- Data source: `/dashboard` server page and `/api/dashboard`.
+- Shows current plan, displayed credits total/used/remaining, text/image displayed usage, assistant breakdown, recent conversations, and recent image generation events.
+
