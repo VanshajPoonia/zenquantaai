@@ -91,6 +91,7 @@ Neon currently provides a server-only client, Drizzle schema definitions, a serv
 - prompt library
 - prompt workflows, ordered steps, and run/step-run metadata
 - text model comparisons and generated candidates
+- private custom text assistants
 - user settings
 - profiles and admin roles
 - subscriptions and usage overrides
@@ -159,6 +160,7 @@ Fresh foundation migration available for Neon:
 5. `neon/migrations/20260522_zenquanta_prompt_workflows.sql`
 6. `neon/migrations/20260522_zenquanta_model_comparisons.sql`
 7. `neon/migrations/20260524_zenquanta_auth_attempts.sql`
+8. `neon/migrations/20260525_zenquanta_custom_assistants.sql`
 
 Apply with a Postgres client or Neon SQL editor. CLI example:
 
@@ -199,6 +201,7 @@ Before changing persistence code again:
 9. With an embeddings key configured, upload a text/code file, enable `fileContext`, and verify chat cites uploaded-file sources.
 10. Create and run a prompt workflow with at least two assistant-family steps and verify the steps queue into one conversation.
 11. Run a text model comparison, review candidates, and save one response into the conversation.
+12. Create/select a private custom text assistant and confirm it sends through normal `/api/chat` with usage limits intact.
 12. Generate an image with Prism and verify `/api/images/generate`.
 13. Check `/dashboard` for usage.
 14. If using admin flows, ensure the user has an admin role in `zen_profiles`.

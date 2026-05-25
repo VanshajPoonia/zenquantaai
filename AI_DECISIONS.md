@@ -50,6 +50,22 @@ Evidence:
 
 Note: Workflow run and step-run rows are lightweight usage metadata. Billing and usage accounting still come from the normal text/image usage events.
 
+## Custom Assistants Layer Over Built-In Text Modes
+
+Decision: Custom assistant builder v1 creates private user-owned text assistants in Neon, layered over existing built-in text modes.
+
+Evidence:
+
+- Custom assistants store bounded user instructions/default settings and a `baseMode` limited to `general`, `creative`, `logic`, `code`, or `live`.
+- `/api/chat` loads the custom assistant by authenticated user, uses its base mode for model routing/usage enforcement, and injects its instructions as an additional system context block.
+- Default model selection uses existing response-profile/model-override values, not arbitrary raw provider model IDs.
+
+Out of scope:
+
+- Prism/image custom assistants.
+- Marketplace/public sharing.
+- Model-limit bypasses.
+
 ## Model Comparison Uses Text Assistants Only In V1
 
 Decision: Model comparison v1 compares text assistants through OpenRouter and does not include Prism image generation.

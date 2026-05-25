@@ -43,6 +43,7 @@ This is the current six-assistant platform, not the old four-mode version.
 - Prompt library.
 - Reusable prompt workflows with ordered assistant-family steps.
 - Text model comparison mode with selectable best-response save-in.
+- Private custom text assistants built on top of the built-in text assistant modes.
 - User dashboard.
 - Admin dashboard.
 - Admin cost and margin analytics with period, plan, assistant, and user filters.
@@ -148,7 +149,7 @@ The Neon migration creates:
 
 - app-owned users, auth identity mapping, credentials, and sessions
 - profiles, subscriptions, manual plan requests, usage overrides, text/image usage events, and admin audit logs
-- projects, conversations, messages, conversation memory fields, prompt library, prompt workflows, text model comparisons, and user settings
+- projects, conversations, messages, conversation memory fields, prompt library, prompt workflows, text model comparisons, private custom text assistants, and user settings
 - assistant recommendation events, file metadata, and generated image metadata
 - uploaded-file text chunks and pgvector embeddings for private project knowledge
 
@@ -163,6 +164,7 @@ Neon migration order:
 5. `20260522_zenquanta_prompt_workflows.sql`
 6. `20260522_zenquanta_model_comparisons.sql`
 7. `20260524_zenquanta_auth_attempts.sql`
+8. `20260525_zenquanta_custom_assistants.sql`
 
 Historical Supabase migration order documented in `README.md`:
 
@@ -331,5 +333,6 @@ Accepted aliases in code include:
 - File storage access keys must remain server-only.
 - Conversation saves currently delete and reinsert messages, which may be risky for large histories or concurrent writes.
 - Neon starts fresh and does not preserve old Supabase rows.
-- Settings, prompts, prompt workflows, text model comparisons, assistant recommendation telemetry, projects, conversations, messages, conversation memory, billing/admin data, usage records, plan requests, dashboard data, image history, and admin mutations are wired to Neon.
+- Settings, prompts, prompt workflows, text model comparisons, private custom text assistants, assistant recommendation telemetry, projects, conversations, messages, conversation memory, billing/admin data, usage records, plan requests, dashboard data, image history, and admin mutations are wired to Neon.
+- Custom assistants are private text assistants only in v1; image/Prism custom assistants, public sharing, marketplaces, and arbitrary raw model selection are out of scope.
 - S3-compatible/R2 storage configuration must be validated before production if local storage is not acceptable.
