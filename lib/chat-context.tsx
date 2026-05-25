@@ -19,10 +19,11 @@ import {
   AuthState,
   Chat,
   ChatAction,
-  ChatResponse,
   ChatRequest,
   Conversation,
   ConversationSummary,
+  CustomAssistant,
+  CustomAssistantInput,
   ImageGenerateRequest,
   ImageGenerateResponse,
   PendingAttachment,
@@ -32,6 +33,7 @@ import {
   PromptWorkflow,
   PromptWorkflowInput,
   PromptWorkflowRun,
+  PromptWorkflowRunStatus,
   SendLifecycleStatus,
   SessionSettings,
   StreamEvent,
@@ -88,6 +90,7 @@ interface SendMessageInput {
   attachments?: Array<Attachment | PendingAttachment>
   kind?: 'chat' | 'image'
   modeOverride?: AIMode
+  customAssistantId?: string | null
 }
 
 interface QueuedPrompt {
@@ -97,6 +100,7 @@ interface QueuedPrompt {
   settings: SessionSettings
   projectId: string
   conversationId?: string
+  customAssistantId?: string | null
 }
 
 type ProjectFilterId = 'all' | string
@@ -180,6 +184,13 @@ interface ChatContextType {
     workflowId: string,
     variableValues?: Record<string, string>
   ) => Promise<void>
+  customAssistants: CustomAssistant[]
+  currentCustomAssistantId: string | null
+  setCurrentCustomAssistant: (assistantId: string | null) => void
+  saveCustomAssistant: (
+    input: CustomAssistantInput & { id?: string }
+  ) => Promise<CustomAssistant | null>
+  deleteCustomAssistant: (assistantId: string) => Promise<void>
   runModelComparison: (
     input: RunModelComparisonInput
   ) => Promise<ModelComparison | null>
@@ -251,6 +262,16 @@ function sortPromptWorkflows(workflows: PromptWorkflow[]): PromptWorkflow[] {
   )
 }
 
+function sortCustomAssistants(assistants: CustomAssistant[]): CustomAssistant[] {
+  return [...assistants].sort((a, b) => {
+    if (a.isEnabled !== b.isEnabled) {
+      return a.isEnabled ? -1 : 1
+    }
+
+    return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+  })
+}
+
 function isPendingAttachment(
   attachment: Attachment | PendingAttachment
 ): attachment is PendingAttachment {
@@ -288,6 +309,9 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     useState<ProjectFilterId>('all')
   const [promptLibrary, setPromptLibrary] = useState<PromptLibraryItem[]>([])
   const [promptWorkflows, setPromptWorkflows] = useState<PromptWorkflow[]>([])
+  const [customAssistants, setCustomAssistants] = useState<CustomAssistant[]>([])
+  const [currentCustomAssistantId, setCurrentCustomAssistantId] =
+    useState<string | null>(null)
   const [queuedPrompts, setQueuedPrompts] = useState<QueuedPrompt[]>([])
   const streamAbortRef = useRef<AbortController | null>(null)
   const activeSendIdRef = useRef<string | null>(null)
@@ -347,6 +371,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     setProjects([])
     setPromptLibrary([])
     setPromptWorkflows([])
+    setCustomAssistants([])
+    setCurrentCustomAssistantId(null)
     setQueuedPrompts([])
     setCurrentModeState(DEFAULT_APP_SETTINGS.defaultMode)
     setAppSettings(DEFAULT_APP_SETTINGS)
@@ -542,12 +568,20 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     async (user: NonNullable<AuthState['user']>) => {
       await runLocalImport(user.id)
 
-      const [settings, nextProjects, nextPrompts, nextWorkflows, nextConversations] =
+      const [
+        settings,
+        nextProjects,
+        nextPrompts,
+        nextWorkflows,
+        nextCustomAssistants,
+        nextConversations,
+      ] =
         await Promise.all([
           requestJson<AppSettings>('/api/settings'),
           requestJson<Project[]>('/api/projects'),
           requestJson<PromptLibraryItem[]>('/api/prompts'),
           requestJson<PromptWorkflow[]>('/api/prompt-workflows'),
+          requestJson<CustomAssistant[]>('/api/custom-assistants'),
           requestJson<Conversation[]>('/api/conversations'),
         ])
 
@@ -555,6 +589,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       const normalizedProjects = sortProjects(nextProjects)
       const normalizedPrompts = sortPrompts(nextPrompts)
       const normalizedWorkflows = sortPromptWorkflows(nextWorkflows)
+      const normalizedCustomAssistants = sortCustomAssistants(nextCustomAssistants)
       const normalizedConversations = sortConversationList(nextConversations)
       const currentChatId = readBrowserCurrentChatId()
       const activeConversation =
@@ -567,6 +602,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       setProjects(normalizedProjects)
       setPromptLibrary(normalizedPrompts)
       setPromptWorkflows(normalizedWorkflows)
+      setCustomAssistants(normalizedCustomAssistants)
+      setCurrentCustomAssistantId(activeConversation?.customAssistantId ?? null)
       setSelectedProjectIdState(
         storedProjectId &&
           normalizedProjects.some((project) => project.id === storedProjectId)
@@ -773,6 +810,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     (chat: ConversationSummary | Conversation | null) => {
       if (!chat) {
         setCurrentChatState(null)
+        setCurrentCustomAssistantId(null)
         writeBrowserCurrentChatId(null)
         return
       }
@@ -783,6 +821,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       if (!nextConversation) return
 
       setCurrentModeState(nextConversation.mode)
+      setCurrentCustomAssistantId(nextConversation.customAssistantId ?? null)
       setCurrentChatState(nextConversation)
       writeBrowserCurrentChatId(nextConversation.id)
     },
@@ -792,6 +831,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const setCurrentMode = useCallback(
     (mode: AIMode) => {
       setCurrentModeState(mode)
+      setCurrentCustomAssistantId(null)
 
       if (!currentChat) {
         setDraftSessionSettings((previous) => createSessionSettings(mode, previous))
@@ -824,6 +864,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     setSearchQuery('')
     setCurrentChatState(null)
     currentChatRef.current = null
+    setCurrentCustomAssistantId(null)
     writeBrowserCurrentChatId(null)
     setCurrentModeState(appSettings.defaultMode)
     setDraftSessionSettings(
@@ -840,6 +881,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     setSearchQuery('')
     setCurrentChatState(null)
     currentChatRef.current = null
+    setCurrentCustomAssistantId(null)
     writeBrowserCurrentChatId(null)
     setDraftSessionSettings(createSessionSettings(currentMode, sessionSettings))
   }, [currentMode, sessionSettings])
@@ -1092,6 +1134,127 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     [requestJson]
   )
 
+  const setCurrentCustomAssistant = useCallback(
+    (assistantId: string | null) => {
+      const assistant = assistantId
+        ? customAssistants.find((item) => item.id === assistantId && item.isEnabled)
+        : null
+
+      if (!assistant) {
+        setCurrentCustomAssistantId(null)
+        return
+      }
+
+      setCurrentCustomAssistantId(assistant.id)
+      setCurrentModeState(assistant.baseMode)
+
+      const defaults = assistant.defaultSettings
+      const toolDefaults = defaults.tools ?? {}
+      const nextSettings = createSessionSettings(assistant.baseMode, {
+        ...(currentChat?.sessionSettings ?? draftSessionSettings),
+        temperature:
+          defaults.temperature ??
+          currentChat?.sessionSettings.temperature ??
+          draftSessionSettings.temperature,
+        maxTokens:
+          defaults.maxTokens ??
+          currentChat?.sessionSettings.maxTokens ??
+          draftSessionSettings.maxTokens,
+        topP:
+          defaults.topP ??
+          currentChat?.sessionSettings.topP ??
+          draftSessionSettings.topP,
+        modelOverride:
+          assistant.defaultModelOverride ??
+          defaults.modelOverride ??
+          currentChat?.sessionSettings.modelOverride ??
+          draftSessionSettings.modelOverride,
+        webSearch:
+          toolDefaults.webSearch ??
+          currentChat?.sessionSettings.webSearch ??
+          draftSessionSettings.webSearch,
+        memory:
+          toolDefaults.memory ??
+          currentChat?.sessionSettings.memory ??
+          draftSessionSettings.memory,
+        fileContext:
+          toolDefaults.fileContext ??
+          currentChat?.sessionSettings.fileContext ??
+          draftSessionSettings.fileContext,
+      })
+
+      if (!currentChat) {
+        setDraftSessionSettings(nextSettings)
+        return
+      }
+
+      applyConversationPatch(currentChat.id, (conversation) =>
+        updateConversationSnapshot(conversation, {
+          mode: assistant.baseMode,
+          sessionSettings: nextSettings,
+          customAssistantId: assistant.id,
+          customAssistant: {
+            id: assistant.id,
+            name: assistant.name,
+            description: assistant.description,
+            iconEmoji: assistant.iconEmoji,
+            color: assistant.color,
+            baseMode: assistant.baseMode,
+          },
+        })
+      )
+    },
+    [applyConversationPatch, currentChat, customAssistants, draftSessionSettings]
+  )
+
+  const saveCustomAssistant = useCallback(
+    async (input: CustomAssistantInput & { id?: string }) => {
+      try {
+        const assistant = await requestJson<CustomAssistant>(
+          input.id
+            ? `/api/custom-assistants/${input.id}`
+            : '/api/custom-assistants',
+          {
+            method: input.id ? 'PATCH' : 'POST',
+            body: JSON.stringify(input),
+          }
+        )
+
+        setCustomAssistants((previous) =>
+          sortCustomAssistants([
+            assistant,
+            ...previous.filter((item) => item.id !== assistant.id),
+          ])
+        )
+        return assistant
+      } catch (error) {
+        console.error('Failed to save custom assistant.', error)
+        return null
+      }
+    },
+    [requestJson]
+  )
+
+  const deleteCustomAssistant = useCallback(
+    async (assistantId: string) => {
+      try {
+        await requestJson(`/api/custom-assistants/${assistantId}`, {
+          method: 'DELETE',
+        })
+      } catch (error) {
+        console.error('Failed to delete custom assistant.', error)
+      }
+
+      setCustomAssistants((previous) =>
+        previous.filter((assistant) => assistant.id !== assistantId)
+      )
+      if (currentCustomAssistantId === assistantId) {
+        setCurrentCustomAssistantId(null)
+      }
+    },
+    [currentCustomAssistantId, requestJson]
+  )
+
   const applyLocalError = useCallback(
     (conversationId: string | undefined, messageId: string | undefined, error: string) => {
       if (!conversationId || !messageId) return
@@ -1288,6 +1451,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       conversation: Conversation
       optimisticConversation: Conversation
       attachments?: Attachment[]
+      customAssistantId?: string | null
       sendId?: string
     }) => {
       if (
@@ -1339,6 +1503,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
             targetMessageId: payload.targetMessageId,
             attachments: payload.attachments,
             attachmentContext: (payload.attachments ?? []).map(toAttachmentContext),
+            customAssistantId: payload.customAssistantId ?? null,
           } satisfies ChatRequest),
           signal: controller.signal,
         })
@@ -1674,7 +1839,12 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
   const executeSendMessage = useCallback(
     async (
-      { content, attachments = [], kind = 'chat' }: SendMessageInput,
+      {
+        content,
+        attachments = [],
+        kind = 'chat',
+        customAssistantId = currentCustomAssistantId,
+      }: SendMessageInput,
       options: {
         conversationId?: string
         mode: AIMode
@@ -1691,8 +1861,25 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         conversationId: options.conversationId,
         projectId: options.projectId,
         settings: options.settings,
+        customAssistantId,
       })
       const resolvedSend = resolveSend(pendingSend)
+      const customAssistant =
+        customAssistantId && resolvedSend.transport === 'text'
+          ? customAssistants.find(
+              (assistant) => assistant.id === customAssistantId && assistant.isEnabled
+            ) ?? null
+          : null
+      const customAssistantSnapshot = customAssistant
+        ? {
+            id: customAssistant.id,
+            name: customAssistant.name,
+            description: customAssistant.description,
+            iconEmoji: customAssistant.iconEmoji,
+            color: customAssistant.color,
+            baseMode: customAssistant.baseMode,
+          }
+        : null
 
       activeSendIdRef.current = resolvedSend.sendId
       setSendLifecycleStatus(
@@ -1717,17 +1904,25 @@ export function ChatProvider({ children }: { children: ReactNode }) {
           content,
           mode: resolvedSend.resolvedMode,
           attachments,
+          customAssistantId: customAssistant?.id ?? null,
+          customAssistant: customAssistantSnapshot,
         })
-        const placeholder = createAssistantPlaceholder({
-          mode: resolvedSend.resolvedMode,
-          settings: options.settings,
-          parentUserMessageId: userMessage.id,
-        })
+        const placeholder = {
+          ...createAssistantPlaceholder({
+            mode: resolvedSend.resolvedMode,
+            settings: options.settings,
+            parentUserMessageId: userMessage.id,
+          }),
+          customAssistantId: customAssistant?.id ?? null,
+          customAssistant: customAssistantSnapshot,
+        }
         placeholderId = placeholder.id
 
         const optimisticConversation = updateConversationSnapshot(conversation, {
           mode: resolvedSend.resolvedMode,
           sessionSettings: options.settings,
+          customAssistantId: customAssistant?.id ?? null,
+          customAssistant: customAssistantSnapshot,
           messages: [...conversation.messages, userMessage, placeholder],
         })
         optimisticConversationId = optimisticConversation.id
@@ -1747,6 +1942,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         const preparedOptimisticConversation = updateConversationSnapshot(conversation, {
           mode: resolvedSend.resolvedMode,
           sessionSettings: options.settings,
+          customAssistantId: customAssistant?.id ?? null,
+          customAssistant: customAssistantSnapshot,
           messages: [
             ...conversation.messages,
             {
@@ -1779,6 +1976,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
           conversation,
           optimisticConversation: preparedOptimisticConversation,
           attachments: uploadedAttachments,
+          customAssistantId: customAssistant?.id ?? null,
           sendId: resolvedSend.sendId,
         })
       } catch (error) {
@@ -1815,6 +2013,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     },
     [
       applyLocalError,
+      currentCustomAssistantId,
+      customAssistants,
       ensureConversationForMessage,
       finalizeSendLifecycle,
       runImageAction,
@@ -1839,6 +2039,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
   const { sendMessage } = useSendMessage({
     currentMode,
+    currentCustomAssistantId,
     currentChatId: currentChat?.id,
     currentChatSessionSettings: currentChat?.sessionSettings ?? null,
     draftSessionSettings,
@@ -1864,7 +2065,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
       if (runnableSteps.length === 0) return
 
-      await requestJson<PromptWorkflowRun>(
+      const run = await requestJson<PromptWorkflowRun>(
         `/api/prompt-workflows/${workflow.id}/runs`,
         {
           method: 'POST',
@@ -1879,12 +2080,87 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         }
       )
 
-      for (const { step, content } of runnableSteps) {
-        await sendMessage({
-          content,
-          kind: step.mode === 'image' ? 'image' : 'chat',
-          modeOverride: step.mode,
+      const patchWorkflowRun = async (input: {
+        status?: PromptWorkflowRunStatus
+        conversationId?: string | null
+        error?: string | null
+        step?: {
+          workflowStepId?: string | null
+          stepOrder?: number
+          status: PromptWorkflowRunStatus
+          messageId?: string | null
+          error?: string | null
+        }
+      }) => {
+        return await requestJson<PromptWorkflowRun>(
+          `/api/prompt-workflows/${workflow.id}/runs`,
+          {
+            method: 'PATCH',
+            body: JSON.stringify({
+              runId: run.id,
+              ...input,
+            }),
+          }
+        )
+      }
+
+      await patchWorkflowRun({ status: 'running' })
+
+      let activeStep: (typeof runnableSteps)[number] | null = null
+      try {
+        for (const item of runnableSteps) {
+          activeStep = item
+          await patchWorkflowRun({
+            step: {
+              workflowStepId: item.step.id,
+              stepOrder: item.step.order,
+              status: 'running',
+            },
+          })
+          await sendMessage({
+            content: item.content,
+            kind: item.step.mode === 'image' ? 'image' : 'chat',
+            modeOverride: item.step.mode,
+          })
+          await patchWorkflowRun({
+            step: {
+              workflowStepId: item.step.id,
+              stepOrder: item.step.order,
+              status: 'complete',
+            },
+          })
+        }
+
+        await patchWorkflowRun({
+          status: 'complete',
+          conversationId: currentChatRef.current?.id ?? run.conversationId ?? null,
         })
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : 'Workflow step dispatch failed.'
+
+        if (activeStep) {
+          await patchWorkflowRun({
+            step: {
+              workflowStepId: activeStep.step.id,
+              stepOrder: activeStep.step.order,
+              status: 'failed',
+              error: message,
+            },
+          }).catch((patchError) => {
+            console.error('Failed to mark workflow step as failed.', patchError)
+          })
+        }
+
+        await patchWorkflowRun({
+          status: 'failed',
+          conversationId: currentChatRef.current?.id ?? run.conversationId ?? null,
+          error: message,
+        }).catch((patchError) => {
+          console.error('Failed to mark workflow run as failed.', patchError)
+        })
+
+        throw error
       }
     },
     [promptWorkflows, requestJson, selectedProjectId, sendMessage]
@@ -1914,7 +2190,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         return result.comparison
       } catch (error) {
         console.error('Failed to compare models.', error)
-        return null
+        throw error
       }
     },
     [currentMode, requestJson, sessionSettings, upsertConversation]
@@ -1974,6 +2250,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       conversationId: currentChat.id,
       projectId: currentChat.projectId,
       settings: sessionSettings,
+      customAssistantId: currentCustomAssistantId ?? currentChat.customAssistantId ?? null,
     }).sendId
 
     activeSendIdRef.current = sendId
@@ -1996,9 +2273,17 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       settings: sessionSettings,
       conversation: currentChat,
       optimisticConversation,
+      customAssistantId: currentCustomAssistantId ?? currentChat.customAssistantId ?? null,
       sendId,
     })
-  }, [currentChat, currentMode, runImageAction, runTextAction, sessionSettings])
+  }, [
+    currentChat,
+    currentCustomAssistantId,
+    currentMode,
+    runImageAction,
+    runTextAction,
+    sessionSettings,
+  ])
 
   const retryLastMessage = useCallback(async () => {
     if (!currentChat) return
@@ -2034,6 +2319,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       conversationId: currentChat.id,
       projectId: currentChat.projectId,
       settings: sessionSettings,
+      customAssistantId: currentCustomAssistantId ?? currentChat.customAssistantId ?? null,
     }).sendId
 
     activeSendIdRef.current = sendId
@@ -2056,9 +2342,17 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       settings: sessionSettings,
       conversation: currentChat,
       optimisticConversation,
+      customAssistantId: currentCustomAssistantId ?? currentChat.customAssistantId ?? null,
       sendId,
     })
-  }, [currentChat, currentMode, runImageAction, runTextAction, sessionSettings])
+  }, [
+    currentChat,
+    currentCustomAssistantId,
+    currentMode,
+    runImageAction,
+    runTextAction,
+    sessionSettings,
+  ])
 
   const editLastUserMessage = useCallback(
     async (content: string, targetMessageId?: string) => {
@@ -2109,8 +2403,9 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         resolvedMode: currentMode,
         conversationId: currentChat.id,
         projectId: currentChat.projectId,
-        settings: sessionSettings,
-      }).sendId
+      settings: sessionSettings,
+      customAssistantId: currentCustomAssistantId ?? currentChat.customAssistantId ?? null,
+    }).sendId
 
       activeSendIdRef.current = sendId
 
@@ -2138,10 +2433,18 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         conversation: currentChat,
         optimisticConversation,
         attachments: editedUser.attachments,
+        customAssistantId: currentCustomAssistantId ?? currentChat.customAssistantId ?? null,
         sendId,
       })
     },
-    [currentChat, currentMode, runImageAction, runTextAction, sessionSettings]
+    [
+      currentChat,
+      currentCustomAssistantId,
+      currentMode,
+      runImageAction,
+      runTextAction,
+      sessionSettings,
+    ]
   )
 
   const askAnotherMode = useCallback(
@@ -2175,8 +2478,9 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         resolvedMode: mode,
         conversationId: currentChat.id,
         projectId: currentChat.projectId,
-        settings: sessionSettings,
-      }).sendId
+      settings: sessionSettings,
+      customAssistantId: currentCustomAssistantId ?? currentChat.customAssistantId ?? null,
+    }).sendId
 
       activeSendIdRef.current = sendId
 
@@ -2200,10 +2504,21 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         conversation: currentChat,
         optimisticConversation,
         targetMode: mode,
+        customAssistantId:
+          mode === currentMode
+            ? currentCustomAssistantId ?? currentChat.customAssistantId ?? null
+            : null,
         sendId,
       })
     },
-    [currentChat, currentMode, runImageAction, runTextAction, sessionSettings]
+    [
+      currentChat,
+      currentCustomAssistantId,
+      currentMode,
+      runImageAction,
+      runTextAction,
+      sessionSettings,
+    ]
   )
 
   const updateSessionSettings = useCallback(
@@ -2346,6 +2661,11 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       savePromptWorkflow,
       deletePromptWorkflow,
       runPromptWorkflow,
+      customAssistants,
+      currentCustomAssistantId,
+      setCurrentCustomAssistant,
+      saveCustomAssistant,
+      deleteCustomAssistant,
       runModelComparison,
       chooseModelComparisonResponse,
       beginPromptPrecheck,
@@ -2366,8 +2686,11 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       createNewChat,
       createProject,
       currentChat,
+      currentCustomAssistantId,
       currentMode,
+      customAssistants,
       deleteChat,
+      deleteCustomAssistant,
       deletePrompt,
       deletePromptWorkflow,
       editLastUserMessage,
@@ -2393,6 +2716,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       runModelComparison,
       runPromptWorkflow,
       saveAppSettings,
+      saveCustomAssistant,
       savePrompt,
       savePromptWorkflow,
       searchQuery,
@@ -2400,6 +2724,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       sendMessage,
       sessionSettings,
       setCurrentChat,
+      setCurrentCustomAssistant,
       setCurrentMode,
       setSelectedProjectId,
       signOut,
