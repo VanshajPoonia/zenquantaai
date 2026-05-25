@@ -70,6 +70,7 @@ export function ModelComparisonButton({
       .slice(0, 3)
   })
   const [comparison, setComparison] = useState<ModelComparison | null>(null)
+  const [comparisonError, setComparisonError] = useState<string | null>(null)
   const [isComparing, setIsComparing] = useState(false)
   const [savingCandidateId, setSavingCandidateId] = useState<string | null>(null)
 
@@ -92,12 +93,23 @@ export function ModelComparisonButton({
 
     setIsComparing(true)
     setComparison(null)
+    setComparisonError(null)
     try {
       const result = await runModelComparison({
         content: prompt,
         targetModes: selectedModes,
       })
       setComparison(result)
+      if (!result) {
+        setComparisonError('Comparison could not be created.')
+      }
+    } catch (error) {
+      setComparison(null)
+      setComparisonError(
+        error instanceof Error
+          ? error.message
+          : 'Comparison could not be created.'
+      )
     } finally {
       setIsComparing(false)
     }
@@ -248,6 +260,10 @@ export function ModelComparisonButton({
                     </Button>
                   </div>
                 ))}
+              </div>
+            ) : comparisonError ? (
+              <div className="rounded-2xl border border-destructive/40 bg-destructive/10 px-4 py-5 text-sm text-destructive">
+                {comparisonError}
               </div>
             ) : (
               <div className="rounded-2xl border border-dashed border-border/60 bg-card/30 px-4 py-8 text-center text-sm text-muted-foreground">

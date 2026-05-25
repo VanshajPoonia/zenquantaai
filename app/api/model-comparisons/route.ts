@@ -110,9 +110,40 @@ export async function POST(request: NextRequest) {
   const storedConversation = body?.conversationId
     ? await neonConversationRepository.get(auth.user.id, body.conversationId)
     : null
+
+  if (body?.conversationId && !storedConversation) {
+    return NextResponse.json({ error: 'Conversation not found.' }, { status: 404 })
+  }
+
   const appSettings = await neonSettingsRepository.get(auth.user.id)
   const subscription = await neonSubscriptionsRepository.ensureForUser(auth.user)
   const override = await neonUsageLimitOverridesRepository.getByUserId(auth.user.id)
+  const allowedModels = getAllowedModelsForTier(subscription.tier)
+  const accessibleTargets = targetModes
+    .map((mode) => {
+      const routeConfig = resolveModelConfig(mode, 'auto', subscription.tier)
+      const overrideAllowsModel =
+        override?.allowedModelOverrides?.includes(routeConfig.model) ?? false
+
+      return {
+        mode,
+        routeConfig,
+        accessible:
+          allowedModels.includes(routeConfig.model) || overrideAllowsModel,
+      }
+    })
+    .filter((target) => target.accessible)
+
+  if (accessibleTargets.length < 2) {
+    return NextResponse.json(
+      {
+        error:
+          'Choose at least two assistants available on your current plan.',
+      },
+      { status: 400 }
+    )
+  }
+
   const effectiveSubscription = getEffectiveSubscription(subscription, override)
   const providedSettings = body?.settings
     ? ({
@@ -141,25 +172,16 @@ export async function POST(request: NextRequest) {
     auth.user.id,
     prepared.conversation
   )
-  const allowedModels = getAllowedModelsForTier(subscription.tier)
   const candidates: Array<
     Omit<ModelComparisonCandidate, 'comparisonId' | 'createdAt' | 'updatedAt'>
   > = []
 
-  for (const mode of targetModes) {
+  for (const { mode, routeConfig } of accessibleTargets) {
     const startedAt = Date.now()
-    const routeConfig = resolveModelConfig(mode, 'auto', subscription.tier)
     const assistantFamily = getAssistantFamilyFromMode(mode)
     const label = routeConfig.label
 
     try {
-      const overrideAllowsModel =
-        override?.allowedModelOverrides?.includes(routeConfig.model) ?? false
-
-      if (!allowedModels.includes(routeConfig.model) && !overrideAllowsModel) {
-        throw new Error('That assistant profile is not available on your current plan.')
-      }
-
       const webSearchContext = shouldUseWebSearch(mode, settings)
         ? await searchWebForContext(buildWebSearchQuery(content))
         : undefined
@@ -257,6 +279,16 @@ export async function POST(request: NextRequest) {
         sources: [],
       })
     }
+  }
+
+  if (!candidates.some((candidate) => candidate.status === 'complete')) {
+    return NextResponse.json(
+      {
+        error: 'Comparison failed for every selected assistant.',
+        candidates,
+      },
+      { status: 502 }
+    )
   }
 
   const comparison = await neonModelComparisonsRepository.create(auth.user.id, {
