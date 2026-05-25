@@ -258,3 +258,163 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
 
   const scrollToMessage = (messageId?: string) => {
     if (!messageId) return
+
+    window.setTimeout(() => {
+      document
+        .getElementById(`message-${messageId}`)
+        ?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+    }, 180)
+  }
+
+  const executeTarget = async (target: SearchResultTarget) => {
+    switch (target.type) {
+      case 'open_project':
+        setSelectedProjectId(target.projectId)
+        goHome()
+        return
+      case 'open_conversation':
+        await openConversation(target.conversationId)
+        scrollToMessage(target.messageId)
+        return
+      case 'open_prompt_library':
+        openWorkspaceTool('prompt-library')
+        return
+      case 'run_prompt_workflow':
+        await runPromptWorkflow(target.workflowId)
+        return
+      case 'switch_custom_assistant':
+        setCurrentCustomAssistant(target.assistantId)
+        return
+      case 'open_custom_assistants':
+        openWorkspaceTool('custom-assistants')
+        return
+      case 'open_model_comparison':
+        if (target.conversationId) {
+          await openConversation(target.conversationId)
+          return
+        }
+        openWorkspaceTool('model-comparison')
+        return
+      case 'open_prism_history':
+        if (target.conversationId) {
+          await openConversation(target.conversationId)
+          return
+        }
+        router.push('/dashboard')
+        return
+      case 'open_url':
+        router.push(target.url)
+        return
+    }
+  }
+
+  const openWorkspaceUrl = (url: string) => {
+    void runAction(() => {
+      router.push(url)
+    })
+  }
+
+  return (
+    <CommandDialog
+      open={open}
+      onOpenChange={handleOpenChange}
+      title="Search Zenquanta"
+      description="Search workspace data and run workspace actions."
+      className="max-w-3xl rounded-2xl border-border/70 bg-background/95 shadow-2xl"
+    >
+      <CommandInput
+        value={query}
+        onValueChange={setQuery}
+        placeholder="Search workspace or run a command..."
+      />
+      <CommandList className="max-h-[70vh]">
+        <CommandEmpty>No matching commands or workspace results.</CommandEmpty>
+
+        {trimmedQuery.length >= 2 ? (
+          <CommandGroup heading="Workspace Results">
+            {isSearching ? (
+              <CommandItem disabled value="search-loading">
+                <Loader2 className="size-4 animate-spin" />
+                <span>Searching workspace...</span>
+              </CommandItem>
+            ) : null}
+
+            {searchError ? (
+              <CommandItem disabled value="search-error">
+                <Search className="size-4 text-destructive" />
+                <span>{searchError}</span>
+              </CommandItem>
+            ) : null}
+
+            {!isSearching && !searchError && results.length === 0 ? (
+              <CommandItem disabled value="search-empty">
+                <Search className="size-4" />
+                <span>No workspace results for {trimmedQuery}.</span>
+              </CommandItem>
+            ) : null}
+
+            {results.map((result) => (
+              <CommandItem
+                key={`${result.entityType}-${result.id}`}
+                value={resultValue(result)}
+                onSelect={() => void runAction(() => executeTarget(result.target))}
+                className="items-start gap-3"
+              >
+                <div className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg border border-border/60 bg-card/70">
+                  {resultIcon(result.entityType)}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <span className="truncate text-sm font-medium">
+                      {result.title}
+                    </span>
+                    <span className="shrink-0 rounded-md border border-border/60 px-1.5 py-0.5 text-[10px] uppercase tracking-[0.12em] text-muted-foreground">
+                      {ENTITY_LABELS[result.entityType]}
+                    </span>
+                  </div>
+                  {result.snippet ? (
+                    <p className="mt-1 line-clamp-2 text-xs leading-5 text-muted-foreground">
+                      {result.snippet}
+                    </p>
+                  ) : null}
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    {metadataBadges(result.metadata).map((badge) => (
+                      <span
+                        key={badge}
+                        className="rounded-md bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground"
+                      >
+                        {badge}
+                      </span>
+                    ))}
+                    <span className="rounded-md bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                      {formatResultDate(result.updatedAt ?? result.createdAt)}
+                    </span>
+                  </div>
+                </div>
+              </CommandItem>
+            ))}
+          </CommandGroup>
+        ) : null}
+
+        <CommandGroup heading="Actions">
+          <CommandItem
+            value="new chat start conversation"
+            onSelect={() => void runAction(createNewChat)}
+          >
+            <Plus className="size-4" />
+            <span>New chat</span>
+          </CommandItem>
+          <CommandItem
+            value={`new project create folder ${projectName}`}
+            onSelect={() =>
+              void runAction(async () => {
+                const project = await createProject(projectName)
+                if (!project) return
+                setSelectedProjectId(project.id)
+                goHome()
+              })
+            }
+          >
+            <FolderPlus className="size-4" />
+            <span className="truncate">
+              {trimmedQuery ? `New project: ${trimmedQuery}` : 'New project'}
