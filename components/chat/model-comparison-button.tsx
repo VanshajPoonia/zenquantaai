@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Check, GitCompareArrows, Loader2, Trophy } from 'lucide-react'
 import { MODE_CONFIGS } from '@/lib/config'
 import { getAssistantFamilyFromMode } from '@/lib/config/assistants'
@@ -58,6 +58,8 @@ export function ModelComparisonButton({
     currentMode,
     runModelComparison,
     chooseModelComparisonResponse,
+    workspaceToolRequest,
+    clearWorkspaceToolRequest,
   } = useChatContext()
   const [open, setOpen] = useState(false)
   const [selectedModes, setSelectedModes] = useState<AIMode[]>(() => {
@@ -76,6 +78,13 @@ export function ModelComparisonButton({
 
   const prompt = value.trim()
   const canCompare = prompt.length > 0 && selectedModes.length >= 2 && !isComparing
+
+  useEffect(() => {
+    if (workspaceToolRequest?.tool !== 'model-comparison') return
+
+    setOpen(true)
+    clearWorkspaceToolRequest(workspaceToolRequest.requestId)
+  }, [clearWorkspaceToolRequest, workspaceToolRequest])
 
   const toggleMode = (mode: AIMode) => {
     setSelectedModes((previous) => {
