@@ -4,13 +4,69 @@ import { eq } from 'drizzle-orm'
 import {
   createSessionSettings,
   DEFAULT_APP_SETTINGS,
+  ONBOARDING_ASSISTANT_MODES,
+  ONBOARDING_USE_CASES,
+  ONBOARDING_VERSION,
   OPENROUTER_DEFAULT_BASE_URL,
+  STARTER_PACKS,
 } from '@/lib/config'
-import { AppSettings, AppSettingsPatch } from '@/types'
+import {
+  AppSettings,
+  AppSettingsPatch,
+  OnboardingState,
+  OnboardingUseCase,
+  StarterPackId,
+} from '@/types'
 import { getDatabaseClient } from '../client'
 import { zenUserSettings } from '../schema'
 import { toJsonObject } from './helpers'
 import { neonUsersRepository } from './users'
+
+const ONBOARDING_USE_CASE_IDS = new Set(
+  ONBOARDING_USE_CASES.map((useCase) => useCase.id)
+)
+const STARTER_PACK_IDS = new Set(Object.keys(STARTER_PACKS) as StarterPackId[])
+const ONBOARDING_MODE_IDS = new Set(ONBOARDING_ASSISTANT_MODES)
+
+function isOnboardingUseCase(value: unknown): value is OnboardingUseCase {
+  return (
+    typeof value === 'string' &&
+    ONBOARDING_USE_CASE_IDS.has(value as OnboardingUseCase)
+  )
+}
+
+function isStarterPackId(value: unknown): value is StarterPackId {
+  return typeof value === 'string' && STARTER_PACK_IDS.has(value as StarterPackId)
+}
+
+function normalizeOnboarding(input?: Partial<OnboardingState>): OnboardingState {
+  const status =
+    input?.status === 'completed' || input?.status === 'skipped'
+      ? input.status
+      : 'not_started'
+
+  return {
+    status,
+    version: ONBOARDING_VERSION,
+    useCase: isOnboardingUseCase(input?.useCase) ? input.useCase : null,
+    defaultMode:
+      typeof input?.defaultMode === 'string' &&
+      ONBOARDING_MODE_IDS.has(input.defaultMode)
+        ? input.defaultMode
+        : null,
+    starterPackId: isStarterPackId(input?.starterPackId)
+      ? input.starterPackId
+      : null,
+    starterProjectId:
+      typeof input?.starterProjectId === 'string' ? input.starterProjectId : null,
+    installedPromptIds: Array.isArray(input?.installedPromptIds)
+      ? input.installedPromptIds.filter((id): id is string => typeof id === 'string')
+      : [],
+    completedAt: typeof input?.completedAt === 'string' ? input.completedAt : null,
+    skippedAt: typeof input?.skippedAt === 'string' ? input.skippedAt : null,
+    updatedAt: typeof input?.updatedAt === 'string' ? input.updatedAt : null,
+  }
+}
 
 function normalizeSettings(input: Partial<AppSettings>): AppSettings {
   const defaultMode = input.defaultMode ?? DEFAULT_APP_SETTINGS.defaultMode
@@ -59,6 +115,7 @@ function normalizeSettings(input: Partial<AppSettings>): AppSettings {
       openRouterBaseUrl:
         input.gatewayDrafts?.openRouterBaseUrl ?? OPENROUTER_DEFAULT_BASE_URL,
     },
+    onboarding: normalizeOnboarding(input.onboarding),
   }
 }
 
@@ -112,6 +169,10 @@ class NeonSettingsRepository {
       gatewayDrafts: {
         ...current.gatewayDrafts,
         ...settings.gatewayDrafts,
+      },
+      onboarding: {
+        ...current.onboarding,
+        ...settings.onboarding,
       },
     })
 
