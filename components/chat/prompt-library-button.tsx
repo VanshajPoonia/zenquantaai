@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   ArrowDown,
   ArrowUp,
@@ -143,6 +143,8 @@ export function PromptLibraryButton({
     deletePromptWorkflow,
     runPromptWorkflow,
     selectedProjectId,
+    workspaceToolRequest,
+    clearWorkspaceToolRequest,
   } = useChatContext()
   const [promptTitle, setPromptTitle] = useState('')
   const [isPopoverOpen, setIsPopoverOpen] = useState(false)
@@ -162,6 +164,13 @@ export function PromptLibraryButton({
         : [],
     [workflowDraft]
   )
+
+  useEffect(() => {
+    if (workspaceToolRequest?.tool !== 'prompt-library') return
+
+    setIsPopoverOpen(true)
+    clearWorkspaceToolRequest(workspaceToolRequest.requestId)
+  }, [clearWorkspaceToolRequest, workspaceToolRequest])
 
   const openWorkflowEditor = (workflow: PromptWorkflow | null) => {
     setWorkflowDraft(workflowToDraft(workflow, selectedProjectId))
