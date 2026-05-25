@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { BotIcon, PencilIcon, PlusIcon, Trash2Icon } from 'lucide-react'
 import { useChatContext } from '@/lib/chat-context'
 import { cn } from '@/lib/utils'
@@ -100,6 +100,8 @@ export function CustomAssistantButton() {
     setCurrentCustomAssistant,
     saveCustomAssistant,
     deleteCustomAssistant,
+    workspaceToolRequest,
+    clearWorkspaceToolRequest,
   } = useChatContext()
   const [open, setOpen] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -117,6 +119,13 @@ export function CustomAssistantButton() {
     () => customAssistants.find((assistant) => assistant.id === editingId) ?? null,
     [customAssistants, editingId]
   )
+
+  useEffect(() => {
+    if (workspaceToolRequest?.tool !== 'custom-assistants') return
+
+    setOpen(true)
+    clearWorkspaceToolRequest(workspaceToolRequest.requestId)
+  }, [clearWorkspaceToolRequest, workspaceToolRequest])
 
   const startCreate = () => {
     setEditingId(null)
