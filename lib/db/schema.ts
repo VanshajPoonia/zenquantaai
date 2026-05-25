@@ -34,6 +34,8 @@ const assistantFamilyCheck = [
   'prism',
 ] as const
 
+const textModeCheck = ['general', 'creative', 'logic', 'code', 'live'] as const
+
 export const zenUsers = pgTable(
   'zen_users',
   {
@@ -264,6 +266,43 @@ export const zenUsageLimitOverrides = pgTable('zen_usage_limit_overrides', {
   ...timestamps,
 })
 
+export const zenCustomAssistants = pgTable(
+  'zen_custom_assistants',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => zenUsers.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    description: text('description').notNull().default(''),
+    iconEmoji: text('icon_emoji').notNull().default('✨'),
+    color: text('color').notNull().default('general'),
+    baseMode: text('base_mode').notNull().default('general'),
+    systemInstructions: text('system_instructions').notNull(),
+    defaultModelOverride: text('default_model_override').notNull().default('auto'),
+    defaultSettings: jsonb('default_settings').notNull().default({}),
+    isEnabled: boolean('is_enabled').notNull().default(true),
+    ...timestamps,
+  },
+  (table) => [
+    index('zen_custom_assistants_user_updated_idx').on(
+      table.userId,
+      table.updatedAt
+    ),
+    check(
+      'zen_custom_assistants_base_mode_check',
+      sql`${table.baseMode} in (${sql.join(
+        textModeCheck.map((mode) => sql`${mode}`),
+        sql`, `
+      )})`
+    ),
+    check(
+      'zen_custom_assistants_default_model_override_check',
+      sql`${table.defaultModelOverride} in ('auto', 'gemini', 'claude', 'gpt', 'deepseek', 'qwen')`
+    ),
+  ]
+)
+
 export const zenProjects = pgTable(
   'zen_projects',
   {
@@ -298,6 +337,11 @@ export const zenConversations = pgTable(
     preview: text('preview').notNull().default(''),
     messageCount: integer('message_count').notNull().default(0),
     sessionSettings: jsonb('session_settings').notNull().default({}),
+    customAssistantId: uuid('custom_assistant_id').references(
+      () => zenCustomAssistants.id,
+      { onDelete: 'set null' }
+    ),
+    customAssistant: jsonb('custom_assistant'),
     usage: jsonb('usage'),
     memorySummary: text('memory_summary'),
     memoryUpdatedAt: timestamp('memory_updated_at', { withTimezone: true }),
@@ -334,6 +378,11 @@ export const zenMessages = pgTable(
     error: text('error'),
     parentUserMessageId: text('parent_user_message_id'),
     branchLabel: text('branch_label'),
+    customAssistantId: uuid('custom_assistant_id').references(
+      () => zenCustomAssistants.id,
+      { onDelete: 'set null' }
+    ),
+    customAssistant: jsonb('custom_assistant'),
     attachments: jsonb('attachments').notNull().default([]),
     usage: jsonb('usage'),
     sources: jsonb('sources').notNull().default([]),
