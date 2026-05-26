@@ -15,6 +15,12 @@ import {
   AIMode,
   AppSettings,
   AppSettingsPatch,
+  Artifact,
+  ArtifactActionResponse,
+  ArtifactActionType,
+  ArtifactInput,
+  ArtifactListFilters,
+  ArtifactPatch,
   Attachment,
   AuthState,
   Chat,
@@ -35,6 +41,7 @@ import {
   PromptWorkflow,
   PromptWorkflowInput,
   PromptWorkflowRun,
+  PromptWorkflowRunHistoryItem,
   PromptWorkflowRunStatus,
   SearchScope,
   SendLifecycleStatus,
@@ -125,11 +132,26 @@ interface RunModelComparisonInput {
   targetModes: AIMode[]
 }
 
-type WorkspaceTool = 'prompt-library' | 'model-comparison' | 'custom-assistants'
+type WorkspaceTool =
+  | 'prompt-library'
+  | 'playbooks'
+  | 'model-comparison'
+  | 'custom-assistants'
+  | 'artifacts'
+
+type WorkspaceToolRequestInput =
+  | WorkspaceTool
+  | {
+      tool: WorkspaceTool
+      artifactId?: string | null
+      projectId?: string | null
+    }
 
 interface WorkspaceToolRequest {
   requestId: number
   tool: WorkspaceTool
+  artifactId?: string | null
+  projectId?: string | null
 }
 
 interface WorkspaceSearchRequest {
@@ -210,6 +232,9 @@ interface ChatContextType {
     input: SavePromptWorkflowInput
   ) => Promise<PromptWorkflow | null>
   deletePromptWorkflow: (workflowId: string) => Promise<void>
+  listPromptWorkflowRuns: (
+    workflowId: string
+  ) => Promise<PromptWorkflowRunHistoryItem[]>
   runPromptWorkflow: (
     workflowId: string,
     variableValues?: Record<string, string>
@@ -221,6 +246,17 @@ interface ChatContextType {
     input: CustomAssistantInput & { id?: string }
   ) => Promise<CustomAssistant | null>
   deleteCustomAssistant: (assistantId: string) => Promise<void>
+  listArtifacts: (filters?: ArtifactListFilters) => Promise<Artifact[]>
+  saveArtifact: (input: ArtifactInput) => Promise<Artifact | null>
+  updateArtifact: (
+    artifactId: string,
+    patch: ArtifactPatch
+  ) => Promise<Artifact | null>
+  deleteArtifact: (artifactId: string) => Promise<void>
+  runArtifactAction: (
+    artifactId: string,
+    actionType: ArtifactActionType
+  ) => Promise<ArtifactActionResponse>
   runModelComparison: (
     input: RunModelComparisonInput
   ) => Promise<ModelComparison | null>
@@ -232,7 +268,7 @@ interface ChatContextType {
   awaitRecommendationDecision: () => void
   clearPromptPrecheck: () => void
   workspaceToolRequest: WorkspaceToolRequest | null
-  openWorkspaceTool: (tool: WorkspaceTool) => void
+  openWorkspaceTool: (request: WorkspaceToolRequestInput) => void
   clearWorkspaceToolRequest: (requestId: number) => void
   workspaceSearchRequest: WorkspaceSearchRequest | null
   openWorkspaceSearch: (request?: {
@@ -964,11 +1000,14 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     [commitState, requestJson]
   )
 
-  const openWorkspaceTool = useCallback((tool: WorkspaceTool) => {
+  const openWorkspaceTool = useCallback((request: WorkspaceToolRequestInput) => {
+    const payload = typeof request === 'string' ? { tool: request } : request
     workspaceToolRequestIdRef.current += 1
     setWorkspaceToolRequest({
       requestId: workspaceToolRequestIdRef.current,
-      tool,
+      tool: payload.tool,
+      artifactId: payload.artifactId ?? null,
+      projectId: payload.projectId ?? null,
     })
   }, [])
 
@@ -1380,6 +1419,20 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     [requestJson]
   )
 
+  const listPromptWorkflowRuns = useCallback(
+    async (workflowId: string): Promise<PromptWorkflowRunHistoryItem[]> => {
+      try {
+        return await requestJson<PromptWorkflowRunHistoryItem[]>(
+          `/api/prompt-workflows/${workflowId}/runs`
+        )
+      } catch (error) {
+        console.error('Failed to load AI Playbook runs.', error)
+        throw error
+      }
+    },
+    [requestJson]
+  )
+
   const setCurrentCustomAssistant = useCallback(
     (assistantId: string | null) => {
       const assistant = assistantId
@@ -1499,6 +1552,86 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       }
     },
     [currentCustomAssistantId, requestJson]
+  )
+
+  const listArtifacts = useCallback(
+    async (filters: ArtifactListFilters = {}) => {
+      const params = new URLSearchParams()
+
+      if (filters.projectId) params.set('projectId', filters.projectId)
+      if (filters.q) params.set('q', filters.q)
+      if (filters.artifactType) params.set('artifactType', filters.artifactType)
+      if (filters.sourceType) params.set('sourceType', filters.sourceType)
+
+      const query = params.toString()
+      return await requestJson<Artifact[]>(
+        query ? `/api/artifacts?${query}` : '/api/artifacts'
+      )
+    },
+    [requestJson]
+  )
+
+  const saveArtifact = useCallback(
+    async (input: ArtifactInput) => {
+      try {
+        const artifact = await requestJson<Artifact>('/api/artifacts', {
+          method: 'POST',
+          body: JSON.stringify(input),
+        })
+
+        openWorkspaceTool({
+          tool: 'artifacts',
+          artifactId: artifact.id,
+          projectId: artifact.projectId,
+        })
+        return artifact
+      } catch (error) {
+        console.error('Failed to save artifact.', error)
+        return null
+      }
+    },
+    [openWorkspaceTool, requestJson]
+  )
+
+  const updateArtifact = useCallback(
+    async (artifactId: string, patch: ArtifactPatch) => {
+      try {
+        return await requestJson<Artifact>(`/api/artifacts/${artifactId}`, {
+          method: 'PATCH',
+          body: JSON.stringify(patch),
+        })
+      } catch (error) {
+        console.error('Failed to update artifact.', error)
+        return null
+      }
+    },
+    [requestJson]
+  )
+
+  const deleteArtifact = useCallback(
+    async (artifactId: string) => {
+      try {
+        await requestJson(`/api/artifacts/${artifactId}`, {
+          method: 'DELETE',
+        })
+      } catch (error) {
+        console.error('Failed to delete artifact.', error)
+      }
+    },
+    [requestJson]
+  )
+
+  const runArtifactAction = useCallback(
+    async (artifactId: string, actionType: ArtifactActionType) => {
+      return await requestJson<ArtifactActionResponse>(
+        `/api/artifacts/${artifactId}/actions`,
+        {
+          method: 'POST',
+          body: JSON.stringify({ actionType }),
+        }
+      )
+    },
+    [requestJson]
   )
 
   const applyLocalError = useCallback(
@@ -1746,6 +1879,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       const controller = new AbortController()
       streamAbortRef.current = controller
       let terminalEvent: 'done' | 'error' | null = null
+      let completedConversation: Conversation | null = null
 
       try {
         const response = await fetch('/api/chat', {
@@ -1857,6 +1991,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
             }
             case 'done': {
               terminalEvent = 'done'
+              completedConversation = event.conversation
               upsertConversation(event.conversation)
               setStreamingState({ status: 'idle' })
               break
@@ -1880,12 +2015,12 @@ export function ChatProvider({ children }: { children: ReactNode }) {
             payload.optimisticConversation.id,
             payload.optimisticConversation.messages.at(-1)?.id
           )
-          return
+          return null
         }
 
         if (terminalEvent === 'error') {
           finalizeSendLifecycle(payload.sendId, 'failed')
-          return
+          return null
         }
 
         if (terminalEvent !== 'done') {
@@ -1899,6 +2034,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         })
         setStreamingState({ status: 'idle' })
         finalizeSendLifecycle(payload.sendId)
+        return completedConversation
       } catch (error) {
         const lastMessageId = payload.optimisticConversation.messages.at(-1)?.id
 
@@ -1911,7 +2047,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
           applyLocalError(payload.optimisticConversation.id, lastMessageId, 'Generation stopped.')
           setStreamingState({ status: 'idle' })
           finalizeSendLifecycle(payload.sendId)
-          return
+          return null
         }
 
         const message =
@@ -1933,6 +2069,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
           error: message,
         })
         finalizeSendLifecycle(payload.sendId, 'failed')
+        return null
       } finally {
         streamAbortRef.current = null
       }
@@ -2033,7 +2170,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
             payload.optimisticConversation.id,
             payload.optimisticConversation.messages.at(-1)?.id
           )
-          return
+          return null
         }
 
         debugSendPipeline('response-parsed', {
@@ -2047,6 +2184,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         upsertConversation(data.conversation)
         setStreamingState({ status: 'idle' })
         finalizeSendLifecycle(payload.sendId)
+        return data.conversation
       } catch (error) {
         const lastMessageId = payload.optimisticConversation.messages.at(-1)?.id
 
@@ -2063,7 +2201,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
           )
           setStreamingState({ status: 'idle' })
           finalizeSendLifecycle(payload.sendId)
-          return
+          return null
         }
 
         const message =
@@ -2085,6 +2223,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
           error: message,
         })
         finalizeSendLifecycle(payload.sendId, 'failed')
+        return null
       } finally {
         streamAbortRef.current = null
       }
@@ -2216,7 +2355,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         })
 
         if (resolvedSend.transport === 'image') {
-          await runImageAction({
+          return await runImageAction({
             action: 'send',
             content,
             mode: resolvedSend.resolvedMode,
@@ -2226,10 +2365,9 @@ export function ChatProvider({ children }: { children: ReactNode }) {
             attachments: uploadedAttachments,
             sendId: resolvedSend.sendId,
           })
-          return
         }
 
-        await runTextAction({
+        return await runTextAction({
           action: 'send',
           content,
           mode: resolvedSend.resolvedMode,
@@ -2316,6 +2454,10 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       const workflow = promptWorkflows.find((item) => item.id === workflowId)
       if (!workflow) return
 
+      if (hasActiveSend()) {
+        throw new Error('Finish the current response before running an AI Playbook.')
+      }
+
       const orderedSteps = [...workflow.steps].sort((a, b) => a.order - b.order)
       const runnableSteps = orderedSteps
         .map((step) => ({
@@ -2326,16 +2468,18 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
       if (runnableSteps.length === 0) return
 
+      const projectId =
+        selectedProjectId === 'all'
+          ? workflow.projectId ?? DEFAULT_PROJECT_ID
+          : selectedProjectId
+
       const run = await requestJson<PromptWorkflowRun>(
         `/api/prompt-workflows/${workflow.id}/runs`,
         {
           method: 'POST',
           body: JSON.stringify({
             conversationId: currentChatRef.current?.id ?? null,
-            projectId:
-              selectedProjectId === 'all'
-                ? workflow.projectId ?? DEFAULT_PROJECT_ID
-                : selectedProjectId,
+            projectId,
             variableValues,
           }),
         }
@@ -2378,16 +2522,39 @@ export function ChatProvider({ children }: { children: ReactNode }) {
               status: 'running',
             },
           })
-          await sendMessage({
-            content: item.content,
-            kind: item.step.mode === 'image' ? 'image' : 'chat',
-            modeOverride: item.step.mode,
-          })
+          const conversation = await executeSendMessage(
+            {
+              content: item.content,
+              kind: item.step.mode === 'image' ? 'image' : 'chat',
+              modeOverride: item.step.mode,
+              customAssistantId: null,
+            },
+            {
+              conversationId: currentChatRef.current?.id,
+              mode: item.step.mode,
+              settings: normalizeModeSessionSettings(item.step.mode, sessionSettings),
+              projectId,
+            }
+          )
+          const outputMessage = [...(conversation?.messages ?? [])]
+            .reverse()
+            .find(
+              (message) =>
+                message.role === 'assistant' &&
+                message.status !== 'error' &&
+                message.content.trim().length > 0
+            )
+
+          if (!conversation || !outputMessage) {
+            throw new Error('AI Playbook step did not complete.')
+          }
+
           await patchWorkflowRun({
             step: {
               workflowStepId: item.step.id,
               stepOrder: item.step.order,
               status: 'complete',
+              messageId: outputMessage.id,
             },
           })
         }
@@ -2424,7 +2591,14 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         throw error
       }
     },
-    [promptWorkflows, requestJson, selectedProjectId, sendMessage]
+    [
+      executeSendMessage,
+      hasActiveSend,
+      promptWorkflows,
+      requestJson,
+      selectedProjectId,
+      sessionSettings,
+    ]
   )
 
   const runModelComparison = useCallback(
@@ -2929,12 +3103,18 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       promptWorkflows,
       savePromptWorkflow,
       deletePromptWorkflow,
+      listPromptWorkflowRuns,
       runPromptWorkflow,
       customAssistants,
       currentCustomAssistantId,
       setCurrentCustomAssistant,
       saveCustomAssistant,
       deleteCustomAssistant,
+      listArtifacts,
+      saveArtifact,
+      updateArtifact,
+      deleteArtifact,
+      runArtifactAction,
       runModelComparison,
       chooseModelComparisonResponse,
       beginPromptPrecheck,
@@ -2968,6 +3148,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       currentCustomAssistantId,
       currentMode,
       customAssistants,
+      deleteArtifact,
       deleteChat,
       deleteCustomAssistant,
       deletePrompt,
@@ -2979,6 +3160,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       isSidebarOpen,
       isStreaming,
       isOnboardingOpen,
+      listArtifacts,
+      listPromptWorkflowRuns,
       openConversation,
       openOnboarding,
       openProjectHome,
@@ -2998,8 +3181,10 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       requestPasswordSignUp,
       requestPasswordReset,
       retryLastMessage,
+      runArtifactAction,
       runModelComparison,
       runPromptWorkflow,
+      saveArtifact,
       saveAppSettings,
       saveCustomAssistant,
       savePrompt,
@@ -3018,6 +3203,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       stopStreaming,
       streamingState,
       togglePinChat,
+      updateArtifact,
       updateApiSettings,
       updateSessionSettings,
       uploadProjectFiles,
