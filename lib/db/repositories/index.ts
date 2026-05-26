@@ -1,6 +1,10 @@
 import 'server-only'
 
 export { neonAdminRepository } from './admin'
+export {
+  ArtifactReferenceNotFoundError,
+  neonArtifactsRepository,
+} from './artifacts'
 export { neonAssistantRecommendationEventsRepository } from './assistant-recommendations'
 export { neonConversationRepository } from './conversations'
 export { neonCustomAssistantsRepository } from './custom-assistants'
