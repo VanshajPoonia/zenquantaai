@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
-import { ImagePlus } from 'lucide-react'
+import { BookOpen, FileText, ImagePlus } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useChatContext } from '@/lib/chat-context'
 import { AIMode, Attachment, MODE_CONFIGS, PendingAttachment } from '@/lib/types'
@@ -39,6 +39,7 @@ export function Composer({ onSend, disabled, initialValue = '' }: ComposerProps)
     isStreaming,
     queuedPromptCount,
     stopStreaming,
+    openWorkspaceTool,
   } = useChatContext()
   const [value, setValue] = useState(initialValue)
   const [composerKind, setComposerKind] = useState<'chat' | 'image'>('chat')
@@ -275,6 +276,40 @@ export function Composer({ onSend, disabled, initialValue = '' }: ComposerProps)
                   requestAnimationFrame(() => textareaRef.current?.focus())
                 }}
               />
+              <TooltipProvider delayDuration={300}>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-sm"
+                      className="text-muted-foreground hover:text-foreground"
+                      disabled={disabled}
+                      onClick={() => openWorkspaceTool('playbooks')}
+                    >
+                      <BookOpen className="size-4" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>AI Playbooks</TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+              <TooltipProvider delayDuration={300}>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-sm"
+                      className="text-muted-foreground hover:text-foreground"
+                      disabled={disabled}
+                      onClick={() => openWorkspaceTool('artifacts')}
+                    >
+                      <FileText className="size-4" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>Artifact Studio</TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
               <ModelComparisonButton
                 value={value}
                 disabled={disabled || composerKind === 'image'}
