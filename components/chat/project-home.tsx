@@ -32,6 +32,7 @@ import { cn } from '@/lib/utils'
 import {
   ProjectHomeFileSummary,
   ProjectHomeGeneratedImageSummary,
+  ProjectHomeArtifactSummary,
   ProjectHomeResponse,
   ProjectHomeSuggestedAction,
   ProjectHomeWorkflowSummary,
@@ -255,6 +256,14 @@ export function ProjectHome({ projectId }: ProjectHomeProps) {
     [home?.workflows, query]
   )
 
+  const filteredArtifacts = useMemo(
+    () =>
+      (home?.artifacts ?? []).filter((artifact) =>
+        matchesSearch(query, artifact.title, artifact.artifactType, artifact.sourceType)
+      ),
+    [home?.artifacts, query]
+  )
+
   const openProjectConversation = async (
     conversationId: string | null,
     messageId?: string | null
@@ -305,7 +314,7 @@ export function ProjectHome({ projectId }: ProjectHomeProps) {
 
   const runWorkflow = async (workflow: ProjectHomeWorkflowSummary) => {
     if (workflow.variableCount > 0) {
-      openWorkspaceTool('prompt-library')
+      openWorkspaceTool({ tool: 'playbooks', projectId })
       return
     }
 
@@ -327,7 +336,7 @@ export function ProjectHome({ projectId }: ProjectHomeProps) {
         uploadInputRef.current?.click()
         return
       case 'run_workflow':
-        openWorkspaceTool('prompt-library')
+        openWorkspaceTool({ tool: 'playbooks', projectId })
         return
       case 'review_images':
         imagesSectionRef.current?.scrollIntoView({
@@ -377,7 +386,8 @@ export function ProjectHome({ projectId }: ProjectHomeProps) {
     filteredConversations.length > 0 ||
     filteredFiles.length > 0 ||
     filteredImages.length > 0 ||
-    filteredWorkflows.length > 0
+    filteredWorkflows.length > 0 ||
+    filteredArtifacts.length > 0
 
   return (
     <div className="mx-auto w-full max-w-6xl space-y-8 px-4 py-6">
@@ -443,7 +453,7 @@ export function ProjectHome({ projectId }: ProjectHomeProps) {
           </Alert>
         ) : null}
 
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-7">
           <StatTile
             label="Chats"
             value={home.overview.conversationCount}
@@ -466,6 +476,11 @@ export function ProjectHome({ projectId }: ProjectHomeProps) {
             icon={ImageIcon}
           />
           <StatTile
+            label="Artifacts"
+            value={home.overview.artifactCount}
+            icon={FileText}
+          />
+          <StatTile
             label="Memory"
             value={home.overview.memoryConversationCount}
             icon={Zap}
@@ -473,7 +488,7 @@ export function ProjectHome({ projectId }: ProjectHomeProps) {
         </div>
       </div>
 
-      <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-6">
+      <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-7">
         <Button type="button" variant="secondary" onClick={handleNewChat}>
           <MessageSquarePlus className="mr-2 size-4" />
           New chat
@@ -490,10 +505,18 @@ export function ProjectHome({ projectId }: ProjectHomeProps) {
         <Button
           type="button"
           variant="outline"
-          onClick={() => openWorkspaceTool('prompt-library')}
+          onClick={() => openWorkspaceTool({ tool: 'playbooks', projectId })}
         >
           <Play className="mr-2 size-4" />
-          Run workflow
+          Run playbook
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => openWorkspaceTool({ tool: 'artifacts', projectId })}
+        >
+          <FileText className="mr-2 size-4" />
+          Artifacts
         </Button>
         <Button type="button" variant="outline" onClick={handleGenerateImage}>
           <ImageIcon className="mr-2 size-4" />
@@ -625,6 +648,58 @@ export function ProjectHome({ projectId }: ProjectHomeProps) {
         )}
       </Section>
 
+      <Section
+        title="Recent artifacts"
+        action={
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="rounded-xl"
+            onClick={() => openWorkspaceTool({ tool: 'artifacts', projectId })}
+          >
+            <FolderOpen className="mr-2 size-4" />
+            Open studio
+          </Button>
+        }
+      >
+        {filteredArtifacts.length > 0 ? (
+          <div className="grid gap-3 lg:grid-cols-2">
+            {filteredArtifacts.map((artifact: ProjectHomeArtifactSummary) => (
+              <button
+                key={artifact.id}
+                type="button"
+                className="rounded-2xl border border-border/60 bg-card/45 p-4 text-left transition-colors hover:border-primary/35 hover:bg-card/70"
+                onClick={() =>
+                  openWorkspaceTool({
+                    tool: 'artifacts',
+                    artifactId: artifact.id,
+                    projectId,
+                  })
+                }
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium text-foreground">
+                      {artifact.title}
+                    </p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {artifact.artifactType} · {artifact.sourceType}
+                    </p>
+                  </div>
+                  <ArrowRight className="size-4 shrink-0 text-muted-foreground" />
+                </div>
+                <p className="mt-3 text-xs text-muted-foreground">
+                  Updated {formatDate(artifact.updatedAt)}
+                </p>
+              </button>
+            ))}
+          </div>
+        ) : (
+          <EmptyPanel>No artifacts are scoped to this project.</EmptyPanel>
+        )}
+      </Section>
+
       <div className="grid gap-8 xl:grid-cols-2">
         <Section title="Uploaded files">
           {filteredFiles.length > 0 ? (
@@ -726,10 +801,10 @@ export function ProjectHome({ projectId }: ProjectHomeProps) {
             variant="outline"
             size="sm"
             className="rounded-xl"
-            onClick={() => openWorkspaceTool('prompt-library')}
+            onClick={() => openWorkspaceTool({ tool: 'playbooks', projectId })}
           >
             <FolderOpen className="mr-2 size-4" />
-            Open library
+            Open AI Playbooks
           </Button>
         }
       >
