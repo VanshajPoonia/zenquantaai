@@ -402,6 +402,90 @@ export interface Project {
   isDefault?: boolean
 }
 
+export type ArtifactSourceType =
+  | 'chat_message'
+  | 'model_comparison'
+  | 'workflow_run'
+  | 'manual'
+  | 'prism_prompt'
+  | 'pulse_report'
+
+export type ArtifactType =
+  | 'document'
+  | 'code'
+  | 'table'
+  | 'image_prompt'
+  | 'research_report'
+  | 'brand_asset'
+  | 'checklist'
+  | 'workflow_output'
+
+export interface Artifact {
+  id: string
+  userId: string
+  projectId?: string | null
+  conversationId?: string | null
+  sourceMessageId?: string | null
+  sourceType: ArtifactSourceType
+  title: string
+  artifactType: ArtifactType
+  content: string
+  metadata: Record<string, unknown>
+  createdAt: string
+  updatedAt: string
+}
+
+export interface ArtifactInput {
+  projectId?: string | null
+  conversationId?: string | null
+  sourceMessageId?: string | null
+  sourceType: ArtifactSourceType
+  title: string
+  artifactType: ArtifactType
+  content: string
+  metadata?: Record<string, unknown>
+}
+
+export interface ArtifactPatch {
+  projectId?: string | null
+  title?: string
+  artifactType?: ArtifactType
+  content?: string
+  metadata?: Record<string, unknown>
+}
+
+export interface ArtifactListFilters {
+  projectId?: string | null
+  q?: string
+  artifactType?: ArtifactType | null
+  sourceType?: ArtifactSourceType | null
+}
+
+export type ArtifactActionType =
+  | 'improve_writing'
+  | 'make_shorter'
+  | 'make_more_professional'
+  | 'expand_detail'
+  | 'turn_into_checklist'
+  | 'turn_into_email'
+  | 'create_summary'
+  | 'find_weaknesses'
+
+export interface ArtifactActionRequest {
+  actionType: ArtifactActionType
+}
+
+export interface ArtifactActionResponse {
+  artifactId: string
+  actionType: ArtifactActionType
+  content: string
+  mode: TextAIMode
+  assistantFamily: AssistantFamily
+  model: string
+  usage?: UsageEstimate
+  truncated: boolean
+}
+
 export interface PromptLibraryItem {
   id: string
   title: string
@@ -498,6 +582,31 @@ export interface PromptWorkflowRun {
   stepRuns: PromptWorkflowStepRun[]
 }
 
+export interface PromptWorkflowRunOutputMessage {
+  stepRunId: string
+  stepOrder: number
+  workflowStepId?: string | null
+  messageId: string
+  conversationId: string
+  assistantFamily: AssistantFamily
+  mode: AIMode
+  content: string
+  createdAt: string
+}
+
+export interface PromptWorkflowRunHistoryItem extends PromptWorkflowRun {
+  outputMessages: PromptWorkflowRunOutputMessage[]
+  finalOutput?: PromptWorkflowRunOutputMessage | null
+}
+
+export interface PlaybookTemplate {
+  id: string
+  title: string
+  description: string
+  tags: string[]
+  input: PromptWorkflowInput
+}
+
 export type ModelComparisonStatus = 'running' | 'complete' | 'failed'
 
 export interface ModelComparisonCandidate {
@@ -544,6 +653,7 @@ export type SearchEntityType =
   | 'project'
   | 'conversation'
   | 'message'
+  | 'artifact'
   | 'prompt'
   | 'prompt_workflow'
   | 'custom_assistant'
@@ -554,6 +664,7 @@ export type SearchEntityType =
 export type SearchResultTarget =
   | { type: 'open_project'; projectId: string }
   | { type: 'open_conversation'; conversationId: string; messageId?: string }
+  | { type: 'open_artifact'; artifactId: string; projectId?: string | null }
   | { type: 'open_prompt_library'; promptId?: string; workflowId?: string }
   | { type: 'run_prompt_workflow'; workflowId: string }
   | { type: 'switch_custom_assistant'; assistantId: string }
@@ -598,6 +709,7 @@ export interface ProjectHomeOverview {
   fileCount: number
   workflowCount: number
   generatedImageCount: number
+  artifactCount: number
   memoryConversationCount: number
 }
 
@@ -652,6 +764,17 @@ export interface ProjectHomeWorkflowSummary {
   updatedAt: string
 }
 
+export interface ProjectHomeArtifactSummary {
+  id: string
+  title: string
+  artifactType: ArtifactType
+  sourceType: ArtifactSourceType
+  conversationId: string | null
+  sourceMessageId: string | null
+  createdAt: string
+  updatedAt: string
+}
+
 export interface ProjectHomeMemoryStatus {
   status: 'empty' | 'active'
   conversationCount: number
@@ -673,6 +796,7 @@ export interface ProjectHomeResponse {
   uploadedFiles: ProjectHomeFileSummary[]
   generatedImages: ProjectHomeGeneratedImageSummary[]
   workflows: ProjectHomeWorkflowSummary[]
+  artifacts: ProjectHomeArtifactSummary[]
   memoryStatus: ProjectHomeMemoryStatus
   suggestedActions: ProjectHomeSuggestedAction[]
   generatedAt: string
