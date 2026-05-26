@@ -11,6 +11,8 @@ import { ChatArea } from './chat-area'
 import { SettingsPanel } from './settings-panel'
 import { SettingsModal } from './settings-modal'
 import { AssistantHelpDialog } from './assistant-help-dialog'
+import { CommandPalette } from './command-palette'
+import { OnboardingDialog } from './onboarding-dialog'
 
 function LoadingScreen() {
   return (
@@ -30,6 +32,7 @@ function ChatShell({
   setIsSettingsModalOpen: (value: boolean) => void
 }) {
   const [isAssistantHelpOpen, setIsAssistantHelpOpen] = useState(false)
+  const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false)
   const { authState, isSidebarOpen, toggleSidebar } = useChatContext()
 
   if (authState.status === 'loading') {
@@ -60,6 +63,7 @@ function ChatShell({
         <Header
           onOpenSettings={() => setIsSettingsModalOpen(true)}
           onOpenAssistantHelp={() => setIsAssistantHelpOpen(true)}
+          onOpenCommandPalette={() => setIsCommandPaletteOpen(true)}
         />
 
         <div className="flex min-h-0 flex-1 overflow-hidden">
@@ -72,6 +76,13 @@ function ChatShell({
         open={isAssistantHelpOpen}
         onOpenChange={setIsAssistantHelpOpen}
       />
+
+      <CommandPalette
+        open={isCommandPaletteOpen}
+        onOpenChange={setIsCommandPaletteOpen}
+      />
+
+      <OnboardingDialog />
 
       <SettingsModal
         open={isSettingsModalOpen}
