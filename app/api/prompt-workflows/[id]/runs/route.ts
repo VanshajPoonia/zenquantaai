@@ -85,6 +85,30 @@ export async function POST(
   return response
 }
 
+export async function GET(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const auth = await requireAuthenticatedUser(request)
+  if ('response' in auth) return auth.response
+
+  await neonProfilesRepository.ensureFromAuthUser(auth.user)
+  const { id } = await params
+
+  const runs = await neonPromptWorkflowsRepository.listRuns(auth.user.id, id)
+  if (!runs) {
+    return NextResponse.json({ error: 'Workflow not found.' }, { status: 404 })
+  }
+
+  const response = NextResponse.json(runs)
+
+  if (auth.session.refreshed) {
+    appendAuthCookies(response.headers, auth.session)
+  }
+
+  return response
+}
+
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
