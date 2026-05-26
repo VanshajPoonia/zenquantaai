@@ -13,6 +13,8 @@ import { SettingsModal } from './settings-modal'
 import { AssistantHelpDialog } from './assistant-help-dialog'
 import { CommandPalette } from './command-palette'
 import { OnboardingDialog } from './onboarding-dialog'
+import { ArtifactStudio } from './artifact-studio'
+import { PlaybookStudio } from './playbook-studio'
 
 function LoadingScreen() {
   return (
@@ -89,6 +91,9 @@ function ChatShell({
       />
 
       <OnboardingDialog />
+
+      <ArtifactStudio />
+      <PlaybookStudio />
 
       <SettingsModal
         open={isSettingsModalOpen}
