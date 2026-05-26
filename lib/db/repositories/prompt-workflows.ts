@@ -11,12 +11,16 @@ import {
   PromptWorkflow,
   PromptWorkflowInput,
   PromptWorkflowRun,
+  PromptWorkflowRunHistoryItem,
+  PromptWorkflowRunOutputMessage,
   PromptWorkflowRunStatus,
   PromptWorkflowStep,
   PromptWorkflowStepRun,
 } from '@/types'
 import { getDatabaseClient } from '../client'
 import {
+  zenConversations,
+  zenMessages,
   zenPromptWorkflowRuns,
   zenPromptWorkflows,
   zenPromptWorkflowStepRuns,
@@ -36,6 +40,7 @@ type WorkflowRow = typeof zenPromptWorkflows.$inferSelect
 type WorkflowStepRow = typeof zenPromptWorkflowSteps.$inferSelect
 type WorkflowRunRow = typeof zenPromptWorkflowRuns.$inferSelect
 type WorkflowStepRunRow = typeof zenPromptWorkflowStepRuns.$inferSelect
+type MessageRow = typeof zenMessages.$inferSelect
 
 function isTerminalRunStatus(status: PromptWorkflowRunStatus | undefined): boolean {
   return status === 'complete' || status === 'failed' || status === 'cancelled'
@@ -111,6 +116,23 @@ function rowToRun(
     stepRuns: stepRuns
       .map(rowToStepRun)
       .sort((a, b) => a.stepOrder - b.stepOrder),
+  }
+}
+
+function stepRunOutputFromMessage(
+  stepRun: PromptWorkflowStepRun,
+  message: MessageRow
+): PromptWorkflowRunOutputMessage {
+  return {
+    stepRunId: stepRun.id,
+    stepOrder: stepRun.stepOrder,
+    workflowStepId: stepRun.workflowStepId,
+    messageId: message.id,
+    conversationId: message.conversationId,
+    assistantFamily: stepRun.assistantFamily,
+    mode: stepRun.mode,
+    content: message.content,
+    createdAt: toIsoString(message.createdAt),
   }
 }
 
@@ -374,6 +396,95 @@ class NeonPromptWorkflowsRepository {
       .orderBy(asc(zenPromptWorkflowStepRuns.stepOrder))
 
     return rowToRun(rows[0], stepRuns)
+  }
+
+  async listRuns(
+    userId: string,
+    workflowId: string,
+    limit = 20
+  ): Promise<PromptWorkflowRunHistoryItem[] | null> {
+    const workflow = await this.get(userId, workflowId)
+    if (!workflow) return null
+
+    const db = getDatabaseClient()
+    const rows = await db
+      .select()
+      .from(zenPromptWorkflowRuns)
+      .where(
+        and(
+          eq(zenPromptWorkflowRuns.userId, userId),
+          eq(zenPromptWorkflowRuns.workflowId, workflowId)
+        )
+      )
+      .orderBy(desc(zenPromptWorkflowRuns.createdAt))
+      .limit(Math.min(Math.max(limit, 1), 50))
+
+    if (rows.length === 0) return []
+
+    const stepRuns = await db
+      .select()
+      .from(zenPromptWorkflowStepRuns)
+      .where(
+        inArray(
+          zenPromptWorkflowStepRuns.runId,
+          rows.map((row) => row.id)
+        )
+      )
+      .orderBy(asc(zenPromptWorkflowStepRuns.stepOrder))
+
+    const messageIds = stepRuns
+      .map((stepRun) => stepRun.messageId)
+      .filter((messageId): messageId is string => Boolean(messageId))
+
+    const messages =
+      messageIds.length > 0
+        ? await db
+            .select({ message: zenMessages })
+            .from(zenMessages)
+            .innerJoin(
+              zenConversations,
+              eq(zenConversations.id, zenMessages.conversationId)
+            )
+            .where(
+              and(
+                eq(zenConversations.userId, userId),
+                inArray(zenMessages.id, messageIds)
+              )
+            )
+        : []
+
+    const messagesById = new Map(
+      messages.map(({ message }) => [message.id, message])
+    )
+    const stepRunsByRun = new Map<string, WorkflowStepRunRow[]>()
+
+    for (const stepRun of stepRuns) {
+      stepRunsByRun.set(stepRun.runId, [
+        ...(stepRunsByRun.get(stepRun.runId) ?? []),
+        stepRun,
+      ])
+    }
+
+    return rows.map((row) => {
+      const run = rowToRun(row, stepRunsByRun.get(row.id) ?? [])
+      const outputMessages = run.stepRuns
+        .map((stepRun) => {
+          const message = stepRun.messageId
+            ? messagesById.get(stepRun.messageId)
+            : null
+          return message ? stepRunOutputFromMessage(stepRun, message) : null
+        })
+        .filter(
+          (message): message is PromptWorkflowRunOutputMessage => Boolean(message)
+        )
+        .sort((a, b) => a.stepOrder - b.stepOrder)
+
+      return {
+        ...run,
+        outputMessages,
+        finalOutput: outputMessages.at(-1) ?? null,
+      }
+    })
   }
 
   async updateRunStatus(
