@@ -306,12 +306,12 @@ export function PromptLibraryButton({
                   Prompt Library
                 </h3>
                 <p className="text-xs text-muted-foreground">
-                  Save prompts or run reusable multi-step workflows.
+                  Save prompts or open reusable AI Playbooks.
                 </p>
               </div>
               <TabsList className="grid w-full grid-cols-2">
                 <TabsTrigger value="prompts">Prompts</TabsTrigger>
-                <TabsTrigger value="workflows">Workflows</TabsTrigger>
+                <TabsTrigger value="workflows">AI Playbooks</TabsTrigger>
               </TabsList>
             </div>
 
@@ -400,7 +400,7 @@ export function PromptLibraryButton({
                 onClick={() => openWorkflowEditor(null)}
               >
                 <Plus className="mr-2 size-4" />
-                New workflow
+                New AI Playbook
               </Button>
               <div className="max-h-80 space-y-2 overflow-y-auto pr-1">
                 {promptWorkflows.length > 0 ? (
@@ -452,13 +452,13 @@ export function PromptLibraryButton({
                         onClick={() => prepareWorkflowRun(workflow)}
                       >
                         <Play className="mr-2 size-4" />
-                        Run workflow
+                        Run AI Playbook
                       </Button>
                     </div>
                   ))
                 ) : (
                   <div className="rounded-2xl border border-dashed border-border/60 bg-card/30 px-3 py-6 text-center text-sm text-muted-foreground">
-                    No workflows saved yet.
+                    No AI Playbooks saved yet.
                   </div>
                 )}
               </div>
@@ -471,7 +471,7 @@ export function PromptLibraryButton({
         <DialogContent className="max-h-[90vh] w-[calc(100vw-1rem)] max-w-3xl overflow-y-auto rounded-2xl border-border/70 bg-background/95">
           <DialogHeader>
             <DialogTitle>
-              {workflowDraft?.id ? 'Edit workflow' : 'Create workflow'}
+              {workflowDraft?.id ? 'Edit AI Playbook' : 'Create AI Playbook'}
             </DialogTitle>
             <DialogDescription>
               Build a short ordered sequence. Use variables like {'{{topic}}'} in
@@ -488,7 +488,7 @@ export function PromptLibraryButton({
                       previous ? { ...previous, title: event.target.value } : previous
                     )
                   }
-                  placeholder="Workflow title"
+                  placeholder="AI Playbook title"
                 />
                 <Input
                   value={workflowDraft.description}
@@ -670,7 +670,7 @@ export function PromptLibraryButton({
               }
               onClick={() => void saveWorkflowDraft()}
             >
-              Save workflow
+              Save AI Playbook
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -679,9 +679,9 @@ export function PromptLibraryButton({
       <Dialog open={Boolean(runWorkflow)} onOpenChange={(open) => !open && setRunWorkflow(null)}>
         <DialogContent className="w-[calc(100vw-1rem)] max-w-lg rounded-2xl border-border/70 bg-background/95">
           <DialogHeader>
-            <DialogTitle>Run workflow</DialogTitle>
+            <DialogTitle>Run AI Playbook</DialogTitle>
             <DialogDescription>
-              Fill the variables, then each workflow step will be queued into the
+              Fill the variables, then each AI Playbook step will be queued into the
               current chat.
             </DialogDescription>
           </DialogHeader>
@@ -707,7 +707,7 @@ export function PromptLibraryButton({
                 ))
               ) : (
                 <div className="rounded-2xl border border-border/60 bg-card/40 px-3 py-4 text-sm text-muted-foreground">
-                  This workflow has no variables.
+                  This AI Playbook has no variables.
                 </div>
               )}
               <div className="space-y-1 rounded-2xl border border-border/60 bg-card/40 p-3">
@@ -745,7 +745,7 @@ export function PromptLibraryButton({
               disabled={isRunningWorkflow}
               onClick={() => void executeWorkflowRun()}
             >
-              Queue steps
+              Run AI Playbook
             </Button>
           </DialogFooter>
         </DialogContent>
