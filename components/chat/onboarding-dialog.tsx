@@ -238,3 +238,83 @@ export function OnboardingDialog() {
                             ? 'border-primary bg-primary/10'
                             : 'border-border/70 bg-card/50 hover:border-border hover:bg-card/80'
                         )}
+                      >
+                        <div className="flex items-center gap-3">
+                          <span className="flex size-10 items-center justify-center rounded-xl border border-border/70 bg-background/70">
+                            <ModeIcon mode={mode} size="sm" />
+                          </span>
+                          <span className="font-semibold">{config.name}</span>
+                        </div>
+                        <p className="mt-3 line-clamp-3 text-xs leading-5 text-muted-foreground">
+                          {config.description}
+                        </p>
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            ) : null}
+
+            {currentStep === 2 ? (
+              <div className="space-y-5">
+                <div>
+                  <h3 className="text-lg font-semibold">
+                    Create a starter project?
+                  </h3>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    Recommended project: {starterPack.projectName}.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setCreateStarterProject((previous) => !previous)}
+                  className="flex w-full items-start gap-4 rounded-2xl border border-border/70 bg-card/60 p-5 text-left transition-colors hover:bg-card/80"
+                >
+                  <Checkbox
+                    checked={createStarterProject}
+                    className="mt-1 pointer-events-none"
+                  />
+                  <div>
+                    <p className="font-semibold">{starterPack.projectName}</p>
+                    <p className="mt-1 text-sm leading-6 text-muted-foreground">
+                      {starterPack.projectDescription}
+                    </p>
+                  </div>
+                </button>
+              </div>
+            ) : null}
+
+            {currentStep === 3 ? (
+              <div className="space-y-5">
+                <div>
+                  <h3 className="text-lg font-semibold">
+                    Install starter prompts?
+                  </h3>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    Selected pack: {starterPack.label}.
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setInstallStarterPrompts((previous) => !previous)}
+                  className="flex w-full items-start gap-4 rounded-2xl border border-border/70 bg-card/60 p-5 text-left transition-colors hover:bg-card/80"
+                >
+                  <Checkbox
+                    checked={installStarterPrompts}
+                    className="mt-1 pointer-events-none"
+                  />
+                  <div>
+                    <p className="font-semibold">Prompt library starter pack</p>
+                    <p className="mt-1 text-sm leading-6 text-muted-foreground">
+                      {starterPack.description}
+                    </p>
+                  </div>
+                </button>
+
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {PACK_IDS.map((packId) => {
+                    const pack = STARTER_PACKS[packId]
+                    const active = packId === starterPackId
+
+                    return (
