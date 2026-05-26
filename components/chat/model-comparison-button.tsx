@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Check, GitCompareArrows, Loader2, Trophy } from 'lucide-react'
+import { Check, FileText, GitCompareArrows, Loader2, Trophy } from 'lucide-react'
 import { MODE_CONFIGS } from '@/lib/config'
 import { getAssistantFamilyFromMode } from '@/lib/config/assistants'
 import { cn } from '@/lib/utils'
@@ -58,6 +58,7 @@ export function ModelComparisonButton({
     currentMode,
     runModelComparison,
     chooseModelComparisonResponse,
+    saveArtifact,
     workspaceToolRequest,
     clearWorkspaceToolRequest,
   } = useChatContext()
@@ -75,6 +76,8 @@ export function ModelComparisonButton({
   const [comparisonError, setComparisonError] = useState<string | null>(null)
   const [isComparing, setIsComparing] = useState(false)
   const [savingCandidateId, setSavingCandidateId] = useState<string | null>(null)
+  const [savingArtifactCandidateId, setSavingArtifactCandidateId] =
+    useState<string | null>(null)
 
   const prompt = value.trim()
   const canCompare = prompt.length > 0 && selectedModes.length >= 2 && !isComparing
@@ -140,6 +143,43 @@ export function ModelComparisonButton({
       }
     } finally {
       setSavingCandidateId(null)
+    }
+  }
+
+  const saveCandidateArtifact = async (candidateId: string) => {
+    if (!comparison) return
+    const candidate = comparison.candidates.find((item) => item.id === candidateId)
+    if (!candidate || candidate.status !== 'complete' || !candidate.content.trim()) {
+      return
+    }
+
+    setSavingArtifactCandidateId(candidateId)
+    try {
+      const artifact = await saveArtifact({
+        title: `${candidate.label} comparison response`,
+        content: candidate.content,
+        artifactType: /```[\s\S]+```/.test(candidate.content)
+          ? 'code'
+          : 'document',
+        sourceType: 'model_comparison',
+        projectId: comparison.projectId,
+        conversationId: comparison.conversationId,
+        metadata: {
+          savedFrom: 'model_comparison',
+          comparisonId: comparison.id,
+          candidateId: candidate.id,
+          assistantFamily: candidate.assistantFamily,
+          mode: candidate.mode,
+          model: candidate.model,
+          label: candidate.label,
+          selected: comparison.selectedCandidateId === candidate.id,
+        },
+      })
+      if (artifact) {
+        setOpen(false)
+      }
+    } finally {
+      setSavingArtifactCandidateId(null)
     }
   }
 
@@ -250,23 +290,42 @@ export function ModelComparisonButton({
                       )}
                     </div>
 
-                    <Button
-                      type="button"
-                      className="mt-3 w-full rounded-xl"
-                      disabled={
-                        candidate.status !== 'complete' ||
-                        Boolean(comparison.selectedCandidateId) ||
-                        Boolean(savingCandidateId)
-                      }
-                      onClick={() => void saveCandidate(candidate.id)}
-                    >
-                      {savingCandidateId === candidate.id ? (
-                        <Loader2 className="mr-2 size-4 animate-spin" />
-                      ) : (
-                        <Trophy className="mr-2 size-4" />
-                      )}
-                      Save as best
-                    </Button>
+                    <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
+                      <Button
+                        type="button"
+                        className="rounded-xl"
+                        disabled={
+                          candidate.status !== 'complete' ||
+                          Boolean(comparison.selectedCandidateId) ||
+                          Boolean(savingCandidateId)
+                        }
+                        onClick={() => void saveCandidate(candidate.id)}
+                      >
+                        {savingCandidateId === candidate.id ? (
+                          <Loader2 className="mr-2 size-4 animate-spin" />
+                        ) : (
+                          <Trophy className="mr-2 size-4" />
+                        )}
+                        Save as best
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="rounded-xl"
+                        disabled={
+                          candidate.status !== 'complete' ||
+                          Boolean(savingArtifactCandidateId)
+                        }
+                        onClick={() => void saveCandidateArtifact(candidate.id)}
+                      >
+                        {savingArtifactCandidateId === candidate.id ? (
+                          <Loader2 className="mr-2 size-4 animate-spin" />
+                        ) : (
+                          <FileText className="mr-2 size-4" />
+                        )}
+                        Save artifact
+                      </Button>
+                    </div>
                   </div>
                 ))}
               </div>
