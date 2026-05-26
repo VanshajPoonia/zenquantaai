@@ -7,6 +7,7 @@ import { AIMode, MODE_CONFIGS } from '@/lib/types'
 import { ModeIcon, getModeAccentClass, getModeGradient, getModeGlow } from '@/lib/mode-utils'
 import { ModeSwitcher } from './mode-switcher'
 import { ChevronRightIcon } from '@/components/icons'
+import { Button } from '@/components/ui/button'
 
 interface SuggestedPromptCardProps {
   prompt: string
@@ -64,7 +65,7 @@ interface EmptyStateProps {
 }
 
 export function EmptyState({ onPromptSelect }: EmptyStateProps) {
-  const { currentMode } = useChatContext()
+  const { currentMode, openOnboarding } = useChatContext()
   const modeConfig = MODE_CONFIGS[currentMode]
 
   return (
@@ -126,6 +127,16 @@ export function EmptyState({ onPromptSelect }: EmptyStateProps) {
         {/* Mode Switcher */}
         <div className="mb-12 animate-in fade-in slide-in-from-bottom-2 duration-500 delay-200 fill-mode-both">
           <ModeSwitcher />
+          <div className="mt-4 flex justify-center">
+            <Button
+              type="button"
+              variant="outline"
+              className="rounded-xl"
+              onClick={openOnboarding}
+            >
+              Personalize workspace
+            </Button>
+          </div>
         </div>
 
         {/* Suggested Prompts */}
