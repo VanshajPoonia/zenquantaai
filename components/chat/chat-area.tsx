@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useChatContext } from '@/lib/chat-context'
+import { ArtifactSourceType, ArtifactType, Message } from '@/types'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { ChatMessage } from './message'
@@ -19,6 +20,7 @@ export function ChatArea() {
     retryLastMessage,
     editLastUserMessage,
     askAnotherMode,
+    saveArtifact,
     streamingState,
   } = useChatContext()
   const [selectedPrompt, setSelectedPrompt] = useState('')
@@ -76,6 +78,65 @@ export function ChatArea() {
   }) => {
     setSelectedPrompt('')
     await sendMessage(input)
+  }
+
+  const getArtifactTitle = (content: string) => {
+    const heading =
+      content
+        .split('\n')
+        .map((line) => line.trim())
+        .find((line) => line.startsWith('# '))
+        ?.replace(/^#+\s*/, '') ??
+      content
+        .split('\n')
+        .map((line) => line.trim())
+        .find(Boolean) ??
+      'Saved artifact'
+
+    return heading.length > 80 ? `${heading.slice(0, 77).trimEnd()}...` : heading
+  }
+
+  const inferArtifactType = (message: Message): ArtifactType => {
+    if (message.mode === 'image') return 'image_prompt'
+    if (message.sources?.some((source) => source.kind === 'web')) {
+      return 'research_report'
+    }
+    if (/```[\s\S]+```/.test(message.content)) return 'code'
+    if (/^\s*\|.+\|\s*$/m.test(message.content)) return 'table'
+    if (/^\s*[-*]\s+\[[ xX]\]/m.test(message.content)) return 'checklist'
+    return 'document'
+  }
+
+  const inferSourceType = (message: Message): ArtifactSourceType => {
+    if (message.mode === 'image') return 'prism_prompt'
+    if (message.mode === 'live' || message.sources?.some((source) => source.kind === 'web')) {
+      return 'pulse_report'
+    }
+    return 'chat_message'
+  }
+
+  const handleSaveMessageArtifact = async (message: Message) => {
+    if (!currentChat || message.role !== 'assistant' || !message.content.trim()) {
+      return
+    }
+
+    await saveArtifact({
+      title: getArtifactTitle(message.content),
+      content: message.content,
+      artifactType: inferArtifactType(message),
+      sourceType: inferSourceType(message),
+      projectId: currentChat.projectId,
+      conversationId: currentChat.id,
+      sourceMessageId: message.id,
+      metadata: {
+        savedFrom: 'assistant_message',
+        assistantFamily: message.assistantFamily ?? null,
+        mode: message.mode,
+        model: message.model ?? null,
+        provider: message.provider ?? null,
+        sourceCount: message.sources?.length ?? 0,
+      },
+    })
   }
 
   const showProjectHome = !currentChat && Boolean(activeProjectHomeId)
@@ -141,6 +202,7 @@ export function ChatArea() {
                   onRetry={retryLastMessage}
                   onEdit={editLastUserMessage}
                   onAskAnotherMode={askAnotherMode}
+                  onSaveArtifact={handleSaveMessageArtifact}
                 />
               </div>
             ))}
