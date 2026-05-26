@@ -10,6 +10,7 @@ import {
 import {
   AIMode,
   Attachment,
+  Conversation,
   PendingAttachment,
   ResolvedSend,
   SessionSettings,
@@ -65,7 +66,7 @@ export function useSendMessage(input: {
       settings: SessionSettings
       projectId: string
     }
-  ) => Promise<void>
+  ) => Promise<Conversation | null>
 }) {
   const preparePendingSend = useCallback(
     (payload: UseSendMessageInput): PreparedSendDispatch => {
