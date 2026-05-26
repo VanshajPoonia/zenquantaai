@@ -2,7 +2,7 @@
 
 ## Current Status
 
-The repository contains a real Zenquanta AI platform backed by Neon for runtime app data and credentials auth, neutral private file storage for new uploads/generated images, and OpenRouter for AI transport. Shared AI project memory files exist at the repo root. The workspace now includes Neon-backed global search through `/api/search`, a Cmd/Ctrl+K command palette, and first-run onboarding through `/api/onboarding`. The prompt library includes reusable Neon-backed prompt workflows, the composer includes text model comparison mode, and the admin dashboard includes filtered cost/margin analytics.
+The repository contains a real Zenquanta AI platform backed by Neon for runtime app data and credentials auth, neutral private file storage for new uploads/generated images, and OpenRouter for AI transport. Shared AI project memory files exist at the repo root. The workspace now includes Neon-backed global search through `/api/search`, a Cmd/Ctrl+K command palette, first-run onboarding through `/api/onboarding`, and Artifact Studio through `/api/artifacts`. The prompt library includes reusable Neon-backed prompt workflows, the composer includes text model comparison mode, and the admin dashboard includes filtered cost/margin analytics.
 
 Current direction: plan upgrades remain manual/admin-driven, payment automation is out of scope unless explicitly requested, and Neon/storage start fresh without importing Supabase database rows or storage objects.
 
@@ -52,6 +52,24 @@ Audit date: 2026-05-26. Documentation-only audit before new product features; no
 - `npm run lint` passed after the audit entry with 14 existing warnings: `<img>` usage in chat image/message components, hook dependency cleanup in `components/chat/composer.tsx`, several unused variables/imports, and the existing toast action type warning.
 
 ## Completed Work
+
+### 2026-05-26 - AI-Assisted Artifact Actions V1
+
+- Added protected `/api/artifacts/[id]/actions` for owned saved artifacts. The route validates the requested action, builds a bounded artifact prompt, selects a text assistant mode by action, enforces usage limits, generates through the existing OpenRouter text helper, logs text usage, and returns scrubbed client-safe usage.
+- Added shared artifact action types/config for Improve writing, Make shorter, Make more professional, Expand with more detail, Turn into checklist, Turn into email, Create summary, and Find weaknesses.
+- Extended Artifact Studio with an action picker, loading/error states, generated preview, Copy/Dismiss/Apply controls, and draft-only apply behavior so users still save explicitly.
+- Preserved constraints: no image route calls, no background jobs, no Stripe, no Supabase, no external storage, no artifact version table, no raw model cost exposure, and no billing bypass.
+- Verification: `npm run typecheck` passed; `npm run lint` passed with the existing 14 warnings; `npm run build` passed with the existing Node `[DEP0205]` `module.register()` deprecation warning; unauthenticated `POST /api/artifacts/test-artifact/actions` returned `401` on the already-running dev server at `http://localhost:3001`.
+
+### 2026-05-26 - Artifact Studio V1
+
+- Added Neon migration and Drizzle schema support for `zen_artifacts`, with user/project/source metadata, source/type checks, indexes, and updated-at trigger.
+- Added protected artifact CRUD APIs and a server-only artifact repository with user-scoped list/get/create/update/delete operations plus owned project, conversation, and source-message validation.
+- Added Artifact Studio as an authenticated workspace dialog with list/search/filter, project assignment, markdown/plain-text editing, create/update/delete, copy, and `.md` export.
+- Added assistant-message and model-comparison candidate save-to-artifact actions without OpenRouter calls or billing events.
+- Extended Project Home and global/project search to include artifacts and command-palette artifact targets.
+- Preserved constraints: no Supabase, no Stripe, no external artifact storage, no realtime collaboration, no background AI generation, and no billing/auth behavior changes.
+- Verification: `npm run typecheck` passed; `npm run lint` passed with the existing 14 warnings; `npm run build` passed with the existing Node `[DEP0205]` `module.register()` deprecation warning; unauthenticated `GET /api/artifacts` returned `401`.
 
 ### 2026-05-26 - Project Search V1
 
@@ -370,6 +388,17 @@ Audit date: 2026-05-26. Documentation-only audit before new product features; no
 - Supabase runtime clients and old Supabase-backed storage/data modules have been removed; only historical migrations remain.
 
 ## AI Handoff Summaries
+
+### 2026-05-26 - AI Playbooks V1 Polish
+
+- Polished Prompt Workflows into user-facing AI Playbooks while preserving the existing `/api/prompt-workflows*` routes, Neon tables, repository names, and foreground execution model.
+- Added `components/chat/playbook-studio.tsx`, mounted it in the authenticated workspace shell, and wired it from the composer, command palette, Project Home quick actions, and project-scoped playbook links.
+- Added starter AI Playbook templates in `lib/config/playbook-templates.ts`; templates install only after user action and create normal user-owned prompt workflow records.
+- Added protected `GET /api/prompt-workflows/[id]/runs` plus repository run-history enrichment with step output messages when `messageId` exists.
+- Updated the client playbook runner to execute each step through the normal text/Prism send path and record completed step `messageId` values for future run history/final output review.
+- Added final-output review actions in Playbook Studio, including open conversation, copy/export, and Save as Artifact with `sourceType: workflow_run` and `artifactType: workflow_output`.
+- Verification: `npm run typecheck` passes; `npm run lint` passes with the existing 14 warnings; `npm run build` passes with the existing Node `module.register()` deprecation warning.
+- Remaining risks: older run records without step `messageId` show output unavailable; playbooks remain foreground/user-triggered and are not durable background automation.
 
 ### 2026-05-22
 
