@@ -158,3 +158,83 @@ export function OnboardingDialog() {
                   Set up your workspace
                 </DialogTitle>
                 <DialogDescription className="mt-2 max-w-2xl text-sm leading-6">
+                  Choose a starting point, then Zenquanta will create user-owned
+                  prompts and preferences without running any AI calls.
+                </DialogDescription>
+              </div>
+              <span className="shrink-0 rounded-full border border-border/70 px-3 py-1 text-xs text-muted-foreground">
+                {progress}
+              </span>
+            </div>
+          </DialogHeader>
+
+          <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5 sm:px-7 sm:py-6">
+            {currentStep === 0 ? (
+              <div className="space-y-5">
+                <div>
+                  <h3 className="text-lg font-semibold">
+                    What are you mainly using Zenquanta for?
+                  </h3>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    This sets the initial assistant and starter pack.
+                  </p>
+                </div>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {ONBOARDING_USE_CASES.map((item) => {
+                    const Icon = USE_CASE_ICONS[item.id]
+                    const active = item.id === useCase
+
+                    return (
+                      <button
+                        key={item.id}
+                        type="button"
+                        onClick={() => updateUseCase(item.id)}
+                        className={cn(
+                          'min-h-[128px] rounded-2xl border p-4 text-left transition-colors',
+                          active
+                            ? 'border-primary bg-primary/10 text-foreground'
+                            : 'border-border/70 bg-card/50 hover:border-border hover:bg-card/80'
+                        )}
+                      >
+                        <div className="flex items-center gap-3">
+                          <span className="flex size-10 items-center justify-center rounded-xl border border-border/70 bg-background/70">
+                            <Icon className="size-4" />
+                          </span>
+                          <span className="font-semibold">{item.label}</span>
+                        </div>
+                        <p className="mt-3 text-xs leading-5 text-muted-foreground">
+                          {item.description}
+                        </p>
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            ) : null}
+
+            {currentStep === 1 ? (
+              <div className="space-y-5">
+                <div>
+                  <h3 className="text-lg font-semibold">
+                    Preferred default assistant
+                  </h3>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    Recommended: {MODE_CONFIGS[selectedRecommendation.defaultMode].name}.
+                  </p>
+                </div>
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                  {ONBOARDING_ASSISTANT_MODES.map((mode) => {
+                    const config = MODE_CONFIGS[mode]
+                    const active = defaultMode === mode
+
+                    return (
+                      <button
+                        key={mode}
+                        type="button"
+                        onClick={() => setDefaultMode(mode)}
+                        className={cn(
+                          'min-h-[136px] rounded-2xl border p-4 text-left transition-colors',
+                          active
+                            ? 'border-primary bg-primary/10'
+                            : 'border-border/70 bg-card/50 hover:border-border hover:bg-card/80'
+                        )}
