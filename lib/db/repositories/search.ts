@@ -4,6 +4,7 @@ import { and, desc, eq, ilike, inArray, or, sql } from 'drizzle-orm'
 import { SearchResult } from '@/types'
 import { getDatabaseClient } from '../client'
 import {
+  zenArtifacts,
   zenConversations,
   zenCustomAssistants,
   zenFiles,
@@ -86,6 +87,7 @@ class NeonSearchRepository {
       const [
         conversations,
         messages,
+        artifacts,
         workflows,
         files,
         generatedImages,
@@ -93,6 +95,7 @@ class NeonSearchRepository {
       ] = await Promise.all([
         this.searchConversations(userId, query, pattern, projectId),
         this.searchMessages(userId, query, pattern, projectId),
+        this.searchArtifacts(userId, query, pattern, projectId),
         this.searchWorkflows(userId, query, pattern, projectId),
         this.searchFiles(userId, query, pattern, projectId),
         this.searchGeneratedImages(userId, query, pattern, projectId),
@@ -102,6 +105,7 @@ class NeonSearchRepository {
       return sortResults([
         ...conversations,
         ...messages,
+        ...artifacts,
         ...workflows,
         ...files,
         ...generatedImages,
@@ -113,6 +117,7 @@ class NeonSearchRepository {
       projects,
       conversations,
       messages,
+      artifacts,
       prompts,
       workflows,
       customAssistants,
@@ -123,6 +128,7 @@ class NeonSearchRepository {
       this.searchProjects(userId, query, pattern),
       this.searchConversations(userId, query, pattern),
       this.searchMessages(userId, query, pattern),
+      this.searchArtifacts(userId, query, pattern),
       this.searchPrompts(userId, query, pattern),
       this.searchWorkflows(userId, query, pattern),
       this.searchCustomAssistants(userId, query, pattern),
@@ -135,6 +141,7 @@ class NeonSearchRepository {
       ...projects,
       ...conversations,
       ...messages,
+      ...artifacts,
       ...prompts,
       ...workflows,
       ...customAssistants,
@@ -338,6 +345,70 @@ class NeonSearchRepository {
       updatedAt: toIsoString(row.updatedAt),
       metadata: {
         mode: row.mode,
+      },
+    }))
+  }
+
+  private async searchArtifacts(
+    userId: string,
+    query: string,
+    pattern: string,
+    projectId?: string | null
+  ): Promise<SearchResult[]> {
+    const rows = await getDatabaseClient()
+      .select()
+      .from(zenArtifacts)
+      .where(
+        projectId
+          ? and(
+              eq(zenArtifacts.userId, userId),
+              eq(zenArtifacts.projectId, projectId),
+              or(
+                ilike(zenArtifacts.title, pattern),
+                ilike(zenArtifacts.content, pattern),
+                ilike(zenArtifacts.artifactType, pattern),
+                ilike(zenArtifacts.sourceType, pattern),
+                sql`${zenArtifacts.metadata}::text ILIKE ${pattern}`
+              )
+            )
+          : and(
+              eq(zenArtifacts.userId, userId),
+              or(
+                ilike(zenArtifacts.title, pattern),
+                ilike(zenArtifacts.content, pattern),
+                ilike(zenArtifacts.artifactType, pattern),
+                ilike(zenArtifacts.sourceType, pattern),
+                sql`${zenArtifacts.metadata}::text ILIKE ${pattern}`
+              )
+            )
+      )
+      .orderBy(desc(zenArtifacts.updatedAt))
+      .limit(PER_ENTITY_LIMIT)
+
+    return rows.map((row) => ({
+      id: row.id,
+      entityType: 'artifact',
+      title: row.title,
+      snippet: buildSnippet(
+        query,
+        row.content,
+        row.artifactType,
+        row.sourceType,
+        row.title
+      ),
+      url: '/',
+      target: {
+        type: 'open_artifact',
+        artifactId: row.id,
+        projectId: row.projectId,
+      },
+      projectId: row.projectId,
+      conversationId: row.conversationId,
+      createdAt: toIsoString(row.createdAt),
+      updatedAt: toIsoString(row.updatedAt),
+      metadata: {
+        artifactType: row.artifactType,
+        sourceType: row.sourceType,
       },
     }))
   }
