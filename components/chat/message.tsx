@@ -5,6 +5,7 @@ import {
   ChevronDown,
   Download,
   ExternalLink,
+  FileText,
   ImageIcon,
   PencilLine,
   Play,
@@ -58,6 +59,7 @@ interface ChatMessageProps {
   onRetry?: () => void
   onEdit?: (content: string, targetMessageId?: string) => void
   onAskAnotherMode?: (mode: AIMode) => void
+  onSaveArtifact?: (message: Message) => Promise<void>
   isLastAssistant?: boolean
   isLastUser?: boolean
   isStreamingMessage?: boolean
@@ -517,6 +519,7 @@ export function ChatMessage({
   onRetry,
   onEdit,
   onAskAnotherMode,
+  onSaveArtifact,
   isLastAssistant,
   isLastUser,
   isStreamingMessage = false,
@@ -532,6 +535,7 @@ export function ChatMessage({
   )
   const [draftValue, setDraftValue] = useState(message.content)
   const [isWorkingExpanded, setIsWorkingExpanded] = useState(false)
+  const [isSavingArtifact, setIsSavingArtifact] = useState(false)
 
   useEffect(() => {
     if (!isStreamingMessage) {
@@ -551,6 +555,19 @@ export function ChatMessage({
 
   const handleDownloadImage = async (attachment: Attachment) => {
     await downloadAttachmentImage(attachment)
+  }
+
+  const handleSaveArtifact = async () => {
+    if (!onSaveArtifact || effectiveStatus === 'streaming' || !message.content.trim()) {
+      return
+    }
+
+    setIsSavingArtifact(true)
+    try {
+      await onSaveArtifact(message)
+    } finally {
+      setIsSavingArtifact(false)
+    }
   }
 
   const firstImageAttachment = getFirstImageAttachment(message)
@@ -764,6 +781,23 @@ export function ChatMessage({
                 >
                   <Play className="size-3.5" />
                   Preview app
+                </Button>
+              ) : null}
+
+              {onSaveArtifact && message.content.trim() ? (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 gap-1 rounded-full px-2.5 text-xs"
+                  disabled={isSavingArtifact || effectiveStatus === 'streaming'}
+                  onClick={() => void handleSaveArtifact()}
+                >
+                  {isSavingArtifact ? (
+                    <span className="size-3.5 animate-spin rounded-full border border-current border-t-transparent" />
+                  ) : (
+                    <FileText className="size-3.5" />
+                  )}
+                  Save artifact
                 </Button>
               ) : null}
 
