@@ -318,3 +318,88 @@ export function OnboardingDialog() {
                     const active = packId === starterPackId
 
                     return (
+                      <button
+                        key={packId}
+                        type="button"
+                        onClick={() => setStarterPackId(packId)}
+                        className={cn(
+                          'rounded-2xl border p-4 text-left transition-colors',
+                          active
+                            ? 'border-primary bg-primary/10'
+                            : 'border-border/70 bg-card/50 hover:border-border hover:bg-card/80'
+                        )}
+                      >
+                        <div className="flex items-center gap-2">
+                          <BookOpen className="size-4" />
+                          <span className="font-semibold">{pack.label}</span>
+                        </div>
+                        <p className="mt-2 text-xs leading-5 text-muted-foreground">
+                          {pack.prompts.map((prompt) => prompt.title).join(', ')}
+                        </p>
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            ) : null}
+
+            {error ? (
+              <div className="mt-5 rounded-2xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+                {error}
+              </div>
+            ) : null}
+          </div>
+
+          <div className="border-t border-border/70 bg-background/90 px-5 py-4 sm:px-7">
+            <div className="flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => void handleSkip()}
+                disabled={isSubmitting}
+              >
+                Skip for now
+              </Button>
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={currentStep === 0 || isSubmitting}
+                  onClick={() => setStep((previous) => Math.max(0, previous - 1))}
+                  className="gap-2"
+                >
+                  <ArrowLeft className="size-4" />
+                  Back
+                </Button>
+                {currentStep < 3 ? (
+                  <Button
+                    type="button"
+                    onClick={() => setStep((previous) => Math.min(3, previous + 1))}
+                    className="gap-2"
+                  >
+                    Next
+                    <ArrowRight className="size-4" />
+                  </Button>
+                ) : (
+                  <Button
+                    type="button"
+                    onClick={() => void handleFinish()}
+                    disabled={isSubmitting}
+                    className="gap-2"
+                  >
+                    {isSubmitting ? (
+                      <Loader2 className="size-4 animate-spin" />
+                    ) : (
+                      <Check className="size-4" />
+                    )}
+                    Finish setup
+                  </Button>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  )
+}
