@@ -54,8 +54,9 @@ const ENTITY_LABELS: Record<SearchResult['entityType'], string> = {
   project: 'Project',
   conversation: 'Conversation',
   message: 'Message',
+  artifact: 'Artifact',
   prompt: 'Prompt',
-  prompt_workflow: 'Workflow',
+  prompt_workflow: 'Playbook',
   custom_assistant: 'Assistant',
   file: 'File',
   generated_image: 'Prism',
@@ -66,6 +67,7 @@ const SEARCH_ENTITY_ORDER: SearchEntityType[] = [
   'project',
   'conversation',
   'message',
+  'artifact',
   'file',
   'generated_image',
   'prompt_workflow',
@@ -81,6 +83,8 @@ function resultIcon(entityType: SearchResult['entityType']) {
     case 'conversation':
     case 'message':
       return <MessageSquare className="size-4" />
+    case 'artifact':
+      return <FileText className="size-4" />
     case 'prompt':
       return <BookText className="size-4" />
     case 'prompt_workflow':
@@ -371,7 +375,18 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
         await openConversation(target.conversationId)
         scrollToMessage(target.messageId)
         return
+      case 'open_artifact':
+        openWorkspaceTool({
+          tool: 'artifacts',
+          artifactId: target.artifactId,
+          projectId: target.projectId,
+        })
+        return
       case 'open_prompt_library':
+        if (target.workflowId) {
+          openWorkspaceTool('playbooks')
+          return
+        }
         openWorkspaceTool('prompt-library')
         return
       case 'run_prompt_workflow':
@@ -597,11 +612,25 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
             <span>Open pricing</span>
           </CommandItem>
           <CommandItem
-            value="open prompt library prompts workflows"
+            value="open prompt library prompts"
             onSelect={() => void runAction(() => openWorkspaceTool('prompt-library'))}
           >
             <BookText className="size-4" />
             <span>Open prompt library</span>
+          </CommandItem>
+          <CommandItem
+            value="open ai playbooks workflows reusable runs"
+            onSelect={() => void runAction(() => openWorkspaceTool('playbooks'))}
+          >
+            <Play className="size-4" />
+            <span>Open AI Playbooks</span>
+          </CommandItem>
+          <CommandItem
+            value="open artifact studio artifacts saved outputs"
+            onSelect={() => void runAction(() => openWorkspaceTool('artifacts'))}
+          >
+            <FileText className="size-4" />
+            <span>Open Artifact Studio</span>
           </CommandItem>
           <CommandItem
             value="open model comparison compare assistants"
@@ -651,11 +680,11 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
         </CommandGroup>
 
         {matchingWorkflows.length > 0 ? (
-          <CommandGroup heading="Run Prompt Workflow">
+          <CommandGroup heading="Run AI Playbook">
             {matchingWorkflows.slice(0, 8).map((workflow) => (
               <CommandItem
                 key={workflow.id}
-                value={`run workflow ${workflow.title} ${workflow.description ?? ''}`}
+                value={`run ai playbook workflow ${workflow.title} ${workflow.description ?? ''}`}
                 onSelect={() =>
                   void runAction(() =>
                     executeTarget({
