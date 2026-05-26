@@ -5,6 +5,7 @@ import { createPrivateFileUrl } from '@/lib/storage/object-store'
 import {
   AssistantFamily,
   Project,
+  ProjectHomeArtifactSummary,
   ProjectHomeConversationSummary,
   ProjectHomeFileSummary,
   ProjectHomeGeneratedImageSummary,
@@ -14,6 +15,7 @@ import {
 } from '@/types'
 import { getDatabaseClient } from '../client'
 import {
+  zenArtifacts,
   zenConversations,
   zenFiles,
   zenGeneratedImages,
@@ -139,6 +141,10 @@ class NeonProjectHomeRepository {
       eq(zenPromptWorkflows.userId, userId),
       eq(zenPromptWorkflows.projectId, projectId)
     )
+    const artifactScope = and(
+      eq(zenArtifacts.userId, userId),
+      eq(zenArtifacts.projectId, projectId)
+    )
 
     const [
       conversationStatsRows,
@@ -149,6 +155,8 @@ class NeonProjectHomeRepository {
       workflowRows,
       imageStatsRows,
       imageRows,
+      artifactStatsRows,
+      artifactRows,
     ] = await Promise.all([
       db
         .select({
@@ -228,6 +236,16 @@ class NeonProjectHomeRepository {
         )
         .orderBy(desc(zenGeneratedImages.createdAt))
         .limit(PROJECT_HOME_ITEM_LIMIT),
+      db
+        .select({ artifactCount: sql<number>`count(*)::int` })
+        .from(zenArtifacts)
+        .where(artifactScope),
+      db
+        .select()
+        .from(zenArtifacts)
+        .where(artifactScope)
+        .orderBy(desc(zenArtifacts.updatedAt))
+        .limit(PROJECT_HOME_ITEM_LIMIT),
     ])
 
     const workflowIds = workflowRows.map((workflow) => workflow.id)
@@ -255,6 +273,7 @@ class NeonProjectHomeRepository {
     const fileCount = toNumber(fileStatsRows[0]?.fileCount)
     const workflowCount = toNumber(workflowStatsRows[0]?.workflowCount)
     const generatedImageCount = toNumber(imageStatsRows[0]?.generatedImageCount)
+    const artifactCount = toNumber(artifactStatsRows[0]?.artifactCount)
 
     const recentConversations: ProjectHomeConversationSummary[] =
       recentConversationRows.map((row) => ({
@@ -312,6 +331,17 @@ class NeonProjectHomeRepository {
       updatedAt: toIsoString(row.updatedAt),
     }))
 
+    const artifacts: ProjectHomeArtifactSummary[] = artifactRows.map((row) => ({
+      id: row.id,
+      title: row.title,
+      artifactType: row.artifactType as ProjectHomeArtifactSummary['artifactType'],
+      sourceType: row.sourceType as ProjectHomeArtifactSummary['sourceType'],
+      conversationId: row.conversationId,
+      sourceMessageId: row.sourceMessageId,
+      createdAt: toIsoString(row.createdAt),
+      updatedAt: toIsoString(row.updatedAt),
+    }))
+
     return {
       project,
       overview: {
@@ -320,12 +350,14 @@ class NeonProjectHomeRepository {
         fileCount,
         workflowCount,
         generatedImageCount,
+        artifactCount,
         memoryConversationCount,
       },
       recentConversations,
       uploadedFiles,
       generatedImages,
       workflows,
+      artifacts,
       memoryStatus: {
         status: memoryConversationCount > 0 ? 'active' : 'empty',
         conversationCount,
