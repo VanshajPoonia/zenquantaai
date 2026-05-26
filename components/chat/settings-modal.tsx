@@ -86,7 +86,7 @@ function ModeSelectionCard({
 }
 
 export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
-  const { appSettings, saveAppSettings } = useChatContext()
+  const { appSettings, saveAppSettings, openOnboarding } = useChatContext()
   const [localSettings, setLocalSettings] = useState<AppSettings>(appSettings)
   const [saved, setSaved] = useState(false)
 
@@ -392,6 +392,26 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                   />
                 </div>
               </div>
+            </div>
+
+            <div className="flex flex-col gap-3 rounded-2xl border border-border/70 bg-card/60 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
+              <div>
+                <h3 className="text-base font-semibold">Workspace Setup</h3>
+                <p className="text-xs leading-6 text-muted-foreground sm:text-sm">
+                  Reopen onboarding to refresh starter prompts, projects, and the default assistant.
+                </p>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                className="rounded-xl"
+                onClick={() => {
+                  onOpenChange(false)
+                  openOnboarding()
+                }}
+              >
+                Reopen onboarding
+              </Button>
             </div>
 
             <div className="space-y-4 rounded-2xl border border-border/70 bg-card/60 p-4 sm:p-5">
