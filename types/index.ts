@@ -576,9 +576,106 @@ export interface SearchResult {
   metadata?: Record<string, string | number | boolean | null>
 }
 
+export type SearchScope = 'global' | 'project'
+
 export interface SearchResponse {
   query: string
+  scope?: SearchScope
+  project?: Pick<Project, 'id' | 'name'> | null
   results: SearchResult[]
+}
+
+export type ProjectHomeSuggestedActionType =
+  | 'start_chat'
+  | 'upload_file'
+  | 'run_workflow'
+  | 'review_images'
+  | 'research_project'
+
+export interface ProjectHomeOverview {
+  conversationCount: number
+  messageCount: number
+  fileCount: number
+  workflowCount: number
+  generatedImageCount: number
+  memoryConversationCount: number
+}
+
+export interface ProjectHomeConversationSummary {
+  id: string
+  title: string
+  mode: AIMode
+  assistantFamily: AssistantFamily
+  preview: string
+  messageCount: number
+  isPinned: boolean
+  memorySummary?: string | null
+  memoryUpdatedAt?: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export interface ProjectHomeFileSummary {
+  id: string
+  fileName: string
+  mimeType: string | null
+  byteSize: number | null
+  conversationId: string | null
+  messageId: string | null
+  url: string | null
+  createdAt: string
+  updatedAt: string
+  metadata?: Record<string, string | number | boolean | null>
+}
+
+export interface ProjectHomeGeneratedImageSummary {
+  id: string
+  prompt: string
+  model: string
+  status: string
+  conversationId: string | null
+  messageId: string | null
+  width: number | null
+  height: number | null
+  url: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export interface ProjectHomeWorkflowSummary {
+  id: string
+  title: string
+  description?: string | null
+  stepCount: number
+  variableCount: number
+  createdAt: string
+  updatedAt: string
+}
+
+export interface ProjectHomeMemoryStatus {
+  status: 'empty' | 'active'
+  conversationCount: number
+  memoryConversationCount: number
+  latestMemoryUpdatedAt: string | null
+}
+
+export interface ProjectHomeSuggestedAction {
+  id: string
+  type: ProjectHomeSuggestedActionType
+  title: string
+  description: string
+}
+
+export interface ProjectHomeResponse {
+  project: Project
+  overview: ProjectHomeOverview
+  recentConversations: ProjectHomeConversationSummary[]
+  uploadedFiles: ProjectHomeFileSummary[]
+  generatedImages: ProjectHomeGeneratedImageSummary[]
+  workflows: ProjectHomeWorkflowSummary[]
+  memoryStatus: ProjectHomeMemoryStatus
+  suggestedActions: ProjectHomeSuggestedAction[]
+  generatedAt: string
 }
 
 export interface ChatRequest {
