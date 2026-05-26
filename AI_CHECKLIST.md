@@ -92,6 +92,7 @@ Neon currently provides a server-only client, Drizzle schema definitions, a serv
 - prompt workflows, ordered steps, and run/step-run metadata
 - text model comparisons and generated candidates
 - private custom text assistants
+- editable artifacts saved from workspace outputs
 - user settings
 - profiles and admin roles
 - subscriptions and usage overrides
@@ -122,6 +123,9 @@ Current Neon-backed runtime routes:
 - `/api/projects/[id]`
 - `/api/projects/[id]/home`
 - `/api/search`
+- `/api/artifacts`
+- `/api/artifacts/[id]`
+- `/api/artifacts/[id]/actions`
 - `/api/onboarding`
 - `/api/conversations`
 - `/api/conversations/[id]`
@@ -164,6 +168,7 @@ Fresh foundation migration available for Neon:
 6. `neon/migrations/20260522_zenquanta_model_comparisons.sql`
 7. `neon/migrations/20260524_zenquanta_auth_attempts.sql`
 8. `neon/migrations/20260525_zenquanta_custom_assistants.sql`
+9. `neon/migrations/20260526_zenquanta_artifacts.sql`
 
 Apply with a Postgres client or Neon SQL editor. CLI example:
 
@@ -202,16 +207,18 @@ Before changing persistence code again:
 7. Send a text prompt and verify `/api/chat` streaming.
 8. With `TAVILY_API_KEY` configured, send a Pulse or `webSearch` prompt and verify sources appear.
 9. With an embeddings key configured, upload a text/code file, enable `fileContext`, and verify chat cites uploaded-file sources.
-10. Create and run a prompt workflow with at least two assistant-family steps and verify the steps queue into one conversation.
+10. Open AI Playbooks, install a starter template only by user action, create/edit a playbook, run at least two assistant-family steps, and verify run history records completed step outputs when message ids are available.
 11. Open Project Home from the workspace project selector and verify user-scoped conversations, files, generated images, playbooks, memory status, and quick actions.
 12. Use command palette search globally and with a selected Project Home scope, and verify project searches do not show other project data.
-13. Run a text model comparison, review candidates, and save one response into the conversation.
-14. Create/select a private custom text assistant and confirm it sends through normal `/api/chat` with usage limits intact.
-15. Generate an image with Prism and verify `/api/images/generate`.
-16. Check `/dashboard` for usage.
-17. If using admin flows, ensure the user has an admin role in `zen_profiles`.
-18. Check `/admin` with current-month defaults and optional date range, plan, assistant, and user filters.
-19. Confirm admin raw-cost views do not change user-facing `/dashboard` displayed-cost responses.
+13. Save an assistant message and a model comparison candidate into Artifact Studio, edit it, move it to a project, export it, and verify project search/Project Home can find it.
+14. Run an Artifact Studio AI action, review the preview, apply it to the draft, save explicitly, and confirm usage is logged without raw cost exposure.
+15. Run a text model comparison, review candidates, and save one response into the conversation.
+16. Create/select a private custom text assistant and confirm it sends through normal `/api/chat` with usage limits intact.
+17. Generate an image with Prism and verify `/api/images/generate`.
+18. Check `/dashboard` for usage.
+19. If using admin flows, ensure the user has an admin role in `zen_profiles`.
+20. Check `/admin` with current-month defaults and optional date range, plan, assistant, and user filters.
+21. Confirm admin raw-cost views do not change user-facing `/dashboard` displayed-cost responses.
 
 ## Production Safety Checks
 
@@ -235,8 +242,9 @@ Before changing persistence code again:
 - Missing Tavily key causes Pulse/webSearch to answer without live source context and without source claims.
 - Missing embeddings key skips uploaded-file indexing/retrieval without blocking uploads.
 - Missing pgvector extension or file knowledge migration breaks chunk storage and retrieval.
-- Missing prompt workflow migration breaks workflow CRUD and run tracking, while one-off prompts still use `zen_prompt_library`.
+- Missing prompt workflow migration breaks AI Playbook CRUD and run tracking, while one-off prompts still use `zen_prompt_library`.
 - Missing model comparison migration breaks comparison mode, while normal chat remains separate.
+- Missing artifacts migration breaks Artifact Studio, artifact search results, and Project Home artifact summaries.
 - Missing Neon `DATABASE_URL` breaks auth, settings, prompt library, assistant recommendation, project, conversation, chat persistence, image persistence, billing/admin, usage, dashboard, plan request, image history, profile/role hydration, and local import app-data paths.
 - Missing S3-compatible/R2 env vars breaks attachment and generated-image storage when `FILE_STORAGE_PROVIDER` is `s3` or `r2`.
 - Existing lint warnings can obscure newer warnings if not cleaned up intentionally.

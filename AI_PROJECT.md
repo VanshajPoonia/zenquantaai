@@ -42,6 +42,8 @@ This is the current six-assistant platform, not the old four-mode version.
 - Projects.
 - Project Home dashboards with project-scoped conversations, files, generated images, playbooks, memory status, and rule-based next actions.
 - Global/project-scoped search and authenticated command palette.
+- Artifact Studio with editable Neon-backed project-scoped artifacts.
+- AI-assisted Artifact Actions for saved artifacts, using the text generation and billing path.
 - First-run onboarding with starter prompts and optional starter project.
 - Prompt library.
 - Reusable prompt workflows with ordered assistant-family steps.
@@ -96,6 +98,8 @@ Mode mapping:
 - `/api/projects` and `/api/projects/[id]`: project management.
 - `/api/projects/[id]/home`: user-scoped Project Home aggregate summary.
 - `/api/search`: user-scoped workspace search across Neon-backed projects, conversations, messages, prompts, workflows, custom assistants, file metadata, generated image metadata, and model comparisons, with optional `projectId` scoping.
+- `/api/artifacts` and `/api/artifacts/[id]`: editable user-owned artifacts saved from workspace outputs.
+- `/api/artifacts/[id]/actions`: user-scoped AI-assisted artifact transformations that reuse the text generation and billing path.
 - `/api/onboarding`: first-run workspace setup, starter prompt/project creation, and onboarding settings updates.
 - `/api/prompts` and `/api/prompts/[id]`: prompt library.
 - `/api/prompt-workflows`, `/api/prompt-workflows/[id]`, and `/api/prompt-workflows/[id]/runs`: reusable workflow CRUD and lightweight run tracking.
@@ -138,6 +142,9 @@ Active Neon runtime data paths are:
 - `/api/projects/[id]`
 - `/api/projects/[id]/home`
 - `/api/search`
+- `/api/artifacts`
+- `/api/artifacts/[id]`
+- `/api/artifacts/[id]/actions`
 - `/api/onboarding`
 - `/api/conversations`
 - `/api/conversations/[id]`
@@ -159,6 +166,7 @@ The Neon migration creates:
 - app-owned users, auth identity mapping, credentials, and sessions
 - profiles, subscriptions, manual plan requests, usage overrides, text/image usage events, and admin audit logs
 - projects, conversations, messages, conversation memory fields, prompt library, prompt workflows, text model comparisons, private custom text assistants, and user settings
+- editable artifacts saved from chat, comparisons, workflows, Pulse, and Prism outputs
 - assistant recommendation events, file metadata, and generated image metadata
 - uploaded-file text chunks and pgvector embeddings for private project knowledge
 
@@ -174,6 +182,7 @@ Neon migration order:
 6. `20260522_zenquanta_model_comparisons.sql`
 7. `20260524_zenquanta_auth_attempts.sql`
 8. `20260525_zenquanta_custom_assistants.sql`
+9. `20260526_zenquanta_artifacts.sql`
 
 Historical Supabase migration order documented in `README.md`:
 
@@ -299,6 +308,7 @@ Backend logic is implemented with Next route handlers and server actions:
 - historical Supabase migrations in `supabase/migrations/*`
 - auth helpers in `lib/auth/session.ts`
 - billing helpers in `lib/billing/*`
+- AI Playbooks are the user-facing workspace layer over existing prompt workflow routes/tables; run history is available through `GET /api/prompt-workflows/[id]/runs`.
 
 ## Environment Variables
 
@@ -343,5 +353,6 @@ Accepted aliases in code include:
 - Conversation saves currently delete and reinsert messages, which may be risky for large histories or concurrent writes.
 - Neon starts fresh and does not preserve old Supabase rows.
 - Settings, prompts, prompt workflows, text model comparisons, private custom text assistants, assistant recommendation telemetry, projects, conversations, messages, conversation memory, billing/admin data, usage records, plan requests, dashboard data, image history, and admin mutations are wired to Neon.
+- Prompt workflows are presented as AI Playbooks in the workspace. The backend route/table names remain `prompt-workflows` for compatibility.
 - Custom assistants are private text assistants only in v1; image/Prism custom assistants, public sharing, marketplaces, and arbitrary raw model selection are out of scope.
 - S3-compatible/R2 storage configuration must be validated before production if local storage is not acceptable.
