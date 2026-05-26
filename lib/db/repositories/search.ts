@@ -71,11 +71,43 @@ function sortResults(results: SearchResult[]): SearchResult[] {
 }
 
 class NeonSearchRepository {
-  async search(userId: string, rawQuery: string): Promise<SearchResult[]> {
+  async search(
+    userId: string,
+    rawQuery: string,
+    options: { projectId?: string | null } = {}
+  ): Promise<SearchResult[]> {
     const query = normalizeQuery(rawQuery)
     if (query.length < MIN_QUERY_LENGTH) return []
 
     const pattern = toPattern(query)
+    const projectId = options.projectId?.trim() || null
+
+    if (projectId) {
+      const [
+        conversations,
+        messages,
+        workflows,
+        files,
+        generatedImages,
+        modelComparisons,
+      ] = await Promise.all([
+        this.searchConversations(userId, query, pattern, projectId),
+        this.searchMessages(userId, query, pattern, projectId),
+        this.searchWorkflows(userId, query, pattern, projectId),
+        this.searchFiles(userId, query, pattern, projectId),
+        this.searchGeneratedImages(userId, query, pattern, projectId),
+        this.searchModelComparisons(userId, query, pattern, projectId),
+      ])
+
+      return sortResults([
+        ...conversations,
+        ...messages,
+        ...workflows,
+        ...files,
+        ...generatedImages,
+        ...modelComparisons,
+      ])
+    }
 
     const [
       projects,
@@ -154,20 +186,31 @@ class NeonSearchRepository {
   private async searchConversations(
     userId: string,
     query: string,
-    pattern: string
+    pattern: string,
+    projectId?: string | null
   ): Promise<SearchResult[]> {
     const rows = await getDatabaseClient()
       .select()
       .from(zenConversations)
       .where(
-        and(
-          eq(zenConversations.userId, userId),
-          or(
-            ilike(zenConversations.title, pattern),
-            ilike(zenConversations.preview, pattern),
-            ilike(zenConversations.memorySummary, pattern)
-          )
-        )
+        projectId
+          ? and(
+              eq(zenConversations.userId, userId),
+              eq(zenConversations.projectId, projectId),
+              or(
+                ilike(zenConversations.title, pattern),
+                ilike(zenConversations.preview, pattern),
+                ilike(zenConversations.memorySummary, pattern)
+              )
+            )
+          : and(
+              eq(zenConversations.userId, userId),
+              or(
+                ilike(zenConversations.title, pattern),
+                ilike(zenConversations.preview, pattern),
+                ilike(zenConversations.memorySummary, pattern)
+              )
+            )
       )
       .orderBy(desc(zenConversations.updatedAt))
       .limit(PER_ENTITY_LIMIT)
@@ -195,7 +238,8 @@ class NeonSearchRepository {
   private async searchMessages(
     userId: string,
     query: string,
-    pattern: string
+    pattern: string,
+    projectId?: string | null
   ): Promise<SearchResult[]> {
     const rows = await getDatabaseClient()
       .select({
@@ -216,10 +260,22 @@ class NeonSearchRepository {
         eq(zenMessages.conversationId, zenConversations.id)
       )
       .where(
-        and(
-          eq(zenConversations.userId, userId),
-          or(ilike(zenMessages.content, pattern), ilike(zenMessages.model, pattern))
-        )
+        projectId
+          ? and(
+              eq(zenConversations.userId, userId),
+              eq(zenConversations.projectId, projectId),
+              or(
+                ilike(zenMessages.content, pattern),
+                ilike(zenMessages.model, pattern)
+              )
+            )
+          : and(
+              eq(zenConversations.userId, userId),
+              or(
+                ilike(zenMessages.content, pattern),
+                ilike(zenMessages.model, pattern)
+              )
+            )
       )
       .orderBy(desc(zenMessages.createdAt))
       .limit(PER_ENTITY_LIMIT)
@@ -289,20 +345,30 @@ class NeonSearchRepository {
   private async searchWorkflows(
     userId: string,
     query: string,
-    pattern: string
+    pattern: string,
+    projectId?: string | null
   ): Promise<SearchResult[]> {
     const db = getDatabaseClient()
     const workflowRows = await db
       .select({ id: zenPromptWorkflows.id })
       .from(zenPromptWorkflows)
       .where(
-        and(
-          eq(zenPromptWorkflows.userId, userId),
-          or(
-            ilike(zenPromptWorkflows.title, pattern),
-            ilike(zenPromptWorkflows.description, pattern)
-          )
-        )
+        projectId
+          ? and(
+              eq(zenPromptWorkflows.userId, userId),
+              eq(zenPromptWorkflows.projectId, projectId),
+              or(
+                ilike(zenPromptWorkflows.title, pattern),
+                ilike(zenPromptWorkflows.description, pattern)
+              )
+            )
+          : and(
+              eq(zenPromptWorkflows.userId, userId),
+              or(
+                ilike(zenPromptWorkflows.title, pattern),
+                ilike(zenPromptWorkflows.description, pattern)
+              )
+            )
       )
       .orderBy(desc(zenPromptWorkflows.updatedAt))
       .limit(PER_ENTITY_LIMIT)
@@ -315,15 +381,26 @@ class NeonSearchRepository {
         eq(zenPromptWorkflowSteps.workflowId, zenPromptWorkflows.id)
       )
       .where(
-        and(
-          eq(zenPromptWorkflows.userId, userId),
-          or(
-            ilike(zenPromptWorkflowSteps.title, pattern),
-            ilike(zenPromptWorkflowSteps.template, pattern),
-            ilike(zenPromptWorkflowSteps.assistantFamily, pattern),
-            ilike(zenPromptWorkflowSteps.mode, pattern)
-          )
-        )
+        projectId
+          ? and(
+              eq(zenPromptWorkflows.userId, userId),
+              eq(zenPromptWorkflows.projectId, projectId),
+              or(
+                ilike(zenPromptWorkflowSteps.title, pattern),
+                ilike(zenPromptWorkflowSteps.template, pattern),
+                ilike(zenPromptWorkflowSteps.assistantFamily, pattern),
+                ilike(zenPromptWorkflowSteps.mode, pattern)
+              )
+            )
+          : and(
+              eq(zenPromptWorkflows.userId, userId),
+              or(
+                ilike(zenPromptWorkflowSteps.title, pattern),
+                ilike(zenPromptWorkflowSteps.template, pattern),
+                ilike(zenPromptWorkflowSteps.assistantFamily, pattern),
+                ilike(zenPromptWorkflowSteps.mode, pattern)
+              )
+            )
       )
       .limit(PER_ENTITY_LIMIT)
 
@@ -337,10 +414,16 @@ class NeonSearchRepository {
       .select()
       .from(zenPromptWorkflows)
       .where(
-        and(
-          eq(zenPromptWorkflows.userId, userId),
-          inArray(zenPromptWorkflows.id, workflowIds)
-        )
+        projectId
+          ? and(
+              eq(zenPromptWorkflows.userId, userId),
+              eq(zenPromptWorkflows.projectId, projectId),
+              inArray(zenPromptWorkflows.id, workflowIds)
+            )
+          : and(
+              eq(zenPromptWorkflows.userId, userId),
+              inArray(zenPromptWorkflows.id, workflowIds)
+            )
       )
       .orderBy(desc(zenPromptWorkflows.updatedAt))
 
@@ -425,20 +508,31 @@ class NeonSearchRepository {
   private async searchFiles(
     userId: string,
     query: string,
-    pattern: string
+    pattern: string,
+    projectId?: string | null
   ): Promise<SearchResult[]> {
     const rows = await getDatabaseClient()
       .select()
       .from(zenFiles)
       .where(
-        and(
-          eq(zenFiles.userId, userId),
-          or(
-            ilike(zenFiles.fileName, pattern),
-            ilike(zenFiles.mimeType, pattern),
-            sql`${zenFiles.metadata}::text ILIKE ${pattern}`
-          )
-        )
+        projectId
+          ? and(
+              eq(zenFiles.userId, userId),
+              eq(zenFiles.projectId, projectId),
+              or(
+                ilike(zenFiles.fileName, pattern),
+                ilike(zenFiles.mimeType, pattern),
+                sql`${zenFiles.metadata}::text ILIKE ${pattern}`
+              )
+            )
+          : and(
+              eq(zenFiles.userId, userId),
+              or(
+                ilike(zenFiles.fileName, pattern),
+                ilike(zenFiles.mimeType, pattern),
+                sql`${zenFiles.metadata}::text ILIKE ${pattern}`
+              )
+            )
       )
       .orderBy(desc(zenFiles.updatedAt))
       .limit(PER_ENTITY_LIMIT)
@@ -474,7 +568,8 @@ class NeonSearchRepository {
   private async searchGeneratedImages(
     userId: string,
     query: string,
-    pattern: string
+    pattern: string,
+    projectId?: string | null
   ): Promise<SearchResult[]> {
     const rows = await getDatabaseClient()
       .select({
@@ -502,15 +597,27 @@ class NeonSearchRepository {
         )
       )
       .where(
-        and(
-          eq(zenGeneratedImages.userId, userId),
-          or(
-            ilike(zenGeneratedImages.prompt, pattern),
-            ilike(zenGeneratedImages.negativePrompt, pattern),
-            ilike(zenGeneratedImages.model, pattern),
-            sql`${zenGeneratedImages.metadata}::text ILIKE ${pattern}`
-          )
-        )
+        projectId
+          ? and(
+              eq(zenGeneratedImages.userId, userId),
+              eq(zenConversations.userId, userId),
+              eq(zenConversations.projectId, projectId),
+              or(
+                ilike(zenGeneratedImages.prompt, pattern),
+                ilike(zenGeneratedImages.negativePrompt, pattern),
+                ilike(zenGeneratedImages.model, pattern),
+                sql`${zenGeneratedImages.metadata}::text ILIKE ${pattern}`
+              )
+            )
+          : and(
+              eq(zenGeneratedImages.userId, userId),
+              or(
+                ilike(zenGeneratedImages.prompt, pattern),
+                ilike(zenGeneratedImages.negativePrompt, pattern),
+                ilike(zenGeneratedImages.model, pattern),
+                sql`${zenGeneratedImages.metadata}::text ILIKE ${pattern}`
+              )
+            )
       )
       .orderBy(desc(zenGeneratedImages.updatedAt))
       .limit(PER_ENTITY_LIMIT)
@@ -546,19 +653,29 @@ class NeonSearchRepository {
   private async searchModelComparisons(
     userId: string,
     query: string,
-    pattern: string
+    pattern: string,
+    projectId?: string | null
   ): Promise<SearchResult[]> {
     const rows = await getDatabaseClient()
       .select()
       .from(zenModelComparisons)
       .where(
-        and(
-          eq(zenModelComparisons.userId, userId),
-          or(
-            ilike(zenModelComparisons.prompt, pattern),
-            ilike(zenModelComparisons.status, pattern)
-          )
-        )
+        projectId
+          ? and(
+              eq(zenModelComparisons.userId, userId),
+              eq(zenModelComparisons.projectId, projectId),
+              or(
+                ilike(zenModelComparisons.prompt, pattern),
+                ilike(zenModelComparisons.status, pattern)
+              )
+            )
+          : and(
+              eq(zenModelComparisons.userId, userId),
+              or(
+                ilike(zenModelComparisons.prompt, pattern),
+                ilike(zenModelComparisons.status, pattern)
+              )
+            )
       )
       .orderBy(desc(zenModelComparisons.updatedAt))
       .limit(PER_ENTITY_LIMIT)
