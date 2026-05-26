@@ -36,6 +36,26 @@ const assistantFamilyCheck = [
 
 const textModeCheck = ['general', 'creative', 'logic', 'code', 'live'] as const
 
+const artifactSourceTypeCheck = [
+  'chat_message',
+  'model_comparison',
+  'workflow_run',
+  'manual',
+  'prism_prompt',
+  'pulse_report',
+] as const
+
+const artifactTypeCheck = [
+  'document',
+  'code',
+  'table',
+  'image_prompt',
+  'research_report',
+  'brand_asset',
+  'checklist',
+  'workflow_output',
+] as const
+
 export const zenUsers = pgTable(
   'zen_users',
   {
@@ -1005,6 +1025,53 @@ export const zenGeneratedImages = pgTable(
     check(
       'zen_generated_images_status_check',
       sql`${table.status} in ('created', 'stored', 'failed', 'deleted')`
+    ),
+  ]
+)
+
+export const zenArtifacts = pgTable(
+  'zen_artifacts',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => zenUsers.id, { onDelete: 'cascade' }),
+    projectId: text('project_id'),
+    conversationId: text('conversation_id').references(() => zenConversations.id, {
+      onDelete: 'set null',
+    }),
+    sourceMessageId: text('source_message_id').references(() => zenMessages.id, {
+      onDelete: 'set null',
+    }),
+    sourceType: text('source_type').notNull().default('manual'),
+    title: text('title').notNull(),
+    artifactType: text('artifact_type').notNull().default('document'),
+    content: text('content').notNull().default(''),
+    metadata: jsonb('metadata').notNull().default({}),
+    ...timestamps,
+  },
+  (table) => [
+    index('zen_artifacts_user_updated_idx').on(table.userId, table.updatedAt),
+    index('zen_artifacts_user_project_updated_idx').on(
+      table.userId,
+      table.projectId,
+      table.updatedAt
+    ),
+    index('zen_artifacts_conversation_idx').on(table.conversationId),
+    index('zen_artifacts_source_message_idx').on(table.sourceMessageId),
+    check(
+      'zen_artifacts_source_type_check',
+      sql`${table.sourceType} in (${sql.join(
+        artifactSourceTypeCheck.map((sourceType) => sql`${sourceType}`),
+        sql`, `
+      )})`
+    ),
+    check(
+      'zen_artifacts_artifact_type_check',
+      sql`${table.artifactType} in (${sql.join(
+        artifactTypeCheck.map((artifactType) => sql`${artifactType}`),
+        sql`, `
+      )})`
     ),
   ]
 )
