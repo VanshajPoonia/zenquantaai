@@ -418,3 +418,185 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
             <FolderPlus className="size-4" />
             <span className="truncate">
               {trimmedQuery ? `New project: ${trimmedQuery}` : 'New project'}
+            </span>
+          </CommandItem>
+          <CommandItem
+            value="search workspace command palette"
+            onSelect={() => setQuery('')}
+          >
+            <CommandIcon className="size-4" />
+            <span>Search workspace</span>
+          </CommandItem>
+          <CommandItem
+            value="open dashboard usage"
+            onSelect={() => openWorkspaceUrl('/dashboard')}
+          >
+            <LayoutDashboard className="size-4" />
+            <span>Open dashboard</span>
+          </CommandItem>
+          <CommandItem
+            value="open pricing plans"
+            onSelect={() => openWorkspaceUrl('/pricing')}
+          >
+            <CreditCard className="size-4" />
+            <span>Open pricing</span>
+          </CommandItem>
+          <CommandItem
+            value="open prompt library prompts workflows"
+            onSelect={() => void runAction(() => openWorkspaceTool('prompt-library'))}
+          >
+            <BookText className="size-4" />
+            <span>Open prompt library</span>
+          </CommandItem>
+          <CommandItem
+            value="open model comparison compare assistants"
+            onSelect={() =>
+              void runAction(() => openWorkspaceTool('model-comparison'))
+            }
+          >
+            <GitCompareArrows className="size-4" />
+            <span>Open model comparison</span>
+          </CommandItem>
+          <CommandItem
+            value="open custom assistants builder"
+            onSelect={() =>
+              void runAction(() => openWorkspaceTool('custom-assistants'))
+            }
+          >
+            <Bot className="size-4" />
+            <span>Open custom assistants</span>
+          </CommandItem>
+          <CommandItem
+            value="open prism image history recent generations"
+            onSelect={() => openWorkspaceUrl('/dashboard')}
+          >
+            <ImageIcon className="size-4" />
+            <span>Open Prism image history</span>
+          </CommandItem>
+        </CommandGroup>
+
+        <CommandGroup heading="Switch Assistant">
+          {ASSISTANT_MODES.map((mode) => {
+            const config = MODE_CONFIGS[mode]
+            const family = config.family
+            return (
+              <CommandItem
+                key={mode}
+                value={`switch assistant ${config.name} ${family} ${ASSISTANT_FAMILY_COPY[family].description}`}
+                onSelect={() => void runAction(() => setCurrentMode(mode))}
+              >
+                <ModeIcon mode={mode} size="sm" />
+                <span>{config.name}</span>
+                {currentMode === mode ? (
+                  <CommandShortcut>Active</CommandShortcut>
+                ) : null}
+              </CommandItem>
+            )
+          })}
+        </CommandGroup>
+
+        {matchingWorkflows.length > 0 ? (
+          <CommandGroup heading="Run Prompt Workflow">
+            {matchingWorkflows.slice(0, 8).map((workflow) => (
+              <CommandItem
+                key={workflow.id}
+                value={`run workflow ${workflow.title} ${workflow.description ?? ''}`}
+                onSelect={() =>
+                  void runAction(() =>
+                    executeTarget({
+                      type: 'run_prompt_workflow',
+                      workflowId: workflow.id,
+                    })
+                  )
+                }
+                className="items-start gap-3"
+              >
+                <Play className="mt-0.5 size-4" />
+                <div className="min-w-0">
+                  <p className="truncate">{workflow.title}</p>
+                  <p className="truncate text-xs text-muted-foreground">
+                    {workflow.steps.length} steps
+                  </p>
+                </div>
+              </CommandItem>
+            ))}
+          </CommandGroup>
+        ) : null}
+
+        {matchingAssistants.length > 0 ? (
+          <CommandGroup heading="Custom Assistants">
+            {matchingAssistants.slice(0, 8).map((assistant) => (
+              <CommandItem
+                key={assistant.id}
+                value={`custom assistant ${assistant.name} ${assistant.description} ${assistant.baseMode}`}
+                disabled={!assistant.isEnabled}
+                onSelect={() =>
+                  void runAction(() =>
+                    executeTarget({
+                      type: 'switch_custom_assistant',
+                      assistantId: assistant.id,
+                    })
+                  )
+                }
+              >
+                <span className="flex size-5 items-center justify-center text-sm">
+                  {assistant.iconEmoji}
+                </span>
+                <span className="truncate">{assistant.name}</span>
+                <CommandShortcut>{assistant.baseMode}</CommandShortcut>
+              </CommandItem>
+            ))}
+          </CommandGroup>
+        ) : null}
+
+        {projects.length > 0 ? (
+          <CommandGroup heading="Projects">
+            {projects.slice(0, 8).map((project) => (
+              <CommandItem
+                key={project.id}
+                value={`open project ${project.name} ${project.description ?? ''}`}
+                onSelect={() =>
+                  void runAction(() =>
+                    executeTarget({ type: 'open_project', projectId: project.id })
+                  )
+                }
+              >
+                <Folder className="size-4" />
+                <span className="truncate">{project.name}</span>
+              </CommandItem>
+            ))}
+          </CommandGroup>
+        ) : null}
+
+        {conversations.length > 0 ? (
+          <CommandGroup heading="Recent Conversations">
+            {conversations.slice(0, 6).map((conversation) => (
+              <CommandItem
+                key={conversation.id}
+                value={`open conversation ${conversation.title} ${conversation.preview}`}
+                onSelect={() =>
+                  void runAction(() =>
+                    executeTarget({
+                      type: 'open_conversation',
+                      conversationId: conversation.id,
+                    })
+                  )
+                }
+              >
+                <MessageSquare className="size-4" />
+                <span className="truncate">{conversation.title}</span>
+              </CommandItem>
+            ))}
+          </CommandGroup>
+        ) : null}
+
+        {isRunningAction ? (
+          <div className="flex items-center gap-2 border-t border-border px-3 py-2 text-xs text-muted-foreground">
+            <Loader2 className="size-3.5 animate-spin" />
+            <span>Running command...</span>
+          </div>
+        ) : null}
+      </CommandList>
+    </CommandDialog>
+  )
+}
