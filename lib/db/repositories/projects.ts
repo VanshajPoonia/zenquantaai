@@ -51,6 +51,16 @@ function projectToInsert(userId: string, project: Project) {
 }
 
 class NeonProjectsRepository {
+  async get(userId: string, projectId: string): Promise<Project | null> {
+    const rows = await getDatabaseClient()
+      .select()
+      .from(zenProjects)
+      .where(and(eq(zenProjects.userId, userId), eq(zenProjects.id, projectId)))
+      .limit(1)
+
+    return rows[0] ? rowToProject(rows[0]) : null
+  }
+
   async list(userId: string): Promise<Project[]> {
     const db = getDatabaseClient()
     const rows = await db

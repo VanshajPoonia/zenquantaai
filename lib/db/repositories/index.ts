@@ -13,6 +13,7 @@ export {
   neonAdminAuditLogsRepository,
   neonPlanRequestsRepository,
 } from './plan-requests'
+export { neonProjectHomeRepository } from './project-home'
 export { neonProfilesRepository } from './profiles'
 export { neonPromptWorkflowsRepository } from './prompt-workflows'
 export { neonProjectsRepository } from './projects'
