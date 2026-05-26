@@ -36,6 +36,7 @@ import {
   PromptWorkflowInput,
   PromptWorkflowRun,
   PromptWorkflowRunStatus,
+  SearchScope,
   SendLifecycleStatus,
   SessionSettings,
   StreamEvent,
@@ -84,7 +85,11 @@ import {
   conversationToMarkdown,
   downloadTextFile,
 } from '@/lib/utils/export'
-import { serializeAttachment, toAttachmentContext } from '@/lib/utils/files'
+import {
+  createPendingAttachment,
+  serializeAttachment,
+  toAttachmentContext,
+} from '@/lib/utils/files'
 import { expandWorkflowTemplate } from '@/lib/utils/prompt-workflows'
 
 interface SendMessageInput {
@@ -127,6 +132,12 @@ interface WorkspaceToolRequest {
   tool: WorkspaceTool
 }
 
+interface WorkspaceSearchRequest {
+  requestId: number
+  scope: SearchScope
+  projectId?: string | null
+}
+
 interface AuthSessionResponse {
   authenticated: boolean
   user: AuthState['user']
@@ -147,6 +158,8 @@ interface ChatContextType {
   currentChat: Chat | null
   setCurrentChat: (chat: ConversationSummary | Conversation | null) => void
   openConversation: (conversationId: string) => Promise<Conversation | null>
+  activeProjectHomeId: string | null
+  openProjectHome: (projectId: string) => void
   goHome: () => void
   createNewChat: () => Promise<void>
   deleteChat: (chatId: string) => Promise<void>
@@ -186,6 +199,7 @@ interface ChatContextType {
   selectedProjectId: ProjectFilterId
   setSelectedProjectId: (projectId: ProjectFilterId) => void
   createProject: (name: string) => Promise<Project | null>
+  uploadProjectFiles: (projectId: string, files: File[]) => Promise<Attachment[]>
   moveChatToProject: (chatId: string, projectId: string) => Promise<void>
   moveCurrentChatToProject: (projectId: string) => Promise<void>
   promptLibrary: PromptLibraryItem[]
@@ -220,6 +234,12 @@ interface ChatContextType {
   workspaceToolRequest: WorkspaceToolRequest | null
   openWorkspaceTool: (tool: WorkspaceTool) => void
   clearWorkspaceToolRequest: (requestId: number) => void
+  workspaceSearchRequest: WorkspaceSearchRequest | null
+  openWorkspaceSearch: (request?: {
+    scope?: SearchScope
+    projectId?: string | null
+  }) => void
+  clearWorkspaceSearchRequest: (requestId: number) => void
 }
 
 const ChatContext = createContext<ChatContextType | undefined>(undefined)
@@ -335,6 +355,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const [projects, setProjects] = useState<Project[]>([])
   const [selectedProjectIdState, setSelectedProjectIdState] =
     useState<ProjectFilterId>('all')
+  const [activeProjectHomeId, setActiveProjectHomeId] = useState<string | null>(null)
   const [promptLibrary, setPromptLibrary] = useState<PromptLibraryItem[]>([])
   const [promptWorkflows, setPromptWorkflows] = useState<PromptWorkflow[]>([])
   const [customAssistants, setCustomAssistants] = useState<CustomAssistant[]>([])
@@ -343,6 +364,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const [queuedPrompts, setQueuedPrompts] = useState<QueuedPrompt[]>([])
   const [workspaceToolRequest, setWorkspaceToolRequest] =
     useState<WorkspaceToolRequest | null>(null)
+  const [workspaceSearchRequest, setWorkspaceSearchRequest] =
+    useState<WorkspaceSearchRequest | null>(null)
   const streamAbortRef = useRef<AbortController | null>(null)
   const activeSendIdRef = useRef<string | null>(null)
   const conversationsRef = useRef<Conversation[]>([])
@@ -350,6 +373,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const queuedPromptsRef = useRef<QueuedPrompt[]>([])
   const isProcessingQueueRef = useRef(false)
   const workspaceToolRequestIdRef = useRef(0)
+  const workspaceSearchRequestIdRef = useRef(0)
   const hasAutoOpenedOnboardingRef = useRef(false)
 
   const chats = useMemo(
@@ -402,12 +426,14 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     setConversations([])
     setCurrentChatState(null)
     setProjects([])
+    setActiveProjectHomeId(null)
     setPromptLibrary([])
     setPromptWorkflows([])
     setCustomAssistants([])
     setCurrentCustomAssistantId(null)
     setQueuedPrompts([])
     setWorkspaceToolRequest(null)
+    setWorkspaceSearchRequest(null)
     setIsOnboardingOpen(false)
     hasAutoOpenedOnboardingRef.current = false
     setCurrentModeState(DEFAULT_APP_SETTINGS.defaultMode)
@@ -471,6 +497,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       writeBrowserCurrentChatId(nextCurrentChat?.id ?? null)
 
       if (nextCurrentChat) {
+        setActiveProjectHomeId(null)
         setCurrentModeState(nextCurrentChat.mode)
       }
     },
@@ -548,6 +575,11 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
   const setSelectedProjectId = useCallback((projectId: ProjectFilterId) => {
     setSelectedProjectIdState(projectId)
+    setActiveProjectHomeId((currentProjectHomeId) =>
+      currentProjectHomeId && currentProjectHomeId !== projectId
+        ? null
+        : currentProjectHomeId
+    )
     writeBrowserSelectedProjectId(projectId === 'all' ? null : projectId)
   }, [])
 
@@ -877,6 +909,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     (chat: ConversationSummary | Conversation | null) => {
       if (!chat) {
         setCurrentChatState(null)
+        setActiveProjectHomeId(null)
         setCurrentCustomAssistantId(null)
         writeBrowserCurrentChatId(null)
         return
@@ -889,6 +922,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
       setCurrentModeState(nextConversation.mode)
       setCurrentCustomAssistantId(nextConversation.customAssistantId ?? null)
+      setActiveProjectHomeId(null)
       setCurrentChatState(nextConversation)
       writeBrowserCurrentChatId(nextConversation.id)
     },
@@ -944,6 +978,29 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     )
   }, [])
 
+  const openWorkspaceSearch = useCallback(
+    (
+      request: {
+        scope?: SearchScope
+        projectId?: string | null
+      } = {}
+    ) => {
+      workspaceSearchRequestIdRef.current += 1
+      setWorkspaceSearchRequest({
+        requestId: workspaceSearchRequestIdRef.current,
+        scope: request.scope ?? (request.projectId ? 'project' : 'global'),
+        projectId: request.projectId ?? null,
+      })
+    },
+    []
+  )
+
+  const clearWorkspaceSearchRequest = useCallback((requestId: number) => {
+    setWorkspaceSearchRequest((previous) =>
+      previous?.requestId === requestId ? null : previous
+    )
+  }, [])
+
   const setCurrentMode = useCallback(
     (mode: AIMode) => {
       setCurrentModeState(mode)
@@ -978,6 +1035,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     setSendLifecycleStatus('idle')
     setStreamingState({ status: 'idle' })
     setSearchQuery('')
+    setActiveProjectHomeId(null)
     setCurrentChatState(null)
     currentChatRef.current = null
     setCurrentCustomAssistantId(null)
@@ -988,6 +1046,15 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     )
   }, [appSettings])
 
+  const openProjectHome = useCallback(
+    (projectId: string) => {
+      setSelectedProjectId(projectId)
+      goHome()
+      setActiveProjectHomeId(projectId)
+    },
+    [goHome, setSelectedProjectId]
+  )
+
   const createNewChat = useCallback(async () => {
     streamAbortRef.current?.abort()
     streamAbortRef.current = null
@@ -995,6 +1062,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     setSendLifecycleStatus('idle')
     setStreamingState({ status: 'idle' })
     setSearchQuery('')
+    setActiveProjectHomeId(null)
     setCurrentChatState(null)
     currentChatRef.current = null
     setCurrentCustomAssistantId(null)
@@ -1616,6 +1684,21 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       ]
     },
     [handleUnauthorized]
+  )
+
+  const uploadProjectFiles = useCallback(
+    async (projectId: string, files: File[]): Promise<Attachment[]> => {
+      if (!projectId || files.length === 0) return []
+
+      const pendingAttachments = await Promise.all(
+        files.map((file) => createPendingAttachment(file))
+      )
+
+      return await uploadAttachments(pendingAttachments, {
+        projectId,
+      })
+    },
+    [uploadAttachments]
   )
 
   const runTextAction = useCallback(
@@ -2798,6 +2881,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       currentChat,
       setCurrentChat,
       openConversation,
+      activeProjectHomeId,
+      openProjectHome,
       goHome,
       createNewChat,
       deleteChat,
@@ -2835,6 +2920,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       selectedProjectId,
       setSelectedProjectId,
       createProject,
+      uploadProjectFiles,
       moveChatToProject,
       moveCurrentChatToProject,
       promptLibrary,
@@ -2857,6 +2943,9 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       workspaceToolRequest,
       openWorkspaceTool,
       clearWorkspaceToolRequest,
+      workspaceSearchRequest,
+      openWorkspaceSearch,
+      clearWorkspaceSearchRequest,
     }),
     [
       appSettings,
@@ -2864,11 +2953,13 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       authError,
       authState,
       awaitRecommendationDecision,
+      activeProjectHomeId,
       beginPromptPrecheck,
       chats,
       chooseModelComparisonResponse,
       clearPromptPrecheck,
       clearWorkspaceToolRequest,
+      clearWorkspaceSearchRequest,
       completeOnboarding,
       conversations,
       createNewChat,
@@ -2890,7 +2981,9 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       isOnboardingOpen,
       openConversation,
       openOnboarding,
+      openProjectHome,
       openWorkspaceTool,
+      openWorkspaceSearch,
       queuedPrompts.length,
       setSidebarWidth,
       sidebarWidth,
@@ -2927,6 +3020,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       togglePinChat,
       updateApiSettings,
       updateSessionSettings,
+      uploadProjectFiles,
+      workspaceSearchRequest,
       workspaceToolRequest,
     ]
   )
