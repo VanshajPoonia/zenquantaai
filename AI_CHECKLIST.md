@@ -120,6 +120,8 @@ Current Neon-backed runtime routes:
 - `/api/assistant-recommendations`
 - `/api/projects`
 - `/api/projects/[id]`
+- `/api/search`
+- `/api/onboarding`
 - `/api/conversations`
 - `/api/conversations/[id]`
 - conversation persistence inside `/api/chat`

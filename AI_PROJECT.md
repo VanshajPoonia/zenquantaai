@@ -40,6 +40,8 @@ This is the current six-assistant platform, not the old four-mode version.
 - Generated image files stored through the neutral storage abstraction.
 - Local prompt precheck and assistant recommendations.
 - Projects.
+- Global search and authenticated command palette.
+- First-run onboarding with starter prompts and optional starter project.
 - Prompt library.
 - Reusable prompt workflows with ordered assistant-family steps.
 - Text model comparison mode with selectable best-response save-in.
@@ -91,6 +93,8 @@ Mode mapping:
 - `/api/images/history`: image generation history.
 - `/api/conversations` and `/api/conversations/[id]`: conversation persistence.
 - `/api/projects` and `/api/projects/[id]`: project management.
+- `/api/search`: user-scoped workspace search across Neon-backed projects, conversations, messages, prompts, workflows, custom assistants, file metadata, generated image metadata, and model comparisons.
+- `/api/onboarding`: first-run workspace setup, starter prompt/project creation, and onboarding settings updates.
 - `/api/prompts` and `/api/prompts/[id]`: prompt library.
 - `/api/prompt-workflows`, `/api/prompt-workflows/[id]`, and `/api/prompt-workflows/[id]/runs`: reusable workflow CRUD and lightweight run tracking.
 - `/api/model-comparisons` and `/api/model-comparisons/[id]/choose`: text assistant/model comparison and chosen response save-in.
@@ -130,6 +134,8 @@ Active Neon runtime data paths are:
 - `/api/assistant-recommendations`
 - `/api/projects`
 - `/api/projects/[id]`
+- `/api/search`
+- `/api/onboarding`
 - `/api/conversations`
 - `/api/conversations/[id]`
 - conversation persistence inside `/api/chat`
