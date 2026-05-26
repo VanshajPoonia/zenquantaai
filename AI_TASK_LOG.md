@@ -53,6 +53,24 @@ Audit date: 2026-05-26. Documentation-only audit before new product features; no
 
 ## Completed Work
 
+### 2026-05-26 - Project Search V1
+
+- Extended `/api/search` with optional authenticated `projectId` scoping and response scope metadata while preserving global search behavior.
+- Added project-scoped search filtering in the Neon search repository for conversations, messages, files, generated images linked through project conversations, project-scoped workflows, and project-scoped model comparisons.
+- Updated the command palette with “Search everywhere” and “Search this project” scope controls, grouped search results, scoped loading/error/empty states, and project-default scope when a concrete project is active.
+- Wired Project Home’s search quick action to open the command palette in project scope while leaving the local Project Home dashboard filter intact.
+- Preserved constraints: no vector/semantic search, no external search provider, no schema/dependency/auth/billing/storage changes, no Supabase or Stripe.
+- Verification: `npm run typecheck` passed; `npm run lint` passed with the existing 14 warnings; `npm run build` passed with the existing Node `[DEP0205]` `module.register()` deprecation warning; unauthenticated `GET /api/search?q=test&projectId=project-inbox` returned `401`.
+
+### 2026-05-26 - Project Home V1
+
+- Added protected `/api/projects/[id]/home` backed by a Neon aggregate repository for authenticated, user-scoped project summaries.
+- Added the workspace Project Home view with overview counts, recent conversations, uploaded file metadata, generated image metadata, project-scoped workflow/playbook summaries, memory status, suggested next actions, local project-home filtering, and quick actions for chat, upload, workflows, Prism, and Pulse.
+- Wired Project Home into the sidebar project selector and command palette while keeping plain project selection as a chat filter.
+- Preserved constraints: no OpenRouter calls on page load, no billing/auth/storage-provider/schema/dependency changes, no Supabase or Stripe, and private file reads still go through `/api/files/object`.
+- Verification: `npm run typecheck` passed; `npm run lint` passed with the existing 14 warnings; `npm run build` passed with the existing Node `[DEP0205]` `module.register()` deprecation warning; unauthenticated `GET /api/projects/project-inbox/home` returned `401`.
+- Remaining risks: Project Home uses current project ID text fields rather than foreign-keyed project relationships; prompt library items remain global, so project playbooks are represented by project-scoped prompt workflows only.
+
 ### 2026-05-26 - First-Run Onboarding V1
 
 - Added onboarding state to the existing Neon-backed user settings payload with normalized `not_started`, `completed`, and `skipped` states.
