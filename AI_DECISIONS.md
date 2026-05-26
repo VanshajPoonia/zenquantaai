@@ -82,6 +82,44 @@ Reason:
 - Text chat and Prism image generation use separate transports and separate usage wallets.
 - Keeping comparison text-only avoids mixing side-by-side text responses with image-credit generation in the first version.
 
+## Artifacts Are Editable Neon Snapshots
+
+Decision: Artifact Studio v1 stores user-owned, editable artifact snapshots in Neon instead of object storage, realtime documents, or AI-generated background summaries.
+
+Evidence:
+
+- Artifact records live in `zen_artifacts`.
+- Artifact routes are protected under `/api/artifacts`.
+- Artifact content is markdown/plain text stored in Neon `content`, with source details in `metadata`.
+- Artifacts can be project-scoped and can reference source conversations/messages when available.
+- Saving or editing artifacts does not call OpenRouter and does not create usage events.
+
+Out of scope:
+
+- Realtime collaboration.
+- Version history.
+- Full rich-document editing.
+- External artifact storage.
+- Background AI summarization or rewriting.
+
+## Artifact Actions Reuse Text Billing
+
+Decision: AI-assisted Artifact Actions run through a protected artifact route that reuses the existing OpenRouter text generation helpers and billing enforcement instead of creating a separate AI gateway or background job.
+
+Evidence:
+
+- Artifact action requests live under `/api/artifacts/[id]/actions`.
+- The route verifies artifact ownership before generation.
+- Actions use text-only assistant modes: Velora/creative, Axiom/logic, and Nova/general.
+- Usage is enforced with `enforceTextUsage` and logged with `logTextUsage`.
+- Client responses scrub raw model cost and margin fields.
+
+Out of scope:
+
+- Artifact version tables.
+- Prism/image routes.
+- Automatic replacement of artifact content without preview.
+
 ## Neutral Private File Storage Replaces Supabase Storage
 
 Decision: Use a neutral private object storage abstraction for new uploads and generated images.
@@ -253,3 +291,13 @@ Reason:
 
 - `FILE_STORAGE_ACCESS_KEY_ID`, `FILE_STORAGE_SECRET_ACCESS_KEY`, and `OPENROUTER_API_KEY` are used by server-side code.
 - Client components should only use public env vars or API routes.
+
+## AI Playbooks Are A Product Layer Over Prompt Workflows
+
+Decision: Use "AI Playbooks" in the workspace UX while preserving existing prompt workflow routes, Neon tables, and repository names.
+
+Reason:
+
+- Existing prompt workflow data remains compatible.
+- Renaming backend tables/routes would add migration risk without changing product behavior.
+- Playbooks remain foreground, user-triggered runs through normal chat or Prism image transports; they are not a background automation engine, cron system, worker queue, or billing bypass.
