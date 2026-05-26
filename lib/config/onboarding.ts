@@ -178,3 +178,135 @@ export const STARTER_PACKS: Record<StarterPackId, StarterPack> = {
     prompts: [
       {
         id: 'onboarding_content_calendar_builder',
+        title: 'Content Calendar Builder',
+        mode: 'creative',
+        content:
+          'Create a content calendar for this audience and goal. Include themes, post ideas, hooks, formats, and repurposing notes: ',
+      },
+      {
+        id: 'onboarding_content_brand_voice_rewrite',
+        title: 'Brand Voice Rewrite',
+        mode: 'creative',
+        content:
+          'Rewrite this in a stronger brand voice. Keep the meaning, improve rhythm, make it specific, and offer three tone variants: ',
+      },
+      {
+        id: 'onboarding_content_prism_prompt_builder',
+        title: 'Prism Image Prompt Builder',
+        mode: 'image',
+        content:
+          'Turn this visual idea into a polished Prism image prompt with subject, composition, lighting, style, mood, and details to avoid: ',
+      },
+    ],
+  },
+  small_business: {
+    id: 'small_business',
+    label: 'Small Business Pack',
+    description: 'Handle customer communication, offers, and operational clarity.',
+    projectName: 'Small Business Workspace',
+    projectDescription: 'Customer replies, offers, operations, and planning.',
+    projectColor: 'general',
+    prompts: [
+      {
+        id: 'onboarding_small_business_customer_reply',
+        title: 'Customer Reply Draft',
+        mode: 'general',
+        content:
+          'Draft a helpful customer reply for this situation. Keep it warm, concise, specific, and include the next step: ',
+      },
+      {
+        id: 'onboarding_small_business_operations_checklist',
+        title: 'Operations Checklist',
+        mode: 'logic',
+        content:
+          'Create an operations checklist for this recurring task. Include owner, timing, dependencies, risks, and quality checks: ',
+      },
+      {
+        id: 'onboarding_small_business_local_offer',
+        title: 'Local Offer Brainstorm',
+        mode: 'creative',
+        content:
+          'Brainstorm practical offers for this local business. Include target customer, offer structure, copy angle, and launch steps: ',
+      },
+    ],
+  },
+  research: {
+    id: 'research',
+    label: 'Research Pack',
+    description: 'Build briefs, compare sources, and surface open questions.',
+    projectName: 'Research Workspace',
+    projectDescription: 'Research briefs, source matrices, and investigation notes.',
+    projectColor: 'live',
+    prompts: [
+      {
+        id: 'onboarding_research_source_brief',
+        title: 'Source-Grounded Brief',
+        mode: 'live',
+        content:
+          'Create a source-grounded research brief on this question. Separate known facts, evidence, uncertainty, and follow-up searches: ',
+      },
+      {
+        id: 'onboarding_research_literature_matrix',
+        title: 'Literature Review Matrix',
+        mode: 'logic',
+        content:
+          'Turn these papers or sources into a literature review matrix with methods, findings, limitations, and relevance: ',
+      },
+      {
+        id: 'onboarding_research_open_questions',
+        title: 'Open Questions Tracker',
+        mode: 'logic',
+        content:
+          'Extract open questions from this research area and rank them by importance, uncertainty, and next investigation step: ',
+      },
+    ],
+  },
+  agency: {
+    id: 'agency',
+    label: 'Agency Pack',
+    description: 'Move between discovery, concepts, client communication, and delivery.',
+    projectName: 'Agency Workspace',
+    projectDescription: 'Client briefs, campaign concepts, status updates, and delivery notes.',
+    projectColor: 'general',
+    prompts: [
+      {
+        id: 'onboarding_agency_client_discovery',
+        title: 'Client Discovery Brief',
+        mode: 'logic',
+        content:
+          'Turn these discovery notes into a client brief with goals, audience, constraints, risks, and recommended next steps: ',
+      },
+      {
+        id: 'onboarding_agency_campaign_concept',
+        title: 'Campaign Concept Sprint',
+        mode: 'creative',
+        content:
+          'Generate campaign concepts for this client goal. Include angle, audience insight, sample copy, visual direction, and execution notes: ',
+      },
+      {
+        id: 'onboarding_agency_status_update',
+        title: 'Client Status Update',
+        mode: 'general',
+        content:
+          'Draft a client status update from these notes. Include completed work, decisions, blockers, next steps, and a polished tone: ',
+      },
+    ],
+  },
+}
+
+export const ONBOARDING_ASSISTANT_MODES: AIMode[] = [
+  'general',
+  'creative',
+  'logic',
+  'code',
+  'live',
+  'image',
+]
+
+export function getOnboardingRecommendation(useCase: OnboardingUseCase) {
+  return ONBOARDING_RECOMMENDATIONS[useCase]
+}
+
+export function getStarterProjectId(packId: StarterPackId) {
+  return `onboarding_${packId}_project`
+}
