@@ -120,6 +120,7 @@ Current Neon-backed runtime routes:
 - `/api/assistant-recommendations`
 - `/api/projects`
 - `/api/projects/[id]`
+- `/api/projects/[id]/home`
 - `/api/search`
 - `/api/onboarding`
 - `/api/conversations`
@@ -202,13 +203,15 @@ Before changing persistence code again:
 8. With `TAVILY_API_KEY` configured, send a Pulse or `webSearch` prompt and verify sources appear.
 9. With an embeddings key configured, upload a text/code file, enable `fileContext`, and verify chat cites uploaded-file sources.
 10. Create and run a prompt workflow with at least two assistant-family steps and verify the steps queue into one conversation.
-11. Run a text model comparison, review candidates, and save one response into the conversation.
-12. Create/select a private custom text assistant and confirm it sends through normal `/api/chat` with usage limits intact.
-12. Generate an image with Prism and verify `/api/images/generate`.
-13. Check `/dashboard` for usage.
-14. If using admin flows, ensure the user has an admin role in `zen_profiles`.
-15. Check `/admin` with current-month defaults and optional date range, plan, assistant, and user filters.
-16. Confirm admin raw-cost views do not change user-facing `/dashboard` displayed-cost responses.
+11. Open Project Home from the workspace project selector and verify user-scoped conversations, files, generated images, playbooks, memory status, and quick actions.
+12. Use command palette search globally and with a selected Project Home scope, and verify project searches do not show other project data.
+13. Run a text model comparison, review candidates, and save one response into the conversation.
+14. Create/select a private custom text assistant and confirm it sends through normal `/api/chat` with usage limits intact.
+15. Generate an image with Prism and verify `/api/images/generate`.
+16. Check `/dashboard` for usage.
+17. If using admin flows, ensure the user has an admin role in `zen_profiles`.
+18. Check `/admin` with current-month defaults and optional date range, plan, assistant, and user filters.
+19. Confirm admin raw-cost views do not change user-facing `/dashboard` displayed-cost responses.
 
 ## Production Safety Checks
 
