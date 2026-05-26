@@ -7,6 +7,7 @@ import {
   FolderPlus,
   FolderTree,
   GripVertical,
+  LayoutDashboard,
   MoreHorizontal,
   PanelLeftClose,
 } from 'lucide-react'
@@ -320,6 +321,7 @@ export function Sidebar({ onOpenSettings }: SidebarProps) {
     projects,
     selectedProjectId,
     setSelectedProjectId,
+    openProjectHome,
     createProject,
     searchQuery,
     setSearchQuery,
@@ -510,6 +512,22 @@ export function Sidebar({ onOpenSettings }: SidebarProps) {
               </SelectContent>
             </Select>
           </div>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            title="Project home"
+            aria-label="Open project home"
+            className="size-9 rounded-xl bg-sidebar-accent/40 text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground"
+            disabled={selectedProjectId === 'all'}
+            onClick={() => {
+              if (selectedProjectId !== 'all') {
+                openProjectHome(selectedProjectId)
+              }
+            }}
+          >
+            <LayoutDashboard className="size-4" />
+          </Button>
           <Button
             type="button"
             variant="ghost"

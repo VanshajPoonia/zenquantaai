@@ -8,10 +8,12 @@ import { ChatMessage } from './message'
 import { EmptyState } from './empty-state'
 import { Composer } from './composer'
 import { ModeSwitcherCompact } from './mode-switcher'
+import { ProjectHome } from './project-home'
 
 export function ChatArea() {
   const {
     currentChat,
+    activeProjectHomeId,
     sendMessage,
     regenerateLastResponse,
     retryLastMessage,
@@ -76,11 +78,16 @@ export function ChatArea() {
     await sendMessage(input)
   }
 
+  const showProjectHome = !currentChat && Boolean(activeProjectHomeId)
   const showEmptyState = !currentChat || currentChat.messages.length === 0
 
   return (
     <div className="flex flex-col flex-1 h-full min-h-0 overflow-hidden">
-      {showEmptyState ? (
+      {showProjectHome && activeProjectHomeId ? (
+        <div className="flex-1 min-h-0 overflow-y-auto">
+          <ProjectHome projectId={activeProjectHomeId} />
+        </div>
+      ) : showEmptyState ? (
         <div className="flex-1 min-h-0 overflow-y-auto">
           <EmptyState onPromptSelect={setSelectedPrompt} />
         </div>
