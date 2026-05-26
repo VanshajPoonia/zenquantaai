@@ -1,4 +1,6 @@
 export { ChatLayout } from './chat-layout'
+export { ArtifactStudio } from './artifact-studio'
+export { PlaybookStudio } from './playbook-studio'
 export { Sidebar } from './sidebar'
 export { Header } from './header'
 export { ChatArea } from './chat-area'
