@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   Bot,
@@ -21,7 +21,14 @@ import {
 } from 'lucide-react'
 import { ASSISTANT_FAMILY_COPY, MODE_CONFIGS } from '@/lib/config'
 import { useChatContext } from '@/lib/chat-context'
-import { AIMode, SearchResponse, SearchResult, SearchResultTarget } from '@/types'
+import {
+  AIMode,
+  SearchEntityType,
+  SearchResponse,
+  SearchResult,
+  SearchResultTarget,
+  SearchScope,
+} from '@/types'
 import {
   CommandDialog,
   CommandEmpty,
@@ -31,6 +38,7 @@ import {
   CommandList,
   CommandShortcut,
 } from '@/components/ui/command'
+import { Button } from '@/components/ui/button'
 import { ModeIcon } from '@/lib/mode-utils'
 
 const ASSISTANT_MODES: AIMode[] = [
@@ -53,6 +61,18 @@ const ENTITY_LABELS: Record<SearchResult['entityType'], string> = {
   generated_image: 'Prism',
   model_comparison: 'Comparison',
 }
+
+const SEARCH_ENTITY_ORDER: SearchEntityType[] = [
+  'project',
+  'conversation',
+  'message',
+  'file',
+  'generated_image',
+  'prompt_workflow',
+  'prompt',
+  'model_comparison',
+  'custom_assistant',
+]
 
 function resultIcon(entityType: SearchResult['entityType']) {
   switch (entityType) {
@@ -116,34 +136,59 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
     currentMode,
     setCurrentMode,
     openConversation,
-    goHome,
+    openProjectHome,
     createNewChat,
     createProject,
     projects,
-    setSelectedProjectId,
+    selectedProjectId,
+    activeProjectHomeId,
     promptWorkflows,
     runPromptWorkflow,
     customAssistants,
     setCurrentCustomAssistant,
     openWorkspaceTool,
+    workspaceSearchRequest,
+    clearWorkspaceSearchRequest,
   } = useChatContext()
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<SearchResult[]>([])
+  const [searchScope, setSearchScope] = useState<SearchScope>('global')
+  const [searchProjectId, setSearchProjectId] = useState<string | null>(null)
   const [isSearching, setIsSearching] = useState(false)
   const [searchError, setSearchError] = useState<string | null>(null)
   const [isRunningAction, setIsRunningAction] = useState(false)
+  const previousOpenRef = useRef(false)
 
   const trimmedQuery = query.trim()
   const projectName = trimmedQuery || 'New Project'
+  const activeConcreteProjectId =
+    activeProjectHomeId ?? (selectedProjectId === 'all' ? null : selectedProjectId)
+  const scopedProject = searchProjectId
+    ? projects.find((project) => project.id === searchProjectId) ?? null
+    : null
+  const canSearchProject = Boolean(activeConcreteProjectId)
+  const effectiveSearchScope =
+    searchScope === 'project' && scopedProject ? 'project' : 'global'
+  const searchScopeLabel =
+    effectiveSearchScope === 'project' && scopedProject
+      ? scopedProject.name
+      : 'everywhere'
 
   const matchingWorkflows = useMemo(
     () =>
       promptWorkflows.filter((workflow) => {
+        if (
+          effectiveSearchScope === 'project' &&
+          scopedProject &&
+          workflow.projectId !== scopedProject.id
+        ) {
+          return false
+        }
         if (!trimmedQuery) return true
         const value = `${workflow.title} ${workflow.description ?? ''}`.toLowerCase()
         return value.includes(trimmedQuery.toLowerCase())
       }),
-    [promptWorkflows, trimmedQuery]
+    [effectiveSearchScope, promptWorkflows, scopedProject, trimmedQuery]
   )
 
   const matchingAssistants = useMemo(
@@ -155,6 +200,15 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
         return value.includes(trimmedQuery.toLowerCase())
       }),
     [customAssistants, trimmedQuery]
+  )
+
+  const groupedResults = useMemo(
+    () =>
+      SEARCH_ENTITY_ORDER.map((entityType) => ({
+        entityType,
+        results: results.filter((result) => result.entityType === entityType),
+      })).filter((group) => group.results.length > 0),
+    [results]
   )
 
   useEffect(() => {
@@ -178,6 +232,43 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
   }, [onOpenChange, open])
 
   useEffect(() => {
+    if (!workspaceSearchRequest) return
+
+    const requestedProjectId =
+      workspaceSearchRequest.projectId ?? activeConcreteProjectId
+
+    if (workspaceSearchRequest.scope === 'project' && requestedProjectId) {
+      setSearchScope('project')
+      setSearchProjectId(requestedProjectId)
+    } else {
+      setSearchScope('global')
+      setSearchProjectId(null)
+    }
+
+    clearWorkspaceSearchRequest(workspaceSearchRequest.requestId)
+  }, [
+    activeConcreteProjectId,
+    clearWorkspaceSearchRequest,
+    workspaceSearchRequest,
+  ])
+
+  useEffect(() => {
+    const wasOpen = previousOpenRef.current
+    previousOpenRef.current = open
+
+    if (!open || wasOpen || workspaceSearchRequest) return
+
+    if (activeConcreteProjectId) {
+      setSearchScope('project')
+      setSearchProjectId(activeConcreteProjectId)
+      return
+    }
+
+    setSearchScope('global')
+    setSearchProjectId(null)
+  }, [activeConcreteProjectId, open, workspaceSearchRequest])
+
+  useEffect(() => {
     if (!open) return
 
     if (trimmedQuery.length < 2) {
@@ -192,7 +283,12 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
       setIsSearching(true)
       setSearchError(null)
 
-      fetch(`/api/search?q=${encodeURIComponent(trimmedQuery)}`, {
+      const params = new URLSearchParams({ q: trimmedQuery })
+      if (effectiveSearchScope === 'project' && scopedProject) {
+        params.set('projectId', scopedProject.id)
+      }
+
+      fetch(`/api/search?${params.toString()}`, {
         cache: 'no-store',
         signal: controller.signal,
       })
@@ -230,7 +326,7 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
       window.clearTimeout(timeout)
       controller.abort()
     }
-  }, [open, trimmedQuery])
+  }, [effectiveSearchScope, open, scopedProject, trimmedQuery])
 
   const closePalette = () => {
     onOpenChange(false)
@@ -269,8 +365,7 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
   const executeTarget = async (target: SearchResultTarget) => {
     switch (target.type) {
       case 'open_project':
-        setSelectedProjectId(target.projectId)
-        goHome()
+        openProjectHome(target.projectId)
         return
       case 'open_conversation':
         await openConversation(target.conversationId)
@@ -322,78 +417,139 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
       description="Search workspace data and run workspace actions."
       className="max-w-3xl rounded-2xl border-border/70 bg-background/95 shadow-2xl"
     >
+      <div className="flex flex-wrap items-center gap-2 border-b border-border/60 px-3 py-2">
+        <Button
+          type="button"
+          variant={effectiveSearchScope === 'global' ? 'secondary' : 'ghost'}
+          size="sm"
+          className="h-8 rounded-xl"
+          onClick={() => {
+            setSearchScope('global')
+            setSearchProjectId(null)
+          }}
+        >
+          Search everywhere
+        </Button>
+        <Button
+          type="button"
+          variant={effectiveSearchScope === 'project' ? 'secondary' : 'ghost'}
+          size="sm"
+          className="h-8 rounded-xl"
+          disabled={!canSearchProject}
+          onClick={() => {
+            if (!activeConcreteProjectId) return
+            setSearchScope('project')
+            setSearchProjectId(activeConcreteProjectId)
+          }}
+        >
+          Search this project
+        </Button>
+        <span className="ml-auto truncate text-xs text-muted-foreground">
+          Scope: {searchScopeLabel}
+        </span>
+      </div>
       <CommandInput
         value={query}
         onValueChange={setQuery}
-        placeholder="Search workspace or run a command..."
+        placeholder={
+          effectiveSearchScope === 'project' && scopedProject
+            ? `Search ${scopedProject.name}...`
+            : 'Search workspace or run a command...'
+        }
       />
       <CommandList className="max-h-[70vh]">
         <CommandEmpty>No matching commands or workspace results.</CommandEmpty>
 
         {trimmedQuery.length >= 2 ? (
-          <CommandGroup heading="Workspace Results">
+          <>
             {isSearching ? (
-              <CommandItem disabled value="search-loading">
-                <Loader2 className="size-4 animate-spin" />
-                <span>Searching workspace...</span>
-              </CommandItem>
+              <CommandGroup heading="Search">
+                <CommandItem disabled value="search-loading">
+                  <Loader2 className="size-4 animate-spin" />
+                  <span>Searching {searchScopeLabel}...</span>
+                </CommandItem>
+              </CommandGroup>
             ) : null}
 
             {searchError ? (
-              <CommandItem disabled value="search-error">
-                <Search className="size-4 text-destructive" />
-                <span>{searchError}</span>
-              </CommandItem>
+              <CommandGroup heading="Search">
+                <CommandItem disabled value="search-error">
+                  <Search className="size-4 text-destructive" />
+                  <span>{searchError}</span>
+                </CommandItem>
+              </CommandGroup>
             ) : null}
 
             {!isSearching && !searchError && results.length === 0 ? (
-              <CommandItem disabled value="search-empty">
-                <Search className="size-4" />
-                <span>No workspace results for {trimmedQuery}.</span>
-              </CommandItem>
+              <CommandGroup
+                heading={
+                  effectiveSearchScope === 'project'
+                    ? 'Project Results'
+                    : 'Workspace Results'
+                }
+              >
+                <CommandItem disabled value="search-empty">
+                  <Search className="size-4" />
+                  <span>
+                    No {effectiveSearchScope === 'project' ? 'project' : 'workspace'}{' '}
+                    results for {trimmedQuery}.
+                  </span>
+                </CommandItem>
+              </CommandGroup>
             ) : null}
 
-            {results.map((result) => (
-              <CommandItem
-                key={`${result.entityType}-${result.id}`}
-                value={resultValue(result)}
-                onSelect={() => void runAction(() => executeTarget(result.target))}
-                className="items-start gap-3"
-              >
-                <div className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg border border-border/60 bg-card/70">
-                  {resultIcon(result.entityType)}
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
-                    <span className="truncate text-sm font-medium">
-                      {result.title}
-                    </span>
-                    <span className="shrink-0 rounded-md border border-border/60 px-1.5 py-0.5 text-[10px] uppercase tracking-[0.12em] text-muted-foreground">
-                      {ENTITY_LABELS[result.entityType]}
-                    </span>
-                  </div>
-                  {result.snippet ? (
-                    <p className="mt-1 line-clamp-2 text-xs leading-5 text-muted-foreground">
-                      {result.snippet}
-                    </p>
-                  ) : null}
-                  <div className="mt-2 flex flex-wrap gap-1.5">
-                    {metadataBadges(result.metadata).map((badge) => (
-                      <span
-                        key={badge}
-                        className="rounded-md bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground"
+            {!isSearching && !searchError
+              ? groupedResults.map((group) => (
+                  <CommandGroup
+                    key={group.entityType}
+                    heading={ENTITY_LABELS[group.entityType]}
+                  >
+                    {group.results.map((result) => (
+                      <CommandItem
+                        key={`${result.entityType}-${result.id}`}
+                        value={resultValue(result)}
+                        onSelect={() =>
+                          void runAction(() => executeTarget(result.target))
+                        }
+                        className="items-start gap-3"
                       >
-                        {badge}
-                      </span>
+                        <div className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg border border-border/60 bg-card/70">
+                          {resultIcon(result.entityType)}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2">
+                            <span className="truncate text-sm font-medium">
+                              {result.title}
+                            </span>
+                            <span className="shrink-0 rounded-md border border-border/60 px-1.5 py-0.5 text-[10px] uppercase tracking-[0.12em] text-muted-foreground">
+                              {ENTITY_LABELS[result.entityType]}
+                            </span>
+                          </div>
+                          {result.snippet ? (
+                            <p className="mt-1 line-clamp-2 text-xs leading-5 text-muted-foreground">
+                              {result.snippet}
+                            </p>
+                          ) : null}
+                          <div className="mt-2 flex flex-wrap gap-1.5">
+                            {metadataBadges(result.metadata).map((badge) => (
+                              <span
+                                key={badge}
+                                className="rounded-md bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground"
+                              >
+                                {badge}
+                              </span>
+                            ))}
+                            <span className="rounded-md bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                              {formatResultDate(result.updatedAt ?? result.createdAt)}
+                            </span>
+                          </div>
+                        </div>
+                      </CommandItem>
                     ))}
-                    <span className="rounded-md bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
-                      {formatResultDate(result.updatedAt ?? result.createdAt)}
-                    </span>
-                  </div>
-                </div>
-              </CommandItem>
-            ))}
-          </CommandGroup>
+                  </CommandGroup>
+                ))
+              : null}
+          </>
         ) : null}
 
         <CommandGroup heading="Actions">
@@ -410,8 +566,7 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
               void runAction(async () => {
                 const project = await createProject(projectName)
                 if (!project) return
-                setSelectedProjectId(project.id)
-                goHome()
+                openProjectHome(project.id)
               })
             }
           >

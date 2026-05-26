@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { ChatProvider, useChatContext } from '@/lib/chat-context'
 import { AuthGate } from '@/components/auth/auth-gate'
 import { Button } from '@/components/ui/button'
@@ -33,7 +33,13 @@ function ChatShell({
 }) {
   const [isAssistantHelpOpen, setIsAssistantHelpOpen] = useState(false)
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false)
-  const { authState, isSidebarOpen, toggleSidebar } = useChatContext()
+  const { authState, isSidebarOpen, toggleSidebar, workspaceSearchRequest } =
+    useChatContext()
+
+  useEffect(() => {
+    if (!workspaceSearchRequest) return
+    setIsCommandPaletteOpen(true)
+  }, [workspaceSearchRequest])
 
   if (authState.status === 'loading') {
     return <LoadingScreen />
