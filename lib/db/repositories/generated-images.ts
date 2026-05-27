@@ -1,6 +1,6 @@
 import 'server-only'
 
-import { and, desc, eq } from 'drizzle-orm'
+import { and, desc, eq, gte, ilike, lte, or } from 'drizzle-orm'
 import { getDatabaseClient } from '../client'
 import { zenGeneratedImages } from '../schema'
 import { compactObject, toIsoString } from './helpers'
@@ -16,6 +16,7 @@ export type NeonGeneratedImageStatus = 'created' | 'stored' | 'failed' | 'delete
 export interface NeonGeneratedImageMetadata {
   id: string
   userId: string
+  projectId: string | null
   conversationId: string | null
   messageId: string | null
   imageGenerationEventId: string | null
@@ -30,6 +31,7 @@ export interface NeonGeneratedImageMetadata {
   width: number | null
   height: number | null
   status: NeonGeneratedImageStatus
+  isFavorite: boolean
   metadata: Record<string, unknown>
   createdAt: string
   updatedAt: string
@@ -46,10 +48,19 @@ type PatchGeneratedImageInput = Partial<
   Omit<NeonGeneratedImageMetadata, 'id' | 'userId' | 'createdAt' | 'updatedAt'>
 >
 
+export interface GeneratedImageListFilters {
+  q?: string | null
+  projectId?: string | null
+  favorite?: boolean | null
+  from?: Date | null
+  to?: Date | null
+}
+
 function rowToGeneratedImage(row: GeneratedImageRow): NeonGeneratedImageMetadata {
   return {
     id: row.id,
     userId: row.userId,
+    projectId: row.projectId,
     conversationId: row.conversationId,
     messageId: row.messageId,
     imageGenerationEventId: row.imageGenerationEventId,
@@ -64,6 +75,7 @@ function rowToGeneratedImage(row: GeneratedImageRow): NeonGeneratedImageMetadata
     width: row.width,
     height: row.height,
     status: row.status as NeonGeneratedImageStatus,
+    isFavorite: row.isFavorite,
     metadata:
       row.metadata && typeof row.metadata === 'object' && !Array.isArray(row.metadata)
         ? (row.metadata as Record<string, unknown>)
@@ -74,11 +86,44 @@ function rowToGeneratedImage(row: GeneratedImageRow): NeonGeneratedImageMetadata
 }
 
 class NeonGeneratedImagesRepository {
-  async listByUser(userId: string): Promise<NeonGeneratedImageMetadata[]> {
+  async listByUser(
+    userId: string,
+    filters: GeneratedImageListFilters = {}
+  ): Promise<NeonGeneratedImageMetadata[]> {
+    const conditions = [eq(zenGeneratedImages.userId, userId)]
+    const query = filters.q?.trim()
+
+    if (query) {
+      const pattern = `%${query.replace(/[\\%_]/g, (match) => `\\${match}`)}%`
+      const searchCondition = or(
+        ilike(zenGeneratedImages.prompt, pattern),
+        ilike(zenGeneratedImages.model, pattern),
+        ilike(zenGeneratedImages.negativePrompt, pattern)
+      )
+
+      if (searchCondition) conditions.push(searchCondition)
+    }
+
+    if (filters.projectId) {
+      conditions.push(eq(zenGeneratedImages.projectId, filters.projectId))
+    }
+
+    if (typeof filters.favorite === 'boolean') {
+      conditions.push(eq(zenGeneratedImages.isFavorite, filters.favorite))
+    }
+
+    if (filters.from) {
+      conditions.push(gte(zenGeneratedImages.createdAt, filters.from))
+    }
+
+    if (filters.to) {
+      conditions.push(lte(zenGeneratedImages.createdAt, filters.to))
+    }
+
     const rows = await getDatabaseClient()
       .select()
       .from(zenGeneratedImages)
-      .where(eq(zenGeneratedImages.userId, userId))
+      .where(and(...conditions))
       .orderBy(desc(zenGeneratedImages.createdAt))
 
     return rows.map(rowToGeneratedImage)
@@ -123,6 +168,7 @@ class NeonGeneratedImagesRepository {
     const values = compactObject<GeneratedImageInsert>({
       id: input.id,
       userId: input.userId,
+      projectId: input.projectId,
       conversationId: input.conversationId,
       messageId: input.messageId,
       imageGenerationEventId: input.imageGenerationEventId,
@@ -137,6 +183,7 @@ class NeonGeneratedImagesRepository {
       width: input.width,
       height: input.height,
       status: input.status,
+      isFavorite: input.isFavorite,
       metadata: input.metadata,
     }) as GeneratedImageInsert
 
@@ -154,6 +201,7 @@ class NeonGeneratedImagesRepository {
     patch: PatchGeneratedImageInput
   ): Promise<NeonGeneratedImageMetadata | null> {
     const values = compactObject<Partial<GeneratedImageInsert>>({
+      projectId: patch.projectId,
       conversationId: patch.conversationId,
       messageId: patch.messageId,
       imageGenerationEventId: patch.imageGenerationEventId,
@@ -168,6 +216,7 @@ class NeonGeneratedImagesRepository {
       width: patch.width,
       height: patch.height,
       status: patch.status,
+      isFavorite: patch.isFavorite,
       metadata: patch.metadata,
       updatedAt: new Date(),
     })

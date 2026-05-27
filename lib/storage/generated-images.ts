@@ -104,6 +104,7 @@ function generatedImageName(attachment: Attachment): string {
 
 export async function storeGeneratedImageAttachment(input: {
   userId: string
+  projectId?: string | null
   conversationId: string
   messageId: string
   prompt: string
@@ -124,12 +125,14 @@ export async function storeGeneratedImageAttachment(input: {
     fileName,
     mimeType: image.mimeType || input.attachment.mimeType || 'image/png',
     bytes: image.buffer,
+    projectId: input.projectId ?? null,
     conversationId: input.conversationId,
     messageId: input.messageId,
     folder: 'generated-images',
   })
   await neonGeneratedImagesRepository.create({
     userId: input.userId,
+    projectId: input.projectId ?? null,
     conversationId: input.conversationId,
     messageId: input.messageId,
     imageGenerationEventId: null,
@@ -147,6 +150,7 @@ export async function storeGeneratedImageAttachment(input: {
     width: null,
     height: null,
     status: 'stored',
+    isFavorite: false,
     metadata: {
       attachmentId: input.attachment.id,
       fileId: uploaded.fileId,
@@ -202,6 +206,7 @@ export async function storeLatestGeneratedImageInConversation(input: {
             attachment.kind === 'image'
               ? storeGeneratedImageAttachment({
                   userId: input.userId,
+                  projectId: input.conversation.projectId ?? null,
                   conversationId: input.conversation.id,
                   messageId: message.id,
                   prompt: input.prompt,
