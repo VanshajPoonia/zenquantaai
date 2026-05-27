@@ -15,6 +15,8 @@ import { CommandPalette } from './command-palette'
 import { OnboardingDialog } from './onboarding-dialog'
 import { ArtifactStudio } from './artifact-studio'
 import { PlaybookStudio } from './playbook-studio'
+import { MemoryVault } from './memory-vault'
+import { PrismStudio } from './prism-studio'
 
 function LoadingScreen() {
   return (
@@ -94,6 +96,8 @@ function ChatShell({
 
       <ArtifactStudio />
       <PlaybookStudio />
+      <MemoryVault />
+      <PrismStudio />
 
       <SettingsModal
         open={isSettingsModalOpen}
