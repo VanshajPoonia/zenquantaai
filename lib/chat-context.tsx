@@ -32,7 +32,13 @@ import {
   CustomAssistantInput,
   ImageGenerateRequest,
   ImageGenerateResponse,
+  MemoryVaultConversationSummary,
+  MemoryVaultResponse,
   PendingAttachment,
+  PrismStudioHistoryFilters,
+  PrismStudioHistoryResponse,
+  PrismStudioImage,
+  PrismStudioImagePatch,
   Project,
   ModelComparison,
   OnboardingRequest,
@@ -97,7 +103,7 @@ import {
   serializeAttachment,
   toAttachmentContext,
 } from '@/lib/utils/files'
-import { expandWorkflowTemplate } from '@/lib/utils/prompt-workflows'
+import { buildWorkflowStepPrompt } from '@/lib/utils/prompt-workflows'
 
 interface SendMessageInput {
   content: string
@@ -138,12 +144,15 @@ type WorkspaceTool =
   | 'model-comparison'
   | 'custom-assistants'
   | 'artifacts'
+  | 'memory-vault'
+  | 'prism-studio'
 
 type WorkspaceToolRequestInput =
   | WorkspaceTool
   | {
       tool: WorkspaceTool
       artifactId?: string | null
+      imageId?: string | null
       projectId?: string | null
     }
 
@@ -151,6 +160,15 @@ interface WorkspaceToolRequest {
   requestId: number
   tool: WorkspaceTool
   artifactId?: string | null
+  imageId?: string | null
+  projectId?: string | null
+}
+
+interface ComposerDraftRequest {
+  requestId: number
+  content: string
+  kind: 'chat' | 'image'
+  mode: AIMode
   projectId?: string | null
 }
 
@@ -257,6 +275,21 @@ interface ChatContextType {
     artifactId: string,
     actionType: ArtifactActionType
   ) => Promise<ArtifactActionResponse>
+  listPrismImages: (
+    filters?: PrismStudioHistoryFilters
+  ) => Promise<PrismStudioHistoryResponse>
+  updatePrismImage: (
+    imageId: string,
+    patch: PrismStudioImagePatch
+  ) => Promise<PrismStudioImage | null>
+  listMemoryVault: () => Promise<MemoryVaultResponse>
+  setConversationMemoryEnabled: (
+    conversationId: string,
+    memoryEnabled: boolean
+  ) => Promise<MemoryVaultConversationSummary | null>
+  clearConversationMemory: (
+    conversationId: string
+  ) => Promise<MemoryVaultConversationSummary | null>
   runModelComparison: (
     input: RunModelComparisonInput
   ) => Promise<ModelComparison | null>
@@ -270,6 +303,14 @@ interface ChatContextType {
   workspaceToolRequest: WorkspaceToolRequest | null
   openWorkspaceTool: (request: WorkspaceToolRequestInput) => void
   clearWorkspaceToolRequest: (requestId: number) => void
+  composerDraftRequest: ComposerDraftRequest | null
+  prepareComposerDraft: (request: {
+    content: string
+    kind?: 'chat' | 'image'
+    mode?: AIMode
+    projectId?: string | null
+  }) => void
+  clearComposerDraftRequest: (requestId: number) => void
   workspaceSearchRequest: WorkspaceSearchRequest | null
   openWorkspaceSearch: (request?: {
     scope?: SearchScope
@@ -402,6 +443,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     useState<WorkspaceToolRequest | null>(null)
   const [workspaceSearchRequest, setWorkspaceSearchRequest] =
     useState<WorkspaceSearchRequest | null>(null)
+  const [composerDraftRequest, setComposerDraftRequest] =
+    useState<ComposerDraftRequest | null>(null)
   const streamAbortRef = useRef<AbortController | null>(null)
   const activeSendIdRef = useRef<string | null>(null)
   const conversationsRef = useRef<Conversation[]>([])
@@ -410,6 +453,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const isProcessingQueueRef = useRef(false)
   const workspaceToolRequestIdRef = useRef(0)
   const workspaceSearchRequestIdRef = useRef(0)
+  const composerDraftRequestIdRef = useRef(0)
   const hasAutoOpenedOnboardingRef = useRef(false)
 
   const chats = useMemo(
@@ -470,6 +514,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     setQueuedPrompts([])
     setWorkspaceToolRequest(null)
     setWorkspaceSearchRequest(null)
+    setComposerDraftRequest(null)
     setIsOnboardingOpen(false)
     hasAutoOpenedOnboardingRef.current = false
     setCurrentModeState(DEFAULT_APP_SETTINGS.defaultMode)
@@ -1007,6 +1052,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       requestId: workspaceToolRequestIdRef.current,
       tool: payload.tool,
       artifactId: payload.artifactId ?? null,
+      imageId: payload.imageId ?? null,
       projectId: payload.projectId ?? null,
     })
   }, [])
@@ -1066,6 +1112,39 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     },
     [applyConversationPatch, currentChat, persistConversationMutation]
   )
+
+  const prepareComposerDraft = useCallback(
+    (request: {
+      content: string
+      kind?: 'chat' | 'image'
+      mode?: AIMode
+      projectId?: string | null
+    }) => {
+      const mode = request.mode ?? (request.kind === 'image' ? 'image' : currentMode)
+      const kind = request.kind ?? (mode === 'image' ? 'image' : 'chat')
+
+      if (request.projectId) {
+        setSelectedProjectId(request.projectId)
+      }
+
+      setCurrentMode(mode)
+      composerDraftRequestIdRef.current += 1
+      setComposerDraftRequest({
+        requestId: composerDraftRequestIdRef.current,
+        content: request.content,
+        kind,
+        mode,
+        projectId: request.projectId ?? null,
+      })
+    },
+    [currentMode, setCurrentMode, setSelectedProjectId]
+  )
+
+  const clearComposerDraftRequest = useCallback((requestId: number) => {
+    setComposerDraftRequest((previous) =>
+      previous?.requestId === requestId ? null : previous
+    )
+  }, [])
 
   const goHome = useCallback(() => {
     streamAbortRef.current?.abort()
@@ -1632,6 +1711,95 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       )
     },
     [requestJson]
+  )
+
+  const listPrismImages = useCallback(
+    async (filters: PrismStudioHistoryFilters = {}) => {
+      const params = new URLSearchParams()
+
+      if (filters.q) params.set('q', filters.q)
+      if (filters.projectId) params.set('projectId', filters.projectId)
+      if (typeof filters.favorite === 'boolean') {
+        params.set('favorite', String(filters.favorite))
+      }
+      if (filters.from) params.set('from', filters.from)
+      if (filters.to) params.set('to', filters.to)
+
+      const query = params.toString()
+      return await requestJson<PrismStudioHistoryResponse>(
+        query ? `/api/images/history?${query}` : '/api/images/history'
+      )
+    },
+    [requestJson]
+  )
+
+  const updatePrismImage = useCallback(
+    async (imageId: string, patch: PrismStudioImagePatch) => {
+      try {
+        return await requestJson<PrismStudioImage>(
+          `/api/images/history/${imageId}`,
+          {
+            method: 'PATCH',
+            body: JSON.stringify(patch),
+          }
+        )
+      } catch (error) {
+        console.error('Failed to update Prism image.', error)
+        return null
+      }
+    },
+    [requestJson]
+  )
+
+  const applyMemoryConversationSummary = useCallback(
+    (summary: MemoryVaultConversationSummary) => {
+      applyConversationPatch(summary.id, (conversation) => ({
+        ...conversation,
+        sessionSettings: {
+          ...conversation.sessionSettings,
+          memory: summary.memoryEnabled,
+        },
+        memorySummary: summary.memorySummary ?? undefined,
+        memoryUpdatedAt: summary.memoryUpdatedAt ?? undefined,
+        updatedAt: summary.updatedAt,
+      }))
+    },
+    [applyConversationPatch]
+  )
+
+  const listMemoryVault = useCallback(async () => {
+    return await requestJson<MemoryVaultResponse>('/api/memory-vault')
+  }, [requestJson])
+
+  const setConversationMemoryEnabled = useCallback(
+    async (conversationId: string, memoryEnabled: boolean) => {
+      const summary = await requestJson<MemoryVaultConversationSummary>(
+        `/api/conversations/${conversationId}/memory`,
+        {
+          method: 'PATCH',
+          body: JSON.stringify({ memoryEnabled }),
+        }
+      )
+
+      applyMemoryConversationSummary(summary)
+      return summary
+    },
+    [applyMemoryConversationSummary, requestJson]
+  )
+
+  const clearConversationMemory = useCallback(
+    async (conversationId: string) => {
+      const summary = await requestJson<MemoryVaultConversationSummary>(
+        `/api/conversations/${conversationId}/memory`,
+        {
+          method: 'DELETE',
+        }
+      )
+
+      applyMemoryConversationSummary(summary)
+      return summary
+    },
+    [applyMemoryConversationSummary, requestJson]
   )
 
   const applyLocalError = useCallback(
@@ -2462,7 +2630,10 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       const runnableSteps = orderedSteps
         .map((step) => ({
           step,
-          content: expandWorkflowTemplate(step.template, variableValues).trim(),
+          content: buildWorkflowStepPrompt({
+            step,
+            values: variableValues,
+          }).trim(),
         }))
         .filter((item) => item.content.length > 0)
 
@@ -2512,9 +2683,15 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       await patchWorkflowRun({ status: 'running' })
 
       let activeStep: (typeof runnableSteps)[number] | null = null
+      let previousStepOutput: string | null = null
       try {
         for (const item of runnableSteps) {
           activeStep = item
+          const stepContent = buildWorkflowStepPrompt({
+            step: item.step,
+            values: variableValues,
+            previousOutput: previousStepOutput,
+          }).trim()
           await patchWorkflowRun({
             step: {
               workflowStepId: item.step.id,
@@ -2524,7 +2701,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
           })
           const conversation = await executeSendMessage(
             {
-              content: item.content,
+              content: stepContent,
               kind: item.step.mode === 'image' ? 'image' : 'chat',
               modeOverride: item.step.mode,
               customAssistantId: null,
@@ -2557,6 +2734,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
               messageId: outputMessage.id,
             },
           })
+          previousStepOutput = outputMessage.content
         }
 
         await patchWorkflowRun({
@@ -3115,6 +3293,11 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       updateArtifact,
       deleteArtifact,
       runArtifactAction,
+      listPrismImages,
+      updatePrismImage,
+      listMemoryVault,
+      setConversationMemoryEnabled,
+      clearConversationMemory,
       runModelComparison,
       chooseModelComparisonResponse,
       beginPromptPrecheck,
@@ -3123,6 +3306,9 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       workspaceToolRequest,
       openWorkspaceTool,
       clearWorkspaceToolRequest,
+      composerDraftRequest,
+      prepareComposerDraft,
+      clearComposerDraftRequest,
       workspaceSearchRequest,
       openWorkspaceSearch,
       clearWorkspaceSearchRequest,
@@ -3140,8 +3326,11 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       clearPromptPrecheck,
       clearWorkspaceToolRequest,
       clearWorkspaceSearchRequest,
+      clearComposerDraftRequest,
+      clearConversationMemory,
       completeOnboarding,
       conversations,
+      composerDraftRequest,
       createNewChat,
       createProject,
       currentChat,
@@ -3161,12 +3350,15 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       isStreaming,
       isOnboardingOpen,
       listArtifacts,
+      listPrismImages,
+      listMemoryVault,
       listPromptWorkflowRuns,
       openConversation,
       openOnboarding,
       openProjectHome,
       openWorkspaceTool,
       openWorkspaceSearch,
+      prepareComposerDraft,
       queuedPrompts.length,
       setSidebarWidth,
       sidebarWidth,
@@ -3195,6 +3387,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       sessionSettings,
       setCurrentChat,
       setCurrentCustomAssistant,
+      setConversationMemoryEnabled,
       setCurrentMode,
       setSelectedProjectId,
       skipOnboarding,
@@ -3204,6 +3397,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       streamingState,
       togglePinChat,
       updateArtifact,
+      updatePrismImage,
       updateApiSettings,
       updateSessionSettings,
       uploadProjectFiles,
