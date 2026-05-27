@@ -71,8 +71,14 @@ export function useSendMessage(input: {
   const preparePendingSend = useCallback(
     (payload: UseSendMessageInput): PreparedSendDispatch => {
       const resolvedMode = payload.modeOverride ?? input.currentMode
+      const hasCustomAssistantOverride = Object.prototype.hasOwnProperty.call(
+        payload,
+        'customAssistantId'
+      )
       const customAssistantId =
-        payload.customAssistantId ?? input.currentCustomAssistantId ?? null
+        hasCustomAssistantOverride
+          ? payload.customAssistantId ?? null
+          : input.currentCustomAssistantId ?? null
       const settings = input.normalizeModeSessionSettings(
         resolvedMode,
         input.currentChatSessionSettings ?? input.draftSessionSettings
