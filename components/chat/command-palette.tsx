@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import {
   Bot,
   BookText,
+  Brain,
   Command as CommandIcon,
   CreditCard,
   FileText,
@@ -60,7 +61,7 @@ const ENTITY_LABELS: Record<SearchResult['entityType'], string> = {
   custom_assistant: 'Assistant',
   file: 'File',
   generated_image: 'Prism',
-  model_comparison: 'Comparison',
+  model_comparison: 'Model Duel',
 }
 
 const SEARCH_ENTITY_ORDER: SearchEntityType[] = [
@@ -406,11 +407,11 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
         openWorkspaceTool('model-comparison')
         return
       case 'open_prism_history':
-        if (target.conversationId) {
-          await openConversation(target.conversationId)
-          return
-        }
-        router.push('/dashboard')
+        openWorkspaceTool({
+          tool: 'prism-studio',
+          imageId: target.imageId,
+          projectId: target.projectId,
+        })
         return
       case 'open_url':
         router.push(target.url)
@@ -633,13 +634,20 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
             <span>Open Artifact Studio</span>
           </CommandItem>
           <CommandItem
-            value="open model comparison compare assistants"
+            value="open memory vault conversation summaries preferences"
+            onSelect={() => void runAction(() => openWorkspaceTool('memory-vault'))}
+          >
+            <Brain className="size-4" />
+            <span>Open Memory Vault</span>
+          </CommandItem>
+          <CommandItem
+            value="open model duel compare assistants models"
             onSelect={() =>
               void runAction(() => openWorkspaceTool('model-comparison'))
             }
           >
             <GitCompareArrows className="size-4" />
-            <span>Open model comparison</span>
+            <span>Open Model Duel</span>
           </CommandItem>
           <CommandItem
             value="open custom assistants builder"
@@ -652,10 +660,12 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
           </CommandItem>
           <CommandItem
             value="open prism image history recent generations"
-            onSelect={() => openWorkspaceUrl('/dashboard')}
+            onSelect={() =>
+              void runAction(() => openWorkspaceTool('prism-studio'))
+            }
           >
             <ImageIcon className="size-4" />
-            <span>Open Prism image history</span>
+            <span>Open Prism Studio</span>
           </CommandItem>
         </CommandGroup>
 
