@@ -2,7 +2,7 @@
 
 ## Current Status
 
-The repository contains a real Zenquanta AI platform backed by Neon for runtime app data and credentials auth, neutral private file storage for new uploads/generated images, and OpenRouter for AI transport. Shared AI project memory files exist at the repo root. The workspace now includes Neon-backed global search through `/api/search`, a Cmd/Ctrl+K command palette, first-run onboarding through `/api/onboarding`, and Artifact Studio through `/api/artifacts`. The prompt library includes reusable Neon-backed prompt workflows, the composer includes text model comparison mode, and the admin dashboard includes filtered cost/margin analytics.
+The repository contains a real Zenquanta AI platform backed by Neon for runtime app data and credentials auth, neutral private file storage for new uploads/generated images, and OpenRouter for AI transport. Shared AI project memory files exist at the repo root. The workspace now includes Neon-backed global search through `/api/search`, a Cmd/Ctrl+K command palette, first-run onboarding through `/api/onboarding`, Artifact Studio through `/api/artifacts`, Prism Studio through `/api/images/history`, and a Memory Vault for visible conversation memory controls. The prompt library includes reusable Neon-backed prompt workflows, the composer includes Model Duel for text assistant comparisons, and the admin dashboard includes filtered cost/margin analytics.
 
 Current direction: plan upgrades remain manual/admin-driven, payment automation is out of scope unless explicitly requested, and Neon/storage start fresh without importing Supabase database rows or storage objects.
 
@@ -389,6 +389,77 @@ Audit date: 2026-05-26. Documentation-only audit before new product features; no
 
 ## AI Handoff Summaries
 
+### 2026-05-28 - Prism Studio V1
+
+- Added Prism Studio as an authenticated workspace panel for generated-image gallery browsing, project/search/date/favorite filters, protected previews, prompt copy/reuse/remix, favorites, and prompt-to-Artifact saves.
+- Added additive Neon metadata support for `zen_generated_images.project_id` and `is_favorite`, including backfill/index migration `20260528_zenquanta_prism_studio_metadata.sql`.
+- Extended `/api/images/history` to return user-scoped durable generated-image metadata and added protected `PATCH /api/images/history/[id]` for favorite/project updates.
+- Wired Prism Studio from the composer, command palette, Project Home, and generated-image search targets; reuse/remix prepares the Prism composer without sending.
+- Added explicit creative action previews: four Prism variations still dispatch through `/api/images/generate`, while ad concept/caption/campaign prompts dispatch through normal Velora text chat.
+- Preserved constraints: no image generation through `/api/chat`, no image credit bypass, no external image storage, no direct private object URLs, no Supabase, and no Stripe.
+- Verification: `npm run typecheck` passes; `npm run lint` passes with the existing 14 warnings; `npm run build` passes with the existing Node `module.register()` deprecation warning; `git diff --check` passes.
+- Remaining risks: production databases must apply the new Prism Studio migration; “Generate 4 more” intentionally queues four one-image Prism requests because the image route remains one image per request.
+
+### 2026-05-28 - Model Duel V1 Polish
+
+- Polished the existing text model comparison feature into user-facing Model Duel while preserving `/api/model-comparisons`, `/api/model-comparisons/[id]/choose`, Neon comparison tables, plan/model filtering, and billing enforcement.
+- Upgraded the composer dialog with premium Model Duel language, prompt preview, selected-assistant count, text-only notices, explicit usage warning, Blind Mode, and 2-4 assistant selection across Nova, Velora, Axiom, Forge, and Pulse.
+- Added clearer side-by-side candidate cards with hidden identity support, completion/failure states, latency, displayed usage, token/source counts, scoring labels, winner save, and Save as Artifact actions.
+- Artifact saves now include Model Duel metadata plus assigned scoring labels; winner saves still use the existing choose endpoint and append the selected response to the conversation.
+- Preserved constraints: no Prism/image comparison, no new API route, no migration, no new AI gateway, no billing bypass, no raw model cost exposure, no Supabase, and no Stripe.
+- Verification: `npm run typecheck` passes; `npm run lint` passes with the existing 14 warnings; `npm run build` passes with the existing Node `module.register()` deprecation warning.
+- Remaining risks: Blind Mode and scoring labels are local review-state only in v1; only Artifact saves preserve scoring labels in metadata.
+
+### 2026-05-28 - Memory Vault V1
+
+- Added a protected Memory Vault workspace panel for viewing and controlling existing Neon-backed conversation memory summaries.
+- Added `/api/memory-vault` plus `/api/conversations/[id]/memory` PATCH/DELETE routes backed by a user-scoped Neon memory repository. Project memory is derived by grouping owned conversation summaries by project; no project memory table or vector store was added.
+- Added global memory default control through existing settings, per-conversation memory enable/disable, clear summary, copy summary, open conversation, recent memory, project memory, and saved-preference explanation UI.
+- Wired Memory Vault into workspace tools, Settings, Command Palette, and Project Home memory status while preserving existing memory injection behavior in `lib/ai/memory.ts`.
+- Preserved constraints: no OpenRouter calls on vault load/clear, no hidden memory store, no migrations, no billing/auth/gateway/storage behavior changes, no Supabase, and no Stripe.
+- Verification: `npm run typecheck` passes; `npm run lint` passes with the existing 14 warnings; `npm run build` passes with the existing Node `module.register()` deprecation warning; `git diff --check` passes.
+- Remaining risks: V1 preferences are only visible lines parsed from conversation summaries because there is no separate editable global preference model yet.
+
+### 2026-05-28 - Quality Check Actions V1
+
+- Added message-level Quality actions for completed assistant responses, using local prompt templates and an editable preview before anything is sent.
+- Added general, Axiom, Pulse, Forge, Velora, and Prism action groups, including shorter/detail/table/action-plan transforms, source verification prompts, code review/test prompts, tone/copy prompts, and visual prompt actions.
+- Quality actions dispatch through the existing `sendMessage` pipeline: text actions use `/api/chat`, Prism visual actions use `/api/images/generate`, and selected custom assistants are bypassed so action targets stay explicit.
+- Kept Save as Artifact available as the existing direct action and surfaced it near the Quality menu without changing artifact APIs.
+- Preserved current project/conversation context and did not add API routes, migrations, gateways, billing changes, Supabase, Stripe, or automatic AI calls.
+- Verification: `npm run typecheck` passes; `npm run lint` passes with the existing 14 warnings; `npm run build` passes with the existing Node `module.register()` deprecation warning; `git diff --check` passes.
+- Remaining risks: quality prompts are template-based in v1 and will likely need tuning from real user examples.
+
+### 2026-05-28 - Assistant Handoffs V1
+
+- Added response-level assistant handoffs from completed assistant messages through a new “Send to” menu and editable preview dialog.
+- Added local handoff target config and bounded prompt generation for Nova, Velora, Axiom, Forge, Pulse, and Prism.
+- Handoff sends reuse the existing `sendMessage` pipeline: text targets route through `/api/chat`, Prism targets route through `/api/images/generate`, and normal billing/usage enforcement remains in place.
+- Explicit handoffs bypass the currently selected custom assistant so “Send to Forge” uses built-in Forge rather than a custom assistant layer.
+- Preserved current project/conversation context and did not add API routes, migrations, gateways, Supabase, Stripe, or automatic AI calls.
+- Verification: `npm run typecheck` passes; `npm run lint` passes with the existing 14 warnings; `npm run build` passes with the existing Node `module.register()` deprecation warning.
+- Remaining risks: handoff prompt quality is template-based in v1 and may need product tuning after real usage.
+
+### 2026-05-28 - Smart Assistant Router UI V1
+
+- Added a subtle inline composer recommendation chip powered by the existing local prompt classifier and assistant precheck hook.
+- The chip appears only for high-confidence assistant mismatches while recommendations are enabled, shows the recommended assistant, reason, and a simple confidence label, and supports explicit Use/Ignore actions.
+- Accepting a recommendation switches the assistant locally without sending; Prism recommendations switch the composer into image mode without calling `/api/images/generate` until the user sends.
+- Kept the existing send-time recommendation dialog as a fallback for immediate paste-and-send flows and continued logging telemetry through `/api/assistant-recommendations` without OpenRouter calls.
+- Updated Settings copy to describe the composer suggestion instead of a modal-only flow.
+- Verification: `npm run typecheck` passes; `npm run lint` passes with the existing 14 warnings; `npm run build` passes with the existing Node `module.register()` deprecation warning.
+- Remaining risks: shown telemetry is keyed to debounced draft snapshots, so very long paused editing sessions may still create more than one shown event for materially changed drafts.
+
+### 2026-05-28 - AI Playbook Builder V1 Improvement
+
+- Added additive Neon/Drizzle workflow metadata support with `zen_prompt_workflows.metadata` for category, expected output type, suggested assistant, and private visibility.
+- Extended Prompt Workflow/AI Playbook shared types, API validation, and repository normalization for workflow metadata plus step metadata (`stepType`, `outputLabel`, `includePreviousOutput`) while preserving existing route/table names.
+- Upgraded Playbook Studio with structured builder fields, step metadata controls, editable variable labels/defaults/required flags, expanded prompt preview before run, required-variable validation, and low/medium/high usage warnings without raw cost exposure.
+- Updated foreground playbook execution so steps that opt in receive the previous completed step output while still dispatching through the normal text chat or Prism image path and recording step `messageId`s.
+- Updated starter templates with structured metadata and output labels.
+- Verification: `npm run typecheck` passes; `npm run lint` passes with the existing 14 warnings; `npm run build` passes with the existing Node `module.register()` deprecation warning.
+- Remaining risks: the usage indicator is intentionally rough and not a billing quote; production Neon databases must apply `20260528_zenquanta_playbook_builder_metadata.sql`.
+
 ### 2026-05-26 - AI Playbooks V1 Polish
 
 - Polished Prompt Workflows into user-facing AI Playbooks while preserving the existing `/api/prompt-workflows*` routes, Neon tables, repository names, and foreground execution model.
@@ -406,7 +477,7 @@ Shared memory files were created to give Codex, Claude Code, and future agents a
 
 ## Future Feature Ideas
 
-- Durable generated-image storage.
+- Prism Studio polish for richer image metadata such as dimensions/title extraction.
 - Workflow templates, sharing, duplication, and richer run history.
 - Automated test suite for auth, billing, routing, recommendations, and chat streaming.
 - Safer incremental conversation persistence.
