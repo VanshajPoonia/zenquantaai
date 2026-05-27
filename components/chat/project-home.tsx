@@ -13,6 +13,7 @@ import {
   AlertCircle,
   ArrowRight,
   BookOpen,
+  Brain,
   ExternalLink,
   FileText,
   FolderOpen,
@@ -180,7 +181,6 @@ export function ProjectHome({ projectId }: ProjectHomeProps) {
   const [runningWorkflowId, setRunningWorkflowId] = useState<string | null>(null)
   const searchInputRef = useRef<HTMLInputElement | null>(null)
   const uploadInputRef = useRef<HTMLInputElement | null>(null)
-  const imagesSectionRef = useRef<HTMLDivElement | null>(null)
 
   const loadProjectHome = useCallback(async () => {
     setIsLoading(true)
@@ -339,10 +339,7 @@ export function ProjectHome({ projectId }: ProjectHomeProps) {
         openWorkspaceTool({ tool: 'playbooks', projectId })
         return
       case 'review_images':
-        imagesSectionRef.current?.scrollIntoView({
-          block: 'start',
-          behavior: 'smooth',
-        })
+        openWorkspaceTool({ tool: 'prism-studio', projectId })
         return
       case 'research_project':
         handleResearchProject()
@@ -576,7 +573,21 @@ export function ProjectHome({ projectId }: ProjectHomeProps) {
           )}
         </Section>
 
-        <Section title="Memory status">
+        <Section
+          title="Memory status"
+          action={
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="rounded-xl"
+              onClick={() => openWorkspaceTool({ tool: 'memory-vault', projectId })}
+            >
+              <Brain className="mr-2 size-4" />
+              Open vault
+            </Button>
+          }
+        >
           <div className="rounded-2xl border border-border/60 bg-card/45 p-4">
             <div className="flex items-center justify-between gap-3">
               <span className="text-sm font-medium text-foreground">
@@ -748,8 +759,22 @@ export function ProjectHome({ projectId }: ProjectHomeProps) {
           )}
         </Section>
 
-        <div ref={imagesSectionRef}>
-          <Section title="Generated images">
+        <div>
+          <Section
+            title="Generated images"
+            action={
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="rounded-xl"
+                onClick={() => openWorkspaceTool({ tool: 'prism-studio', projectId })}
+              >
+                <ImageIcon className="mr-2 size-4" />
+                Prism Studio
+              </Button>
+            }
+          >
             {filteredImages.length > 0 ? (
               <div className="grid gap-3">
                 {filteredImages.map((image: ProjectHomeGeneratedImageSummary) => (

@@ -1,6 +1,6 @@
 import 'server-only'
 
-import { and, desc, eq, inArray, sql } from 'drizzle-orm'
+import { and, desc, eq, inArray, or, sql } from 'drizzle-orm'
 import { createPrivateFileUrl } from '@/lib/storage/object-store'
 import {
   AssistantFamily,
@@ -196,20 +196,26 @@ class NeonProjectHomeRepository {
       db
         .select({ generatedImageCount: sql<number>`count(*)::int` })
         .from(zenGeneratedImages)
-        .innerJoin(
+        .leftJoin(
           zenConversations,
           eq(zenGeneratedImages.conversationId, zenConversations.id)
         )
         .where(
           and(
             eq(zenGeneratedImages.userId, userId),
-            eq(zenConversations.userId, userId),
-            eq(zenConversations.projectId, projectId)
+            or(
+              eq(zenGeneratedImages.projectId, projectId),
+              and(
+                eq(zenConversations.userId, userId),
+                eq(zenConversations.projectId, projectId)
+              )
+            )
           )
         ),
       db
         .select({
           id: zenGeneratedImages.id,
+          projectId: zenGeneratedImages.projectId,
           conversationId: zenGeneratedImages.conversationId,
           messageId: zenGeneratedImages.messageId,
           prompt: zenGeneratedImages.prompt,
@@ -219,19 +225,25 @@ class NeonProjectHomeRepository {
           storagePath: zenGeneratedImages.storagePath,
           width: zenGeneratedImages.width,
           height: zenGeneratedImages.height,
+          isFavorite: zenGeneratedImages.isFavorite,
           createdAt: zenGeneratedImages.createdAt,
           updatedAt: zenGeneratedImages.updatedAt,
         })
         .from(zenGeneratedImages)
-        .innerJoin(
+        .leftJoin(
           zenConversations,
           eq(zenGeneratedImages.conversationId, zenConversations.id)
         )
         .where(
           and(
             eq(zenGeneratedImages.userId, userId),
-            eq(zenConversations.userId, userId),
-            eq(zenConversations.projectId, projectId)
+            or(
+              eq(zenGeneratedImages.projectId, projectId),
+              and(
+                eq(zenConversations.userId, userId),
+                eq(zenConversations.projectId, projectId)
+              )
+            )
           )
         )
         .orderBy(desc(zenGeneratedImages.createdAt))
@@ -311,11 +323,13 @@ class NeonProjectHomeRepository {
         prompt: row.prompt,
         model: row.model,
         status: row.status,
+        projectId: row.projectId,
         conversationId: row.conversationId,
         messageId: row.messageId,
         width: row.width,
         height: row.height,
         url: toPrivateFileUrl(row.storageBucket, row.storagePath),
+        isFavorite: row.isFavorite,
         createdAt: toIsoString(row.createdAt),
         updatedAt: toIsoString(row.updatedAt),
       })
