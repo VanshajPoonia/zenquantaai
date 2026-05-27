@@ -471,6 +471,7 @@ export const zenPromptWorkflows = pgTable(
     title: text('title').notNull(),
     description: text('description'),
     variables: jsonb('variables').notNull().default([]),
+    metadata: jsonb('metadata').notNull().default({}),
     ...timestamps,
   },
   (table) => [
@@ -528,10 +529,10 @@ export const zenPromptWorkflowRuns = pgTable(
     userId: uuid('user_id')
       .notNull()
       .references(() => zenUsers.id, { onDelete: 'cascade' }),
+    projectId: text('project_id'),
     conversationId: text('conversation_id').references(() => zenConversations.id, {
       onDelete: 'set null',
     }),
-    projectId: text('project_id'),
     status: text('status').notNull().default('queued'),
     variableValues: jsonb('variable_values').notNull().default({}),
     error: text('error'),
@@ -870,6 +871,7 @@ export const zenAssistantRecommendationEvents = pgTable(
     userId: uuid('user_id')
       .notNull()
       .references(() => zenUsers.id, { onDelete: 'cascade' }),
+    projectId: text('project_id'),
     conversationId: text('conversation_id').references(() => zenConversations.id, {
       onDelete: 'set null',
     }),
@@ -986,6 +988,7 @@ export const zenGeneratedImages = pgTable(
     userId: uuid('user_id')
       .notNull()
       .references(() => zenUsers.id, { onDelete: 'cascade' }),
+    projectId: text('project_id'),
     conversationId: text('conversation_id').references(() => zenConversations.id, {
       onDelete: 'set null',
     }),
@@ -1005,12 +1008,23 @@ export const zenGeneratedImages = pgTable(
     width: integer('width'),
     height: integer('height'),
     status: text('status').notNull().default('created'),
+    isFavorite: boolean('is_favorite').notNull().default(false),
     metadata: jsonb('metadata').notNull().default({}),
     ...timestamps,
   },
   (table) => [
     index('zen_generated_images_user_created_idx').on(
       table.userId,
+      table.createdAt
+    ),
+    index('zen_generated_images_user_project_created_idx').on(
+      table.userId,
+      table.projectId,
+      table.createdAt
+    ),
+    index('zen_generated_images_user_favorite_created_idx').on(
+      table.userId,
+      table.isFavorite,
       table.createdAt
     ),
     index('zen_generated_images_conversation_idx').on(table.conversationId),
