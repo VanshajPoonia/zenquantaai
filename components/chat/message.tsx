@@ -9,9 +9,22 @@ import {
   ImageIcon,
   PencilLine,
   Play,
+  SendHorizontal,
+  Sparkles,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { AIMode, Attachment, Message, MODE_CONFIGS, MODE_ORDER } from '@/lib/types'
+import {
+  ASSISTANT_HANDOFF_TARGETS,
+  AssistantHandoffTarget,
+  buildAssistantHandoffPrompt,
+} from '@/lib/config/assistant-handoffs'
+import {
+  AssistantQualityAction,
+  buildAssistantQualityPrompt,
+  getQualityActionGroupsForMessage,
+  resolveQualityActionMode,
+} from '@/lib/config/assistant-quality-actions'
 import {
   getModeAccentClass,
   getModeTintClass,
@@ -30,6 +43,11 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import {
@@ -60,6 +78,16 @@ interface ChatMessageProps {
   onEdit?: (content: string, targetMessageId?: string) => void
   onAskAnotherMode?: (mode: AIMode) => void
   onSaveArtifact?: (message: Message) => Promise<void>
+  onHandoff?: (
+    message: Message,
+    target: AssistantHandoffTarget,
+    prompt: string
+  ) => Promise<void>
+  onQualityAction?: (
+    message: Message,
+    action: AssistantQualityAction,
+    prompt: string
+  ) => Promise<void>
   isLastAssistant?: boolean
   isLastUser?: boolean
   isStreamingMessage?: boolean
@@ -520,6 +548,8 @@ export function ChatMessage({
   onEdit,
   onAskAnotherMode,
   onSaveArtifact,
+  onHandoff,
+  onQualityAction,
   isLastAssistant,
   isLastUser,
   isStreamingMessage = false,
@@ -536,6 +566,16 @@ export function ChatMessage({
   const [draftValue, setDraftValue] = useState(message.content)
   const [isWorkingExpanded, setIsWorkingExpanded] = useState(false)
   const [isSavingArtifact, setIsSavingArtifact] = useState(false)
+  const [handoffDraft, setHandoffDraft] = useState<{
+    target: AssistantHandoffTarget
+    prompt: string
+  } | null>(null)
+  const [isSendingHandoff, setIsSendingHandoff] = useState(false)
+  const [qualityDraft, setQualityDraft] = useState<{
+    action: AssistantQualityAction
+    prompt: string
+  } | null>(null)
+  const [isSendingQualityAction, setIsSendingQualityAction] = useState(false)
 
   useEffect(() => {
     if (!isStreamingMessage) {
@@ -570,6 +610,44 @@ export function ChatMessage({
     }
   }
 
+  const handleOpenHandoff = (target: AssistantHandoffTarget) => {
+    setHandoffDraft({
+      target,
+      prompt: buildAssistantHandoffPrompt({ message, target }),
+    })
+  }
+
+  const handleSendHandoff = async () => {
+    if (!onHandoff || !handoffDraft?.prompt.trim()) return
+
+    setIsSendingHandoff(true)
+    try {
+      await onHandoff(message, handoffDraft.target, handoffDraft.prompt.trim())
+      setHandoffDraft(null)
+    } finally {
+      setIsSendingHandoff(false)
+    }
+  }
+
+  const handleOpenQualityAction = (action: AssistantQualityAction) => {
+    setQualityDraft({
+      action,
+      prompt: buildAssistantQualityPrompt({ message, action }),
+    })
+  }
+
+  const handleSendQualityAction = async () => {
+    if (!onQualityAction || !qualityDraft?.prompt.trim()) return
+
+    setIsSendingQualityAction(true)
+    try {
+      await onQualityAction(message, qualityDraft.action, qualityDraft.prompt.trim())
+      setQualityDraft(null)
+    } finally {
+      setIsSendingQualityAction(false)
+    }
+  }
+
   const firstImageAttachment = getFirstImageAttachment(message)
 
   const effectiveStatus =
@@ -587,6 +665,20 @@ export function ChatMessage({
   const previewDocument = useMemo(
     () => getWebPreviewDocument(displayContent),
     [displayContent]
+  )
+  const canHandoff =
+    Boolean(onHandoff) &&
+    effectiveStatus !== 'streaming' &&
+    effectiveStatus !== 'error' &&
+    Boolean(message.content.trim())
+  const canRunQualityAction =
+    Boolean(onQualityAction) &&
+    effectiveStatus !== 'streaming' &&
+    effectiveStatus !== 'error' &&
+    Boolean(message.content.trim())
+  const qualityGroups = useMemo(
+    () => getQualityActionGroupsForMessage(message),
+    [message]
   )
 
   if (message.role === 'user') {
@@ -801,6 +893,95 @@ export function ChatMessage({
                 </Button>
               ) : null}
 
+              {canRunQualityAction ? (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 gap-1 rounded-full px-2.5 text-xs"
+                    >
+                      <Sparkles className="size-3.5" />
+                      Quality
+                      <ChevronDown className="size-3" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start" className="w-72">
+                    {onSaveArtifact ? (
+                      <>
+                        <DropdownMenuItem
+                          className="gap-2"
+                          disabled={isSavingArtifact}
+                          onClick={() => void handleSaveArtifact()}
+                        >
+                          <FileText className="size-3.5" />
+                          Save as Artifact
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                      </>
+                    ) : null}
+                    {qualityGroups.map((group) => (
+                      <DropdownMenuSub key={group.id}>
+                        <DropdownMenuSubTrigger>
+                          {group.family ? (
+                            <span
+                              className={cn(
+                                'inline-flex',
+                                getModeAccentClass(
+                                  resolveQualityActionMode(group.actions[0], message),
+                                  'text'
+                                )
+                              )}
+                            >
+                              <ModeIcon
+                                mode={resolveQualityActionMode(group.actions[0], message)}
+                                size="sm"
+                              />
+                            </span>
+                          ) : (
+                            <Sparkles className="size-3.5" />
+                          )}
+                          {group.label}
+                        </DropdownMenuSubTrigger>
+                        <DropdownMenuSubContent className="w-72">
+                          <DropdownMenuLabel className="text-xs text-muted-foreground">
+                            {group.label} actions
+                          </DropdownMenuLabel>
+                          {group.actions.map((action) => {
+                            const targetMode = resolveQualityActionMode(action, message)
+
+                            return (
+                              <DropdownMenuItem
+                                key={action.id}
+                                className="items-start gap-2 py-2"
+                                onClick={() => handleOpenQualityAction(action)}
+                              >
+                                <span
+                                  className={cn(
+                                    'mt-0.5 inline-flex',
+                                    getModeAccentClass(targetMode, 'text')
+                                  )}
+                                >
+                                  <ModeIcon mode={targetMode} size="sm" />
+                                </span>
+                                <span className="min-w-0">
+                                  <span className="block text-sm font-medium">
+                                    {action.label}
+                                  </span>
+                                  <span className="block text-xs leading-5 text-muted-foreground">
+                                    {action.description}
+                                  </span>
+                                </span>
+                              </DropdownMenuItem>
+                            )
+                          })}
+                        </DropdownMenuSubContent>
+                      </DropdownMenuSub>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              ) : null}
+
               {firstImageAttachment ? (
                 <>
                   <Button
@@ -822,6 +1003,48 @@ export function ChatMessage({
                     Download
                   </Button>
                 </>
+              ) : null}
+
+              {canHandoff ? (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 gap-1 rounded-full px-2.5 text-xs"
+                    >
+                      <SendHorizontal className="size-3.5" />
+                      Send to
+                      <ChevronDown className="size-3" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start" className="w-72">
+                    {ASSISTANT_HANDOFF_TARGETS.map((target) => (
+                      <DropdownMenuItem
+                        key={target.family}
+                        className="items-start gap-2 py-2"
+                        onClick={() => handleOpenHandoff(target)}
+                      >
+                        <span
+                          className={cn(
+                            'mt-0.5 inline-flex',
+                            getModeAccentClass(target.mode, 'text')
+                          )}
+                        >
+                          <ModeIcon mode={target.mode} size="sm" />
+                        </span>
+                        <span className="min-w-0">
+                          <span className="block text-sm font-medium">
+                            {target.label}
+                          </span>
+                          <span className="block text-xs leading-5 text-muted-foreground">
+                            {target.actionLabel}
+                          </span>
+                        </span>
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
               ) : null}
 
               {isLastAssistant && (
@@ -919,6 +1142,194 @@ export function ChatMessage({
                   sandbox="allow-scripts allow-modals"
                   className="h-[65vh] min-h-[420px] w-full bg-white"
                 />
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+      ) : null}
+
+      {handoffDraft ? (
+        <Dialog
+          open={Boolean(handoffDraft)}
+          onOpenChange={(open) => {
+            if (!open && !isSendingHandoff) {
+              setHandoffDraft(null)
+            }
+          }}
+        >
+          <DialogContent className="w-[calc(100vw-1rem)] max-w-2xl rounded-[24px] border border-border/70 bg-background/95 p-0 shadow-2xl shadow-black/40">
+            <DialogHeader className="border-b border-border/70 px-5 py-5 text-left sm:px-6">
+              <div className="flex items-center gap-3">
+                <span
+                  className={cn(
+                    'flex size-10 items-center justify-center rounded-xl border border-white/10 bg-card/80',
+                    getModeAccentClass(handoffDraft.target.mode, 'text')
+                  )}
+                >
+                  <ModeIcon mode={handoffDraft.target.mode} size="md" />
+                </span>
+                <div>
+                  <DialogTitle>Send to {handoffDraft.target.label}</DialogTitle>
+                  <DialogDescription className="mt-1">
+                    {handoffDraft.target.description}
+                  </DialogDescription>
+                </div>
+              </div>
+            </DialogHeader>
+
+            <div className="space-y-4 px-5 py-5 sm:px-6">
+              <div>
+                <label className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                  Handoff prompt
+                </label>
+                <Textarea
+                  value={handoffDraft.prompt}
+                  onChange={(event) =>
+                    setHandoffDraft((previous) =>
+                      previous
+                        ? {
+                            ...previous,
+                            prompt: event.target.value,
+                          }
+                        : previous
+                    )
+                  }
+                  className="mt-2 min-h-[260px] resize-y rounded-2xl border-border/70 bg-card/50 text-sm leading-6"
+                />
+              </div>
+
+              <div className="rounded-2xl border border-border/70 bg-card/50 px-4 py-3 text-xs leading-5 text-muted-foreground">
+                Review or edit the prompt before sending. This will run through the
+                normal {handoffDraft.target.mode === 'image' ? 'Prism image' : 'text chat'}{' '}
+                path and may consume usage.
+              </div>
+
+              <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="rounded-xl"
+                  disabled={isSendingHandoff}
+                  onClick={() => setHandoffDraft(null)}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="button"
+                  className={cn(
+                    'rounded-xl text-white',
+                    getModeAccentClass(handoffDraft.target.mode, 'bg')
+                  )}
+                  disabled={isSendingHandoff || !handoffDraft.prompt.trim()}
+                  onClick={() => void handleSendHandoff()}
+                >
+                  {isSendingHandoff ? (
+                    <span className="size-3.5 animate-spin rounded-full border border-current border-t-transparent" />
+                  ) : (
+                    <SendHorizontal className="size-3.5" />
+                  )}
+                  Send to {handoffDraft.target.label}
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+      ) : null}
+
+      {qualityDraft ? (
+        <Dialog
+          open={Boolean(qualityDraft)}
+          onOpenChange={(open) => {
+            if (!open && !isSendingQualityAction) {
+              setQualityDraft(null)
+            }
+          }}
+        >
+          <DialogContent className="w-[calc(100vw-1rem)] max-w-2xl rounded-[24px] border border-border/70 bg-background/95 p-0 shadow-2xl shadow-black/40">
+            <DialogHeader className="border-b border-border/70 px-5 py-5 text-left sm:px-6">
+              <div className="flex items-center gap-3">
+                <span
+                  className={cn(
+                    'flex size-10 items-center justify-center rounded-xl border border-white/10 bg-card/80',
+                    getModeAccentClass(
+                      resolveQualityActionMode(qualityDraft.action, message),
+                      'text'
+                    )
+                  )}
+                >
+                  <ModeIcon
+                    mode={resolveQualityActionMode(qualityDraft.action, message)}
+                    size="md"
+                  />
+                </span>
+                <div>
+                  <DialogTitle>{qualityDraft.action.label}</DialogTitle>
+                  <DialogDescription className="mt-1">
+                    {qualityDraft.action.description}
+                  </DialogDescription>
+                </div>
+              </div>
+            </DialogHeader>
+
+            <div className="space-y-4 px-5 py-5 sm:px-6">
+              <div>
+                <label className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                  Follow-up prompt
+                </label>
+                <Textarea
+                  value={qualityDraft.prompt}
+                  onChange={(event) =>
+                    setQualityDraft((previous) =>
+                      previous
+                        ? {
+                            ...previous,
+                            prompt: event.target.value,
+                          }
+                        : previous
+                    )
+                  }
+                  className="mt-2 min-h-[260px] resize-y rounded-2xl border-border/70 bg-card/50 text-sm leading-6"
+                />
+              </div>
+
+              <div className="rounded-2xl border border-border/70 bg-card/50 px-4 py-3 text-xs leading-5 text-muted-foreground">
+                Review or edit the prompt before sending. This will run through the
+                normal{' '}
+                {resolveQualityActionMode(qualityDraft.action, message) === 'image'
+                  ? 'Prism image'
+                  : 'text chat'}{' '}
+                path and may consume usage.
+              </div>
+
+              <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="rounded-xl"
+                  disabled={isSendingQualityAction}
+                  onClick={() => setQualityDraft(null)}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="button"
+                  className={cn(
+                    'rounded-xl text-white',
+                    getModeAccentClass(
+                      resolveQualityActionMode(qualityDraft.action, message),
+                      'bg'
+                    )
+                  )}
+                  disabled={isSendingQualityAction || !qualityDraft.prompt.trim()}
+                  onClick={() => void handleSendQualityAction()}
+                >
+                  {isSendingQualityAction ? (
+                    <span className="size-3.5 animate-spin rounded-full border border-current border-t-transparent" />
+                  ) : (
+                    <Sparkles className="size-3.5" />
+                  )}
+                  Run action
+                </Button>
               </div>
             </div>
           </DialogContent>
