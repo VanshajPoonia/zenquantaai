@@ -86,7 +86,8 @@ function ModeSelectionCard({
 }
 
 export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
-  const { appSettings, saveAppSettings, openOnboarding } = useChatContext()
+  const { appSettings, saveAppSettings, openOnboarding, openWorkspaceTool } =
+    useChatContext()
   const [localSettings, setLocalSettings] = useState<AppSettings>(appSettings)
   const [saved, setSaved] = useState(false)
 
@@ -396,6 +397,26 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
 
             <div className="flex flex-col gap-3 rounded-2xl border border-border/70 bg-card/60 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
               <div>
+                <h3 className="text-base font-semibold">Memory Vault</h3>
+                <p className="text-xs leading-6 text-muted-foreground sm:text-sm">
+                  Review saved conversation summaries and control memory per chat.
+                </p>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                className="rounded-xl"
+                onClick={() => {
+                  onOpenChange(false)
+                  openWorkspaceTool('memory-vault')
+                }}
+              >
+                Open Memory Vault
+              </Button>
+            </div>
+
+            <div className="flex flex-col gap-3 rounded-2xl border border-border/70 bg-card/60 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
+              <div>
                 <h3 className="text-base font-semibold">Workspace Setup</h3>
                 <p className="text-xs leading-6 text-muted-foreground sm:text-sm">
                   Reopen onboarding to refresh starter prompts, projects, and the default assistant.
@@ -430,7 +451,7 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                       Recommend better-fit assistants
                     </p>
                     <p className="text-[11px] text-muted-foreground">
-                      Show a lightweight modal before sending obvious mismatches.
+                      Show a lightweight suggestion near the composer for obvious mismatches.
                     </p>
                   </div>
                   <Switch
