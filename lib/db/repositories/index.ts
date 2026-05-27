@@ -12,6 +12,7 @@ export { neonFileChunksRepository } from './file-chunks'
 export { neonFilesRepository } from './files'
 export type { NeonFileMetadata } from './files'
 export { neonGeneratedImagesRepository } from './generated-images'
+export { neonMemoryVaultRepository } from './memory-vault'
 export { neonModelComparisonsRepository } from './model-comparisons'
 export {
   neonAdminAuditLogsRepository,
