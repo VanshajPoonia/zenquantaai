@@ -33,8 +33,10 @@ This is the current six-assistant platform, not the old four-mode version.
 - Six assistant families.
 - Streamed text chat.
 - Prism image generation.
+- Prism Studio gallery for generated-image history, favorites, prompt reuse/remix, prompt Artifact saves, and campaign-style actions.
 - Conversation persistence.
 - Conversation-scoped memory summaries.
+- Memory Vault for visible conversation memory summaries, project-grouped memory status, and user controls.
 - File uploads through the neutral storage abstraction.
 - Text/code uploaded-file knowledge indexing and retrieval with Neon pgvector.
 - Generated image files stored through the neutral storage abstraction.
@@ -46,8 +48,8 @@ This is the current six-assistant platform, not the old four-mode version.
 - AI-assisted Artifact Actions for saved artifacts, using the text generation and billing path.
 - First-run onboarding with starter prompts and optional starter project.
 - Prompt library.
-- Reusable prompt workflows with ordered assistant-family steps.
-- Text model comparison mode with selectable best-response save-in.
+- AI Playbooks backed by reusable prompt workflows, with ordered assistant-family steps, structured builder metadata, variable inputs, prompt preview, foreground run history, and final output review.
+- Model Duel text assistant comparison mode with selectable winner save-in.
 - Private custom text assistants built on top of the built-in text assistant modes.
 - User dashboard.
 - Admin dashboard.
@@ -59,7 +61,7 @@ This is the current six-assistant platform, not the old four-mode version.
 
 Prompt workflow v1 runs are intentionally simple: each step is queued as a normal chat or Prism image send using the chosen assistant family. There is no background automation engine, and normal usage logging remains the billing/usage source of truth.
 
-Model comparison v1 is text-only. Users can compare multiple available text assistants through OpenRouter, review model/assistant/latency/displayed usage, and save one chosen response into the conversation. Prism image comparison is not part of this first slice.
+Model Duel v1 is text-only. Users can compare multiple available text assistants through OpenRouter, review model/assistant/latency/displayed usage, optionally use Blind Mode and scoring labels, and save one chosen response into the conversation. Prism image comparison is not part of this first slice.
 
 ## Assistant Families
 
@@ -93,8 +95,11 @@ Mode mapping:
 
 - `/api/chat`: streamed text chat.
 - `/api/images/generate`: Prism image generation.
-- `/api/images/history`: image generation history.
+- `/api/images/history`: user-scoped Prism Studio generated-image gallery.
+- `/api/images/history/[id]`: generated-image favorite/project metadata updates.
 - `/api/conversations` and `/api/conversations/[id]`: conversation persistence.
+- `/api/memory-vault`: user-scoped Memory Vault summary and controls surface data.
+- `/api/conversations/[id]/memory`: per-conversation memory enable/disable and summary clear controls.
 - `/api/projects` and `/api/projects/[id]`: project management.
 - `/api/projects/[id]/home`: user-scoped Project Home aggregate summary.
 - `/api/search`: user-scoped workspace search across Neon-backed projects, conversations, messages, prompts, workflows, custom assistants, file metadata, generated image metadata, and model comparisons, with optional `projectId` scoping.
@@ -102,8 +107,8 @@ Mode mapping:
 - `/api/artifacts/[id]/actions`: user-scoped AI-assisted artifact transformations that reuse the text generation and billing path.
 - `/api/onboarding`: first-run workspace setup, starter prompt/project creation, and onboarding settings updates.
 - `/api/prompts` and `/api/prompts/[id]`: prompt library.
-- `/api/prompt-workflows`, `/api/prompt-workflows/[id]`, and `/api/prompt-workflows/[id]/runs`: reusable workflow CRUD and lightweight run tracking.
-- `/api/model-comparisons` and `/api/model-comparisons/[id]/choose`: text assistant/model comparison and chosen response save-in.
+- `/api/prompt-workflows`, `/api/prompt-workflows/[id]`, and `/api/prompt-workflows/[id]/runs`: reusable AI Playbook CRUD, structured builder metadata, and lightweight run tracking.
+- `/api/model-comparisons` and `/api/model-comparisons/[id]/choose`: Model Duel text assistant comparison and chosen response save-in.
 - `/api/settings`: user settings.
 - `/api/attachments`: attachment upload.
 - `/api/dashboard`: user dashboard data.
@@ -142,6 +147,8 @@ Active Neon runtime data paths are:
 - `/api/projects/[id]`
 - `/api/projects/[id]/home`
 - `/api/search`
+- `/api/memory-vault`
+- `/api/conversations/[id]/memory`
 - `/api/artifacts`
 - `/api/artifacts/[id]`
 - `/api/artifacts/[id]/actions`
@@ -153,6 +160,7 @@ Active Neon runtime data paths are:
 - conversation persistence inside `/api/images/generate`
 - billing enforcement and image usage logging inside `/api/images/generate`
 - `/api/images/history`
+- `/api/images/history/[id]`
 - `/api/dashboard` and `/dashboard`
 - `/pricing` and `/api/plan-requests`
 - `/api/admin/*`, `/admin`, and `/admin/users/[id]`
@@ -165,9 +173,9 @@ The Neon migration creates:
 
 - app-owned users, auth identity mapping, credentials, and sessions
 - profiles, subscriptions, manual plan requests, usage overrides, text/image usage events, and admin audit logs
-- projects, conversations, messages, conversation memory fields, prompt library, prompt workflows, text model comparisons, private custom text assistants, and user settings
+- projects, conversations, messages, conversation memory fields, prompt library, prompt workflows with AI Playbook builder metadata, text model comparisons, private custom text assistants, and user settings
 - editable artifacts saved from chat, comparisons, workflows, Pulse, and Prism outputs
-- assistant recommendation events, file metadata, and generated image metadata
+- assistant recommendation events, file metadata, and generated image metadata with Prism Studio project/favorite fields
 - uploaded-file text chunks and pgvector embeddings for private project knowledge
 
 Supabase migrations still exist as historical/product reference only. They are not prerequisites for Neon auth, Neon app data, or the neutral file storage path.
@@ -183,6 +191,8 @@ Neon migration order:
 7. `20260524_zenquanta_auth_attempts.sql`
 8. `20260525_zenquanta_custom_assistants.sql`
 9. `20260526_zenquanta_artifacts.sql`
+10. `20260528_zenquanta_playbook_builder_metadata.sql`
+11. `20260528_zenquanta_prism_studio_metadata.sql`
 
 Historical Supabase migration order documented in `README.md`:
 

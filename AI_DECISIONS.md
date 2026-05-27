@@ -68,7 +68,7 @@ Out of scope:
 
 ## Model Comparison Uses Text Assistants Only In V1
 
-Decision: Model comparison v1 compares text assistants through OpenRouter and does not include Prism image generation.
+Decision: Model Duel v1 is the user-facing polish layer for text model comparison. It compares text assistants through OpenRouter and does not include Prism image generation.
 
 Evidence:
 
@@ -76,6 +76,7 @@ Evidence:
 - Comparison candidates store assistant family, model, latency, content, sources, and displayed usage metadata in Neon.
 - Usage logging runs for every successful candidate, while only the selected candidate is saved into the conversation.
 - `/api/model-comparisons/[id]/choose` appends the chosen response as the assistant message.
+- Blind Mode and scoring labels are local UI review affordances; scoring labels are preserved only when saving a candidate as an Artifact.
 
 Reason:
 
@@ -120,6 +121,23 @@ Out of scope:
 - Prism/image routes.
 - Automatic replacement of artifact content without preview.
 
+## Memory Vault Uses Visible Conversation Summaries
+
+Decision: Memory Vault v1 exposes and controls existing conversation memory summaries instead of creating hidden cross-conversation memory or project-level memory tables.
+
+Evidence:
+
+- Conversation memory lives on `zen_conversations.memory_summary` and `memory_updated_at`.
+- `/api/memory-vault` groups owned conversation memory by project for visibility.
+- `/api/conversations/[id]/memory` toggles that conversation's `sessionSettings.memory` or clears its saved summary.
+- Opening or clearing the vault does not call OpenRouter and does not generate new memory.
+
+Out of scope:
+
+- Hidden user preference memory.
+- Project memory tables.
+- Vector search or external memory stores.
+
 ## Neutral Private File Storage Replaces Supabase Storage
 
 Decision: Use a neutral private object storage abstraction for new uploads and generated images.
@@ -138,6 +156,25 @@ Evidence:
 - Supabase runtime clients and old Supabase-backed storage modules have been removed.
 
 Note: Old Supabase-hosted files are not imported, copied, backfilled, or preserved.
+
+## Prism Studio Uses Generated Image Metadata
+
+Decision: Prism Studio v1 is a workspace UI over stored `zen_generated_images` metadata and protected object-store previews, while Prism generation remains exclusively on `/api/images/generate`.
+
+Evidence:
+
+- Gallery reads owned generated-image metadata through `/api/images/history`.
+- Favorites and project assignment are additive fields on `zen_generated_images`.
+- Private previews use `/api/files/object` URLs created by the storage abstraction.
+- Prompt reuse/remix prepares the local Prism composer draft and does not call AI.
+- Four-image variation actions queue four normal Prism sends, so image credit enforcement stays in the existing image route.
+- Caption/ad/campaign actions dispatch through normal Velora text chat after explicit user confirmation.
+
+Out of scope:
+
+- External image storage providers beyond the existing object-store abstraction.
+- Image generation through `/api/chat`.
+- Background image jobs or automatic generation on gallery load.
 
 ## Neon Credentials Auth Starts Fresh
 
