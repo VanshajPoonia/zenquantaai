@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   AIMode,
   Attachment,
@@ -19,6 +19,11 @@ type SubmissionInput = {
   modeOverride?: AIMode
 }
 
+type DraftRecommendation = {
+  recommendation: AssistantRecommendationResult
+  submissionKey: string
+}
+
 function getSubmissionKey(input: SubmissionInput, currentMode: AIMode): string {
   return JSON.stringify({
     content: input.content.trim(),
@@ -32,6 +37,7 @@ function getSubmissionKey(input: SubmissionInput, currentMode: AIMode): string {
 }
 
 export function usePromptPrecheck(input: {
+  draft?: SubmissionInput
   onContinue: (submission: SubmissionInput) => Promise<void>
   onSubmitted?: (submission: SubmissionInput) => void
 }) {
@@ -49,10 +55,13 @@ export function usePromptPrecheck(input: {
     recommendation: AssistantRecommendationResult
     submissionKey: string
   } | null>(null)
+  const [draftRecommendation, setDraftRecommendation] =
+    useState<DraftRecommendation | null>(null)
   const [suppressForMessage, setSuppressForMessage] = useState(false)
   const [suppressedSubmissionKey, setSuppressedSubmissionKey] = useState<string | null>(
     null
   )
+  const shownDraftRecommendationKeysRef = useRef<Set<string>>(new Set())
 
   const logRecommendationEvent = useCallback(
     async (
@@ -88,6 +97,82 @@ export function usePromptPrecheck(input: {
     setPendingRecommendation(null)
     setSuppressForMessage(false)
   }, [])
+
+  useEffect(() => {
+    const draft = input.draft
+    const content = draft?.content.trim() ?? ''
+    const attachments = draft?.attachments ?? []
+
+    if (
+      pendingRecommendation ||
+      !appSettings.assistantRecommendations.enabled ||
+      (!content && attachments.length === 0)
+    ) {
+      setDraftRecommendation(null)
+      return
+    }
+
+    const timeout = window.setTimeout(() => {
+      const submission: SubmissionInput = {
+        content,
+        attachments,
+        kind: draft?.kind ?? 'chat',
+      }
+      const submissionKey = getSubmissionKey(submission, currentMode)
+
+      if (suppressedSubmissionKey === submissionKey) {
+        setDraftRecommendation(null)
+        return
+      }
+
+      const recommendation = getAssistantRecommendation({
+        prompt: content,
+        currentMode,
+        kind: draft?.kind,
+        attachments: attachments.map((attachment) => ({
+          name: attachment.name,
+          kind: attachment.kind,
+          previewUrl: attachment.previewUrl,
+        })),
+      })
+
+      if (!recommendation.shouldRecommendSwitch) {
+        setDraftRecommendation(null)
+        return
+      }
+
+      setDraftRecommendation((previous) =>
+        previous?.submissionKey === submissionKey
+          ? previous
+          : {
+              recommendation,
+              submissionKey,
+            }
+      )
+    }, 350)
+
+    return () => window.clearTimeout(timeout)
+  }, [
+    appSettings.assistantRecommendations.enabled,
+    currentMode,
+    input.draft,
+    pendingRecommendation,
+    suppressedSubmissionKey,
+  ])
+
+  useEffect(() => {
+    if (!draftRecommendation) return
+    if (shownDraftRecommendationKeysRef.current.has(draftRecommendation.submissionKey)) {
+      return
+    }
+
+    shownDraftRecommendationKeysRef.current.add(draftRecommendation.submissionKey)
+    void logRecommendationEvent(
+      draftRecommendation.recommendation,
+      'shown',
+      currentChat?.id
+    )
+  }, [currentChat?.id, draftRecommendation, logRecommendationEvent])
 
   const continueWithSubmission = useCallback(
     async (submission: SubmissionInput) => {
@@ -175,6 +260,17 @@ export function usePromptPrecheck(input: {
           return true
         }
 
+        if (draftRecommendation?.submissionKey === submissionKey) {
+          await logRecommendationEvent(
+            recommendation,
+            'continued',
+            currentChat?.id
+          )
+          setDraftRecommendation(null)
+          await continueWithSubmission(submission)
+          return true
+        }
+
         await logRecommendationEvent(recommendation, 'shown', currentChat?.id)
         awaitRecommendationDecision()
         debugSendPipeline('precheck-modal-opened', {
@@ -202,6 +298,7 @@ export function usePromptPrecheck(input: {
       continueWithSubmission,
       currentChat?.id,
       currentMode,
+      draftRecommendation,
       logRecommendationEvent,
       setCurrentMode,
       suppressedSubmissionKey,
@@ -302,21 +399,62 @@ export function usePromptPrecheck(input: {
     suppressForMessage,
   ])
 
+  const handleUseDraftRecommendation = useCallback(async () => {
+    if (!draftRecommendation) return null
+
+    setSuppressedSubmissionKey(draftRecommendation.submissionKey)
+    setCurrentMode(draftRecommendation.recommendation.recommendedMode)
+    debugSendPipeline('draft-recommendation-accepted', {
+      from: draftRecommendation.recommendation.currentAssistant,
+      to: draftRecommendation.recommendation.predictedAssistant,
+    })
+    await logRecommendationEvent(
+      draftRecommendation.recommendation,
+      'accepted',
+      currentChat?.id
+    )
+    const recommendedMode = draftRecommendation.recommendation.recommendedMode
+    setDraftRecommendation(null)
+    return recommendedMode
+  }, [currentChat?.id, draftRecommendation, logRecommendationEvent, setCurrentMode])
+
+  const handleIgnoreDraftRecommendation = useCallback(async () => {
+    if (!draftRecommendation) return
+
+    setSuppressedSubmissionKey(draftRecommendation.submissionKey)
+    debugSendPipeline('draft-recommendation-ignored', {
+      current: draftRecommendation.recommendation.currentAssistant,
+      recommended: draftRecommendation.recommendation.predictedAssistant,
+    })
+    await logRecommendationEvent(
+      draftRecommendation.recommendation,
+      'continued',
+      currentChat?.id
+    )
+    setDraftRecommendation(null)
+  }, [currentChat?.id, draftRecommendation, logRecommendationEvent])
+
   return useMemo(
     () => ({
+      draftRecommendation: draftRecommendation?.recommendation ?? null,
       pendingRecommendation: pendingRecommendation?.recommendation ?? null,
       recommendationOpen: Boolean(pendingRecommendation),
       suppressForMessage,
       setSuppressForMessage,
       precheckAndSend,
+      handleUseDraftRecommendation,
+      handleIgnoreDraftRecommendation,
       handleSwitchAndContinue,
       handleContinueAnyway,
       handleCancel,
     }),
     [
+      draftRecommendation,
       handleCancel,
       handleContinueAnyway,
+      handleIgnoreDraftRecommendation,
       handleSwitchAndContinue,
+      handleUseDraftRecommendation,
       pendingRecommendation,
       precheckAndSend,
       suppressForMessage,
