@@ -4,7 +4,11 @@ import {
   neonProfilesRepository,
   neonPromptWorkflowsRepository,
 } from '@/lib/db/repositories'
-import { WORKFLOW_FAMILY_TO_MODE } from '@/lib/utils/prompt-workflows'
+import {
+  normalizePromptWorkflowMetadata,
+  normalizePromptWorkflowStepMetadata,
+  WORKFLOW_FAMILY_TO_MODE,
+} from '@/lib/utils/prompt-workflows'
 import {
   AssistantFamily,
   PromptWorkflowInput,
@@ -50,6 +54,10 @@ function parseWorkflowBody(body: unknown): PromptWorkflowInput | { error: string
       mode: WORKFLOW_FAMILY_TO_MODE[assistantFamily],
       template,
       variableNames: step.variableNames,
+      metadata: normalizePromptWorkflowStepMetadata(
+        step.metadata,
+        assistantFamily
+      ),
     }
   })
 
@@ -74,6 +82,7 @@ function parseWorkflowBody(body: unknown): PromptWorkflowInput | { error: string
     title,
     description: input.description?.trim() || null,
     projectId: input.projectId?.trim() || null,
+    metadata: normalizePromptWorkflowMetadata(input.metadata),
     variables,
     steps: normalizedSteps as PromptWorkflowInput['steps'],
   }

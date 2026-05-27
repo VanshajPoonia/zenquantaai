@@ -5,6 +5,8 @@ import { createId, nowIso } from '@/lib/utils/chat'
 import {
   extractWorkflowVariableNames,
   mergeWorkflowVariables,
+  normalizePromptWorkflowMetadata,
+  normalizePromptWorkflowStepMetadata,
   WORKFLOW_FAMILY_TO_MODE,
 } from '@/lib/utils/prompt-workflows'
 import {
@@ -55,6 +57,10 @@ function rowToStep(row: WorkflowStepRow): PromptWorkflowStep {
     mode: row.mode as PromptWorkflowStep['mode'],
     template: row.template,
     variableNames: toJsonArray<string>(row.variableNames),
+    metadata: normalizePromptWorkflowStepMetadata(
+      row.metadata,
+      row.assistantFamily as PromptWorkflowStep['assistantFamily']
+    ),
     createdAt: toIsoString(row.createdAt),
     updatedAt: toIsoString(row.updatedAt),
   }
@@ -69,6 +75,7 @@ function rowToWorkflow(
     title: row.title,
     description: row.description,
     projectId: row.projectId,
+    metadata: normalizePromptWorkflowMetadata(row.metadata),
     variables: toJsonArray<PromptWorkflow['variables'][number]>(row.variables),
     steps: steps
       .map(rowToStep)
@@ -158,6 +165,10 @@ function normalizeWorkflowInput(
         mode,
         template: step.template.trim(),
         variableNames,
+        metadata: normalizePromptWorkflowStepMetadata(
+          step.metadata,
+          assistantFamily
+        ),
         createdAt: now,
         updatedAt: now,
       }
@@ -175,6 +186,7 @@ function normalizeWorkflowInput(
     title: input.title.trim(),
     description: input.description?.trim() || null,
     projectId: input.projectId?.trim() || null,
+    metadata: normalizePromptWorkflowMetadata(input.metadata),
     variables: mergeWorkflowVariables(input.variables, variableNames),
     steps: normalizedSteps,
     createdAt: now,
@@ -247,6 +259,7 @@ class NeonPromptWorkflowsRepository {
       title: workflow.title,
       description: workflow.description,
       variables: workflow.variables,
+      metadata: workflow.metadata,
       createdAt: now,
       updatedAt: now,
     })
@@ -262,7 +275,7 @@ class NeonPromptWorkflowsRepository {
           title: step.title,
           template: step.template,
           variableNames: step.variableNames,
-          metadata: {},
+          metadata: step.metadata,
           createdAt: now,
           updatedAt: now,
         }))
@@ -293,6 +306,7 @@ class NeonPromptWorkflowsRepository {
         description: workflow.description,
         projectId: workflow.projectId,
         variables: workflow.variables,
+        metadata: workflow.metadata,
         updatedAt: now,
       })
       .where(and(eq(zenPromptWorkflows.userId, userId), eq(zenPromptWorkflows.id, id)))
@@ -312,7 +326,7 @@ class NeonPromptWorkflowsRepository {
           title: step.title,
           template: step.template,
           variableNames: step.variableNames,
-          metadata: {},
+          metadata: step.metadata,
           createdAt: now,
           updatedAt: now,
         }))
