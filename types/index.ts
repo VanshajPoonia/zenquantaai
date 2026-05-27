@@ -502,6 +502,52 @@ export interface PromptWorkflowVariable {
   required?: boolean
 }
 
+export type PromptWorkflowVisibility = 'private'
+
+export type PromptWorkflowCategory =
+  | 'custom'
+  | 'research'
+  | 'marketing'
+  | 'business'
+  | 'content'
+  | 'developer'
+  | 'operations'
+  | 'image'
+  | 'education'
+  | 'agency'
+
+export type PromptWorkflowExpectedOutputType =
+  | 'document'
+  | 'checklist'
+  | 'email'
+  | 'code'
+  | 'table'
+  | 'image_prompt'
+  | 'research_brief'
+  | 'proposal'
+  | 'campaign'
+  | 'summary'
+
+export interface PromptWorkflowMetadata {
+  category: PromptWorkflowCategory
+  expectedOutputType: PromptWorkflowExpectedOutputType
+  suggestedAssistant?: AssistantFamily | null
+  visibility: PromptWorkflowVisibility
+}
+
+export type PromptWorkflowStepType =
+  | 'text'
+  | 'analysis'
+  | 'research'
+  | 'code'
+  | 'image'
+
+export interface PromptWorkflowStepMetadata {
+  stepType: PromptWorkflowStepType
+  outputLabel?: string | null
+  includePreviousOutput?: boolean
+}
+
 export interface PromptWorkflowStep {
   id: string
   title?: string | null
@@ -510,6 +556,7 @@ export interface PromptWorkflowStep {
   mode: AIMode
   template: string
   variableNames: string[]
+  metadata: PromptWorkflowStepMetadata
   createdAt: string
   updatedAt: string
 }
@@ -519,6 +566,7 @@ export interface PromptWorkflow {
   title: string
   description?: string | null
   projectId?: string | null
+  metadata: PromptWorkflowMetadata
   variables: PromptWorkflowVariable[]
   steps: PromptWorkflowStep[]
   createdAt: string
@@ -533,12 +581,14 @@ export interface PromptWorkflowStepInput {
   mode?: AIMode
   template: string
   variableNames?: string[]
+  metadata?: Partial<PromptWorkflowStepMetadata>
 }
 
 export interface PromptWorkflowInput {
   title: string
   description?: string | null
   projectId?: string | null
+  metadata?: Partial<PromptWorkflowMetadata>
   variables?: PromptWorkflowVariable[]
   steps: PromptWorkflowStepInput[]
 }
@@ -670,7 +720,12 @@ export type SearchResultTarget =
   | { type: 'switch_custom_assistant'; assistantId: string }
   | { type: 'open_custom_assistants'; assistantId?: string }
   | { type: 'open_model_comparison'; comparisonId?: string; conversationId?: string }
-  | { type: 'open_prism_history'; imageId?: string; conversationId?: string }
+  | {
+      type: 'open_prism_history'
+      imageId?: string
+      conversationId?: string
+      projectId?: string | null
+    }
   | { type: 'open_url'; url: string }
 
 export interface SearchResult {
@@ -745,14 +800,59 @@ export interface ProjectHomeGeneratedImageSummary {
   prompt: string
   model: string
   status: string
+  projectId?: string | null
   conversationId: string | null
   messageId: string | null
   width: number | null
   height: number | null
   url: string | null
+  isFavorite?: boolean
   createdAt: string
   updatedAt: string
 }
+
+export interface PrismStudioImage {
+  id: string
+  prompt: string
+  model: string
+  status: string
+  projectId: string | null
+  conversationId: string | null
+  messageId: string | null
+  width: number | null
+  height: number | null
+  url: string | null
+  sourceUrl: string | null
+  isFavorite: boolean
+  imageCreditsConsumed: number | null
+  displayedCostUsd: number | null
+  createdAt: string
+  updatedAt: string
+  metadata?: Record<string, string | number | boolean | null>
+}
+
+export interface PrismStudioHistoryResponse {
+  items: PrismStudioImage[]
+}
+
+export interface PrismStudioHistoryFilters {
+  q?: string
+  projectId?: string | null
+  favorite?: boolean | null
+  from?: string | null
+  to?: string | null
+}
+
+export interface PrismStudioImagePatch {
+  isFavorite?: boolean
+  projectId?: string | null
+}
+
+export type PrismStudioQuickAction =
+  | 'generate_more'
+  | 'ad_concept'
+  | 'matching_caption'
+  | 'campaign_idea'
 
 export interface ProjectHomeWorkflowSummary {
   id: string
@@ -800,6 +900,51 @@ export interface ProjectHomeResponse {
   memoryStatus: ProjectHomeMemoryStatus
   suggestedActions: ProjectHomeSuggestedAction[]
   generatedAt: string
+}
+
+export interface MemoryVaultConversationSummary {
+  id: string
+  title: string
+  projectId: string
+  projectName: string
+  mode: AIMode
+  assistantFamily: AssistantFamily
+  preview: string
+  messageCount: number
+  memoryEnabled: boolean
+  memorySummary: string | null
+  memoryUpdatedAt: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export interface MemoryVaultProjectGroup {
+  project: Project
+  conversationCount: number
+  memoryConversationCount: number
+  memoryEnabledConversationCount: number
+  latestMemoryUpdatedAt: string | null
+  conversations: MemoryVaultConversationSummary[]
+}
+
+export interface MemoryVaultTotals {
+  projectCount: number
+  conversationCount: number
+  memoryConversationCount: number
+  memoryEnabledConversationCount: number
+  latestMemoryUpdatedAt: string | null
+}
+
+export interface MemoryVaultResponse {
+  globalMemoryEnabled: boolean
+  totals: MemoryVaultTotals
+  projects: MemoryVaultProjectGroup[]
+  recentMemories: MemoryVaultConversationSummary[]
+  generatedAt: string
+}
+
+export interface MemoryVaultConversationPatch {
+  memoryEnabled: boolean
 }
 
 export interface ChatRequest {
