@@ -2,6 +2,11 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useChatContext } from '@/lib/chat-context'
+import { AssistantHandoffTarget } from '@/lib/config/assistant-handoffs'
+import {
+  AssistantQualityAction,
+  resolveQualityActionMode,
+} from '@/lib/config/assistant-quality-actions'
 import { ArtifactSourceType, ArtifactType, Message } from '@/types'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
@@ -139,6 +144,50 @@ export function ChatArea() {
     })
   }
 
+  const handleHandoffMessage = async (
+    message: Message,
+    target: AssistantHandoffTarget,
+    prompt: string
+  ) => {
+    if (
+      !currentChat ||
+      message.role !== 'assistant' ||
+      !currentChat.messages.some((item) => item.id === message.id)
+    ) {
+      return
+    }
+
+    await sendMessage({
+      content: prompt,
+      kind: target.mode === 'image' ? 'image' : 'chat',
+      modeOverride: target.mode,
+      customAssistantId: null,
+    })
+  }
+
+  const handleQualityActionMessage = async (
+    message: Message,
+    action: AssistantQualityAction,
+    prompt: string
+  ) => {
+    if (
+      !currentChat ||
+      message.role !== 'assistant' ||
+      !currentChat.messages.some((item) => item.id === message.id)
+    ) {
+      return
+    }
+
+    const targetMode = resolveQualityActionMode(action, message)
+
+    await sendMessage({
+      content: prompt,
+      kind: action.kind === 'image' || targetMode === 'image' ? 'image' : 'chat',
+      modeOverride: targetMode,
+      customAssistantId: null,
+    })
+  }
+
   const showProjectHome = !currentChat && Boolean(activeProjectHomeId)
   const showEmptyState = !currentChat || currentChat.messages.length === 0
 
@@ -203,6 +252,8 @@ export function ChatArea() {
                   onEdit={editLastUserMessage}
                   onAskAnotherMode={askAnotherMode}
                   onSaveArtifact={handleSaveMessageArtifact}
+                  onHandoff={handleHandoffMessage}
+                  onQualityAction={handleQualityActionMessage}
                 />
               </div>
             ))}
