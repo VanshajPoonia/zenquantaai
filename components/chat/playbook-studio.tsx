@@ -10,6 +10,7 @@ import {
   Download,
   ExternalLink,
   FileText,
+  Info,
   Loader2,
   Pencil,
   Play,
@@ -24,21 +25,31 @@ import { useChatContext } from '@/lib/chat-context'
 import { cn } from '@/lib/utils'
 import { downloadTextFile } from '@/lib/utils/export'
 import {
+  buildWorkflowStepPrompt,
   extractWorkflowVariableNames,
+  getWorkflowUsageLevel,
   mergeWorkflowVariables,
+  normalizePromptWorkflowMetadata,
+  normalizePromptWorkflowStepMetadata,
+  PLAYBOOK_CATEGORIES,
+  PLAYBOOK_OUTPUT_TYPES,
+  PLAYBOOK_STEP_TYPES,
   WORKFLOW_FAMILY_TO_MODE,
 } from '@/lib/utils/prompt-workflows'
 import {
   AssistantFamily,
   PlaybookTemplate,
   PromptWorkflow,
+  PromptWorkflowMetadata,
   PromptWorkflowInput,
   PromptWorkflowRunHistoryItem,
   PromptWorkflowStepInput,
+  PromptWorkflowStepMetadata,
   PromptWorkflowVariable,
 } from '@/types'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
 import {
   Dialog,
   DialogContent,
@@ -65,18 +76,21 @@ interface PlaybookDraft {
   title: string
   description: string
   projectId: string | null
+  metadata: PromptWorkflowMetadata
   variables: PromptWorkflowVariable[]
   steps: PromptWorkflowStepInput[]
 }
 
 function createBlankStep(order: number): PromptWorkflowStepInput {
+  const assistantFamily = 'nova'
   return {
-    assistantFamily: 'nova',
-    mode: 'general',
+    assistantFamily,
+    mode: WORKFLOW_FAMILY_TO_MODE[assistantFamily],
     order,
     title: '',
     template: '',
     variableNames: [],
+    metadata: normalizePromptWorkflowStepMetadata(undefined, assistantFamily),
   }
 }
 
@@ -96,6 +110,7 @@ function workflowToDraft(workflow: PromptWorkflow): PlaybookDraft {
     title: workflow.title,
     description: workflow.description ?? '',
     projectId: workflow.projectId ?? null,
+    metadata: normalizePromptWorkflowMetadata(workflow.metadata),
     variables: workflow.variables,
     steps: workflow.steps.map((step) => ({
       id: step.id,
@@ -105,6 +120,10 @@ function workflowToDraft(workflow: PromptWorkflow): PlaybookDraft {
       mode: step.mode,
       template: step.template,
       variableNames: step.variableNames,
+      metadata: normalizePromptWorkflowStepMetadata(
+        step.metadata,
+        step.assistantFamily
+      ),
     })),
   }
 }
@@ -114,6 +133,7 @@ function templateToDraft(template: PlaybookTemplate, projectId: string | null): 
     title: template.input.title,
     description: template.input.description ?? '',
     projectId,
+    metadata: normalizePromptWorkflowMetadata(template.input.metadata),
     variables: template.input.variables ?? [],
     steps: template.input.steps.map((step, index) => ({
       ...step,
@@ -121,6 +141,10 @@ function templateToDraft(template: PlaybookTemplate, projectId: string | null): 
       order: index + 1,
       variableNames:
         step.variableNames ?? extractWorkflowVariableNames(step.template),
+      metadata: normalizePromptWorkflowStepMetadata(
+        step.metadata,
+        step.assistantFamily
+      ),
     })),
   }
 }
@@ -133,6 +157,10 @@ function draftToInput(draft: PlaybookDraft): PromptWorkflowInput {
       title: step.title?.trim() || null,
       template: step.template.trim(),
       variableNames: extractWorkflowVariableNames(step.template),
+      metadata: normalizePromptWorkflowStepMetadata(
+        step.metadata,
+        step.assistantFamily
+      ),
     }))
     .filter((step) => step.template)
 
@@ -140,6 +168,7 @@ function draftToInput(draft: PlaybookDraft): PromptWorkflowInput {
     title: draft.title.trim(),
     description: draft.description.trim() || null,
     projectId: draft.projectId,
+    metadata: normalizePromptWorkflowMetadata(draft.metadata),
     variables: variablesFromSteps(steps, draft.variables),
     steps,
   }
@@ -167,6 +196,27 @@ function formatDate(value?: string | null) {
     hour: 'numeric',
     minute: '2-digit',
   }).format(date)
+}
+
+function categoryLabel(value: PromptWorkflowMetadata['category']) {
+  return PLAYBOOK_CATEGORIES.find((option) => option.value === value)?.label ?? 'Custom'
+}
+
+function outputTypeLabel(value: PromptWorkflowMetadata['expectedOutputType']) {
+  return (
+    PLAYBOOK_OUTPUT_TYPES.find((option) => option.value === value)?.label ??
+    'Document'
+  )
+}
+
+function stepTypeLabel(value: PromptWorkflowStepMetadata['stepType']) {
+  return PLAYBOOK_STEP_TYPES.find((option) => option.value === value)?.label ?? 'Text'
+}
+
+function usageTone(level: 'low' | 'medium' | 'high') {
+  if (level === 'high') return 'border-amber-500/45 text-amber-300'
+  if (level === 'medium') return 'border-blue-500/40 text-blue-300'
+  return 'border-emerald-500/40 text-emerald-300'
 }
 
 export function PlaybookStudio() {
@@ -286,6 +336,12 @@ export function PlaybookStudio() {
       title: '',
       description: '',
       projectId: projectFilter === PROJECT_FILTER_ALL ? null : projectFilter,
+      metadata: {
+        category: 'custom',
+        expectedOutputType: 'document',
+        suggestedAssistant: 'nova',
+        visibility: 'private',
+      },
       variables: [],
       steps: [createBlankStep(1)],
     })
@@ -300,17 +356,44 @@ export function PlaybookStudio() {
       const steps = previous.steps.map((step, stepIndex) => {
         if (stepIndex !== index) return step
         const assistantFamily = patch.assistantFamily ?? step.assistantFamily
+        const metadataSource =
+          patch.metadata ??
+          (patch.assistantFamily
+            ? {
+                ...step.metadata,
+                stepType: undefined,
+              }
+            : step.metadata)
         return {
           ...step,
           ...patch,
           assistantFamily,
           mode: WORKFLOW_FAMILY_TO_MODE[assistantFamily],
+          metadata: normalizePromptWorkflowStepMetadata(
+            metadataSource,
+            assistantFamily
+          ),
         }
       })
       return {
         ...previous,
         steps,
         variables: variablesFromSteps(steps, previous.variables),
+      }
+    })
+  }
+
+  const updateDraftVariable = (
+    name: string,
+    patch: Partial<PromptWorkflowVariable>
+  ) => {
+    setDraft((previous) => {
+      if (!previous) return previous
+      return {
+        ...previous,
+        variables: previous.variables.map((variable) =>
+          variable.name === name ? { ...variable, ...patch } : variable
+        ),
       }
     })
   }
@@ -380,11 +463,19 @@ export function PlaybookStudio() {
 
   const runSelectedPlaybook = async () => {
     if (!selectedWorkflow) return
+    if (missingRequiredVariables.length > 0) {
+      setError(
+        `Fill required variables before running: ${missingRequiredVariables
+          .map((variable) => variable.label || variable.name)
+          .join(', ')}.`
+      )
+      return
+    }
 
     setIsRunning(true)
     setError(null)
     try {
-      await runPromptWorkflow(selectedWorkflow.id, runValues)
+      await runPromptWorkflow(selectedWorkflow.id, effectiveRunValues)
       const nextRuns = await listPromptWorkflowRuns(selectedWorkflow.id)
       setRuns(nextRuns)
       setSelectedRunId(nextRuns[0]?.id ?? null)
@@ -423,6 +514,33 @@ export function PlaybookStudio() {
 
   const selectedVariables = selectedWorkflow?.variables ?? []
   const draftVariables = draft ? variablesFromSteps(draft.steps, draft.variables) : []
+  const selectedMetadata = normalizePromptWorkflowMetadata(selectedWorkflow?.metadata)
+  const effectiveRunValues = Object.fromEntries(
+    selectedVariables.map((variable) => [
+      variable.name,
+      runValues[variable.name] ?? variable.defaultValue ?? '',
+    ])
+  )
+  const usageLevel = selectedWorkflow
+    ? getWorkflowUsageLevel({
+        steps: selectedWorkflow.steps,
+        values: effectiveRunValues,
+      })
+    : 'low'
+  const missingRequiredVariables = selectedVariables.filter(
+    (variable) =>
+      variable.required !== false &&
+      !(effectiveRunValues[variable.name] ?? '').trim()
+  )
+  const expandedPrompts =
+    selectedWorkflow?.steps.map((step) => ({
+      step,
+      prompt: buildWorkflowStepPrompt({
+        step,
+        values: effectiveRunValues,
+        preview: true,
+      }),
+    })) ?? []
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -580,6 +698,23 @@ export function PlaybookStudio() {
                           {selectedVariables.length} variables
                         </Badge>
                         <Badge variant="outline">
+                          {categoryLabel(selectedMetadata.category)}
+                        </Badge>
+                        <Badge variant="outline">
+                          {outputTypeLabel(selectedMetadata.expectedOutputType)}
+                        </Badge>
+                        {selectedMetadata.suggestedAssistant ? (
+                          <Badge variant="outline">
+                            Suggested:{' '}
+                            {
+                              ASSISTANT_FAMILY_COPY[
+                                selectedMetadata.suggestedAssistant
+                              ].shortName
+                            }
+                          </Badge>
+                        ) : null}
+                        <Badge variant="outline">Private</Badge>
+                        <Badge variant="outline">
                           {selectedWorkflow.projectId
                             ? projects.find(
                                 (project) => project.id === selectedWorkflow.projectId
@@ -619,7 +754,7 @@ export function PlaybookStudio() {
                         <h3 className="font-medium">Run launcher</h3>
                         <Button
                           type="button"
-                          disabled={isRunning}
+                          disabled={isRunning || missingRequiredVariables.length > 0}
                           onClick={() => void runSelectedPlaybook()}
                         >
                           {isRunning ? (
@@ -630,6 +765,13 @@ export function PlaybookStudio() {
                           Run AI Playbook
                         </Button>
                       </div>
+                      <div className="mt-3 flex flex-wrap items-center gap-2 rounded-lg border border-border/60 bg-background/45 px-3 py-2 text-xs text-muted-foreground">
+                        <Info className="size-3.5" />
+                        <span>Each step may consume usage.</span>
+                        <Badge variant="outline" className={usageTone(usageLevel)}>
+                          {usageLevel} usage
+                        </Badge>
+                      </div>
                       {selectedVariables.length > 0 ? (
                         <div className="mt-4 grid gap-3 md:grid-cols-2">
                           {selectedVariables.map((variable) => (
@@ -638,7 +780,11 @@ export function PlaybookStudio() {
                                 {variable.label || variable.name}
                               </span>
                               <Input
-                                value={runValues[variable.name] ?? ''}
+                                value={
+                                  runValues[variable.name] ??
+                                  variable.defaultValue ??
+                                  ''
+                                }
                                 onChange={(event) =>
                                   setRunValues((previous) => ({
                                     ...previous,
@@ -660,7 +806,7 @@ export function PlaybookStudio() {
                     <div className="rounded-xl border border-border/60 bg-card/35 p-4">
                       <h3 className="font-medium">Step preview</h3>
                       <div className="mt-3 space-y-3">
-                        {selectedWorkflow.steps.map((step) => (
+                        {expandedPrompts.map(({ step, prompt }) => (
                           <div
                             key={step.id}
                             className="rounded-lg border border-border/60 bg-background/45 p-3"
@@ -669,12 +815,25 @@ export function PlaybookStudio() {
                               <p className="text-sm font-medium">
                                 {step.order}. {step.title || 'Untitled step'}
                               </p>
-                              <Badge variant="outline">
-                                {ASSISTANT_FAMILY_COPY[step.assistantFamily].shortName}
-                              </Badge>
+                              <div className="flex flex-wrap justify-end gap-1.5">
+                                <Badge variant="outline">
+                                  {ASSISTANT_FAMILY_COPY[step.assistantFamily].shortName}
+                                </Badge>
+                                <Badge variant="outline">
+                                  {stepTypeLabel(step.metadata.stepType)}
+                                </Badge>
+                                {step.metadata.includePreviousOutput ? (
+                                  <Badge variant="outline">Uses previous output</Badge>
+                                ) : null}
+                              </div>
                             </div>
+                            {step.metadata.outputLabel ? (
+                              <p className="mt-2 text-xs text-muted-foreground">
+                                Output: {step.metadata.outputLabel}
+                              </p>
+                            ) : null}
                             <p className="mt-2 line-clamp-3 text-xs leading-5 text-muted-foreground">
-                              {step.template}
+                              {prompt}
                             </p>
                           </div>
                         ))}
@@ -860,6 +1019,92 @@ export function PlaybookStudio() {
                   </SelectContent>
                 </Select>
               </div>
+              <div className="grid gap-3 md:grid-cols-4">
+                <Select
+                  value={draft.metadata.category}
+                  onValueChange={(value) =>
+                    setDraft((previous) =>
+                      previous
+                        ? {
+                            ...previous,
+                            metadata: normalizePromptWorkflowMetadata({
+                              ...previous.metadata,
+                              category: value,
+                            }),
+                          }
+                        : previous
+                    )
+                  }
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Category" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {PLAYBOOK_CATEGORIES.map((category) => (
+                      <SelectItem key={category.value} value={category.value}>
+                        {category.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Select
+                  value={draft.metadata.expectedOutputType}
+                  onValueChange={(value) =>
+                    setDraft((previous) =>
+                      previous
+                        ? {
+                            ...previous,
+                            metadata: normalizePromptWorkflowMetadata({
+                              ...previous.metadata,
+                              expectedOutputType: value,
+                            }),
+                          }
+                        : previous
+                    )
+                  }
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Expected output" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {PLAYBOOK_OUTPUT_TYPES.map((type) => (
+                      <SelectItem key={type.value} value={type.value}>
+                        {type.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Select
+                  value={draft.metadata.suggestedAssistant ?? 'nova'}
+                  onValueChange={(value) =>
+                    setDraft((previous) =>
+                      previous
+                        ? {
+                            ...previous,
+                            metadata: normalizePromptWorkflowMetadata({
+                              ...previous.metadata,
+                              suggestedAssistant: value as AssistantFamily,
+                            }),
+                          }
+                        : previous
+                    )
+                  }
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Suggested assistant" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {ASSISTANT_FAMILIES.map((family) => (
+                      <SelectItem key={family} value={family}>
+                        {ASSISTANT_FAMILY_COPY[family].shortName}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <div className="flex h-9 items-center justify-center rounded-md border border-border/60 bg-muted/30 text-sm text-muted-foreground">
+                  Visibility: private
+                </div>
+              </div>
               <Textarea
                 value={draft.description}
                 onChange={(event) =>
@@ -930,6 +1175,12 @@ export function PlaybookStudio() {
                               ? {
                                   ...previous,
                                   steps: previous.steps.filter((_, stepIndex) => stepIndex !== index),
+                                  variables: variablesFromSteps(
+                                    previous.steps.filter(
+                                      (_, stepIndex) => stepIndex !== index
+                                    ),
+                                    previous.variables
+                                  ),
                                 }
                               : previous
                           )
@@ -937,6 +1188,61 @@ export function PlaybookStudio() {
                       >
                         <Trash2 className="size-4" />
                       </Button>
+                    </div>
+                    <div className="mt-3 grid gap-3 md:grid-cols-[160px_1fr_auto]">
+                      <Select
+                        value={
+                          normalizePromptWorkflowStepMetadata(
+                            step.metadata,
+                            step.assistantFamily
+                          ).stepType
+                        }
+                        onValueChange={(value) =>
+                          updateDraftStep(index, {
+                            metadata: {
+                              ...step.metadata,
+                              stepType: value as PromptWorkflowStepMetadata['stepType'],
+                            },
+                          })
+                        }
+                      >
+                        <SelectTrigger className="w-full">
+                          <SelectValue placeholder="Step type" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {PLAYBOOK_STEP_TYPES.map((type) => (
+                            <SelectItem key={type.value} value={type.value}>
+                              {type.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <Input
+                        value={step.metadata?.outputLabel ?? ''}
+                        onChange={(event) =>
+                          updateDraftStep(index, {
+                            metadata: {
+                              ...step.metadata,
+                              outputLabel: event.target.value,
+                            },
+                          })
+                        }
+                        placeholder="Output label, e.g. Research notes"
+                      />
+                      <label className="flex items-center gap-2 rounded-md border border-border/60 px-3 py-2 text-xs text-muted-foreground">
+                        <Checkbox
+                          checked={step.metadata?.includePreviousOutput === true}
+                          onCheckedChange={(checked) =>
+                            updateDraftStep(index, {
+                              metadata: {
+                                ...step.metadata,
+                                includePreviousOutput: checked === true,
+                              },
+                            })
+                          }
+                        />
+                        Use previous output
+                      </label>
                     </div>
                     <Textarea
                       value={step.template}
@@ -953,12 +1259,62 @@ export function PlaybookStudio() {
                 ))}
               </div>
               <div className="flex flex-wrap items-center justify-between gap-3">
-                <div className="flex flex-wrap gap-2">
-                  {draftVariables.map((variable) => (
-                    <Badge key={variable.name} variant="outline">
-                      {variable.name}
-                    </Badge>
-                  ))}
+                <div className="min-w-0 flex-1">
+                  {draftVariables.length > 0 ? (
+                    <div className="space-y-2 rounded-xl border border-border/60 p-3">
+                      <p className="text-xs font-medium text-muted-foreground">
+                        User inputs detected from prompt variables
+                      </p>
+                      <div className="grid gap-2">
+                        {draftVariables.map((variable) => (
+                          <div
+                            key={variable.name}
+                            className="grid gap-2 md:grid-cols-[140px_1fr_1fr_auto]"
+                          >
+                            <Badge
+                              variant="outline"
+                              className="h-9 justify-center rounded-md"
+                            >
+                              {variable.name}
+                            </Badge>
+                            <Input
+                              value={variable.label ?? variable.name}
+                              onChange={(event) =>
+                                updateDraftVariable(variable.name, {
+                                  label: event.target.value,
+                                })
+                              }
+                              placeholder="Label"
+                            />
+                            <Input
+                              value={variable.defaultValue ?? ''}
+                              onChange={(event) =>
+                                updateDraftVariable(variable.name, {
+                                  defaultValue: event.target.value,
+                                })
+                              }
+                              placeholder="Default value"
+                            />
+                            <label className="flex items-center gap-2 rounded-md border border-border/60 px-3 py-2 text-xs text-muted-foreground">
+                              <Checkbox
+                                checked={variable.required !== false}
+                                onCheckedChange={(checked) =>
+                                  updateDraftVariable(variable.name, {
+                                    required: checked === true,
+                                  })
+                                }
+                              />
+                              Required
+                            </label>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">
+                      Add variables like {'{{business_name}}'} to prompt templates to collect user inputs.
+                    </p>
+                  )}
                 </div>
                 <Button
                   type="button"
