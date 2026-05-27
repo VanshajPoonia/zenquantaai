@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, useRef, useEffect } from 'react'
-import { BookOpen, FileText, ImagePlus } from 'lucide-react'
+import { useState, useRef, useEffect, useMemo } from 'react'
+import { BookOpen, FileText, Images, ImagePlus } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useChatContext } from '@/lib/chat-context'
 import { AIMode, Attachment, MODE_CONFIGS, PendingAttachment } from '@/lib/types'
@@ -17,6 +17,7 @@ import {
 } from '@/components/ui/tooltip'
 import { SendIcon, StopIcon, PaperclipIcon, XIcon } from '@/components/icons'
 import { AssistantRecommendationDialog } from './assistant-recommendation-dialog'
+import { AssistantRecommendationChip } from './assistant-recommendation-chip'
 import { CustomAssistantButton } from './custom-assistant-button'
 import { ModelComparisonButton } from './model-comparison-button'
 import { ModeSwitcherCompact } from './mode-switcher'
@@ -40,6 +41,8 @@ export function Composer({ onSend, disabled, initialValue = '' }: ComposerProps)
     queuedPromptCount,
     stopStreaming,
     openWorkspaceTool,
+    composerDraftRequest,
+    clearComposerDraftRequest,
   } = useChatContext()
   const [value, setValue] = useState(initialValue)
   const [composerKind, setComposerKind] = useState<'chat' | 'image'>('chat')
@@ -61,16 +64,28 @@ export function Composer({ onSend, disabled, initialValue = '' }: ComposerProps)
       textareaRef.current.style.height = 'auto'
     }
   }
+  const promptDraft = useMemo(
+    () => ({
+      content: value,
+      attachments: pendingAttachments,
+      kind: composerKind,
+    }),
+    [composerKind, pendingAttachments, value]
+  )
   const {
+    draftRecommendation,
     pendingRecommendation,
     recommendationOpen,
     suppressForMessage,
     setSuppressForMessage,
     precheckAndSend,
+    handleUseDraftRecommendation,
+    handleIgnoreDraftRecommendation,
     handleSwitchAndContinue,
     handleContinueAnyway,
     handleCancel,
   } = usePromptPrecheck({
+    draft: promptDraft,
     onContinue: onSend,
     onSubmitted: (submission) => {
       setPendingDraftClear({
@@ -91,6 +106,16 @@ export function Composer({ onSend, disabled, initialValue = '' }: ComposerProps)
       textareaRef.current?.focus()
     }
   }, [initialValue])
+
+  useEffect(() => {
+    if (!composerDraftRequest) return
+
+    setValue(composerDraftRequest.content)
+    setComposerKind(composerDraftRequest.kind)
+    setPendingDraftClear(null)
+    clearComposerDraftRequest(composerDraftRequest.requestId)
+    requestAnimationFrame(() => textareaRef.current?.focus())
+  }, [clearComposerDraftRequest, composerDraftRequest])
 
   // Auto-resize textarea
   useEffect(() => {
@@ -152,6 +177,14 @@ export function Composer({ onSend, disabled, initialValue = '' }: ComposerProps)
     })
   }
 
+  const handleUseRecommendation = async () => {
+    const recommendedMode = await handleUseDraftRecommendation()
+    if (!recommendedMode) return
+
+    setComposerKind(recommendedMode === 'image' ? 'image' : 'chat')
+    requestAnimationFrame(() => textareaRef.current?.focus())
+  }
+
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
       e.preventDefault()
@@ -191,6 +224,14 @@ export function Composer({ onSend, disabled, initialValue = '' }: ComposerProps)
   return (
     <div className="sticky bottom-0 z-20 border-t border-border bg-gradient-to-t from-background via-background/95 to-background/70 backdrop-blur-xl px-4 pb-4 pt-6">
       <div className="max-w-4xl mx-auto">
+        {draftRecommendation ? (
+          <AssistantRecommendationChip
+            recommendation={draftRecommendation}
+            disabled={disabled}
+            onUseRecommendation={() => void handleUseRecommendation()}
+            onIgnore={() => void handleIgnoreDraftRecommendation()}
+          />
+        ) : null}
         <div
           className={cn(
             'relative rounded-2xl border bg-card/80 backdrop-blur-sm transition-all duration-300',
@@ -315,6 +356,23 @@ export function Composer({ onSend, disabled, initialValue = '' }: ComposerProps)
                 disabled={disabled || composerKind === 'image'}
                 onSaved={clearDraft}
               />
+              <TooltipProvider delayDuration={300}>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-sm"
+                      className="text-muted-foreground hover:text-foreground"
+                      disabled={disabled}
+                      onClick={() => openWorkspaceTool('prism-studio')}
+                    >
+                      <Images className="size-4" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>Prism Studio</TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
               <TooltipProvider delayDuration={300}>
                 <Tooltip>
                   <TooltipTrigger asChild>
