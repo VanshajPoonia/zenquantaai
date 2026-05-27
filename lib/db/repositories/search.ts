@@ -657,7 +657,8 @@ class NeonSearchRepository {
         metadata: zenGeneratedImages.metadata,
         createdAt: zenGeneratedImages.createdAt,
         updatedAt: zenGeneratedImages.updatedAt,
-        projectId: zenConversations.projectId,
+        projectId: zenGeneratedImages.projectId,
+        conversationProjectId: zenConversations.projectId,
       })
       .from(zenGeneratedImages)
       .leftJoin(
@@ -671,8 +672,13 @@ class NeonSearchRepository {
         projectId
           ? and(
               eq(zenGeneratedImages.userId, userId),
-              eq(zenConversations.userId, userId),
-              eq(zenConversations.projectId, projectId),
+              or(
+                eq(zenGeneratedImages.projectId, projectId),
+                and(
+                  eq(zenConversations.userId, userId),
+                  eq(zenConversations.projectId, projectId)
+                )
+              ),
               or(
                 ilike(zenGeneratedImages.prompt, pattern),
                 ilike(zenGeneratedImages.negativePrompt, pattern),
@@ -698,15 +704,14 @@ class NeonSearchRepository {
       entityType: 'generated_image',
       title: 'Prism image',
       snippet: buildSnippet(query, row.prompt, row.negativePrompt, row.model),
-      url: row.conversationId ? '/' : '/dashboard',
-      target: row.conversationId
-        ? {
-            type: 'open_conversation',
-            conversationId: row.conversationId,
-            messageId: row.messageId ?? undefined,
-          }
-        : { type: 'open_prism_history', imageId: row.id },
-      projectId: row.projectId,
+      url: '/',
+      target: {
+        type: 'open_prism_history',
+        imageId: row.id,
+        conversationId: row.conversationId ?? undefined,
+        projectId: row.projectId ?? row.conversationProjectId,
+      },
+      projectId: row.projectId ?? row.conversationProjectId,
       conversationId: row.conversationId,
       createdAt: toIsoString(row.createdAt),
       updatedAt: toIsoString(row.updatedAt),
@@ -754,7 +759,7 @@ class NeonSearchRepository {
     return rows.map((row) => ({
       id: row.id,
       entityType: 'model_comparison',
-      title: 'Model comparison',
+      title: 'Model Duel',
       snippet: buildSnippet(query, row.prompt, row.status),
       url: '/',
       target: {
