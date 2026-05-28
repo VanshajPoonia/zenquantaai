@@ -30,11 +30,18 @@ import {
   ConversationSummary,
   CustomAssistant,
   CustomAssistantInput,
+  CustomAssistantTestRequest,
+  CustomAssistantTestResponse,
+  FileIntelligence,
+  FileIntelligenceListFilters,
+  FileIntelligenceListResponse,
+  FileIntelligenceMutationResponse,
   ImageGenerateRequest,
   ImageGenerateResponse,
   MemoryVaultConversationSummary,
   MemoryVaultResponse,
   PendingAttachment,
+  PulseResearchRoomResponse,
   PrismStudioHistoryFilters,
   PrismStudioHistoryResponse,
   PrismStudioImage,
@@ -111,6 +118,8 @@ interface SendMessageInput {
   kind?: 'chat' | 'image'
   modeOverride?: AIMode
   customAssistantId?: string | null
+  settingsPatch?: Partial<SessionSettings>
+  projectIdOverride?: string | null
 }
 
 interface QueuedPrompt {
@@ -146,6 +155,9 @@ type WorkspaceTool =
   | 'artifacts'
   | 'memory-vault'
   | 'prism-studio'
+  | 'pulse-research-room'
+  | 'ask-files'
+  | 'github-integration'
 
 type WorkspaceToolRequestInput =
   | WorkspaceTool
@@ -153,6 +165,7 @@ type WorkspaceToolRequestInput =
       tool: WorkspaceTool
       artifactId?: string | null
       imageId?: string | null
+      fileId?: string | null
       projectId?: string | null
     }
 
@@ -161,6 +174,7 @@ interface WorkspaceToolRequest {
   tool: WorkspaceTool
   artifactId?: string | null
   imageId?: string | null
+  fileId?: string | null
   projectId?: string | null
 }
 
@@ -169,6 +183,7 @@ interface ComposerDraftRequest {
   content: string
   kind: 'chat' | 'image'
   mode: AIMode
+  attachments?: Attachment[]
   projectId?: string | null
 }
 
@@ -240,6 +255,11 @@ interface ChatContextType {
   setSelectedProjectId: (projectId: ProjectFilterId) => void
   createProject: (name: string) => Promise<Project | null>
   uploadProjectFiles: (projectId: string, files: File[]) => Promise<Attachment[]>
+  listFileIntelligence: (
+    filters?: FileIntelligenceListFilters
+  ) => Promise<FileIntelligenceListResponse>
+  reindexFile: (fileId: string) => Promise<FileIntelligence | null>
+  deleteFile: (fileId: string) => Promise<void>
   moveChatToProject: (chatId: string, projectId: string) => Promise<void>
   moveCurrentChatToProject: (projectId: string) => Promise<void>
   promptLibrary: PromptLibraryItem[]
@@ -264,6 +284,9 @@ interface ChatContextType {
     input: CustomAssistantInput & { id?: string }
   ) => Promise<CustomAssistant | null>
   deleteCustomAssistant: (assistantId: string) => Promise<void>
+  testCustomAssistant: (
+    input: CustomAssistantTestRequest
+  ) => Promise<CustomAssistantTestResponse>
   listArtifacts: (filters?: ArtifactListFilters) => Promise<Artifact[]>
   saveArtifact: (input: ArtifactInput) => Promise<Artifact | null>
   updateArtifact: (
@@ -290,6 +313,10 @@ interface ChatContextType {
   clearConversationMemory: (
     conversationId: string
   ) => Promise<MemoryVaultConversationSummary | null>
+  listPulseResearchRoom: (filters?: {
+    q?: string
+    projectId?: string | null
+  }) => Promise<PulseResearchRoomResponse>
   runModelComparison: (
     input: RunModelComparisonInput
   ) => Promise<ModelComparison | null>
@@ -306,6 +333,7 @@ interface ChatContextType {
   composerDraftRequest: ComposerDraftRequest | null
   prepareComposerDraft: (request: {
     content: string
+    attachments?: Attachment[]
     kind?: 'chat' | 'image'
     mode?: AIMode
     projectId?: string | null
@@ -389,6 +417,10 @@ function sortCustomAssistants(assistants: CustomAssistant[]): CustomAssistant[] 
   return [...assistants].sort((a, b) => {
     if (a.isEnabled !== b.isEnabled) {
       return a.isEnabled ? -1 : 1
+    }
+
+    if (Boolean(a.metadata.isPinned) !== Boolean(b.metadata.isPinned)) {
+      return a.metadata.isPinned ? -1 : 1
     }
 
     return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
@@ -1053,6 +1085,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       tool: payload.tool,
       artifactId: payload.artifactId ?? null,
       imageId: payload.imageId ?? null,
+      fileId: payload.fileId ?? null,
       projectId: payload.projectId ?? null,
     })
   }, [])
@@ -1116,6 +1149,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const prepareComposerDraft = useCallback(
     (request: {
       content: string
+      attachments?: Attachment[]
       kind?: 'chat' | 'image'
       mode?: AIMode
       projectId?: string | null
@@ -1132,6 +1166,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       setComposerDraftRequest({
         requestId: composerDraftRequestIdRef.current,
         content: request.content,
+        attachments: request.attachments ?? [],
         kind,
         mode,
         projectId: request.projectId ?? null,
@@ -1633,6 +1668,19 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     [currentCustomAssistantId, requestJson]
   )
 
+  const testCustomAssistant = useCallback(
+    async (input: CustomAssistantTestRequest) => {
+      return await requestJson<CustomAssistantTestResponse>(
+        '/api/custom-assistants/test',
+        {
+          method: 'POST',
+          body: JSON.stringify(input),
+        }
+      )
+    },
+    [requestJson]
+  )
+
   const listArtifacts = useCallback(
     async (filters: ArtifactListFilters = {}) => {
       const params = new URLSearchParams()
@@ -1800,6 +1848,26 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       return summary
     },
     [applyMemoryConversationSummary, requestJson]
+  )
+
+  const listPulseResearchRoom = useCallback(
+    async (
+      filters: {
+        q?: string
+        projectId?: string | null
+      } = {}
+    ) => {
+      const params = new URLSearchParams()
+
+      if (filters.q) params.set('q', filters.q)
+      if (filters.projectId) params.set('projectId', filters.projectId)
+
+      const query = params.toString()
+      return await requestJson<PulseResearchRoomResponse>(
+        query ? `/api/pulse/research-room?${query}` : '/api/pulse/research-room'
+      )
+    },
+    [requestJson]
   )
 
   const applyLocalError = useCallback(
@@ -2000,6 +2068,82 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       })
     },
     [uploadAttachments]
+  )
+
+  const listFileIntelligence = useCallback(
+    async (filters: FileIntelligenceListFilters = {}) => {
+      const params = new URLSearchParams()
+
+      if (filters.ids?.length) params.set('ids', filters.ids.join(','))
+      if (filters.projectId) params.set('projectId', filters.projectId)
+      if (filters.conversationId) params.set('conversationId', filters.conversationId)
+
+      const query = params.toString()
+      return await requestJson<FileIntelligenceListResponse>(
+        query ? `/api/files?${query}` : '/api/files'
+      )
+    },
+    [requestJson]
+  )
+
+  const scrubFileAttachmentRefs = useCallback(
+    (fileId: string) => {
+      const scrubbed = conversationsRef.current.map((conversation) =>
+        updateConversationSnapshot(conversation, {
+          messages: conversation.messages.map((message) => ({
+            ...message,
+            attachments: (message.attachments ?? []).map((attachment) => {
+              if (attachment.fileId !== fileId) return attachment
+
+              return {
+                id: attachment.id,
+                kind: attachment.kind,
+                name: attachment.name,
+                mimeType: attachment.mimeType,
+                size: attachment.size,
+                createdAt: attachment.createdAt,
+                textContent: attachment.textContent,
+                textExcerpt: attachment.textExcerpt,
+                isExtracted: attachment.isExtracted,
+              }
+            }),
+          })),
+        })
+      )
+
+      commitState(
+        scrubbed,
+        currentChatRef.current
+          ? scrubbed.find((conversation) => conversation.id === currentChatRef.current?.id) ??
+              null
+          : null
+      )
+    },
+    [commitState]
+  )
+
+  const reindexFile = useCallback(
+    async (fileId: string) => {
+      const response = await requestJson<FileIntelligenceMutationResponse>(
+        `/api/files/${fileId}/reindex`,
+        {
+          method: 'POST',
+        }
+      )
+
+      return response.file
+    },
+    [requestJson]
+  )
+
+  const deleteFile = useCallback(
+    async (fileId: string) => {
+      await requestJson<FileIntelligenceMutationResponse>(`/api/files/${fileId}`, {
+        method: 'DELETE',
+      })
+      scrubFileAttachmentRefs(fileId)
+    },
+    [requestJson, scrubFileAttachmentRefs]
   )
 
   const runTextAction = useCallback(
@@ -3273,6 +3417,9 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       setSelectedProjectId,
       createProject,
       uploadProjectFiles,
+      listFileIntelligence,
+      reindexFile,
+      deleteFile,
       moveChatToProject,
       moveCurrentChatToProject,
       promptLibrary,
@@ -3288,6 +3435,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       setCurrentCustomAssistant,
       saveCustomAssistant,
       deleteCustomAssistant,
+      testCustomAssistant,
       listArtifacts,
       saveArtifact,
       updateArtifact,
@@ -3298,6 +3446,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       listMemoryVault,
       setConversationMemoryEnabled,
       clearConversationMemory,
+      listPulseResearchRoom,
       runModelComparison,
       chooseModelComparisonResponse,
       beginPromptPrecheck,
@@ -3340,6 +3489,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       deleteArtifact,
       deleteChat,
       deleteCustomAssistant,
+      deleteFile,
       deletePrompt,
       deletePromptWorkflow,
       editLastUserMessage,
@@ -3350,8 +3500,10 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       isStreaming,
       isOnboardingOpen,
       listArtifacts,
+      listFileIntelligence,
       listPrismImages,
       listMemoryVault,
+      listPulseResearchRoom,
       listPromptWorkflowRuns,
       openConversation,
       openOnboarding,
@@ -3368,6 +3520,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       promptLibrary,
       promptWorkflows,
       regenerateLastResponse,
+      reindexFile,
       requestMagicLink,
       requestPasswordSignIn,
       requestPasswordSignUp,
@@ -3395,6 +3548,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       statusLabel,
       stopStreaming,
       streamingState,
+      testCustomAssistant,
       togglePinChat,
       updateArtifact,
       updatePrismImage,

@@ -22,6 +22,8 @@ export interface UseSendMessageInput {
   kind?: 'chat' | 'image'
   modeOverride?: AIMode
   customAssistantId?: string | null
+  settingsPatch?: Partial<SessionSettings>
+  projectIdOverride?: string | null
 }
 
 interface PreparedSendDispatch {
@@ -79,14 +81,17 @@ export function useSendMessage(input: {
         hasCustomAssistantOverride
           ? payload.customAssistantId ?? null
           : input.currentCustomAssistantId ?? null
-      const settings = input.normalizeModeSessionSettings(
-        resolvedMode,
+      const baseSettings =
         input.currentChatSessionSettings ?? input.draftSessionSettings
-      )
+      const settings = input.normalizeModeSessionSettings(resolvedMode, {
+        ...baseSettings,
+        ...(payload.settingsPatch ?? {}),
+      })
       const projectId =
-        input.selectedProjectId === 'all'
+        payload.projectIdOverride ||
+        (input.selectedProjectId === 'all'
           ? DEFAULT_PROJECT_ID
-          : input.selectedProjectId
+          : input.selectedProjectId)
       const pendingSend = createPendingSend({
         content: payload.content,
         attachments: payload.attachments,
