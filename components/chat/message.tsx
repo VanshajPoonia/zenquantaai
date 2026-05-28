@@ -13,7 +13,15 @@ import {
   Sparkles,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { AIMode, Attachment, Message, MODE_CONFIGS, MODE_ORDER } from '@/lib/types'
+import {
+  AIMode,
+  Attachment,
+  FileIntelligence,
+  Message,
+  MODE_CONFIGS,
+  MODE_ORDER,
+} from '@/lib/types'
+import { useChatContext } from '@/lib/chat-context'
 import {
   ASSISTANT_HANDOFF_TARGETS,
   AssistantHandoffTarget,
@@ -70,6 +78,7 @@ import {
   openAttachmentImageInNewTab,
 } from '@/lib/utils/image-download'
 import { ChatImageMessage } from './chat-image-message'
+import { FileIntelligenceCard } from './file-intelligence-card'
 
 interface ChatMessageProps {
   message: Message
@@ -388,47 +397,126 @@ function AttachmentList({
   onOpenImage: (attachment: Attachment) => void
   onDownloadImage: (attachment: Attachment) => void
 }) {
+  const {
+    listFileIntelligence,
+    reindexFile,
+    deleteFile,
+    openWorkspaceTool,
+  } = useChatContext()
+  const [filesById, setFilesById] = useState<Record<string, FileIntelligence>>({})
+  const [workingFileId, setWorkingFileId] = useState<string | null>(null)
+  const fileIds = useMemo(
+    () => [
+      ...new Set(
+        (message.attachments ?? [])
+          .map((attachment) => attachment.fileId)
+          .filter(Boolean) as string[]
+      ),
+    ],
+    [message.attachments]
+  )
+
+  useEffect(() => {
+    if (fileIds.length === 0) return
+
+    let cancelled = false
+    void listFileIntelligence({ ids: fileIds })
+      .then((response) => {
+        if (cancelled) return
+        setFilesById(
+          Object.fromEntries(response.files.map((file) => [file.id, file]))
+        )
+      })
+      .catch((error) => {
+        console.error('Failed to load file intelligence.', error)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [fileIds, listFileIntelligence])
+
+  const fallbackFile = (attachment: Attachment): FileIntelligence => ({
+    id: attachment.fileId ?? attachment.id,
+    fileName: attachment.name,
+    mimeType: attachment.mimeType,
+    byteSize: attachment.size,
+    projectId: null,
+    conversationId: null,
+    messageId: message.id,
+    visibility: 'private',
+    viewUrl: attachment.previewUrl ?? null,
+    downloadUrl: null,
+    knowledgeStatus: attachment.fileId ? 'pending' : 'skipped',
+    knowledgeStatusLabel: attachment.fileId ? 'Pending' : 'Skipped',
+    knowledgeReason: attachment.fileId
+      ? 'Indexing state has not been recorded yet.'
+      : 'This attachment is not linked to stored file metadata.',
+    chunkCount: 0,
+    embeddingModel: null,
+    knowledgeUpdatedAt: null,
+    embeddingsAvailable: false,
+    createdAt: attachment.createdAt,
+    updatedAt: attachment.createdAt,
+  })
+
+  const handleAsk = (file: FileIntelligence) => {
+    openWorkspaceTool({
+      tool: 'ask-files',
+      projectId: file.projectId,
+      fileId: file.id,
+    })
+  }
+
+  const handleReindex = async (file: FileIntelligence) => {
+    setWorkingFileId(file.id)
+    try {
+      const updated = await reindexFile(file.id)
+      if (updated) {
+        setFilesById((previous) => ({ ...previous, [updated.id]: updated }))
+      }
+    } catch (error) {
+      console.error('Failed to re-index file.', error)
+    } finally {
+      setWorkingFileId(null)
+    }
+  }
+
+  const handleDelete = async (file: FileIntelligence) => {
+    setWorkingFileId(file.id)
+    try {
+      await deleteFile(file.id)
+      setFilesById((previous) => {
+        const next = { ...previous }
+        delete next[file.id]
+        return next
+      })
+    } catch (error) {
+      console.error('Failed to remove file.', error)
+    } finally {
+      setWorkingFileId(null)
+    }
+  }
+
   if (!message.attachments || message.attachments.length === 0) return null
 
   return (
     <div className="mt-3 space-y-2">
-      {message.attachments.map((attachment) => (
-        <div
-          key={attachment.id}
-          className="rounded-xl border border-border/60 bg-background/50 px-3 py-2"
-        >
-          <div className="flex items-center justify-between gap-3">
-            <div className="min-w-0">
-              <p className="truncate text-sm font-medium text-foreground">
-                {attachment.name}
-              </p>
-              <p className="text-xs text-muted-foreground">
-                {attachment.kind}
-                {attachment.isExtracted ? ' • text extracted' : ''}
-              </p>
-            </div>
-            {attachment.previewUrl ? (
-              attachment.kind === 'image' ? (
-                <button
-                  type="button"
-                  className="rounded-lg transition-opacity hover:opacity-90"
-                  onClick={() => onOpenImage(attachment)}
-                >
-                  <img
-                    src={attachment.previewUrl}
-                    alt={attachment.name}
-                    className="size-12 rounded-lg object-cover"
-                  />
-                </button>
-              ) : (
-                <img
-                  src={attachment.previewUrl}
-                  alt={attachment.name}
-                  className="size-12 rounded-lg object-cover"
-                />
-              )
-            ) : null}
-          </div>
+      {message.attachments.map((attachment) => {
+        const file =
+          (attachment.fileId ? filesById[attachment.fileId] : null) ??
+          fallbackFile(attachment)
+
+        return (
+          <div key={attachment.id} className="space-y-2">
+            <FileIntelligenceCard
+              file={file}
+              compact
+              isWorking={workingFileId === file.id}
+              onAsk={handleAsk}
+              onReindex={attachment.fileId ? handleReindex : undefined}
+              onDelete={attachment.fileId ? handleDelete : undefined}
+            />
           {attachment.kind === 'image' && attachment.previewUrl ? (
             <ChatImageMessage
               attachment={attachment}
@@ -436,8 +524,9 @@ function AttachmentList({
               onDownload={onDownloadImage}
             />
           ) : null}
-        </div>
-      ))}
+          </div>
+        )
+      })}
     </div>
   )
 }
@@ -469,6 +558,11 @@ function SourceList({ message }: { message: Message }) {
                 {source.domain}
                 <ExternalLink className="size-3 opacity-70 transition-opacity group-hover:opacity-100" />
               </span>
+              {source.kind === 'file' && source.snippet ? (
+                <span className="mt-1 block line-clamp-2 text-xs leading-5 text-muted-foreground">
+                  {source.snippet}
+                </span>
+              ) : null}
             </span>
           </a>
         ))}

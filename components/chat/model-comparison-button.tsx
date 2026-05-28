@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { useEffect, useMemo, useState } from 'react'
 import {
   Check,
@@ -17,9 +18,16 @@ import {
 } from 'lucide-react'
 import { MODE_CONFIGS } from '@/lib/config'
 import { ASSISTANT_FAMILY_COPY, getAssistantFamilyFromMode } from '@/lib/config/assistants'
+import { getUpgradeNudgeForError } from '@/lib/billing/upgrade-nudges'
 import { cn } from '@/lib/utils'
 import { useChatContext } from '@/lib/chat-context'
-import { AIMode, ModelComparison, ModelComparisonCandidate } from '@/types'
+import {
+  AIMode,
+  ModelComparison,
+  ModelComparisonCandidate,
+  PlanChangeRequest,
+  SubscriptionTier,
+} from '@/types'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -70,6 +78,13 @@ interface ModelComparisonButtonProps {
   value: string
   disabled?: boolean
   onSaved?: () => void
+}
+
+interface ModelDuelDashboardSnapshot {
+  plan: {
+    tier: SubscriptionTier
+  }
+  pendingRequest?: PlanChangeRequest | null
 }
 
 function candidateLetter(index: number) {
@@ -139,6 +154,7 @@ export function ModelComparisonButton({
     useState<string | null>(null)
   const [blindMode, setBlindMode] = useState(false)
   const [revealed, setRevealed] = useState(false)
+  const [dashboard, setDashboard] = useState<ModelDuelDashboardSnapshot | null>(null)
   const [scoreAssignments, setScoreAssignments] = useState<
     Record<ModelDuelScoreLabel, string | null>
   >({
@@ -159,6 +175,11 @@ export function ModelComparisonButton({
     () => selectedModes.map((mode) => MODE_CONFIGS[mode].name).join(', '),
     [selectedModes]
   )
+  const upgradeErrorNudge = getUpgradeNudgeForError(comparisonError)
+  const showManualUpgradeNudge =
+    dashboard &&
+    ['free', 'basic'].includes(dashboard.plan.tier) &&
+    !dashboard.pendingRequest
 
   useEffect(() => {
     if (workspaceToolRequest?.tool !== 'model-comparison') return
@@ -166,6 +187,33 @@ export function ModelComparisonButton({
     setOpen(true)
     clearWorkspaceToolRequest(workspaceToolRequest.requestId)
   }, [clearWorkspaceToolRequest, workspaceToolRequest])
+
+  useEffect(() => {
+    if (!open) return
+
+    let cancelled = false
+
+    async function loadDashboard() {
+      try {
+        const response = await fetch('/api/dashboard', { cache: 'no-store' })
+        if (!response.ok) return
+        const payload = (await response.json()) as ModelDuelDashboardSnapshot
+        if (!cancelled) {
+          setDashboard(payload)
+        }
+      } catch {
+        if (!cancelled) {
+          setDashboard(null)
+        }
+      }
+    }
+
+    void loadDashboard()
+
+    return () => {
+      cancelled = true
+    }
+  }, [open])
 
   const toggleMode = (mode: AIMode) => {
     setSelectedModes((previous) => {
@@ -364,12 +412,28 @@ export function ModelComparisonButton({
                   <div>
                     <p className="font-medium">Usage heads-up</p>
                     <p className="mt-1 text-xs leading-5 text-amber-100/80">
-                      Each selected assistant may consume text usage. Plan limits and
-                      model access are enforced by the existing comparison API.
+                      This duel can generate one response per selected assistant.
+                      Each response may consume text usage, and plan limits are
+                      enforced by the existing comparison API.
                     </p>
                     <p className="mt-2 text-xs text-amber-100/70">
                       Current duel: {selectedModeNames || 'No assistants selected'}
                     </p>
+                    {showManualUpgradeNudge ? (
+                      <div className="mt-3 flex flex-wrap items-center gap-2">
+                        <p className="text-xs text-amber-100/80">
+                          Comparing often? Manual plan requests can add more room.
+                        </p>
+                        <Button
+                          asChild
+                          size="sm"
+                          variant="secondary"
+                          className="h-8 rounded-full"
+                        >
+                          <Link href="/pricing">Request plan</Link>
+                        </Button>
+                      </div>
+                    ) : null}
                   </div>
                 </div>
               </div>
@@ -600,7 +664,22 @@ export function ModelComparisonButton({
               </div>
             ) : comparisonError ? (
               <div className="rounded-2xl border border-destructive/40 bg-destructive/10 px-4 py-5 text-sm text-destructive">
-                {comparisonError}
+                <p className="font-medium">
+                  {upgradeErrorNudge?.title ?? 'Model Duel could not run'}
+                </p>
+                <p className="mt-1">
+                  {upgradeErrorNudge?.description ?? comparisonError}
+                </p>
+                {upgradeErrorNudge ? (
+                  <Button
+                    asChild
+                    size="sm"
+                    variant="secondary"
+                    className="mt-3 rounded-full"
+                  >
+                    <Link href="/pricing">View plans</Link>
+                  </Button>
+                ) : null}
               </div>
             ) : (
               <div className="rounded-2xl border border-dashed border-border/60 bg-card/30 px-4 py-8 text-center text-sm text-muted-foreground">

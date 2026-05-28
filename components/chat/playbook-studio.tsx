@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { useEffect, useMemo, useState } from 'react'
 import {
   ArrowDown,
@@ -46,6 +47,8 @@ import {
   PromptWorkflowStepInput,
   PromptWorkflowStepMetadata,
   PromptWorkflowVariable,
+  PlanChangeRequest,
+  SubscriptionTier,
 } from '@/types'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -70,6 +73,13 @@ import { Textarea } from '@/components/ui/textarea'
 
 const ASSISTANT_FAMILIES = Object.keys(WORKFLOW_FAMILY_TO_MODE) as AssistantFamily[]
 const PROJECT_FILTER_ALL = '__all__'
+
+interface PlaybookDashboardSnapshot {
+  plan: {
+    tier: SubscriptionTier
+  }
+  pendingRequest?: PlanChangeRequest | null
+}
 
 interface PlaybookDraft {
   id?: string
@@ -247,6 +257,7 @@ export function PlaybookStudio() {
   const [isRunning, setIsRunning] = useState(false)
   const [isLoadingRuns, setIsLoadingRuns] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [dashboard, setDashboard] = useState<PlaybookDashboardSnapshot | null>(null)
 
   useEffect(() => {
     if (workspaceToolRequest?.tool !== 'playbooks') return
@@ -257,6 +268,33 @@ export function PlaybookStudio() {
     }
     clearWorkspaceToolRequest(workspaceToolRequest.requestId)
   }, [clearWorkspaceToolRequest, workspaceToolRequest])
+
+  useEffect(() => {
+    if (!open) return
+
+    let cancelled = false
+
+    async function loadDashboard() {
+      try {
+        const response = await fetch('/api/dashboard', { cache: 'no-store' })
+        if (!response.ok) return
+        const payload = (await response.json()) as PlaybookDashboardSnapshot
+        if (!cancelled) {
+          setDashboard(payload)
+        }
+      } catch {
+        if (!cancelled) {
+          setDashboard(null)
+        }
+      }
+    }
+
+    void loadDashboard()
+
+    return () => {
+      cancelled = true
+    }
+  }, [open])
 
   const visibleWorkflows = useMemo(() => {
     const normalized = query.trim().toLowerCase()
@@ -527,6 +565,11 @@ export function PlaybookStudio() {
         values: effectiveRunValues,
       })
     : 'low'
+  const showManualUpgradeNudge =
+    usageLevel === 'high' &&
+    dashboard &&
+    ['free', 'basic'].includes(dashboard.plan.tier) &&
+    !dashboard.pendingRequest
   const missingRequiredVariables = selectedVariables.filter(
     (variable) =>
       variable.required !== false &&
@@ -771,6 +814,21 @@ export function PlaybookStudio() {
                         <Badge variant="outline" className={usageTone(usageLevel)}>
                           {usageLevel} usage
                         </Badge>
+                        {showManualUpgradeNudge ? (
+                          <>
+                            <span className="text-amber-200">
+                              High-usage playbooks may fit better on a higher manual plan.
+                            </span>
+                            <Button
+                              asChild
+                              size="sm"
+                              variant="secondary"
+                              className="h-7 rounded-full px-2 text-[11px]"
+                            >
+                              <Link href="/pricing">Request plan</Link>
+                            </Button>
+                          </>
+                        ) : null}
                       </div>
                       {selectedVariables.length > 0 ? (
                         <div className="mt-4 grid gap-3 md:grid-cols-2">
