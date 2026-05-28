@@ -107,6 +107,15 @@ export interface CustomAssistantDefaults {
   tools?: Partial<CustomAssistantToolSettings>
 }
 
+export interface CustomAssistantMetadata {
+  version?: 2
+  tone?: string
+  responseStyle?: ResponseStyle
+  suggestedUseCases?: string[]
+  isPinned?: boolean
+  starterPromptIds?: string[]
+}
+
 export interface CustomAssistant {
   id: string
   userId: string
@@ -118,6 +127,7 @@ export interface CustomAssistant {
   systemInstructions: string
   defaultModelOverride: ModelOverrideOption
   defaultSettings: CustomAssistantDefaults
+  metadata: CustomAssistantMetadata
   isEnabled: boolean
   createdAt: string
   updatedAt: string
@@ -132,7 +142,21 @@ export interface CustomAssistantInput {
   systemInstructions: string
   defaultModelOverride?: ModelOverrideOption
   defaultSettings?: CustomAssistantDefaults
+  metadata?: CustomAssistantMetadata
   isEnabled?: boolean
+}
+
+export interface CustomAssistantTestRequest {
+  assistant: CustomAssistantInput
+  prompt: string
+}
+
+export interface CustomAssistantTestResponse {
+  content: string
+  mode: TextAIMode
+  assistantFamily: Exclude<AssistantFamily, 'prism'>
+  model: string
+  usage: UsageEstimate
 }
 
 export interface CustomAssistantReference {
@@ -782,18 +806,7 @@ export interface ProjectHomeConversationSummary {
   updatedAt: string
 }
 
-export interface ProjectHomeFileSummary {
-  id: string
-  fileName: string
-  mimeType: string | null
-  byteSize: number | null
-  conversationId: string | null
-  messageId: string | null
-  url: string | null
-  createdAt: string
-  updatedAt: string
-  metadata?: Record<string, string | number | boolean | null>
-}
+export type ProjectHomeFileSummary = FileIntelligence
 
 export interface ProjectHomeGeneratedImageSummary {
   id: string
@@ -854,6 +867,229 @@ export type PrismStudioQuickAction =
   | 'matching_caption'
   | 'campaign_idea'
 
+export type PulseResearchActionType =
+  | 'summarize_sources'
+  | 'opposing_views'
+  | 'research_brief'
+  | 'compare_sources'
+
+export interface PulseResearchConversationSummary {
+  id: string
+  title: string
+  projectId: string
+  projectName: string
+  preview: string
+  messageCount: number
+  sourceCount: number
+  latestSourceAt: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export interface PulseResearchSourceItem {
+  id: string
+  source: MessageSource
+  conversationId: string
+  conversationTitle: string
+  projectId: string
+  projectName: string
+  messageId: string
+  parentUserMessageId: string | null
+  prompt: string | null
+  responsePreview: string
+  createdAt: string
+}
+
+export interface PulseResearchSavedSource {
+  artifactId: string
+  title: string
+  url: string | null
+  domain: string | null
+  snippet: string
+  projectId: string | null
+  conversationId: string | null
+  sourceMessageId: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export interface PulseResearchSearchHistoryItem {
+  id: string
+  prompt: string
+  conversationId: string
+  conversationTitle: string
+  projectId: string
+  projectName: string
+  sourceCount: number
+  createdAt: string
+}
+
+export interface PulseResearchRoomResponse {
+  webSearchAvailable: boolean
+  project: Project | null
+  conversations: PulseResearchConversationSummary[]
+  recentSources: PulseResearchSourceItem[]
+  savedSources: PulseResearchSavedSource[]
+  recentSearches: PulseResearchSearchHistoryItem[]
+  generatedAt: string
+}
+
+export type FileKnowledgeStatus =
+  | 'indexed'
+  | 'skipped'
+  | 'unsupported'
+  | 'failed'
+  | 'pending'
+
+export interface FileIntelligence {
+  id: string
+  fileName: string
+  mimeType: string | null
+  byteSize: number | null
+  projectId: string | null
+  conversationId: string | null
+  messageId: string | null
+  visibility: 'private' | 'public'
+  viewUrl: string | null
+  downloadUrl: string | null
+  knowledgeStatus: FileKnowledgeStatus
+  knowledgeStatusLabel: string
+  knowledgeReason: string | null
+  chunkCount: number
+  embeddingModel: string | null
+  knowledgeUpdatedAt: string | null
+  embeddingsAvailable: boolean
+  createdAt: string
+  updatedAt: string
+  metadata?: Record<string, string | number | boolean | null>
+}
+
+export interface FileIntelligenceListResponse {
+  files: FileIntelligence[]
+  embeddingsAvailable: boolean
+}
+
+export interface FileIntelligenceMutationResponse {
+  file: FileIntelligence | null
+}
+
+export interface FileIntelligenceListFilters {
+  ids?: string[]
+  projectId?: string | null
+  conversationId?: string | null
+}
+
+export type IntegrationProvider = 'github'
+
+export type IntegrationAccountStatus = 'connected' | 'revoked' | 'error'
+
+export type IntegrationItemStatus =
+  | 'available'
+  | 'imported'
+  | 'skipped'
+  | 'failed'
+
+export interface GitHubIntegrationAccount {
+  id: string
+  provider: 'github'
+  externalAccountId: string
+  externalAccountLogin: string | null
+  externalAccountName: string | null
+  installationId: string | null
+  scopes: string[]
+  status: IntegrationAccountStatus
+  connectedAt: string
+  revokedAt: string | null
+  syncState: Record<string, unknown>
+  createdAt: string
+  updatedAt: string
+}
+
+export interface GitHubIntegrationStatus {
+  configured: boolean
+  connected: boolean
+  account: GitHubIntegrationAccount | null
+  connectUrl: string | null
+  missingConfiguration?: string[]
+}
+
+export interface GitHubRepositorySummary {
+  id: number
+  name: string
+  fullName: string
+  owner: string
+  private: boolean
+  defaultBranch: string
+  description: string | null
+  language: string | null
+  pushedAt: string | null
+  updatedAt: string | null
+}
+
+export interface GitHubImportableFile {
+  path: string
+  name: string
+  type: 'readme' | 'package' | 'source'
+  sha: string
+  size: number
+  language: string | null
+  mimeType: string
+  selectedByDefault: boolean
+  reason?: string | null
+}
+
+export interface GitHubRepoFilesResponse {
+  repository: GitHubRepositorySummary
+  branch: string
+  files: GitHubImportableFile[]
+  skipped: Array<{ path: string; reason: string }>
+}
+
+export interface GitHubImportRequest {
+  projectId: string
+  owner: string
+  repo: string
+  branch?: string
+  files: Array<{ path: string; sha?: string }>
+}
+
+export interface GitHubImportedItem {
+  id: string
+  accountId: string | null
+  projectId: string | null
+  fileId: string | null
+  repoFullName: string | null
+  branch: string | null
+  path: string | null
+  title: string
+  status: IntegrationItemStatus
+  contentHash: string | null
+  byteSize: number | null
+  mimeType: string | null
+  lastImportedAt: string | null
+  metadata: Record<string, unknown>
+  createdAt: string
+  updatedAt: string
+}
+
+export interface GitHubImportResponse {
+  imported: GitHubImportedItem[]
+  skipped: Array<{ path: string; reason: string }>
+}
+
+export interface ProjectHomeGitHubSummary {
+  connected: boolean
+  accountLogin: string | null
+  importedCount: number
+  lastImportedAt: string | null
+  repositories: Array<{
+    fullName: string
+    branch: string | null
+    importedCount: number
+    lastImportedAt: string | null
+  }>
+}
+
 export interface ProjectHomeWorkflowSummary {
   id: string
   title: string
@@ -897,6 +1133,7 @@ export interface ProjectHomeResponse {
   generatedImages: ProjectHomeGeneratedImageSummary[]
   workflows: ProjectHomeWorkflowSummary[]
   artifacts: ProjectHomeArtifactSummary[]
+  githubIntegration?: ProjectHomeGitHubSummary | null
   memoryStatus: ProjectHomeMemoryStatus
   suggestedActions: ProjectHomeSuggestedAction[]
   generatedAt: string

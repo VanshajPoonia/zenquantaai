@@ -36,6 +36,21 @@ const assistantFamilyCheck = [
 
 const textModeCheck = ['general', 'creative', 'logic', 'code', 'live'] as const
 
+const integrationProviderCheck = ['github'] as const
+
+const integrationAccountStatusCheck = [
+  'connected',
+  'revoked',
+  'error',
+] as const
+
+const integrationItemStatusCheck = [
+  'available',
+  'imported',
+  'skipped',
+  'failed',
+] as const
+
 const artifactSourceTypeCheck = [
   'chat_message',
   'model_comparison',
@@ -301,6 +316,7 @@ export const zenCustomAssistants = pgTable(
     systemInstructions: text('system_instructions').notNull(),
     defaultModelOverride: text('default_model_override').notNull().default('auto'),
     defaultSettings: jsonb('default_settings').notNull().default({}),
+    metadata: jsonb('metadata').notNull().default({}),
     isEnabled: boolean('is_enabled').notNull().default(true),
     ...timestamps,
   },
@@ -319,6 +335,116 @@ export const zenCustomAssistants = pgTable(
     check(
       'zen_custom_assistants_default_model_override_check',
       sql`${table.defaultModelOverride} in ('auto', 'gemini', 'claude', 'gpt', 'deepseek', 'qwen')`
+    ),
+  ]
+)
+
+export const zenIntegrationAccounts = pgTable(
+  'zen_integration_accounts',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => zenUsers.id, { onDelete: 'cascade' }),
+    provider: text('provider').notNull(),
+    externalAccountId: text('external_account_id').notNull(),
+    externalAccountLogin: text('external_account_login'),
+    externalAccountName: text('external_account_name'),
+    installationId: text('installation_id'),
+    scopes: text('scopes').array().notNull().default([]),
+    status: text('status').notNull().default('connected'),
+    encryptedTokenPayload: jsonb('encrypted_token_payload'),
+    syncState: jsonb('sync_state').notNull().default({}),
+    connectedAt: timestamp('connected_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    revokedAt: timestamp('revoked_at', { withTimezone: true }),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex('zen_integration_accounts_user_provider_idx').on(
+      table.userId,
+      table.provider
+    ),
+    index('zen_integration_accounts_user_status_idx').on(
+      table.userId,
+      table.status
+    ),
+    check(
+      'zen_integration_accounts_provider_check',
+      sql`${table.provider} in (${sql.join(
+        integrationProviderCheck.map((provider) => sql`${provider}`),
+        sql`, `
+      )})`
+    ),
+    check(
+      'zen_integration_accounts_status_check',
+      sql`${table.status} in (${sql.join(
+        integrationAccountStatusCheck.map((status) => sql`${status}`),
+        sql`, `
+      )})`
+    ),
+  ]
+)
+
+export const zenIntegrationItems = pgTable(
+  'zen_integration_items',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => zenUsers.id, { onDelete: 'cascade' }),
+    accountId: uuid('account_id').references(() => zenIntegrationAccounts.id, {
+      onDelete: 'cascade',
+    }),
+    provider: text('provider').notNull(),
+    externalId: text('external_id').notNull(),
+    projectId: text('project_id'),
+    fileId: uuid('file_id').references(() => zenFiles.id, {
+      onDelete: 'set null',
+    }),
+    title: text('title').notNull(),
+    itemType: text('item_type').notNull().default('file'),
+    sourceUrl: text('source_url'),
+    repoFullName: text('repo_full_name'),
+    branch: text('branch'),
+    path: text('path'),
+    sha: text('sha'),
+    contentHash: text('content_hash'),
+    byteSize: bigint('byte_size', { mode: 'number' }),
+    mimeType: text('mime_type'),
+    status: text('status').notNull().default('available'),
+    lastSeenAt: timestamp('last_seen_at', { withTimezone: true }),
+    lastImportedAt: timestamp('last_imported_at', { withTimezone: true }),
+    metadata: jsonb('metadata').notNull().default({}),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex('zen_integration_items_user_provider_external_project_idx').on(
+      table.userId,
+      table.provider,
+      table.externalId,
+      table.projectId
+    ),
+    index('zen_integration_items_user_project_idx').on(
+      table.userId,
+      table.projectId
+    ),
+    index('zen_integration_items_account_idx').on(table.accountId),
+    index('zen_integration_items_file_idx').on(table.fileId),
+    check(
+      'zen_integration_items_provider_check',
+      sql`${table.provider} in (${sql.join(
+        integrationProviderCheck.map((provider) => sql`${provider}`),
+        sql`, `
+      )})`
+    ),
+    check(
+      'zen_integration_items_status_check',
+      sql`${table.status} in (${sql.join(
+        integrationItemStatusCheck.map((status) => sql`${status}`),
+        sql`, `
+      )})`
     ),
   ]
 )
