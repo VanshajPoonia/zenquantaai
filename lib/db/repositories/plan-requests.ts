@@ -75,6 +75,17 @@ class NeonPlanRequestsRepository {
     return rows[0] ? rowToPlanRequest(rows[0]) : null
   }
 
+  async getLatestForUser(userId: string): Promise<PlanChangeRequest | null> {
+    const rows = await getDatabaseClient()
+      .select()
+      .from(zenPlanChangeRequests)
+      .where(eq(zenPlanChangeRequests.userId, userId))
+      .orderBy(desc(zenPlanChangeRequests.createdAt))
+      .limit(1)
+
+    return rows[0] ? rowToPlanRequest(rows[0]) : null
+  }
+
   async create(input: {
     userId: string
     currentTier: SubscriptionTier
