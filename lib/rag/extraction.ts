@@ -1,6 +1,12 @@
 import 'server-only'
 
 import { createHash } from 'crypto'
+import {
+  FormatError,
+  InvalidPDFException,
+  PasswordException,
+  PDFParse,
+} from 'pdf-parse'
 
 const TEXT_MIME_PREFIXES = ['text/']
 const TEXT_MIME_TYPES = new Set([
@@ -34,6 +40,7 @@ const TEXT_FILE_EXTENSIONS = new Set([
   'sql',
   'sh',
 ])
+const PDF_MIME_TYPES = new Set(['application/pdf', 'application/x-pdf'])
 const MAX_EXTRACTED_CHARS = 160_000
 const MAX_CHUNK_CHARS = 1_200
 const CHUNK_OVERLAP_CHARS = 180
@@ -72,6 +79,16 @@ export function isTextKnowledgeFile(input: {
   )
 }
 
+export function isPdfKnowledgeFile(input: {
+  fileName: string
+  mimeType: string
+}): boolean {
+  const mimeType = input.mimeType.toLowerCase()
+  const extension = extensionOf(input.fileName)
+
+  return PDF_MIME_TYPES.has(mimeType) || extension === 'pdf'
+}
+
 function normalizeExtractedText(input: string): string {
   return input
     .replace(/\0/g, '')
@@ -97,16 +114,78 @@ function hashText(text: string): string {
   return createHash('sha256').update(text).digest('hex')
 }
 
-export function extractTextFromFileBytes(input: {
+async function extractTextFromPdfBytes(input: {
+  bytes: Buffer
+}): Promise<ExtractedFileText> {
+  const parser = new PDFParse({
+    data: new Uint8Array(input.bytes),
+    disableFontFace: true,
+    useSystemFonts: false,
+    stopAtErrors: false,
+  })
+
+  try {
+    const result = await parser.getText({
+      lineEnforce: true,
+      itemJoiner: ' ',
+      pageJoiner: '\n\n',
+    })
+    const normalized = normalizeExtractedText(result.text).slice(
+      0,
+      MAX_EXTRACTED_CHARS
+    )
+
+    if (!normalized) {
+      return {
+        text: '',
+        status: 'empty',
+        reason:
+          'No embedded text was found. OCR/image-only PDFs are not supported yet.',
+      }
+    }
+
+    return {
+      text: normalized,
+      status: 'extracted',
+    }
+  } catch (error) {
+    if (error instanceof PasswordException) {
+      return {
+        text: '',
+        status: 'unsupported',
+        reason: 'Password-protected PDFs are not supported for knowledge indexing.',
+      }
+    }
+
+    if (error instanceof InvalidPDFException || error instanceof FormatError) {
+      return {
+        text: '',
+        status: 'unsupported',
+        reason: 'The PDF could not be parsed as a valid text-based PDF.',
+      }
+    }
+
+    throw error
+  } finally {
+    await parser.destroy().catch(() => undefined)
+  }
+}
+
+export async function extractTextFromFileBytes(input: {
   bytes: Buffer
   fileName: string
   mimeType: string
-}): ExtractedFileText {
+}): Promise<ExtractedFileText> {
+  if (isPdfKnowledgeFile(input)) {
+    return await extractTextFromPdfBytes({ bytes: input.bytes })
+  }
+
   if (!isTextKnowledgeFile(input)) {
     return {
       text: '',
       status: 'unsupported',
-      reason: 'Only text and code-like files are indexed in the first knowledge-base version.',
+      reason:
+        'Only text, code-like, and text-based PDF files are indexed in this knowledge-base version.',
     }
   }
 

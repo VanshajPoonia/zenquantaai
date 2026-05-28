@@ -57,7 +57,7 @@ export async function indexUploadedFileForKnowledge(input: {
       return
     }
 
-    const extracted = extractTextFromFileBytes({
+    const extracted = await extractTextFromFileBytes({
       bytes: input.bytes,
       fileName: input.fileName,
       mimeType: input.mimeType,

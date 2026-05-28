@@ -72,11 +72,6 @@ function truncateText(value: string, limit = 12000): string {
     : `${normalized.slice(0, limit).trimEnd()}\n\n[truncated]`
 }
 
-function extractPrintableStrings(input: string): string {
-  const matches = input.match(/[A-Za-z0-9][A-Za-z0-9 ,.:;'"!?()[\]{}@#%&*_+=/\-]{8,}/g) ?? []
-  return truncateText(matches.join('\n'))
-}
-
 async function readAsDataUrl(file: File): Promise<string> {
   return await new Promise((resolve, reject) => {
     const reader = new FileReader()
@@ -84,12 +79,6 @@ async function readAsDataUrl(file: File): Promise<string> {
     reader.onerror = () => reject(reader.error ?? new Error('Failed to read file.'))
     reader.readAsDataURL(file)
   })
-}
-
-async function extractPdfText(file: File): Promise<string> {
-  const buffer = await file.arrayBuffer()
-  const decoded = new TextDecoder('latin1').decode(buffer)
-  return extractPrintableStrings(decoded)
 }
 
 async function extractText(file: File): Promise<string> {
@@ -110,15 +99,6 @@ export async function createPendingAttachment(file: File): Promise<PendingAttach
 
   if (kind === 'image') {
     attachment.previewUrl = await readAsDataUrl(file)
-  }
-
-  if (kind === 'pdf') {
-    const textContent = await extractPdfText(file)
-    if (textContent) {
-      attachment.textContent = textContent
-      attachment.textExcerpt = textContent.slice(0, 240)
-      attachment.isExtracted = true
-    }
   }
 
   if (kind === 'text' || kind === 'code') {
