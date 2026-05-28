@@ -1,13 +1,22 @@
 import 'server-only'
 
-import { and, desc, eq, inArray } from 'drizzle-orm'
+import { and, desc, eq, inArray, sql } from 'drizzle-orm'
+import { normalizeFileKnowledge } from '@/lib/files/intelligence'
+import { createPrivateFileUrl } from '@/lib/storage/object-store'
+import { FileIntelligence } from '@/types'
 import { getDatabaseClient } from '../client'
-import { zenFiles } from '../schema'
+import { zenFileChunks, zenFiles } from '../schema'
 import { compactObject, toIsoString } from './helpers'
 import { neonUsersRepository } from './users'
 
 type FileRow = typeof zenFiles.$inferSelect
 type FileInsert = typeof zenFiles.$inferInsert
+type FileIntelligenceFilters = {
+  ids?: string[]
+  projectId?: string | null
+  conversationId?: string | null
+  embeddingsAvailable: boolean
+}
 
 export type NeonFileProvider = 'external' | 'local'
 export type NeonFileVisibility = 'private' | 'public'
@@ -68,7 +77,111 @@ function rowToFile(row: FileRow): NeonFileMetadata {
   }
 }
 
+function protectedObjectUrl(
+  bucket: string | null,
+  storagePath: string | null,
+  download = false
+): string | null {
+  if (!bucket || !storagePath) return null
+  return createPrivateFileUrl({ bucket, storagePath, download })
+}
+
+function fileToIntelligence(
+  file: NeonFileMetadata,
+  chunkCount: number,
+  embeddingsAvailable: boolean
+): FileIntelligence {
+  const knowledge = normalizeFileKnowledge(file.metadata)
+
+  return {
+    id: file.id,
+    fileName: file.fileName,
+    mimeType: file.mimeType,
+    byteSize: file.byteSize,
+    projectId: file.projectId,
+    conversationId: file.conversationId,
+    messageId: file.messageId,
+    visibility: file.visibility,
+    viewUrl: protectedObjectUrl(file.bucket, file.storagePath),
+    downloadUrl: protectedObjectUrl(file.bucket, file.storagePath, true),
+    ...knowledge,
+    chunkCount: knowledge.chunkCount || chunkCount,
+    embeddingsAvailable,
+    createdAt: file.createdAt,
+    updatedAt: file.updatedAt,
+    metadata: {
+      private: file.visibility === 'private',
+      provider: file.provider,
+    },
+  }
+}
+
 class NeonFilesRepository {
+  private async chunkCountsByFileId(fileIds: string[]): Promise<Map<string, number>> {
+    if (fileIds.length === 0) return new Map()
+
+    const rows = await getDatabaseClient()
+      .select({
+        fileId: zenFileChunks.fileId,
+        chunkCount: sql<number>`count(*)::int`,
+      })
+      .from(zenFileChunks)
+      .where(inArray(zenFileChunks.fileId, fileIds))
+      .groupBy(zenFileChunks.fileId)
+
+    return new Map(rows.map((row) => [row.fileId, Number(row.chunkCount) || 0]))
+  }
+
+  async listIntelligence(
+    userId: string,
+    filters: FileIntelligenceFilters
+  ): Promise<FileIntelligence[]> {
+    const conditions = [eq(zenFiles.userId, userId)]
+
+    if (filters.ids?.length) {
+      conditions.push(inArray(zenFiles.id, filters.ids))
+    }
+    if (filters.projectId) {
+      conditions.push(eq(zenFiles.projectId, filters.projectId))
+    }
+    if (filters.conversationId) {
+      conditions.push(eq(zenFiles.conversationId, filters.conversationId))
+    }
+
+    const rows = await getDatabaseClient()
+      .select()
+      .from(zenFiles)
+      .where(and(...conditions))
+      .orderBy(desc(zenFiles.createdAt))
+
+    const files = rows.map(rowToFile)
+    const chunkCounts = await this.chunkCountsByFileId(files.map((file) => file.id))
+
+    return files.map((file) =>
+      fileToIntelligence(
+        file,
+        chunkCounts.get(file.id) ?? 0,
+        filters.embeddingsAvailable
+      )
+    )
+  }
+
+  async getIntelligence(
+    userId: string,
+    id: string,
+    embeddingsAvailable: boolean
+  ): Promise<FileIntelligence | null> {
+    const file = await this.get(userId, id)
+    if (!file) return null
+
+    const chunkCounts = await this.chunkCountsByFileId([file.id])
+    return fileToIntelligence(
+      file,
+      chunkCounts.get(file.id) ?? 0,
+      embeddingsAvailable
+    )
+  }
+
   async listByUser(userId: string): Promise<NeonFileMetadata[]> {
     const rows = await getDatabaseClient()
       .select()
