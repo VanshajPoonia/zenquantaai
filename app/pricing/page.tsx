@@ -7,6 +7,11 @@ import {
 import { AssistantFamily } from '@/types'
 import { requireServerUser } from '@/lib/auth/require-admin'
 import {
+  getPlanRequestStatusLabel,
+  isUpgradeTier,
+  sanitizePlanRequestAdminNote,
+} from '@/lib/billing/upgrade-nudges'
+import {
   neonPlanRequestsRepository,
   neonSubscriptionsRepository,
 } from '@/lib/db/repositories'
@@ -17,6 +22,20 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 
+function getPlanRequestBannerClass(status: string) {
+  switch (status) {
+    case 'pending':
+      return 'border-amber-500/30 bg-amber-500/10 text-amber-100'
+    case 'approved':
+    case 'activated':
+      return 'border-emerald-500/30 bg-emerald-500/10 text-emerald-100'
+    case 'rejected':
+      return 'border-rose-500/30 bg-rose-500/10 text-rose-100'
+    default:
+      return 'border-border/70 bg-card/70 text-foreground'
+  }
+}
+
 export default async function PricingPage({
   searchParams,
 }: {
@@ -26,6 +45,8 @@ export default async function PricingPage({
   const subscription = await neonSubscriptionsRepository.ensureForUser(user)
   const pendingRequest =
     await neonPlanRequestsRepository.getLatestPendingForUser(user.id)
+  const latestRequest =
+    await neonPlanRequestsRepository.getLatestForUser(user.id)
   const params = await searchParams
   const requested = params.requested === '1'
   const error =
@@ -82,16 +103,67 @@ export default async function PricingPage({
         {pendingRequest ? (
           <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 px-5 py-4 text-sm text-amber-100">
             Your plan request for {pendingRequest.requestedTier.toUpperCase()} is
-            pending and will be activated soon.
+            pending manual review. Duplicate requests are paused until an admin
+            activates or closes it.
+          </div>
+        ) : null}
+
+        {!latestRequest ? (
+          <div className="rounded-2xl border border-border/70 bg-card/60 px-5 py-4 text-sm text-muted-foreground">
+            No plan request is active right now. Choose a paid plan below to send
+            a manual request for admin review.
+          </div>
+        ) : null}
+
+        {latestRequest && latestRequest.status !== 'pending' ? (
+          <div
+            className={`rounded-2xl border px-5 py-4 text-sm ${getPlanRequestBannerClass(
+              latestRequest.status
+            )}`}
+          >
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="font-medium">
+                  Latest request: {getPlanRequestStatusLabel(latestRequest.status)}
+                </p>
+                <p className="mt-1 opacity-85">
+                  {latestRequest.status === 'activated'
+                    ? `Your ${latestRequest.requestedTier.toUpperCase()} request was activated. Current plan: ${subscription.tier.toUpperCase()}.`
+                    : latestRequest.status === 'approved'
+                      ? `Your ${latestRequest.requestedTier.toUpperCase()} request was approved and is waiting for manual activation.`
+                      : `Your ${latestRequest.requestedTier.toUpperCase()} request was not approved. You can submit a new request when you are ready.`}
+                </p>
+                {latestRequest.status === 'rejected' ? (
+                  <p className="mt-2 text-xs opacity-80">
+                    {sanitizePlanRequestAdminNote(latestRequest.adminNote) ??
+                      'No additional admin note was provided.'}
+                  </p>
+                ) : null}
+              </div>
+              <Badge variant="outline" className="w-fit rounded-full bg-background/30">
+                {latestRequest.status}
+              </Badge>
+            </div>
           </div>
         ) : null}
 
         <div className="grid gap-5 lg:grid-cols-5">
-          {Object.values(PLAN_CONFIGS).map((plan) => (
-            <Card
-              key={plan.tier}
-              className="rounded-3xl border-border/70 bg-card/70 text-foreground"
-            >
+          {Object.values(PLAN_CONFIGS).map((plan) => {
+            const canRequest = plan.tier !== 'free' && isUpgradeTier(subscription.tier, plan.tier)
+            const requestDisabled = Boolean(pendingRequest) || !canRequest
+            const buttonLabel = pendingRequest
+              ? 'Request pending'
+              : !canRequest
+                ? subscription.tier === plan.tier
+                  ? 'Current plan'
+                  : 'Included'
+                : 'Request Plan'
+
+            return (
+              <Card
+                key={plan.tier}
+                className="rounded-3xl border-border/70 bg-card/70 text-foreground"
+              >
               <CardHeader className="space-y-4">
                 <div className="flex items-center justify-between gap-3">
                   <CardTitle className="text-xl">
@@ -144,15 +216,16 @@ export default async function PricingPage({
                     />
                     <Button
                       className="w-full rounded-xl"
-                      disabled={Boolean(pendingRequest)}
+                      disabled={requestDisabled}
                     >
-                      Request Plan
+                      {buttonLabel}
                     </Button>
                   </form>
                 )}
               </CardContent>
             </Card>
-          ))}
+            )
+          })}
         </div>
       </div>
     </main>

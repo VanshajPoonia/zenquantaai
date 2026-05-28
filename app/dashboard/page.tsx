@@ -13,6 +13,10 @@ import {
   getDisplayedCreditsSnapshot,
 } from '@/lib/billing/costs'
 import {
+  getPlanRequestStatusLabel,
+  sanitizePlanRequestAdminNote,
+} from '@/lib/billing/upgrade-nudges'
+import {
   ASSISTANT_FAMILY_COPY,
   ASSISTANT_PUBLIC_PAGES,
   usdToDisplayedCredits,
@@ -64,6 +68,7 @@ export default async function DashboardPage({
   })
   const pendingRequest =
     requests.find((request) => request.status === 'pending') ?? null
+  const latestRequest = requests[0] ?? null
 
   return (
     <main className="min-h-screen bg-background px-4 py-8 sm:px-6 lg:px-10">
@@ -103,10 +108,39 @@ export default async function DashboardPage({
           </div>
         ) : null}
 
-        {pendingRequest ? (
-          <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 px-5 py-4 text-sm text-amber-100">
-            Your {pendingRequest.requestedTier.toUpperCase()} plan request has been
-            received and will be activated soon.
+        {latestRequest ? (
+          <div className="rounded-2xl border border-border/70 bg-card/70 px-5 py-4 text-sm text-foreground">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                  Plan request
+                </p>
+                <p className="mt-1 font-medium">
+                  {getPlanRequestStatusLabel(latestRequest.status)} ·{' '}
+                  {latestRequest.requestedTier.toUpperCase()}
+                </p>
+                <p className="mt-1 text-muted-foreground">
+                  {latestRequest.status === 'pending'
+                    ? 'Your request is waiting for manual admin review and activation.'
+                    : latestRequest.status === 'activated'
+                      ? `Your request was activated. Current plan: ${subscription.tier.toUpperCase()}.`
+                      : latestRequest.status === 'approved'
+                        ? 'Your request was approved and is waiting for manual activation.'
+                        : 'Your request was not approved. You can submit another manual request from pricing.'}
+                </p>
+                {latestRequest.status === 'rejected' ? (
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    {sanitizePlanRequestAdminNote(latestRequest.adminNote) ??
+                      'No additional admin note was provided.'}
+                  </p>
+                ) : null}
+              </div>
+              <Button asChild variant="secondary" className="rounded-xl">
+                <Link href="/pricing">
+                  {pendingRequest ? 'Review pending request' : 'View pricing'}
+                </Link>
+              </Button>
+            </div>
           </div>
         ) : null}
 
