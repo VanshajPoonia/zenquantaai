@@ -15,6 +15,22 @@ import {
   UsageLimitOverride,
 } from '@/types'
 import { usdToDisplayedCredits } from '@/lib/config'
+import { normalizeFileKnowledge } from '@/lib/files/intelligence'
+import { getDatabaseClient } from '../client'
+import {
+  zenConversations,
+  zenCustomAssistants,
+  zenFiles,
+  zenGeneratedImages,
+  zenMessages,
+  zenModelComparisonCandidates,
+  zenModelComparisons,
+  zenProjects,
+  zenPromptLibrary,
+  zenPromptWorkflowRuns,
+  zenPromptWorkflowStepRuns,
+} from '../schema'
+import { toIsoString } from './helpers'
 import { neonAssistantRecommendationEventsRepository } from './assistant-recommendations'
 import { neonConversationRepository } from './conversations'
 import {
@@ -94,6 +110,37 @@ export interface AdminOverview {
       remaining: number
       ratio: number
     }>
+  }>
+  productAnalytics: AdminProductAnalytics
+}
+
+export interface AdminProductAnalytics {
+  activationFunnel: Array<{
+    id: string
+    label: string
+    count: number
+    rate: number
+    detail: string
+  }>
+  featureAdoption: Array<{
+    id: string
+    label: string
+    value: number
+    detail: string
+  }>
+  fileIndexing: {
+    indexed: number
+    skipped: number
+    unsupported: number
+    failed: number
+    pending: number
+  }
+  operationalSignals: Array<{
+    id: string
+    label: string
+    value: number
+    detail: string
+    tone: 'neutral' | 'warning' | 'critical'
   }>
 }
 
@@ -378,6 +425,73 @@ function buildAssistantBreakdown(
     }))
 }
 
+function modeToAssistantFamily(mode: unknown): AssistantFamily | null {
+  switch (mode) {
+    case 'general':
+      return 'nova'
+    case 'creative':
+      return 'velora'
+    case 'logic':
+      return 'axiom'
+    case 'code':
+      return 'forge'
+    case 'live':
+      return 'pulse'
+    case 'image':
+      return 'prism'
+    default:
+      return null
+  }
+}
+
+function matchesAssistantFilter(
+  assistant: AssistantFamily | null,
+  value: AssistantFamily | null
+): boolean {
+  return !assistant || value === assistant
+}
+
+function rowCreatedAt(row: { createdAt: Date | string }): string {
+  return toIsoString(row.createdAt)
+}
+
+function isRowWithinPeriod(
+  row: { createdAt: Date | string },
+  filters: NormalizedAdminAnalyticsFilters
+): boolean {
+  return isWithinPeriod(rowCreatedAt(row), filters)
+}
+
+function hasPersistedSources(value: unknown): boolean {
+  return Array.isArray(value) && value.length > 0
+}
+
+function countFirstUserEvents<T>(
+  rows: T[],
+  filters: NormalizedAdminAnalyticsFilters,
+  getUserId: (row: T) => string,
+  getCreatedAt: (row: T) => string
+): number {
+  const firstByUser = new Map<string, string>()
+
+  for (const row of rows) {
+    const userId = getUserId(row)
+    const createdAt = getCreatedAt(row)
+    const previous = firstByUser.get(userId)
+    if (!previous || new Date(createdAt).getTime() < new Date(previous).getTime()) {
+      firstByUser.set(userId, createdAt)
+    }
+  }
+
+  return [...firstByUser.values()].filter((createdAt) =>
+    isWithinPeriod(createdAt, filters)
+  ).length
+}
+
+function rate(count: number, denominator: number): number {
+  return denominator > 0 ? count / denominator : 0
+}
+
 class NeonAdminRepository {
   normalizeAnalyticsFilters(filters?: AdminAnalyticsFilters) {
     return normalizeAdminAnalyticsFilters(filters)
@@ -385,13 +499,42 @@ class NeonAdminRepository {
 
   async getOverview(filters: AdminAnalyticsFilters = {}): Promise<AdminOverview> {
     const normalizedFilters = normalizeAdminAnalyticsFilters(filters)
-    const [profiles, subscriptions, usageEvents, imageEvents, requests] =
+    const db = getDatabaseClient()
+    const [
+      profiles,
+      subscriptions,
+      usageEvents,
+      imageEvents,
+      requests,
+      projects,
+      promptLibraryItems,
+      workflowRuns,
+      workflowStepRuns,
+      modelComparisons,
+      modelComparisonCandidates,
+      files,
+      generatedImages,
+      customAssistants,
+      conversationRows,
+      messages,
+    ] =
       await Promise.all([
         neonProfilesRepository.list(),
         neonSubscriptionsRepository.list(),
         neonUsageEventsRepository.list(),
         neonImageGenerationEventsRepository.list(),
         neonPlanRequestsRepository.list(),
+        db.select().from(zenProjects),
+        db.select().from(zenPromptLibrary),
+        db.select().from(zenPromptWorkflowRuns),
+        db.select().from(zenPromptWorkflowStepRuns),
+        db.select().from(zenModelComparisons),
+        db.select().from(zenModelComparisonCandidates),
+        db.select().from(zenFiles),
+        db.select().from(zenGeneratedImages),
+        db.select().from(zenCustomAssistants),
+        db.select().from(zenConversations),
+        db.select().from(zenMessages),
       ])
 
     const profileByUserId = new Map(
@@ -593,6 +736,368 @@ class NeonAdminRepository {
       .sort((a, b) => b.highestUsageRatio - a.highestUsageRatio)
       .slice(0, 10)
 
+    const comparisonById = new Map(
+      modelComparisons.map((comparison) => [comparison.id, comparison])
+    )
+    const conversationUserById = new Map(
+      conversationRows.map((conversation) => [
+        conversation.id,
+        conversation.userId,
+      ])
+    )
+    const workflowRunIdsForAssistant = new Set(
+      workflowStepRuns
+        .filter((stepRun) =>
+          matchesAssistantFilter(
+            normalizedFilters.assistant,
+            stepRun.assistantFamily as AssistantFamily
+          )
+        )
+        .map((stepRun) => stepRun.runId)
+    )
+    const comparisonIdsForAssistant = new Set(
+      modelComparisonCandidates
+        .filter((candidate) =>
+          matchesAssistantFilter(
+            normalizedFilters.assistant,
+            candidate.assistantFamily as AssistantFamily
+          )
+        )
+        .map((candidate) => candidate.comparisonId)
+    )
+    const productUsers = subscriptionsForFilters.length
+    const nonDefaultProjects = projects.filter(
+      (project) => filteredUserIds.has(project.userId) && !project.isDefault
+    )
+    const promptItemsForAnalytics = promptLibraryItems.filter(
+      (prompt) =>
+        filteredUserIds.has(prompt.userId) &&
+        (prompt.mode === 'any' ||
+          matchesAssistantFilter(
+            normalizedFilters.assistant,
+            modeToAssistantFamily(prompt.mode)
+          ))
+    )
+    const workflowRunsForAnalytics = workflowRuns.filter(
+      (run) =>
+        filteredUserIds.has(run.userId) &&
+        (!normalizedFilters.assistant || workflowRunIdsForAssistant.has(run.id))
+    )
+    const modelComparisonsForAnalytics = modelComparisons.filter(
+      (comparison) =>
+        filteredUserIds.has(comparison.userId) &&
+        (!normalizedFilters.assistant ||
+          comparisonIdsForAssistant.has(comparison.id))
+    )
+    const filesForAnalytics = files.filter((file) => filteredUserIds.has(file.userId))
+    const generatedImagesForAnalytics = generatedImages.filter(
+      (image) =>
+        filteredUserIds.has(image.userId) &&
+        matchesAssistantFilter(normalizedFilters.assistant, 'prism')
+    )
+    const customAssistantsForAnalytics = customAssistants.filter(
+      (assistant) =>
+        filteredUserIds.has(assistant.userId) &&
+        matchesAssistantFilter(
+          normalizedFilters.assistant,
+          modeToAssistantFamily(assistant.baseMode)
+        )
+    )
+    const sourceBackedPulseMessages = messages.filter(
+      (message) =>
+        filteredUserIds.has(conversationUserById.get(message.conversationId) ?? '') &&
+        message.role === 'assistant' &&
+        message.mode === 'live' &&
+        matchesAssistantFilter(normalizedFilters.assistant, 'pulse') &&
+        hasPersistedSources(message.sources)
+    )
+
+    const periodProjects = nonDefaultProjects.filter((project) =>
+      isRowWithinPeriod(project, normalizedFilters)
+    )
+    const periodPrompts = promptItemsForAnalytics.filter((prompt) =>
+      isRowWithinPeriod(prompt, normalizedFilters)
+    )
+    const periodWorkflowRuns = workflowRunsForAnalytics.filter((run) =>
+      isRowWithinPeriod(run, normalizedFilters)
+    )
+    const periodModelComparisons = modelComparisonsForAnalytics.filter((comparison) =>
+      isRowWithinPeriod(comparison, normalizedFilters)
+    )
+    const periodFiles = filesForAnalytics.filter((file) =>
+      isRowWithinPeriod(file, normalizedFilters)
+    )
+    const periodGeneratedImages = generatedImagesForAnalytics.filter((image) =>
+      isRowWithinPeriod(image, normalizedFilters)
+    )
+    const periodCustomAssistants = customAssistantsForAnalytics.filter((assistant) =>
+      isRowWithinPeriod(assistant, normalizedFilters)
+    )
+    const periodSourceBackedPulseMessages = sourceBackedPulseMessages.filter((message) =>
+      isRowWithinPeriod(message, normalizedFilters)
+    )
+
+    const fileIndexing = periodFiles.reduce<AdminProductAnalytics['fileIndexing']>(
+      (counts, file) => {
+        const metadata =
+          file.metadata && typeof file.metadata === 'object' && !Array.isArray(file.metadata)
+            ? (file.metadata as Record<string, unknown>)
+            : {}
+        const status = normalizeFileKnowledge(metadata).knowledgeStatus
+        counts[status] += 1
+        return counts
+      },
+      {
+        indexed: 0,
+        skipped: 0,
+        unsupported: 0,
+        failed: 0,
+        pending: 0,
+      }
+    )
+    const failedWorkflowRuns = periodWorkflowRuns.filter(
+      (run) => run.status === 'failed'
+    ).length
+    const failedModelDuelCandidates = modelComparisonCandidates.filter((candidate) => {
+      const comparison = comparisonById.get(candidate.comparisonId)
+      return (
+        candidate.status === 'error' &&
+        Boolean(comparison) &&
+        filteredUserIds.has(comparison!.userId) &&
+        (!normalizedFilters.assistant ||
+          candidate.assistantFamily === normalizedFilters.assistant) &&
+        isRowWithinPeriod(candidate, normalizedFilters)
+      )
+    }).length
+    const failedGeneratedImages = periodGeneratedImages.filter(
+      (image) => image.status === 'failed'
+    ).length
+    const topExpensiveModel = [...modelBuckets.values()].sort(
+      (a, b) => b.rawCostUsd - a.rawCostUsd
+    )[0]
+
+    const activationFunnel: AdminProductAnalytics['activationFunnel'] = [
+      {
+        id: 'signed_up',
+        label: 'Signed up',
+        count: profiles.filter(
+          (profile) =>
+            filteredUserIds.has(profile.userId) &&
+            isWithinPeriod(profile.createdAt, normalizedFilters)
+        ).length,
+        rate: rate(
+          profiles.filter(
+            (profile) =>
+              filteredUserIds.has(profile.userId) &&
+              isWithinPeriod(profile.createdAt, normalizedFilters)
+          ).length,
+          productUsers
+        ),
+        detail: 'Admin-visible profiles created in period.',
+      },
+      {
+        id: 'first_message',
+        label: 'Sent first message',
+        count: countFirstUserEvents(
+          usageEvents.filter(
+            (event) =>
+              filteredUserIds.has(event.userId) &&
+              matchesAssistantFilter(
+                normalizedFilters.assistant,
+                event.assistantFamily
+              )
+          ),
+          normalizedFilters,
+          (event) => event.userId,
+          (event) => event.createdAt
+        ),
+        rate: 0,
+        detail: 'First recorded text usage event.',
+      },
+      {
+        id: 'first_project',
+        label: 'Created first project',
+        count: countFirstUserEvents(
+          nonDefaultProjects,
+          normalizedFilters,
+          (project) => project.userId,
+          rowCreatedAt
+        ),
+        rate: 0,
+        detail: 'Excludes the default Inbox project.',
+      },
+      {
+        id: 'first_upload',
+        label: 'Uploaded first file',
+        count: countFirstUserEvents(
+          filesForAnalytics,
+          normalizedFilters,
+          (file) => file.userId,
+          rowCreatedAt
+        ),
+        rate: 0,
+        detail: 'First private file metadata record.',
+      },
+      {
+        id: 'first_playbook',
+        label: 'Ran first playbook',
+        count: countFirstUserEvents(
+          workflowRunsForAnalytics,
+          normalizedFilters,
+          (run) => run.userId,
+          rowCreatedAt
+        ),
+        rate: 0,
+        detail: 'First AI Playbook run record.',
+      },
+      {
+        id: 'first_image',
+        label: 'Generated first image',
+        count: countFirstUserEvents(
+          imageEvents.filter((event) =>
+            filteredUserIds.has(event.userId) &&
+            matchesAssistantFilter(normalizedFilters.assistant, 'prism')
+          ),
+          normalizedFilters,
+          (event) => event.userId,
+          (event) => event.createdAt
+        ),
+        rate: 0,
+        detail: 'First Prism image usage event.',
+      },
+      {
+        id: 'first_model_duel',
+        label: 'Used first Model Duel',
+        count: countFirstUserEvents(
+          modelComparisonsForAnalytics,
+          normalizedFilters,
+          (comparison) => comparison.userId,
+          rowCreatedAt
+        ),
+        rate: 0,
+        detail: 'First text comparison run.',
+      },
+    ].map((item) => ({
+      ...item,
+      rate: item.rate || rate(item.count, productUsers),
+    }))
+
+    const productAnalytics: AdminProductAnalytics = {
+      activationFunnel,
+      featureAdoption: [
+        {
+          id: 'projects',
+          label: 'Projects created',
+          value: periodProjects.length,
+          detail: `${countFirstUserEvents(nonDefaultProjects, normalizedFilters, (project) => project.userId, rowCreatedAt)} users created their first project.`,
+        },
+        {
+          id: 'prompts',
+          label: 'Prompt library saves',
+          value: periodPrompts.length,
+          detail: 'Prompt creation is counted; prompt insertion is not separately logged yet.',
+        },
+        {
+          id: 'playbooks',
+          label: 'AI Playbook runs',
+          value: periodWorkflowRuns.length,
+          detail: `${failedWorkflowRuns} failed in the selected period.`,
+        },
+        {
+          id: 'model_duels',
+          label: 'Model Duel runs',
+          value: periodModelComparisons.length,
+          detail: `${failedModelDuelCandidates} failed candidates in the selected period.`,
+        },
+        {
+          id: 'prism',
+          label: 'Prism generations',
+          value: sum(filteredImageEvents, (event) => event.imageCount),
+          detail: `${failedGeneratedImages} failed generated-image metadata rows logged.`,
+        },
+        {
+          id: 'pulse_sources',
+          label: 'Pulse source-backed chats',
+          value: periodSourceBackedPulseMessages.length,
+          detail: 'Counts persisted web-source assistant messages; Tavily unavailable is not logged in v1.',
+        },
+        {
+          id: 'files',
+          label: 'File uploads',
+          value: periodFiles.length,
+          detail: `${fileIndexing.indexed} indexed, ${fileIndexing.skipped + fileIndexing.unsupported + fileIndexing.failed} skipped/unsupported/failed.`,
+        },
+        {
+          id: 'custom_assistants',
+          label: 'Custom assistants created',
+          value: periodCustomAssistants.length,
+          detail: 'Private custom text assistants created in the selected period.',
+        },
+      ],
+      fileIndexing,
+      operationalSignals: [
+        {
+          id: 'failed_images',
+          label: 'Failed image generations',
+          value: failedGeneratedImages,
+          detail: 'Counts generated-image metadata rows with failed status.',
+          tone: failedGeneratedImages > 0 ? 'warning' : 'neutral',
+        },
+        {
+          id: 'file_indexing_issues',
+          label: 'File indexing skipped/failed',
+          value: fileIndexing.skipped + fileIndexing.unsupported + fileIndexing.failed,
+          detail: `${fileIndexing.failed} failed, ${fileIndexing.unsupported} unsupported, ${fileIndexing.skipped} skipped.`,
+          tone:
+            fileIndexing.failed > 0
+              ? 'critical'
+              : fileIndexing.skipped + fileIndexing.unsupported > 0
+                ? 'warning'
+                : 'neutral',
+        },
+        {
+          id: 'workflow_failures',
+          label: 'Failed playbook runs',
+          value: failedWorkflowRuns,
+          detail: 'Foreground AI Playbook runs marked failed.',
+          tone: failedWorkflowRuns > 0 ? 'warning' : 'neutral',
+        },
+        {
+          id: 'model_duel_failures',
+          label: 'Failed Model Duel candidates',
+          value: failedModelDuelCandidates,
+          detail: 'Candidate-level failures inside completed or failed duels.',
+          tone: failedModelDuelCandidates > 0 ? 'warning' : 'neutral',
+        },
+        {
+          id: 'users_near_limits',
+          label: 'Users near limits',
+          value: usersCloseToLimits.length,
+          detail: 'Users at or above 80% of tracked token, image, or daily limits.',
+          tone: usersCloseToLimits.length > 0 ? 'warning' : 'neutral',
+        },
+        {
+          id: 'expensive_model_usage',
+          label: 'Top raw-cost model',
+          value: topExpensiveModel?.events ?? 0,
+          detail: topExpensiveModel
+            ? `${topExpensiveModel.model} · ${topExpensiveModel.events} events · $${topExpensiveModel.rawCostUsd.toFixed(2)} raw.`
+            : 'No model usage in this filter.',
+          tone:
+            topExpensiveModel && topExpensiveModel.rawCostUsd > 0
+              ? 'warning'
+              : 'neutral',
+        },
+        {
+          id: 'tavily_unavailable',
+          label: 'Tavily unavailable cases',
+          value: 0,
+          detail: 'Not logged in v1; Pulse adoption uses persisted source-backed messages.',
+          tone: 'neutral',
+        },
+      ],
+    }
+
     return {
       filters: normalizedFilters,
       activeUsers: subscriptionsForFilters.filter(
@@ -646,6 +1151,7 @@ class NeonAdminRepository {
         true
       ),
       usersCloseToLimits,
+      productAnalytics,
     }
   }
 
