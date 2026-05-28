@@ -2,7 +2,7 @@
 
 ## Current Status
 
-The repository contains a real Zenquanta AI platform backed by Neon for runtime app data and credentials auth, neutral private file storage for new uploads/generated images, and OpenRouter for AI transport. Shared AI project memory files exist at the repo root. The workspace now includes Neon-backed global search through `/api/search`, a Cmd/Ctrl+K command palette, first-run onboarding through `/api/onboarding`, Artifact Studio through `/api/artifacts`, Prism Studio through `/api/images/history`, and a Memory Vault for visible conversation memory controls. The prompt library includes reusable Neon-backed prompt workflows, the composer includes Model Duel for text assistant comparisons, and the admin dashboard includes filtered cost/margin analytics.
+The repository contains a real Zenquanta AI platform backed by Neon for runtime app data and credentials auth, neutral private file storage for new uploads/generated images, and OpenRouter for AI transport. Shared AI project memory files exist at the repo root. The workspace now includes Neon-backed global search through `/api/search`, a Cmd/Ctrl+K command palette, first-run onboarding through `/api/onboarding`, Artifact Studio through `/api/artifacts`, Prism Studio through `/api/images/history`, Pulse Research Room through `/api/pulse/research-room`, File Intelligence Cards through `/api/files`, Ask Files through the existing `/api/chat` file-context path, GitHub read-only repo context through `/api/integrations/github/*`, and a Memory Vault for visible conversation memory controls. The prompt library includes reusable Neon-backed prompt workflows, the composer includes Model Duel for text assistant comparisons, and the admin dashboard includes filtered cost/margin analytics.
 
 Current direction: plan upgrades remain manual/admin-driven, payment automation is out of scope unless explicitly requested, and Neon/storage start fresh without importing Supabase database rows or storage objects.
 
@@ -32,7 +32,7 @@ Audit date: 2026-05-26. Documentation-only audit before new product features; no
 - Pulse research: Tavily-backed Pulse/webSearch is implemented and degrades without `TAVILY_API_KEY`, but it is source-snippet context injection, not a crawler, saved research archive, or long-running research workflow.
 - Prism gallery: `/api/images/history` reads image usage events and `zen_generated_images` stores durable metadata, but a gallery should prefer private stored image URLs/metadata and avoid assuming all historical output URLs are durable or public.
 - Onboarding: first-run setup now stores state in the user settings payload and creates starter prompts/projects through Neon repositories. There is still no dedicated onboarding table.
-- Cross-cutting risks: conversation saves still delete/reinsert messages; local object storage is development-oriented and S3/R2 must be validated for production; the hardcoded admin fallback in `lib/db/repositories/profiles.ts` remains; advanced PDF/OCR RAG is not implemented; lint currently passes with existing warnings; there is no dedicated test script.
+- Cross-cutting risks: conversation saves still delete/reinsert messages; local object storage is development-oriented and S3/R2 must be validated for production; the hardcoded admin fallback in `lib/db/repositories/profiles.ts` remains; OCR/image-only PDF RAG is not implemented; lint currently passes with existing warnings; there is no dedicated test script.
 
 ### Recommended Feature Build Order
 
@@ -52,6 +52,65 @@ Audit date: 2026-05-26. Documentation-only audit before new product features; no
 - `npm run lint` passed after the audit entry with 14 existing warnings: `<img>` usage in chat image/message components, hook dependency cleanup in `components/chat/composer.tsx`, several unused variables/imports, and the existing toast action type warning.
 
 ## Completed Work
+
+### 2026-05-28 - GitHub Read-Only Integration V1
+
+- Added read-only GitHub App integration scaffolding with Neon `zen_integration_accounts` and `zen_integration_items` tables, plus protected `/api/integrations/github/*` routes for connect callback, status, repo listing, safe file listing, selected import, explicit re-import, and local disconnect.
+- Implemented server-only GitHub App JWT and installation-token helpers using Node crypto/fetch only; no OAuth package, webhook processor, write endpoint, Supabase, Stripe, external vector DB, or new AI gateway was added.
+- Imports are foreground and user-selected. V1 offers README, `package.json`, and safe text/source files under per-file and total size limits, skips dependencies/build outputs/lockfiles/secrets-like paths/binaries, and stores imported content as private `zen_files` metadata plus `zen_file_chunks` through the existing RAG indexing path.
+- Added a GitHub repo context workspace panel, command palette action, and Project Home GitHub section with connected account, imported repo/file counts, last import, re-import, disconnect, and Ask Files handoff.
+- Added GitHub App env placeholders to `.env.example`: `GITHUB_APP_ID`, `GITHUB_APP_CLIENT_ID`, `GITHUB_APP_PRIVATE_KEY`, and `GITHUB_APP_CALLBACK_URL`.
+- Verification: `npm run typecheck` passes; `npm run lint` passes with the existing 12 warnings; `npm run build` passes with the existing Node `module.register()` deprecation warning.
+- Remaining risks: GitHub App installation must be configured externally with read-only Metadata/Contents permissions; v1 stores imported snapshots in Neon chunks/file metadata rather than object-store snapshots, so protected file download is not available for GitHub-imported external files; imports are capped foreground operations with no scheduled sync or webhook refresh.
+
+### 2026-05-28 - Read-Only Integrations Architecture Plan
+
+- Added a documentation-only `AI_DECISIONS.md` section titled “Read-Only Integrations Architecture Plan.”
+- Planned future Google Drive, Notion, GitHub, and later Slack/Discord integrations as read-only, user-selected, Neon-backed sources that import selected content into the existing private `zen_files` and `zen_file_chunks` knowledge path.
+- Documented future `zen_integration_accounts` and `zen_integration_items` concepts, encrypted server-only token storage, foreground import/refresh/revoke flows, Project Home/Ask Files/File Intelligence surfaces, and Google Drive as the recommended first integration.
+- Preserved constraints: no OAuth implementation, no connector code, no OAuth packages, no schema migration, no runtime behavior change, no Supabase, no Stripe, no MCP runtime, no external vector DB, and no background-job system.
+- Verification: not run because this was Markdown documentation only.
+
+### 2026-05-28 - Private Custom Assistant Builder V2
+
+- Added additive Neon metadata support for private custom text assistants through `zen_custom_assistants.metadata`, with structured tone, response style, suggested use cases, pinned state, and attached starter prompt ids.
+- Added protected `POST /api/custom-assistants/test` for unsaved assistant drafts. The route validates the draft, rejects Prism/image modes through existing text-mode validation, runs through the existing OpenRouter text generation helpers, enforces plan/model limits, logs text usage, and returns scrubbed user-safe usage only.
+- Upgraded the workspace custom assistant UI into a Private Assistants studio with assistant cards, pin/favorite, edit, duplicate, delete, structured builder fields, prompt-library attachment metadata, and a billed test panel.
+- Preserved constraints: custom assistants remain private/user-owned and text-only; no public marketplace, no new AI gateway, no billing bypass, no raw cost exposure, no Supabase, and no Stripe.
+- Verification: `npm run typecheck` passes; `npm run lint` passes with 12 existing warnings; `npm run build` passes with the known Node `module.register()` deprecation warning.
+- Remaining risks: v2 starter prompts attach existing prompt-library records by id; it does not create a separate assistant-prompt join table or project-specific availability enforcement.
+
+### 2026-05-28 - PDF Text Extraction V1
+
+- Added `pdf-parse` as a server dependency through pnpm for in-process text extraction from text-based PDFs. Dependency justification: v2 is TypeScript/cross-platform, runs locally on private uploaded bytes, and exposes `PDFParse#getText()` for plain text extraction.
+- Updated uploaded-file knowledge extraction so text/code files keep the existing path while PDFs are parsed server-side, normalized, chunked, embedded, stored in `zen_file_chunks`, and surfaced through the same File Intelligence status metadata.
+- Image-only or empty PDFs are marked as skipped with the clear no-OCR reason: `No embedded text was found. OCR/image-only PDFs are not supported yet.`
+- Password-protected or malformed PDFs are marked unsupported with safe user-facing reasons, while unexpected extraction/indexing failures continue to be recorded as failed metadata without blocking upload completion.
+- Removed the old client-side PDF printable-string scraping from pending attachments so raw PDF bytes no longer inject noisy excerpts into chat context.
+- Preserved constraints: no OCR, no external parsing service, no external vector DB, no Supabase, no storage changes, no new APIs, and embeddings remain server-only.
+- Verification: `npm run typecheck` passes; `npm run lint` passes with 12 existing warnings; `npm run build` passes with the known Node `module.register()` deprecation warning.
+- Remaining risks: PDF text extraction quality depends on embedded text quality and PDF structure; tables/layout reconstruction and scanned PDFs remain out of scope.
+
+### 2026-05-28 - File Intelligence Cards V1
+
+- Added protected `/api/files`, `/api/files/[id]/reindex`, and `/api/files/[id]` DELETE APIs for user-scoped file intelligence, safe re-indexing, and removal.
+- Added file intelligence normalization over existing `zen_files.metadata.knowledgeBase` and chunk counts from `zen_file_chunks`, with safe statuses for indexed, skipped, unsupported, failed, and pending files.
+- Added reusable File Intelligence Cards across chat attachments, Settings recent attachments, and Project Home uploaded files, including protected view/download links, status badges, safe reasons, Ask, Re-index, and Remove actions.
+- Extended workspace state so “Ask about this file” prepares a draft with the existing file attachment and does not send automatically.
+- Preserved constraints: no schema migration, no direct bucket URL exposure, no Supabase, no new storage provider, no OCR extraction, no billing changes, and no knowledge claims when files are not indexed.
+- Verification: `npm run typecheck` passes; `npm run lint` passes with the existing 12 warnings; `npm run build` passes with the existing Node `module.register()` deprecation warning.
+- Remaining risks: deleting a file intentionally preserves historical attachment labels while removing private object access refs; scanned/image-only PDF OCR indexing remains unsupported.
+
+### 2026-05-28 - Pulse Research Room V1
+
+- Added protected `GET /api/pulse/research-room` backed by a server-only Neon aggregate repository over owned conversations, message-attached web sources, projects, and Pulse research artifacts.
+- Added shared Pulse Research Room types and workspace state support for opening the room from the command palette and Project Home.
+- Added the Pulse Research Room workspace panel with recent Pulse conversations, recent source-backed message sources, derived search prompt history, saved source artifacts, project/query filtering, Tavily availability messaging, and polished empty/loading/error states.
+- Added source actions for opening, copying citations, preparing a Pulse follow-up draft, and saving a source as a user-owned `pulse_report` research artifact without AI calls.
+- Added research actions for summarizing sources, finding opposing views, creating research briefs, and comparing sources through editable prompts that send via the existing `/api/chat` Pulse path only after confirmation.
+- Preserved constraints: no crawler, no new search provider, no source database or migration, no background jobs, no OpenRouter bypass, no billing bypass, no Tavily key exposure, no Supabase, and no Stripe.
+- Verification: `npm run typecheck` passes; `npm run lint` passes with the existing 14 warnings; `npm run build` passes with the existing Node `module.register()` deprecation warning.
+- Remaining risks: v1 saved sources are Pulse artifacts rather than a dedicated bookmark table; source/search history exists only when prior messages persisted web sources.
 
 ### 2026-05-26 - AI-Assisted Artifact Actions V1
 
@@ -240,7 +299,7 @@ Audit date: 2026-05-26. Documentation-only audit before new product features; no
 - Added first-version project knowledge/RAG for uploaded text and code-like files.
 - Added server-side text extraction, chunking, OpenAI-compatible embeddings, and Neon pgvector chunk storage.
 - Wired `/api/chat` to retrieve scoped file chunks when `fileContext` is enabled and inject only relevant excerpts.
-- Kept raw files private in object storage and left advanced PDF/OCR handling for later.
+- Kept raw files private in object storage and left scanned/image-only PDF OCR handling for later.
 
 ### 2026-05-22 - Reusable Prompt Workflows V1
 
@@ -317,7 +376,7 @@ Audit date: 2026-05-26. Documentation-only audit before new product features; no
 - Verified the existing uploaded-file RAG path uses neutral storage, Neon file metadata, pgvector chunks, server-only embeddings, and `/api/chat` retrieval when `fileContext` is enabled.
 - Added stricter attachment metadata validation before uploads are linked to file metadata and knowledge chunks.
 - Batched embedding requests for large text/code uploads and cleared stale chunks when extraction produces no usable chunks.
-- Kept v1 focused on text/code-like files; no Supabase import, OCR/PDF expansion, or payment automation was added.
+- Kept v1 focused on text/code-like files; no Supabase import, scanned PDF/OCR expansion, or payment automation was added.
 
 ### 2026-05-24 - Prompt Workflow Tracking Completion
 
@@ -410,6 +469,17 @@ Audit date: 2026-05-26. Documentation-only audit before new product features; no
 - Verification: `npm run typecheck` passes; `npm run lint` passes with the existing 14 warnings; `npm run build` passes with the existing Node `module.register()` deprecation warning.
 - Remaining risks: Blind Mode and scoring labels are local review-state only in v1; only Artifact saves preserve scoring labels in metadata.
 
+### 2026-05-28 - Ask Files V1
+
+- Added an authenticated Ask Files workspace panel that lets users scope questions to selected indexed files or all indexed files in a concrete project.
+- Reused existing protected file intelligence data and the normal `sendMessage` pipeline; Ask Files submits through `/api/chat` with `fileContext` enabled, selected file attachments attached, Nova/general mode by default, and normal billing/usage enforcement preserved.
+- Added honest empty/config states for missing embeddings, no indexed files, unsupported/skipped/pending/failed file states, and project-wide scope requiring a concrete project.
+- Wired Ask Files from Command Palette, Project Home, File Intelligence Cards in chat attachments, and Settings recent attachments. Project Home also has an Ask Files quick action.
+- Updated assistant message source display so file-backed RAG sources show returned snippets when chunk-level sources exist; if no snippets are returned, the UI only shows file/source labels.
+- Preserved constraints: no external vector database, no OCR extraction, no private bucket URL exposure, no Supabase, no Stripe, and no AI calls until the user submits a question.
+- Verification: `npm run typecheck` passes; `npm run lint` passes with 12 existing warnings; `npm run build` passes with the known Node `module.register()` deprecation warning; `git diff --check` passes.
+- Remaining risks: Ask Files depends on existing embeddings/pgvector setup and indexed text/code-like or text-based PDF uploads; project-wide scope attaches all indexed project files in v1, so very large projects may need selection caps or pagination later.
+
 ### 2026-05-28 - Memory Vault V1
 
 - Added a protected Memory Vault workspace panel for viewing and controlling existing Neon-backed conversation memory summaries.
@@ -459,6 +529,41 @@ Audit date: 2026-05-26. Documentation-only audit before new product features; no
 - Updated starter templates with structured metadata and output labels.
 - Verification: `npm run typecheck` passes; `npm run lint` passes with the existing 14 warnings; `npm run build` passes with the existing Node `module.register()` deprecation warning.
 - Remaining risks: the usage indicator is intentionally rough and not a billing quote; production Neon databases must apply `20260528_zenquanta_playbook_builder_metadata.sql`.
+
+### 2026-05-28 - Usage Transparency V1
+
+- Added a composer-level usage transparency hint that shows friendly low/medium/high expectations before chat sends or Prism image generation.
+- The hint surfaces safe, qualitative badges for premium model routing, web search, file context, and image-credit usage without exposing raw model costs or changing billing calculations.
+- Reuses the existing authenticated `/api/dashboard` displayed-usage summary to show the current plan and remaining displayed usage credits when available; plan limits still remain enforced by the existing chat/image routes on send.
+- Added Fast, Balanced, Best quality, and Lowest usage controls as disabled/coming-soon UI affordances so no model routing or profile behavior changes silently.
+- Prism drafts now show an image-credit reminder before generation, and Model Duel’s existing warning now more clearly states that each selected assistant can generate a separate usage-consuming response.
+- Preserved constraints: no Stripe, no payment automation, no Supabase, no new billing route, no raw cost display, no plan-limit bypass, and no changes to `/api/chat` or `/api/images/generate`.
+- Verification: `npm run typecheck` passes; `npm run lint` passes with the existing 12 warnings; `npm run build` passes with the existing Node `module.register()` deprecation warning; `git diff --check` passes.
+- Remaining risks: usage level is intentionally a rough product hint, not a quote; the profile selector is UI-only until a later milestone safely maps it to existing response/model settings.
+
+### 2026-05-28 - Manual Plan Request And Upgrade Nudge Polish
+
+- Extended the safe `/api/dashboard` response with user-facing limit snapshots for daily messages, daily images, image credits, displayed credits, plus latest/pending plan request status. No raw costs, margin, secrets, or override internals are returned.
+- Added reusable upgrade-nudge helpers for 80% near-limit detection, manual request status labels, safe admin-note display, and existing enforcement-error recognition.
+- Composer usage transparency now shows dismissible manual upgrade nudges for near-limit usage or pending plan requests, linking to `/pricing` instead of creating payment automation.
+- Chat errors and Model Duel errors that come from plan/model/usage enforcement now show a clear manual-plan CTA while preserving the existing blocking behavior.
+- Model Duel and high-usage AI Playbooks now include manual request nudges for Free/Basic users without pending requests; no AI call, billing, or routing behavior changed.
+- Pricing now shows clear no-request, pending, approved, activated, and rejected states; duplicate pending requests stay disabled, rejected admin notes are shown only as short plain text, and admin activation remains unchanged.
+- Dashboard now shows the latest plan request status card with a link back to pricing.
+- Verification: `npm run typecheck` passes; `npm run lint` passes with the existing 12 warnings; `npm run build` passes with the existing Node `module.register()` deprecation warning; `git diff --check` passes.
+- Remaining risks: near-limit nudges are session-dismissed only in v1; persistent dismissal or finer per-limit thresholds can be added later if the prompts feel too frequent.
+
+### 2026-05-28 - Admin Product Analytics V1
+
+- Extended the admin overview data with Product Analytics for activation funnel, feature adoption, file indexing outcomes, and operational signals using existing Neon tables.
+- Added activation counts for signed-up users, first text message, first non-default project, first file upload, first playbook run, first Prism image, and first Model Duel, with existing admin date/plan/assistant/user filters applied where relevant.
+- Added feature adoption counts for projects, prompt saves, playbook runs, Model Duel runs, Prism generations, Pulse source-backed chats, file uploads/indexing status, and custom assistants.
+- Added operational signals for failed Prism metadata rows, file indexing skipped/unsupported/failed, failed playbook runs, failed Model Duel candidates, users near limits, top raw-cost model, and an honest “Tavily unavailable not logged in v1” signal.
+- Added safe failed Prism metadata logging after image request preparation so admin analytics can count generation failures without exposing private object URLs or changing image-credit enforcement.
+- Updated the admin dashboard UI with Activation funnel, Feature adoption, File indexing outcomes, and Operational signals cards while preserving existing admin-only cost/margin sections.
+- Preserved constraints: no third-party analytics, no Stripe, no Supabase, no payment automation, no new public routes, no raw cost exposure to normal-user APIs.
+- Verification: `npm run typecheck` passes; `npm run lint` passes with the existing 12 warnings; `npm run build` passes with the existing Node `module.register()` deprecation warning; `git diff --check` passes.
+- Remaining risks: analytics are computed at request time from current tables; Tavily unavailable cases remain unlogged until a future explicit telemetry slice.
 
 ### 2026-05-26 - AI Playbooks V1 Polish
 

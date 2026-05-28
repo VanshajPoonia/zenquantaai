@@ -341,6 +341,41 @@ class NeonConversationsRepository {
       .delete(zenConversations)
       .where(and(eq(zenConversations.userId, userId), eq(zenConversations.id, id)))
   }
+
+  async removeFileAttachmentAccess(userId: string, fileId: string): Promise<void> {
+    const conversations = await this.list(userId)
+    const affected = conversations.filter((conversation) =>
+      conversation.messages.some((message) =>
+        (message.attachments ?? []).some((attachment) => attachment.fileId === fileId)
+      )
+    )
+
+    await Promise.all(
+      affected.map((conversation) =>
+        this.save(userId, {
+          ...conversation,
+          messages: conversation.messages.map((message) => ({
+            ...message,
+            attachments: (message.attachments ?? []).map((attachment) => {
+              if (attachment.fileId !== fileId) return attachment
+
+              return {
+                id: attachment.id,
+                kind: attachment.kind,
+                name: attachment.name,
+                mimeType: attachment.mimeType,
+                size: attachment.size,
+                createdAt: attachment.createdAt,
+                textContent: attachment.textContent,
+                textExcerpt: attachment.textExcerpt,
+                isExtracted: attachment.isExtracted,
+              }
+            }),
+          })),
+        })
+      )
+    )
+  }
 }
 
 export const neonConversationRepository = new NeonConversationsRepository()
