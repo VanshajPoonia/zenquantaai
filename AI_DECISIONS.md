@@ -37,6 +37,79 @@ Evidence:
 
 Note: Raw files remain private in object storage. Advanced PDF/OCR handling is out of scope for this first version.
 
+## Read-Only Integrations Architecture Plan
+
+Decision: Future Google Drive, Notion, GitHub, and later Slack/Discord integrations should start as read-only, user-selected sources that import selected content into Zenquanta's existing private file and RAG knowledge model.
+
+Core approach:
+
+- Integrations may list and select external files, pages, repositories, or message/thread snapshots, but the first version must not write back to external services.
+- Imported content becomes Zenquanta-owned metadata and chunks only after explicit user action.
+- V1 should avoid automatic background crawling, scheduled sync, webhooks, delta cursors, durable retry queues, and broad workspace scanning.
+- Foreground authenticated actions should handle connect, browse, import selected, refresh selected, revoke, and remove imported content.
+
+Future Neon tables:
+
+- `zen_integration_accounts`: user-owned provider account records with `user_id`, provider, external account id/email/name, granted scopes, status, connected/revoked timestamps, encrypted token payload metadata, and safe sync state.
+- `zen_integration_items`: selected external file/page/repo/message metadata with `user_id`, provider, external id, title, mime/content type, source URL, optional `project_id`, sync status, content hash, last seen/imported timestamps, and linked `zen_files.id` when imported.
+- Project links are optional and must be validated through existing project ownership.
+
+Token storage:
+
+- OAuth access and refresh tokens must be stored only in encrypted server-side fields, never in client-visible settings, route responses, file metadata, or logs.
+- Use envelope encryption with a server-only key such as `INTEGRATION_TOKEN_ENCRYPTION_KEY`; key rotation and revocation behavior must be designed before implementation.
+- Provider credentials, OAuth secrets, refresh tokens, raw provider API responses, and private source URLs must not be exposed to the browser.
+
+Import and knowledge flow:
+
+- Imported documents/files should create or link a `zen_files` row with `provider: 'external'`, `visibility: 'private'`, external source metadata, and no direct bucket URL unless Zenquanta stores a private imported snapshot in the neutral object store.
+- Text extraction should run server-side, then chunk/embed through `lib/rag/*` and write scoped rows to `zen_file_chunks`.
+- Retrieval should continue through the existing `/api/chat` file-context path and remain scoped by user/project/file ids.
+- If external content cannot be extracted, is unsupported, or embeddings are unavailable, store safe skipped/failed knowledge status like File Intelligence Cards do today.
+
+Revocation and removal:
+
+- Revoking an integration disables the account, deletes encrypted tokens, and prevents future refresh/import calls.
+- Already imported Zenquanta knowledge remains private user-owned data unless the user also chooses to remove imported content.
+- Removing imported content should delete linked `zen_files` and `zen_file_chunks` rows plus connector item links, following current file privacy rules.
+
+Product surfaces:
+
+- Project Home should show connected source counts, recently imported items, failed/skipped sync states, and quick actions to import or refresh selected sources.
+- Ask Files should treat imported indexed items like other private project files, with honest states for not indexed, embeddings unavailable, and unsupported content.
+- File Intelligence Cards should display provider/source badges without exposing tokens, raw provider responses, or private external URLs.
+
+Provider order:
+
+1. Google Drive first, because Drive files, Docs, PDFs, and text-like assets map directly to the existing private file metadata, PDF/text extraction, File Intelligence, Project Home, and Ask Files flow.
+2. Notion second, because pages and databases are valuable project knowledge but need careful page/block export normalization.
+3. GitHub third, because repo and code imports are valuable for Forge/code projects, but repository size, file selection, and GitHub App versus OAuth choices should follow a proven import pipeline.
+4. Slack/Discord later, treated as explicit message/thread snapshot imports, not live bot participation or background workspace indexing.
+
+## GitHub Read-Only Integration Uses GitHub Apps
+
+Decision: GitHub is implemented as a read-only GitHub App installation for Forge/project context, not as a broad OAuth repo-token connector.
+
+Evidence:
+
+- The integration routes live under `/api/integrations/github/*` and require the existing Neon-backed authenticated session.
+- Server-side helpers in `lib/integrations/github.ts` create GitHub App JWTs and short-lived installation tokens using Node crypto/fetch only.
+- Connection metadata is stored in `zen_integration_accounts`; selected repo/file imports are stored in `zen_integration_items`.
+- Imported repository files become private `zen_files` records and are indexed through `lib/rag/*` into `zen_file_chunks`, so Forge and Ask Files reuse the existing file-context retrieval path.
+
+Constraints:
+
+- GitHub App permissions must remain read-only: Metadata and Contents. Do not add issue, pull request, commit, branch, status, webhook-processing, or repository write behavior in this integration.
+- No GitHub tokens, installation tokens, private keys, raw provider payloads, or private source URLs may be returned to the browser.
+- V1 is foreground-only: connect, list repositories, list safe files, import selected, re-import selected/project files, and disconnect local access. Scheduled sync and webhooks remain out of scope.
+- Imported GitHub content remains private, user-owned, and project-scoped in Neon. Disconnecting GitHub disables future provider calls but does not delete already imported private project knowledge unless a future explicit removal flow is added.
+
+Still out of scope after GitHub v1:
+
+- OAuth package installation for GitHub, OAuth-style broad repo tokens, and connector routes for Google Drive/Notion/Slack/Discord.
+- Supabase, Stripe, payment automation, MCP connector runtime, external vector databases, third-party analytics, or new AI gateways.
+- Provider writeback, live sync claims, background jobs, crawlers, or automatic workspace indexing.
+
 ## Prompt Workflows Use The Existing Chat Queue
 
 Decision: Reusable prompt workflows are persisted in Neon, but v1 execution uses the existing queued chat/image send path instead of a new automation engine.
@@ -52,12 +125,14 @@ Note: Workflow run and step-run rows are lightweight usage metadata. Billing and
 
 ## Custom Assistants Layer Over Built-In Text Modes
 
-Decision: Custom assistant builder v1 creates private user-owned text assistants in Neon, layered over existing built-in text modes.
+Decision: Custom assistant builder v2 creates private user-owned text assistants in Neon, layered over existing built-in text modes, with structured metadata and billed draft testing.
 
 Evidence:
 
 - Custom assistants store bounded user instructions/default settings and a `baseMode` limited to `general`, `creative`, `logic`, `code`, or `live`.
+- Custom assistant builder metadata lives in `zen_custom_assistants.metadata` for tone, response style, suggested use cases, pin state, and attached prompt-library shortcuts.
 - `/api/chat` loads the custom assistant by authenticated user, uses its base mode for model routing/usage enforcement, and injects its instructions as an additional system context block.
+- `/api/custom-assistants/test` validates an unsaved assistant draft and runs a test prompt through the existing OpenRouter text helpers, plan/model checks, and text usage logging.
 - Default model selection uses existing response-profile/model-override values, not arbitrary raw provider model IDs.
 
 Out of scope:

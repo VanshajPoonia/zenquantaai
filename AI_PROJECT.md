@@ -50,10 +50,11 @@ This is the current six-assistant platform, not the old four-mode version.
 - Prompt library.
 - AI Playbooks backed by reusable prompt workflows, with ordered assistant-family steps, structured builder metadata, variable inputs, prompt preview, foreground run history, and final output review.
 - Model Duel text assistant comparison mode with selectable winner save-in.
-- Private custom text assistants built on top of the built-in text assistant modes.
+- Private custom text assistants built on top of the built-in text assistant modes, with structured builder metadata, pinned cards, duplication, prompt attachments, and a billed draft test panel.
 - User dashboard.
 - Admin dashboard.
 - Admin cost and margin analytics with period, plan, assistant, and user filters.
+- Admin Product Analytics for activation funnel, feature adoption, file indexing outcomes, and operational signals.
 - Per-user admin controls.
 - Manual plan request flow.
 - Usage tracking for text and image requests.
@@ -109,8 +110,13 @@ Mode mapping:
 - `/api/prompts` and `/api/prompts/[id]`: prompt library.
 - `/api/prompt-workflows`, `/api/prompt-workflows/[id]`, and `/api/prompt-workflows/[id]/runs`: reusable AI Playbook CRUD, structured builder metadata, and lightweight run tracking.
 - `/api/model-comparisons` and `/api/model-comparisons/[id]/choose`: Model Duel text assistant comparison and chosen response save-in.
+- `/api/custom-assistants`, `/api/custom-assistants/[id]`, and `/api/custom-assistants/test`: private custom text assistant CRUD plus billed unsaved-draft testing through the text generation path.
 - `/api/settings`: user settings.
 - `/api/attachments`: attachment upload.
+- `/api/files`: user-scoped file intelligence cards and metadata.
+- `/api/files/[id]/reindex`: re-index an owned private file through the existing uploaded-file knowledge path.
+- `/api/files/[id]`: remove owned file metadata, chunks, private object access, and attachment access refs.
+- `/api/files/object`: protected private file object reads.
 - `/api/dashboard`: user dashboard data.
 - `/api/assistant-recommendations`: recommendation telemetry.
 - `/api/plan-requests`: user plan requests.
@@ -142,6 +148,9 @@ Active Neon runtime data paths are:
 - `/api/prompt-workflows/[id]/runs`
 - `/api/model-comparisons`
 - `/api/model-comparisons/[id]/choose`
+- `/api/custom-assistants`
+- `/api/custom-assistants/[id]`
+- `/api/custom-assistants/test`
 - `/api/assistant-recommendations`
 - `/api/projects`
 - `/api/projects/[id]`
@@ -161,6 +170,7 @@ Active Neon runtime data paths are:
 - billing enforcement and image usage logging inside `/api/images/generate`
 - `/api/images/history`
 - `/api/images/history/[id]`
+- `/api/pulse/research-room`
 - `/api/dashboard` and `/dashboard`
 - `/pricing` and `/api/plan-requests`
 - `/api/admin/*`, `/admin`, and `/admin/users/[id]`
@@ -193,6 +203,7 @@ Neon migration order:
 9. `20260526_zenquanta_artifacts.sql`
 10. `20260528_zenquanta_playbook_builder_metadata.sql`
 11. `20260528_zenquanta_prism_studio_metadata.sql`
+12. `20260528_zenquanta_custom_assistant_builder_v2.sql`
 
 Historical Supabase migration order documented in `README.md`:
 
@@ -218,6 +229,7 @@ Implemented:
 - text usage events
 - image generation events
 - admin-only raw/displayed cost and margin analytics
+- admin-only product activation and feature adoption analytics
 - manual admin activation
 - usage limit overrides
 
@@ -238,12 +250,13 @@ Current behavior:
 - authenticated file reads go through `/api/files/object`
 - upload metadata is stored in `zen_files`
 - generated image metadata is stored in `zen_generated_images`
+- failed Prism generations after request preparation are recorded as safe `zen_generated_images` metadata rows with `status = failed`
 - local development storage writes under `.storage/zenquanta`
 - production storage should use `FILE_STORAGE_PROVIDER=s3` or `FILE_STORAGE_PROVIDER=r2` with an S3-compatible endpoint such as Cloudflare R2
 
 Old Supabase-hosted files are not imported, copied, or preserved.
 
-Uploaded text/code files can be indexed for project knowledge. The first version extracts safe text-like files only, chunks text server-side, stores embeddings in Neon `zen_file_chunks` with pgvector, and retrieves scoped chunks for chat when `fileContext` is enabled. Raw files remain private in object storage. Advanced PDF/OCR handling is not part of this first version.
+Uploaded text/code files and text-based PDFs can be indexed for project knowledge. The extraction path chunks text server-side, stores embeddings in Neon `zen_file_chunks` with pgvector, and retrieves scoped chunks for chat when `fileContext` is enabled. Raw files remain private in object storage. OCR, scanned/image-only PDFs, and PDF layout reconstruction are not implemented.
 
 ## Model Routing Status
 
@@ -278,6 +291,7 @@ Implemented foundation and migration slices:
 9. Replace Supabase Storage with neutral private file storage.
 10. Add Neon-backed prompt workflows and lightweight workflow run tracking.
 11. Add text model comparison records and candidate persistence.
+12. Add read-only integration account/item metadata for GitHub repo context imports.
 
 Planned migration direction:
 
@@ -319,6 +333,9 @@ Backend logic is implemented with Next route handlers and server actions:
 - auth helpers in `lib/auth/session.ts`
 - billing helpers in `lib/billing/*`
 - AI Playbooks are the user-facing workspace layer over existing prompt workflow routes/tables; run history is available through `GET /api/prompt-workflows/[id]/runs`.
+- Pulse Research Room is the workspace layer over persisted message `sources`, owned Pulse conversations, and Pulse research artifacts; it does not add a crawler, source database, or new search provider.
+- Ask Files is the workspace layer over existing uploaded-file RAG. It uses protected file intelligence from `/api/files`, selected file attachments/project scope, and the normal `/api/chat` path with `fileContext` enabled; it does not add another retrieval backend.
+- GitHub repo context is the first read-only integration. It uses GitHub App installation routes under `/api/integrations/github/*`, stores connection/item metadata in Neon, imports selected repository files into private `zen_files` records, and indexes them through the existing `zen_file_chunks` knowledge path for Forge/Ask Files.
 
 ## Environment Variables
 
@@ -339,6 +356,10 @@ Required or expected variables:
 - `FILE_STORAGE_REGION`
 - `FILE_STORAGE_ACCESS_KEY_ID`
 - `FILE_STORAGE_SECRET_ACCESS_KEY`
+- `GITHUB_APP_ID`
+- `GITHUB_APP_CLIENT_ID`
+- `GITHUB_APP_PRIVATE_KEY`
+- `GITHUB_APP_CALLBACK_URL`
 
 Accepted aliases in code include:
 
@@ -349,7 +370,11 @@ Accepted aliases in code include:
 
 - No payment automation or automated subscription billing; manual plan requests and admin activation remain the intended flow.
 - Pulse web search depends on `TAVILY_API_KEY`; without it, Pulse/webSearch degrades without claiming live verification.
-- Uploaded-file knowledge depends on an embeddings key and the pgvector migration; unsupported/binary/PDF/OCR-heavy files are not indexed in v1.
+- Pulse Research Room depends on sources already persisted on assistant messages; old chats without `sources` show empty research history rather than invented source data.
+- Uploaded-file knowledge depends on an embeddings key and the pgvector migration; unsupported/binary files and image-only/OCR-heavy PDFs are not indexed in v1.
+- File Intelligence Cards read existing `zen_files.metadata.knowledgeBase`; they should show pending/skipped/unsupported/failed honestly and must keep file reads behind `/api/files/object`.
+- Ask Files depends on indexed text/code-like uploads or text-based PDFs, embeddings configuration, and pgvector availability. It should show missing-config/no-indexed-file states honestly and should not claim chunk-level citations unless `/api/chat` returns file source snippets.
+- GitHub repo context depends on a read-only GitHub App configured with Metadata and Contents permissions. V1 is explicit foreground import/re-import only; it does not store provider write tokens, process webhooks, schedule sync, or expose protected provider URLs.
 - No automated test script is defined.
 - Old Supabase-hosted files are intentionally not migrated into the new storage layer.
 

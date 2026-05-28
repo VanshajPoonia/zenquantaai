@@ -91,7 +91,7 @@ Neon currently provides a server-only client, Drizzle schema definitions, a serv
 - prompt library
 - prompt workflows, ordered steps, and run/step-run metadata
 - text model comparisons and generated candidates
-- private custom text assistants
+- private custom text assistants and their builder metadata
 - editable artifacts saved from workspace outputs
 - user settings
 - profiles and admin roles
@@ -118,6 +118,9 @@ Current Neon-backed runtime routes:
 - `/api/prompt-workflows/[id]/runs`
 - `/api/model-comparisons`
 - `/api/model-comparisons/[id]/choose`
+- `/api/custom-assistants`
+- `/api/custom-assistants/[id]`
+- `/api/custom-assistants/test`
 - `/api/assistant-recommendations`
 - `/api/projects`
 - `/api/projects/[id]`
@@ -173,6 +176,8 @@ Fresh foundation migration available for Neon:
 9. `neon/migrations/20260526_zenquanta_artifacts.sql`
 10. `neon/migrations/20260528_zenquanta_playbook_builder_metadata.sql`
 11. `neon/migrations/20260528_zenquanta_prism_studio_metadata.sql`
+12. `neon/migrations/20260528_zenquanta_custom_assistant_builder_v2.sql`
+13. `neon/migrations/20260528_zenquanta_github_readonly_integrations.sql`
 
 Apply with a Postgres client or Neon SQL editor. CLI example:
 
@@ -205,26 +210,31 @@ Before changing persistence code again:
 1. Install dependencies.
 2. Create `.env.local` from `.env.example`.
 3. Fill OpenRouter, Neon, file storage, Tavily, and embeddings values as needed.
-4. Apply the fresh Neon migrations for database/auth flows.
-5. Start dev server with `npm run dev`.
-6. Sign up or sign in.
-7. Send a text prompt and verify `/api/chat` streaming.
-8. With `TAVILY_API_KEY` configured, send a Pulse or `webSearch` prompt and verify sources appear.
-9. With an embeddings key configured, upload a text/code file, enable `fileContext`, and verify chat cites uploaded-file sources.
-10. Open AI Playbooks, install a starter template only by user action, create/edit a playbook with category/output/suggested assistant fields, edit variable labels/defaults/required flags, preview expanded prompts, run at least two assistant-family steps, and verify run history records completed step outputs when message ids are available.
-11. Open Project Home from the workspace project selector and verify user-scoped conversations, files, generated images, playbooks, memory status, and quick actions.
-12. Use command palette search globally and with a selected Project Home scope, and verify project searches do not show other project data.
-13. Save an assistant message and a model comparison candidate into Artifact Studio, edit it, move it to a project, export it, and verify project search/Project Home can find it.
-14. Open Memory Vault from Settings, Command Palette, and Project Home; verify conversation summaries are user-scoped, copy works, clearing a summary does not delete messages, and per-conversation memory toggles persist.
-15. Run an Artifact Studio AI action, review the preview, apply it to the draft, save explicitly, and confirm usage is logged without raw cost exposure.
-16. Run Model Duel, review candidates with and without Blind Mode, assign scoring labels, save one winner into the conversation, and verify Prism/image is not selectable.
-17. Create/select a private custom text assistant and confirm it sends through normal `/api/chat` with usage limits intact.
-18. Generate an image with Prism and verify `/api/images/generate`.
-19. Open Prism Studio, verify protected gallery previews, project/search/date/favorite filters, favorite persistence, prompt copy/reuse/remix, Save prompt as Artifact, and explicit preview before four-image or Velora campaign actions.
-20. Check `/dashboard` for usage.
-21. If using admin flows, ensure the user has an admin role in `zen_profiles`.
-22. Check `/admin` with current-month defaults and optional date range, plan, assistant, and user filters.
-23. Confirm admin raw-cost views do not change user-facing `/dashboard` displayed-cost responses.
+4. If testing GitHub repo context, configure a GitHub App with read-only Metadata and Contents permissions and set `GITHUB_APP_ID`, `GITHUB_APP_CLIENT_ID`, `GITHUB_APP_PRIVATE_KEY`, and `GITHUB_APP_CALLBACK_URL`.
+5. Apply the fresh Neon migrations for database/auth flows.
+6. Start dev server with `npm run dev`.
+7. Sign up or sign in.
+8. Send a text prompt and verify `/api/chat` streaming.
+9. With `TAVILY_API_KEY` configured, send a Pulse or `webSearch` prompt and verify sources appear.
+10. With an embeddings key configured, upload a text/code file and a text-based PDF, enable `fileContext`, and verify chat cites uploaded-file sources.
+11. Open Ask Files, select one indexed file and then a concrete project scope, ask a question, and verify the request uses normal `/api/chat`, returns file source snippets only when RAG returns them, and does not expose private file URLs.
+12. Open GitHub repo context from Command Palette or Project Home, connect a read-only installation, import selected README/package/source files into a project, then verify Ask Files and Forge fileContext can retrieve imported snippets without exposing GitHub tokens or provider URLs.
+13. Open AI Playbooks, install a starter template only by user action, create/edit a playbook with category/output/suggested assistant fields, edit variable labels/defaults/required flags, preview expanded prompts, run at least two assistant-family steps, and verify run history records completed step outputs when message ids are available.
+14. Open Project Home from the workspace project selector and verify user-scoped conversations, files, generated images, playbooks, memory status, GitHub repo context, and quick actions.
+15. Use command palette search globally and with a selected Project Home scope, and verify project searches do not show other project data.
+16. Save an assistant message and a model comparison candidate into Artifact Studio, edit it, move it to a project, export it, and verify project search/Project Home can find it.
+17. Open Memory Vault from Settings, Command Palette, and Project Home; verify conversation summaries are user-scoped, copy works, clearing a summary does not delete messages, and per-conversation memory toggles persist.
+18. Run an Artifact Studio AI action, review the preview, apply it to the draft, save explicitly, and confirm usage is logged without raw cost exposure.
+19. Open Private Assistants, create/edit/duplicate/pin a text-only assistant, attach prompt-library shortcuts, run a test prompt, and verify the test consumes normal text usage without saving the draft assistant.
+20. Run Model Duel, review candidates with and without Blind Mode, assign scoring labels, save one winner into the conversation, and verify Prism/image is not selectable.
+21. Create/select a private custom text assistant and confirm it sends through normal `/api/chat` with usage limits intact.
+22. Generate an image with Prism and verify `/api/images/generate`.
+23. Open Prism Studio, verify protected gallery previews, project/search/date/favorite filters, favorite persistence, prompt copy/reuse/remix, Save prompt as Artifact, and explicit preview before four-image or Velora campaign actions.
+24. Check `/dashboard` for usage.
+25. If using admin flows, ensure the user has an admin role in `zen_profiles`.
+26. Check `/admin` with current-month defaults and optional date range, plan, assistant, and user filters.
+27. Confirm Admin Product Analytics shows activation funnel, feature adoption, file indexing outcomes, and operational signals without exposing raw cost outside admin pages/APIs.
+28. Confirm admin raw-cost views do not change user-facing `/dashboard` displayed-cost responses.
 
 ## Production Safety Checks
 
@@ -238,7 +248,14 @@ Before changing persistence code again:
 - Confirm generated images are stored durably if required.
 - Confirm Neon auth-attempt limiting is applied before relying on production ID/password sign-in.
 - Confirm pgvector is available in Neon before enabling uploaded-file knowledge.
+- Confirm File Intelligence Cards expose only protected file URLs, show `knowledgeBase` status honestly, and do not claim retrieval for skipped/unsupported/pending files.
+- Confirm text-based PDFs index through server-side extraction and image-only/scanned PDFs show a skipped/no-OCR status.
+- Confirm Ask Files opens only in the authenticated workspace, uses `/api/chat` with `fileContext`, and stays disabled or explicit when embeddings/pgvector/indexed chunks are unavailable.
+- Confirm GitHub App credentials remain server-only, installation tokens are never returned to clients, and the GitHub App permissions are read-only Metadata/Contents.
+- Confirm GitHub imports are explicit foreground actions, skip unsafe/oversized/binary/secrets-like files, and create only user-owned project-scoped `zen_files`/`zen_file_chunks` records.
 - Confirm Pulse/webSearch source display and no-key degradation before presenting live retrieval in production.
+- Confirm failed Prism metadata rows are safe for admin analytics: no raw object URLs, bucket credentials, or provider secrets.
+- Confirm Pulse Research Room shows only owned message sources/artifacts and stays honest when Tavily is unavailable or no source-backed messages exist.
 - Do not claim automated payments, checkout, customer portal, webhooks, or subscription automation. Manual plan requests and admin activation are the intended flow unless explicitly changed later.
 - Confirm raw model cost remains admin-only and user dashboards expose displayed usage only.
 
@@ -246,12 +263,18 @@ Before changing persistence code again:
 
 - Missing OpenRouter key causes fallback/mock text and image behavior.
 - Missing Tavily key causes Pulse/webSearch to answer without live source context and without source claims.
+- Pulse Research Room uses persisted message `sources` and Pulse artifacts; if no source-backed messages exist, it should show empty states rather than live/source claims.
 - Missing embeddings key skips uploaded-file indexing/retrieval without blocking uploads.
+- File Intelligence re-index requires embeddings config and the stored private object; without either, it should fail clearly without exposing storage internals.
+- Ask Files depends on already indexed files and the existing file RAG path; missing embeddings, missing pgvector, unsupported files, or project scopes with no indexed files should produce honest empty states rather than retrieval claims.
 - Missing pgvector extension or file knowledge migration breaks chunk storage and retrieval.
+- Text-based PDF extraction depends on embedded selectable text; scanned/image-only PDFs require future OCR and should not be represented as indexed.
 - Missing prompt workflow or playbook builder metadata migrations break AI Playbook CRUD, structured builder fields, and run tracking, while one-off prompts still use `zen_prompt_library`.
 - Missing model comparison migration breaks Model Duel, while normal chat remains separate.
 - Missing artifacts migration breaks Artifact Studio, artifact search results, and Project Home artifact summaries.
 - Missing Prism Studio metadata migration breaks generated-image project/favorite filters, while normal Prism generation can still run.
+- Missing GitHub integration migration breaks `/api/integrations/github/*`, Project Home GitHub summaries, and repo-context imports, while ordinary uploads/Ask Files remain separate.
+- Missing GitHub App env vars disables the GitHub repo context connection flow; the UI should show configuration-required state instead of claiming integration availability.
 - Memory Vault uses existing conversation memory fields; if conversations are absent or summaries have not been generated, the vault should show empty states rather than inventing memory.
 - Missing Neon `DATABASE_URL` breaks auth, settings, prompt library, assistant recommendation, project, conversation, chat persistence, image persistence, billing/admin, usage, dashboard, plan request, image history, profile/role hydration, and local import app-data paths.
 - Missing S3-compatible/R2 env vars breaks attachment and generated-image storage when `FILE_STORAGE_PROVIDER` is `s3` or `r2`.
@@ -259,7 +282,7 @@ Before changing persistence code again:
 - TypeScript errors should fail both `npm run typecheck` and `npm run build`.
 - Package manager mismatch can cause lockfile churn.
 - Tavily request failures should degrade without claiming live verification.
-- Advanced PDF/OCR extraction is not implemented in uploaded-file knowledge v1.
+- OCR, scanned/image-only PDF extraction, and PDF layout reconstruction are not implemented in uploaded-file knowledge v1.
 - Manual plan requests are not payment automation.
 - Admin margin analytics are operational estimates from stored usage and active plan prices, not payment-provider revenue.
 - Partial Neon route migration can create mixed Supabase/Neon data sources if the data boundary is not planned first.
