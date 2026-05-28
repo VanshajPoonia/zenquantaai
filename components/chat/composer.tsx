@@ -22,6 +22,7 @@ import { CustomAssistantButton } from './custom-assistant-button'
 import { ModelComparisonButton } from './model-comparison-button'
 import { ModeSwitcherCompact } from './mode-switcher'
 import { PromptLibraryButton } from './prompt-library-button'
+import { UsageTransparencyHint } from './usage-transparency-hint'
 interface ComposerProps {
   onSend: (input: {
     content: string
@@ -41,12 +42,15 @@ export function Composer({ onSend, disabled, initialValue = '' }: ComposerProps)
     queuedPromptCount,
     stopStreaming,
     openWorkspaceTool,
+    sessionSettings,
     composerDraftRequest,
     clearComposerDraftRequest,
   } = useChatContext()
   const [value, setValue] = useState(initialValue)
   const [composerKind, setComposerKind] = useState<'chat' | 'image'>('chat')
-  const [pendingAttachments, setPendingAttachments] = useState<PendingAttachment[]>([])
+  const [pendingAttachments, setPendingAttachments] = useState<
+    Array<Attachment | PendingAttachment>
+  >([])
   const [pendingDraftClear, setPendingDraftClear] = useState<{
     value: string
     normalizedContent: string
@@ -112,6 +116,7 @@ export function Composer({ onSend, disabled, initialValue = '' }: ComposerProps)
 
     setValue(composerDraftRequest.content)
     setComposerKind(composerDraftRequest.kind)
+    setPendingAttachments(composerDraftRequest.attachments ?? [])
     setPendingDraftClear(null)
     clearComposerDraftRequest(composerDraftRequest.requestId)
     requestAnimationFrame(() => textareaRef.current?.focus())
@@ -232,6 +237,14 @@ export function Composer({ onSend, disabled, initialValue = '' }: ComposerProps)
             onIgnore={() => void handleIgnoreDraftRecommendation()}
           />
         ) : null}
+        <UsageTransparencyHint
+          mode={currentMode}
+          kind={composerKind}
+          content={value}
+          attachments={pendingAttachments}
+          settings={sessionSettings}
+          disabled={disabled}
+        />
         <div
           className={cn(
             'relative rounded-2xl border bg-card/80 backdrop-blur-sm transition-all duration-300',
