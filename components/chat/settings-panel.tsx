@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Info } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useChatContext } from '@/lib/chat-context'
@@ -11,6 +11,7 @@ import {
   RESPONSE_PROFILE_DESCRIPTIONS,
   RESPONSE_PROFILE_LABELS,
   SYSTEM_PRESET_CONFIGS,
+  FileIntelligence,
   createSessionSettings,
 } from '@/lib/types'
 import {
@@ -41,6 +42,7 @@ import {
   getTemperatureQuantity,
   getTopPQuantity,
 } from '@/lib/utils/session-display'
+import { FileIntelligenceCard } from './file-intelligence-card'
 
 function getSliderClass(mode: AIMode) {
   const colorClass = getModeAccentClass(mode, 'bg')
@@ -59,14 +61,91 @@ export function SettingsPanel() {
     moveCurrentChatToProject,
     isSettingsPanelOpen,
     toggleSettingsPanel,
+    listFileIntelligence,
+    openWorkspaceTool,
+    reindexFile,
+    deleteFile,
   } = useChatContext()
   const [showAdvanced, setShowAdvanced] = useState(false)
+  const [filesById, setFilesById] = useState<Record<string, FileIntelligence>>({})
+  const [workingFileId, setWorkingFileId] = useState<string | null>(null)
+  const attachmentFileIds = useMemo(
+    () => [
+      ...new Set(
+        (currentChat?.attachments ?? [])
+          .map((attachment) => attachment.fileId)
+          .filter(Boolean) as string[]
+      ),
+    ],
+    [currentChat?.attachments]
+  )
 
   useEffect(() => {
     if (sessionSettings.modelOverride !== 'auto') {
       setShowAdvanced(true)
     }
   }, [sessionSettings.modelOverride])
+
+  useEffect(() => {
+    if (attachmentFileIds.length === 0) {
+      setFilesById({})
+      return
+    }
+
+    let cancelled = false
+    void listFileIntelligence({ ids: attachmentFileIds })
+      .then((response) => {
+        if (cancelled) return
+        setFilesById(
+          Object.fromEntries(response.files.map((file) => [file.id, file]))
+        )
+      })
+      .catch((error) => {
+        console.error('Failed to load recent attachment intelligence.', error)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [attachmentFileIds, listFileIntelligence])
+
+  const handleAskFile = (file: FileIntelligence) => {
+    openWorkspaceTool({
+      tool: 'ask-files',
+      projectId: file.projectId,
+      fileId: file.id,
+    })
+  }
+
+  const handleReindexFile = async (file: FileIntelligence) => {
+    setWorkingFileId(file.id)
+    try {
+      const updated = await reindexFile(file.id)
+      if (updated) {
+        setFilesById((previous) => ({ ...previous, [updated.id]: updated }))
+      }
+    } catch (error) {
+      console.error('Failed to re-index file.', error)
+    } finally {
+      setWorkingFileId(null)
+    }
+  }
+
+  const handleDeleteFile = async (file: FileIntelligence) => {
+    setWorkingFileId(file.id)
+    try {
+      await deleteFile(file.id)
+      setFilesById((previous) => {
+        const next = { ...previous }
+        delete next[file.id]
+        return next
+      })
+    } catch (error) {
+      console.error('Failed to remove file.', error)
+    } finally {
+      setWorkingFileId(null)
+    }
+  }
 
   if (!isSettingsPanelOpen) return null
 
@@ -413,18 +492,38 @@ export function SettingsPanel() {
           <h3 className="text-sm font-medium text-foreground">Recent attachments</h3>
           {currentChat?.attachments && currentChat.attachments.length > 0 ? (
             <div className="space-y-2">
-              {currentChat.attachments.slice(-4).map((attachment) => (
-                <div
-                  key={attachment.id}
-                  className="rounded-xl border border-border bg-background/50 px-3 py-3"
-                >
-                  <p className="text-sm font-medium text-foreground">{attachment.name}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {attachment.kind}
-                    {attachment.isExtracted ? ' • extracted text ready' : ''}
-                  </p>
-                </div>
-              ))}
+              {currentChat.attachments.slice(-4).map((attachment) => {
+                const file = attachment.fileId ? filesById[attachment.fileId] : null
+
+                if (!file) {
+                  return (
+                    <div
+                      key={attachment.id}
+                      className="rounded-xl border border-border bg-background/50 px-3 py-3"
+                    >
+                      <p className="text-sm font-medium text-foreground">
+                        {attachment.name}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {attachment.kind}
+                        {attachment.isExtracted ? ' / extracted text ready' : ''}
+                      </p>
+                    </div>
+                  )
+                }
+
+                return (
+                  <FileIntelligenceCard
+                    key={attachment.id}
+                    file={file}
+                    compact
+                    isWorking={workingFileId === file.id}
+                    onAsk={handleAskFile}
+                    onReindex={handleReindexFile}
+                    onDelete={handleDeleteFile}
+                  />
+                )
+              })}
             </div>
           ) : (
             <div className="rounded-xl border border-dashed border-border bg-background/50 px-3 py-4 text-sm text-muted-foreground">

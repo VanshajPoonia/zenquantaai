@@ -1,7 +1,9 @@
 'use client'
 
+import Link from 'next/link'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useChatContext } from '@/lib/chat-context'
+import { getUpgradeNudgeForError } from '@/lib/billing/upgrade-nudges'
 import { AssistantHandoffTarget } from '@/lib/config/assistant-handoffs'
 import {
   AssistantQualityAction,
@@ -190,6 +192,7 @@ export function ChatArea() {
 
   const showProjectHome = !currentChat && Boolean(activeProjectHomeId)
   const showEmptyState = !currentChat || currentChat.messages.length === 0
+  const upgradeErrorNudge = getUpgradeNudgeForError(streamingState.error)
 
   return (
     <div className="flex flex-col flex-1 h-full min-h-0 overflow-hidden">
@@ -210,9 +213,23 @@ export function ChatArea() {
 
             {streamingState.status === 'error' && (
               <Alert className="mb-6 border-destructive/40 bg-destructive/10 text-destructive">
-                <AlertTitle>Last response needs attention</AlertTitle>
+                <AlertTitle>
+                  {upgradeErrorNudge?.title ?? 'Last response needs attention'}
+                </AlertTitle>
                 <AlertDescription>
-                  {streamingState.error ?? 'The last generation did not finish cleanly.'}
+                  <span>
+                    {upgradeErrorNudge?.description ??
+                      streamingState.error ??
+                      'The last generation did not finish cleanly.'}
+                  </span>
+                  {upgradeErrorNudge ? (
+                    <Link
+                      href="/pricing"
+                      className="ml-2 inline-flex rounded-full border border-destructive/40 px-2 py-0.5 text-xs font-medium text-destructive transition-colors hover:bg-destructive/10"
+                    >
+                      View plans
+                    </Link>
+                  ) : null}
                 </AlertDescription>
               </Alert>
             )}

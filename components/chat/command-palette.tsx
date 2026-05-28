@@ -8,10 +8,12 @@ import {
   Brain,
   Command as CommandIcon,
   CreditCard,
+  Database,
   FileText,
   Folder,
   FolderPlus,
   GitCompareArrows,
+  Github,
   ImageIcon,
   LayoutDashboard,
   Loader2,
@@ -19,6 +21,7 @@ import {
   Play,
   Plus,
   Search,
+  Zap,
 } from 'lucide-react'
 import { ASSISTANT_FAMILY_COPY, MODE_CONFIGS } from '@/lib/config'
 import { useChatContext } from '@/lib/chat-context'
@@ -639,6 +642,36 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
           >
             <Brain className="size-4" />
             <span>Open Memory Vault</span>
+          </CommandItem>
+          <CommandItem
+            value="open pulse research room sources web search citations"
+            onSelect={() =>
+              void runAction(() => openWorkspaceTool('pulse-research-room'))
+            }
+          >
+            <Zap className="size-4" />
+            <span>Open Pulse Research Room</span>
+          </CommandItem>
+          <CommandItem
+            value="open ask files uploaded file rag knowledge retrieval"
+            onSelect={() => void runAction(() => openWorkspaceTool('ask-files'))}
+          >
+            <Database className="size-4" />
+            <span>Open Ask Files</span>
+          </CommandItem>
+          <CommandItem
+            value="open github repo context forge code integration"
+            onSelect={() =>
+              void runAction(() =>
+                openWorkspaceTool({
+                  tool: 'github-integration',
+                  projectId: activeConcreteProjectId,
+                })
+              )
+            }
+          >
+            <Github className="size-4" />
+            <span>Open GitHub repo context</span>
           </CommandItem>
           <CommandItem
             value="open model duel compare assistants models"

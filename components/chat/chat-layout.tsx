@@ -17,6 +17,9 @@ import { ArtifactStudio } from './artifact-studio'
 import { PlaybookStudio } from './playbook-studio'
 import { MemoryVault } from './memory-vault'
 import { PrismStudio } from './prism-studio'
+import { PulseResearchRoom } from './pulse-research-room'
+import { AskFilesPanel } from './ask-files-panel'
+import { GitHubIntegrationPanel } from './github-integration-panel'
 
 function LoadingScreen() {
   return (
@@ -98,6 +101,9 @@ function ChatShell({
       <PlaybookStudio />
       <MemoryVault />
       <PrismStudio />
+      <PulseResearchRoom />
+      <AskFilesPanel />
+      <GitHubIntegrationPanel />
 
       <SettingsModal
         open={isSettingsModalOpen}
