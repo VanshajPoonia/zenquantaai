@@ -1,7 +1,9 @@
 import {
   CustomAssistantDefaults,
   CustomAssistantInput,
+  CustomAssistantMetadata,
   ModelOverrideOption,
+  ResponseStyle,
   TextAIMode,
 } from '@/types'
 import { PROJECT_COLOR_OPTIONS } from '@/lib/config'
@@ -24,6 +26,7 @@ export const CUSTOM_ASSISTANT_MODEL_OVERRIDES: ModelOverrideOption[] = [
 ]
 
 export const CUSTOM_ASSISTANT_COLORS = PROJECT_COLOR_OPTIONS
+const RESPONSE_STYLES: ResponseStyle[] = ['balanced', 'concise', 'detailed']
 
 type ValidationResult =
   | { ok: true; input: CustomAssistantInput }
@@ -43,6 +46,10 @@ function isColor(value: unknown): value is (typeof PROJECT_COLOR_OPTIONS)[number
   )
 }
 
+function isResponseStyle(value: unknown): value is ResponseStyle {
+  return RESPONSE_STYLES.includes(value as ResponseStyle)
+}
+
 function stringValue(value: unknown): string | undefined {
   return typeof value === 'string' ? value.trim() : undefined
 }
@@ -58,6 +65,22 @@ function boundedNumber(
 ): number | undefined {
   if (typeof value !== 'number' || !Number.isFinite(value)) return undefined
   return Math.max(min, Math.min(max, value))
+}
+
+function normalizeStringArray(
+  value: unknown,
+  maxItems: number,
+  maxLength: number
+): string[] | undefined {
+  if (!Array.isArray(value)) return undefined
+
+  const items = value
+    .map((item) => (typeof item === 'string' ? item.trim() : ''))
+    .filter(Boolean)
+    .slice(0, maxItems)
+    .map((item) => item.slice(0, maxLength))
+
+  return items.length ? Array.from(new Set(items)) : []
 }
 
 function normalizeDefaults(value: unknown): CustomAssistantDefaults | undefined {
@@ -87,6 +110,35 @@ function normalizeDefaults(value: unknown): CustomAssistantDefaults | undefined 
   return Object.fromEntries(
     Object.entries(normalized).filter(([, item]) => typeof item !== 'undefined')
   ) as CustomAssistantDefaults
+}
+
+export function normalizeCustomAssistantMetadata(
+  value: unknown
+): CustomAssistantMetadata {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return { version: 2, isPinned: false, suggestedUseCases: [] }
+  }
+
+  const input = value as Record<string, unknown>
+  const tone = stringValue(input.tone)
+  const starterPromptIds = normalizeStringArray(input.starterPromptIds, 12, 120)
+  const suggestedUseCases = normalizeStringArray(
+    input.suggestedUseCases,
+    8,
+    120
+  )
+  const metadata: CustomAssistantMetadata = {
+    version: 2,
+    isPinned: optionalBoolean(input.isPinned) ?? false,
+    suggestedUseCases: suggestedUseCases ?? [],
+    ...(tone ? { tone: tone.slice(0, 80) } : {}),
+    ...(isResponseStyle(input.responseStyle)
+      ? { responseStyle: input.responseStyle }
+      : {}),
+    ...(starterPromptIds ? { starterPromptIds } : {}),
+  }
+
+  return metadata
 }
 
 export function buildCustomAssistantSnapshot(input: {
@@ -124,6 +176,10 @@ export function normalizeCustomAssistantInput(
   const baseMode = input.baseMode
   const defaultModelOverride = input.defaultModelOverride
   const defaultSettings = normalizeDefaults(input.defaultSettings)
+  const metadata =
+    typeof input.metadata !== 'undefined'
+      ? normalizeCustomAssistantMetadata(input.metadata)
+      : undefined
   const isEnabled = optionalBoolean(input.isEnabled)
 
   if (!options.partial || typeof input.name !== 'undefined') {
@@ -181,6 +237,7 @@ export function normalizeCustomAssistantInput(
       ...(systemInstructions ? { systemInstructions } : {}),
       ...(isModelOverride(defaultModelOverride) ? { defaultModelOverride } : {}),
       ...(defaultSettings ? { defaultSettings } : {}),
+      ...(metadata ? { metadata } : {}),
       ...(typeof isEnabled !== 'undefined' ? { isEnabled } : {}),
     } as CustomAssistantInput,
   }

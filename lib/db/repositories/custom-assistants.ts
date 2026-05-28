@@ -5,9 +5,11 @@ import {
   CustomAssistant,
   CustomAssistantDefaults,
   CustomAssistantInput,
+  CustomAssistantMetadata,
   ModelOverrideOption,
   TextAIMode,
 } from '@/types'
+import { normalizeCustomAssistantMetadata } from '@/lib/custom-assistants/validation'
 import { getDatabaseClient } from '../client'
 import { zenCustomAssistants } from '../schema'
 import { compactObject, toIsoString, toJsonObject } from './helpers'
@@ -32,6 +34,9 @@ function rowToCustomAssistant(row: CustomAssistantRow): CustomAssistant {
       row.defaultSettings,
       {}
     ),
+    metadata: normalizeCustomAssistantMetadata(
+      toJsonObject<CustomAssistantMetadata>(row.metadata, {})
+    ),
     isEnabled: row.isEnabled,
     createdAt: toIsoString(row.createdAt),
     updatedAt: toIsoString(row.updatedAt),
@@ -46,7 +51,14 @@ class NeonCustomAssistantsRepository {
       .where(eq(zenCustomAssistants.userId, userId))
       .orderBy(desc(zenCustomAssistants.updatedAt))
 
-    return rows.map(rowToCustomAssistant)
+    return rows.map(rowToCustomAssistant).sort((a, b) => {
+      if (a.isEnabled !== b.isEnabled) return a.isEnabled ? -1 : 1
+      if (Boolean(a.metadata.isPinned) !== Boolean(b.metadata.isPinned)) {
+        return a.metadata.isPinned ? -1 : 1
+      }
+
+      return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+    })
   }
 
   async get(userId: string, id: string): Promise<CustomAssistant | null> {
@@ -79,6 +91,7 @@ class NeonCustomAssistantsRepository {
         systemInstructions: input.systemInstructions,
         defaultModelOverride: input.defaultModelOverride ?? 'auto',
         defaultSettings: input.defaultSettings ?? {},
+        metadata: normalizeCustomAssistantMetadata(input.metadata),
         isEnabled: input.isEnabled ?? true,
       })
       .returning()
@@ -107,6 +120,9 @@ class NeonCustomAssistantsRepository {
           systemInstructions: patch.systemInstructions,
           defaultModelOverride: patch.defaultModelOverride,
           defaultSettings: patch.defaultSettings,
+          metadata: patch.metadata
+            ? normalizeCustomAssistantMetadata(patch.metadata)
+            : undefined,
           isEnabled: patch.isEnabled,
         }),
         updatedAt: new Date(),
