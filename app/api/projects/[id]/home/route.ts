@@ -6,6 +6,7 @@ import {
   neonProjectsRepository,
   neonSettingsRepository,
 } from '@/lib/db/repositories'
+import { hasEmbeddingConfig } from '@/lib/rag/embeddings'
 
 export const runtime = 'nodejs'
 
@@ -24,6 +25,7 @@ export async function GET(
   const projectHome = await neonProjectHomeRepository.get(auth.user.id, id, {
     webSearchEnabled:
       settings.defaultMode === 'live' || settings.sessionDefaults.webSearch,
+    embeddingsAvailable: hasEmbeddingConfig(),
   })
 
   if (!projectHome) {

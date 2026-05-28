@@ -1,6 +1,7 @@
 import 'server-only'
 
 import { and, desc, eq, inArray, or, sql } from 'drizzle-orm'
+import { normalizeFileKnowledge } from '@/lib/files/intelligence'
 import { createPrivateFileUrl } from '@/lib/storage/object-store'
 import {
   AssistantFamily,
@@ -19,6 +20,8 @@ import {
   zenConversations,
   zenFiles,
   zenGeneratedImages,
+  zenIntegrationAccounts,
+  zenIntegrationItems,
   zenProjects,
   zenPromptWorkflows,
   zenPromptWorkflowSteps,
@@ -52,11 +55,12 @@ function jsonArrayLength(value: unknown): number {
 
 function toPrivateFileUrl(
   bucket: string | null,
-  storagePath: string | null
+  storagePath: string | null,
+  download = false
 ): string | null {
   if (!bucket || !storagePath) return null
 
-  return createPrivateFileUrl({ bucket, storagePath })
+  return createPrivateFileUrl({ bucket, storagePath, download })
 }
 
 function buildSuggestedActions(input: {
@@ -120,7 +124,7 @@ class NeonProjectHomeRepository {
   async get(
     userId: string,
     projectId: string,
-    options: { webSearchEnabled?: boolean } = {}
+    options: { webSearchEnabled?: boolean; embeddingsAvailable?: boolean } = {}
   ): Promise<ProjectHomeResponse | null> {
     const db = getDatabaseClient()
     const projectRows = await db
@@ -157,6 +161,8 @@ class NeonProjectHomeRepository {
       imageRows,
       artifactStatsRows,
       artifactRows,
+      githubAccountRows,
+      githubRepoRows,
     ] = await Promise.all([
       db
         .select({
@@ -258,6 +264,35 @@ class NeonProjectHomeRepository {
         .where(artifactScope)
         .orderBy(desc(zenArtifacts.updatedAt))
         .limit(PROJECT_HOME_ITEM_LIMIT),
+      db
+        .select()
+        .from(zenIntegrationAccounts)
+        .where(
+          and(
+            eq(zenIntegrationAccounts.userId, userId),
+            eq(zenIntegrationAccounts.provider, 'github')
+          )
+        )
+        .limit(1),
+      db
+        .select({
+          fullName: zenIntegrationItems.repoFullName,
+          branch: zenIntegrationItems.branch,
+          importedCount: sql<number>`count(*)::int`,
+          lastImportedAt: sql<Date | null>`max(${zenIntegrationItems.lastImportedAt})`,
+        })
+        .from(zenIntegrationItems)
+        .where(
+          and(
+            eq(zenIntegrationItems.userId, userId),
+            eq(zenIntegrationItems.provider, 'github'),
+            eq(zenIntegrationItems.projectId, projectId),
+            eq(zenIntegrationItems.status, 'imported')
+          )
+        )
+        .groupBy(zenIntegrationItems.repoFullName, zenIntegrationItems.branch)
+        .orderBy(sql`max(${zenIntegrationItems.lastImportedAt}) desc nulls last`)
+        .limit(PROJECT_HOME_ITEM_LIMIT),
     ])
 
     const workflowIds = workflowRows.map((workflow) => workflow.id)
@@ -302,20 +337,34 @@ class NeonProjectHomeRepository {
         updatedAt: toIsoString(row.updatedAt),
       }))
 
-    const uploadedFiles: ProjectHomeFileSummary[] = fileRows.map((row) => ({
-      id: row.id,
-      fileName: row.fileName,
-      mimeType: row.mimeType,
-      byteSize: row.byteSize,
-      conversationId: row.conversationId,
-      messageId: row.messageId,
-      url: toPrivateFileUrl(row.bucket, row.storagePath),
-      createdAt: toIsoString(row.createdAt),
-      updatedAt: toIsoString(row.updatedAt),
-      metadata: {
-        private: row.visibility === 'private',
-      },
-    }))
+    const uploadedFiles: ProjectHomeFileSummary[] = fileRows.map((row) => {
+      const metadata =
+        row.metadata && typeof row.metadata === 'object' && !Array.isArray(row.metadata)
+          ? (row.metadata as Record<string, unknown>)
+          : {}
+      const knowledge = normalizeFileKnowledge(metadata)
+
+      return {
+        id: row.id,
+        fileName: row.fileName,
+        mimeType: row.mimeType,
+        byteSize: row.byteSize,
+        projectId: row.projectId,
+        conversationId: row.conversationId,
+        messageId: row.messageId,
+        visibility: row.visibility as ProjectHomeFileSummary['visibility'],
+        viewUrl: toPrivateFileUrl(row.bucket, row.storagePath),
+        downloadUrl: toPrivateFileUrl(row.bucket, row.storagePath, true),
+        ...knowledge,
+        embeddingsAvailable: Boolean(options.embeddingsAvailable),
+        createdAt: toIsoString(row.createdAt),
+        updatedAt: toIsoString(row.updatedAt),
+        metadata: {
+          private: row.visibility === 'private',
+          provider: row.provider,
+        },
+      }
+    })
 
     const generatedImages: ProjectHomeGeneratedImageSummary[] = imageRows.map(
       (row) => ({
@@ -356,6 +405,30 @@ class NeonProjectHomeRepository {
       updatedAt: toIsoString(row.updatedAt),
     }))
 
+    const githubRepositories = githubRepoRows
+      .filter((row) => row.fullName)
+      .map((row) => ({
+        fullName: row.fullName ?? '',
+        branch: row.branch,
+        importedCount: toNumber(row.importedCount),
+        lastImportedAt: toNullableIsoString(row.lastImportedAt),
+      }))
+    const githubIntegration = {
+      connected: githubAccountRows[0]?.status === 'connected',
+      accountLogin: githubAccountRows[0]?.externalAccountLogin ?? null,
+      importedCount: githubRepositories.reduce(
+        (total, repo) => total + repo.importedCount,
+        0
+      ),
+      lastImportedAt:
+        githubRepositories
+          .map((repo) => repo.lastImportedAt)
+          .filter(Boolean)
+          .sort()
+          .at(-1) ?? null,
+      repositories: githubRepositories,
+    }
+
     return {
       project,
       overview: {
@@ -372,6 +445,7 @@ class NeonProjectHomeRepository {
       generatedImages,
       workflows,
       artifacts,
+      githubIntegration,
       memoryStatus: {
         status: memoryConversationCount > 0 ? 'active' : 'empty',
         conversationCount,

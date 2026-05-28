@@ -14,9 +14,10 @@ import {
   ArrowRight,
   BookOpen,
   Brain,
-  ExternalLink,
+  Database,
   FileText,
   FolderOpen,
+  Github,
   ImageIcon,
   Loader2,
   MessageSquare,
@@ -42,6 +43,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { FileIntelligenceCard } from './file-intelligence-card'
 
 interface ProjectHomeProps {
   projectId: string
@@ -60,22 +62,6 @@ function formatDate(value: string | null | undefined): string {
     day: 'numeric',
     year: 'numeric',
   }).format(date)
-}
-
-function formatBytes(value: number | null): string {
-  if (!value) return 'Size unknown'
-  if (value < 1024) return `${value} B`
-
-  const units = ['KB', 'MB', 'GB']
-  let size = value / 1024
-  let unitIndex = 0
-
-  while (size >= 1024 && unitIndex < units.length - 1) {
-    size /= 1024
-    unitIndex += 1
-  }
-
-  return `${size.toFixed(size >= 10 ? 0 : 1)} ${units[unitIndex]}`
 }
 
 function matchesSearch(query: string, ...values: Array<string | null | undefined>) {
@@ -171,6 +157,8 @@ export function ProjectHome({ projectId }: ProjectHomeProps) {
     setCurrentMode,
     uploadProjectFiles,
     openWorkspaceSearch,
+    reindexFile,
+    deleteFile,
   } = useChatContext()
   const [home, setHome] = useState<ProjectHomeResponse | null>(null)
   const [isLoading, setIsLoading] = useState(true)
@@ -178,7 +166,10 @@ export function ProjectHome({ projectId }: ProjectHomeProps) {
   const [query, setQuery] = useState('')
   const [uploadError, setUploadError] = useState<string | null>(null)
   const [isUploading, setIsUploading] = useState(false)
+  const [workingFileId, setWorkingFileId] = useState<string | null>(null)
   const [runningWorkflowId, setRunningWorkflowId] = useState<string | null>(null)
+  const [isGitHubWorking, setIsGitHubWorking] = useState(false)
+  const [githubError, setGithubError] = useState<string | null>(null)
   const searchInputRef = useRef<HTMLInputElement | null>(null)
   const uploadInputRef = useRef<HTMLInputElement | null>(null)
 
@@ -284,8 +275,103 @@ export function ProjectHome({ projectId }: ProjectHomeProps) {
   }
 
   const handleResearchProject = () => {
-    setSelectedProjectId(projectId)
-    setCurrentMode('live')
+    openWorkspaceTool({ tool: 'pulse-research-room', projectId })
+  }
+
+  const handleReimportGitHub = async () => {
+    setIsGitHubWorking(true)
+    setGithubError(null)
+
+    try {
+      const response = await fetch('/api/integrations/github/reimport', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ projectId }),
+      })
+      if (!response.ok) {
+        const payload = (await response.json().catch(() => null)) as
+          | { error?: string }
+          | null
+        throw new Error(payload?.error ?? 'Unable to re-import GitHub files.')
+      }
+      await loadProjectHome()
+    } catch (reimportError) {
+      setGithubError(
+        reimportError instanceof Error
+          ? reimportError.message
+          : 'Unable to re-import GitHub files.'
+      )
+    } finally {
+      setIsGitHubWorking(false)
+    }
+  }
+
+  const handleDisconnectGitHub = async () => {
+    setIsGitHubWorking(true)
+    setGithubError(null)
+
+    try {
+      const response = await fetch('/api/integrations/github', {
+        method: 'DELETE',
+      })
+      if (!response.ok) {
+        const payload = (await response.json().catch(() => null)) as
+          | { error?: string }
+          | null
+        throw new Error(payload?.error ?? 'Unable to disconnect GitHub.')
+      }
+      await loadProjectHome()
+    } catch (disconnectError) {
+      setGithubError(
+        disconnectError instanceof Error
+          ? disconnectError.message
+          : 'Unable to disconnect GitHub.'
+      )
+    } finally {
+      setIsGitHubWorking(false)
+    }
+  }
+
+  const handleAskFile = (file: ProjectHomeFileSummary) => {
+    openWorkspaceTool({
+      tool: 'ask-files',
+      projectId,
+      fileId: file.id,
+    })
+  }
+
+  const handleReindexFile = async (file: ProjectHomeFileSummary) => {
+    setWorkingFileId(file.id)
+    setUploadError(null)
+
+    try {
+      await reindexFile(file.id)
+      await loadProjectHome()
+    } catch (reindexError) {
+      setUploadError(
+        reindexError instanceof Error
+          ? reindexError.message
+          : 'Unable to re-index file.'
+      )
+    } finally {
+      setWorkingFileId(null)
+    }
+  }
+
+  const handleDeleteFile = async (file: ProjectHomeFileSummary) => {
+    setWorkingFileId(file.id)
+    setUploadError(null)
+
+    try {
+      await deleteFile(file.id)
+      await loadProjectHome()
+    } catch (deleteError) {
+      setUploadError(
+        deleteError instanceof Error ? deleteError.message : 'Unable to remove file.'
+      )
+    } finally {
+      setWorkingFileId(null)
+    }
   }
 
   const handleFilesSelected = async (
@@ -485,7 +571,7 @@ export function ProjectHome({ projectId }: ProjectHomeProps) {
         </div>
       </div>
 
-      <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-7">
+      <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-9">
         <Button type="button" variant="secondary" onClick={handleNewChat}>
           <MessageSquarePlus className="mr-2 size-4" />
           New chat
@@ -514,6 +600,22 @@ export function ProjectHome({ projectId }: ProjectHomeProps) {
         >
           <FileText className="mr-2 size-4" />
           Artifacts
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => openWorkspaceTool({ tool: 'ask-files', projectId })}
+        >
+          <Database className="mr-2 size-4" />
+          Ask files
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => openWorkspaceTool({ tool: 'github-integration', projectId })}
+        >
+          <Github className="mr-2 size-4" />
+          GitHub
         </Button>
         <Button type="button" variant="outline" onClick={handleGenerateImage}>
           <ImageIcon className="mr-2 size-4" />
@@ -711,48 +813,141 @@ export function ProjectHome({ projectId }: ProjectHomeProps) {
         )}
       </Section>
 
+      <Section
+        title="GitHub repo context"
+        action={
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="rounded-xl"
+            onClick={() => openWorkspaceTool({ tool: 'github-integration', projectId })}
+          >
+            <Github className="mr-2 size-4" />
+            Open GitHub
+          </Button>
+        }
+      >
+        <div className="rounded-2xl border border-border/60 bg-card/45 p-4">
+          <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <p className="text-sm font-medium text-foreground">
+                  {home.githubIntegration?.connected
+                    ? home.githubIntegration.accountLogin ?? 'GitHub connected'
+                    : 'GitHub not connected'}
+                </p>
+                <Badge variant="outline" className="rounded-full">
+                  {home.githubIntegration?.importedCount ?? 0} imported files
+                </Badge>
+              </div>
+              <p className="mt-2 text-xs leading-5 text-muted-foreground">
+                Imported repository files become private project knowledge for Forge
+                and Ask Files. Last import:{' '}
+                {formatDate(home.githubIntegration?.lastImportedAt)}
+              </p>
+            </div>
+            <div className="flex shrink-0 flex-wrap gap-2">
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                className="rounded-xl"
+                onClick={() => openWorkspaceTool({ tool: 'ask-files', projectId })}
+              >
+                <Database className="mr-2 size-4" />
+                Ask Files
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="rounded-xl"
+                disabled={
+                  isGitHubWorking ||
+                  !home.githubIntegration?.connected ||
+                  !home.githubIntegration.importedCount
+                }
+                onClick={() => void handleReimportGitHub()}
+              >
+                {isGitHubWorking ? (
+                  <Loader2 className="mr-2 size-4 animate-spin" />
+                ) : (
+                  <RefreshCcw className="mr-2 size-4" />
+                )}
+                Re-import
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="rounded-xl"
+                disabled={isGitHubWorking || !home.githubIntegration?.connected}
+                onClick={() => void handleDisconnectGitHub()}
+              >
+                Disconnect
+              </Button>
+            </div>
+          </div>
+
+          {githubError ? (
+            <p className="mt-3 text-xs text-destructive">{githubError}</p>
+          ) : null}
+
+          {home.githubIntegration?.repositories.length ? (
+            <div className="mt-4 grid gap-2">
+              {home.githubIntegration.repositories.map((repo) => (
+                <div
+                  key={`${repo.fullName}:${repo.branch ?? 'default'}`}
+                  className="flex flex-col gap-2 rounded-xl border border-border/50 bg-background/40 px-3 py-2 text-xs sm:flex-row sm:items-center sm:justify-between"
+                >
+                  <span className="min-w-0 truncate font-medium text-foreground">
+                    {repo.fullName}
+                  </span>
+                  <span className="text-muted-foreground">
+                    {repo.importedCount} files · {repo.branch ?? 'default'} ·{' '}
+                    {formatDate(repo.lastImportedAt)}
+                  </span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="mt-4 text-xs leading-5 text-muted-foreground">
+              Connect GitHub and import selected repository files to make this
+              project code-aware without granting write access.
+            </p>
+          )}
+        </div>
+      </Section>
+
       <div className="grid gap-8 xl:grid-cols-2">
-        <Section title="Uploaded files">
+        <Section
+          title="Uploaded files"
+          action={
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="rounded-xl"
+              onClick={() => openWorkspaceTool({ tool: 'ask-files', projectId })}
+            >
+              <Database className="mr-2 size-4" />
+              Ask files
+            </Button>
+          }
+        >
           {filteredFiles.length > 0 ? (
             <div className="grid gap-3">
-              {filteredFiles.map((file: ProjectHomeFileSummary) => {
-                const fileUrl = file.url
-
-                return (
-                  <div
-                    key={file.id}
-                    className="rounded-2xl border border-border/60 bg-card/45 p-4"
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <p className="truncate text-sm font-medium text-foreground">
-                          {file.fileName}
-                        </p>
-                        <p className="mt-1 text-xs text-muted-foreground">
-                          {file.mimeType ?? 'Unknown type'} ·{' '}
-                          {formatBytes(file.byteSize)}
-                        </p>
-                      </div>
-                      {fileUrl ? (
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon-sm"
-                          className="shrink-0"
-                          onClick={() =>
-                            window.open(fileUrl, '_blank', 'noopener')
-                          }
-                        >
-                          <ExternalLink className="size-4" />
-                        </Button>
-                      ) : null}
-                    </div>
-                    <p className="mt-3 text-xs text-muted-foreground">
-                      Added {formatDate(file.createdAt)}
-                    </p>
-                  </div>
-                )
-              })}
+              {filteredFiles.map((file: ProjectHomeFileSummary) => (
+                <FileIntelligenceCard
+                  key={file.id}
+                  file={file}
+                  isWorking={workingFileId === file.id}
+                  onAsk={handleAskFile}
+                  onReindex={handleReindexFile}
+                  onDelete={handleDeleteFile}
+                />
+              ))}
             </div>
           ) : (
             <EmptyPanel>No uploaded files are scoped to this project.</EmptyPanel>
