@@ -166,6 +166,82 @@ export default async function AdminPage({
           <MetricCard label="Prime users" value={String(overview.usersByTier.prime)} />
         </div>
 
+        <div className="grid gap-5 xl:grid-cols-[0.95fr_1.05fr]">
+          <AnalyticsCard title="Activation funnel">
+            {overview.productAnalytics.activationFunnel.length ? (
+              overview.productAnalytics.activationFunnel.map((item) => (
+                <InsightRow
+                  key={item.id}
+                  label={item.label}
+                  value={item.count.toLocaleString()}
+                  detail={`${formatPercent(item.rate)} of filtered users · ${item.detail}`}
+                />
+              ))
+            ) : (
+              <EmptyAnalyticsState label="No activation data for this filter." />
+            )}
+          </AnalyticsCard>
+
+          <AnalyticsCard title="Feature adoption">
+            {overview.productAnalytics.featureAdoption.length ? (
+              overview.productAnalytics.featureAdoption.map((item) => (
+                <InsightRow
+                  key={item.id}
+                  label={item.label}
+                  value={item.value.toLocaleString()}
+                  detail={item.detail}
+                />
+              ))
+            ) : (
+              <EmptyAnalyticsState label="No feature adoption data for this filter." />
+            )}
+          </AnalyticsCard>
+        </div>
+
+        <div className="grid gap-5 xl:grid-cols-[0.9fr_1.1fr]">
+          <AnalyticsCard title="File indexing outcomes">
+            <InsightRow
+              label="Indexed"
+              value={overview.productAnalytics.fileIndexing.indexed.toLocaleString()}
+              detail="Files with searchable uploaded-file knowledge."
+            />
+            <InsightRow
+              label="Skipped"
+              value={overview.productAnalytics.fileIndexing.skipped.toLocaleString()}
+              detail="Files skipped because extraction was empty or embeddings were unavailable."
+            />
+            <InsightRow
+              label="Unsupported"
+              value={overview.productAnalytics.fileIndexing.unsupported.toLocaleString()}
+              detail="Files not supported by the current text extraction pipeline."
+            />
+            <InsightRow
+              label="Failed or pending"
+              value={(
+                overview.productAnalytics.fileIndexing.failed +
+                overview.productAnalytics.fileIndexing.pending
+              ).toLocaleString()}
+              detail={`${overview.productAnalytics.fileIndexing.failed.toLocaleString()} failed · ${overview.productAnalytics.fileIndexing.pending.toLocaleString()} pending.`}
+            />
+          </AnalyticsCard>
+
+          <AnalyticsCard title="Operational signals">
+            {overview.productAnalytics.operationalSignals.length ? (
+              overview.productAnalytics.operationalSignals.map((item) => (
+                <InsightRow
+                  key={item.id}
+                  label={item.label}
+                  value={item.value.toLocaleString()}
+                  detail={item.detail}
+                  tone={item.tone}
+                />
+              ))
+            ) : (
+              <EmptyAnalyticsState label="No operational signals for this filter." />
+            )}
+          </AnalyticsCard>
+        </div>
+
         <div className="grid gap-5 xl:grid-cols-2">
           <AnalyticsCard title="Text vs image cost split">
             <InsightRow
@@ -524,11 +600,13 @@ function InsightRow({
   value,
   detail,
   href,
+  tone = 'neutral',
 }: {
   label: string
   value: string
   detail: string
   href?: string
+  tone?: 'neutral' | 'warning' | 'critical'
 }) {
   const content = (
     <div className="flex min-w-0 flex-col gap-1">
@@ -538,7 +616,11 @@ function InsightRow({
   )
 
   return (
-    <div className="flex items-center justify-between gap-4 rounded-2xl border border-border/60 bg-background/40 px-4 py-3">
+    <div
+      className={`flex items-center justify-between gap-4 rounded-2xl border px-4 py-3 ${getInsightToneClass(
+        tone
+      )}`}
+    >
       {href ? (
         <Link href={href} className="min-w-0 flex-1 hover:text-primary">
           {content}
@@ -549,6 +631,17 @@ function InsightRow({
       <p className="shrink-0 text-sm font-semibold text-foreground">{value}</p>
     </div>
   )
+}
+
+function getInsightToneClass(tone: 'neutral' | 'warning' | 'critical'): string {
+  switch (tone) {
+    case 'warning':
+      return 'border-amber-500/30 bg-amber-500/10'
+    case 'critical':
+      return 'border-rose-500/30 bg-rose-500/10'
+    case 'neutral':
+      return 'border-border/60 bg-background/40'
+  }
 }
 
 function EmptyAnalyticsState({ label }: { label: string }) {

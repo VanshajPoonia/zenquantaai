@@ -13,6 +13,7 @@ import { enforceImageUsage, getEffectiveSubscription } from '@/lib/billing/enfor
 import { logImageUsage } from '@/lib/billing/log-usage'
 import {
   neonConversationRepository,
+  neonGeneratedImagesRepository,
   neonProfilesRepository,
   neonSettingsRepository,
   neonSubscriptionsRepository,
@@ -93,6 +94,14 @@ export async function POST(request: NextRequest) {
   if (auth.session.refreshed) {
     appendAuthCookies(headers, auth.session)
   }
+  let failedImageContext: {
+    conversationId: string | null
+    projectId: string | null
+    messageId: string | null
+    prompt: string
+    model: string
+    action: string
+  } | null = null
 
   try {
     const prepared = await prepareConversationForChat(payload)
@@ -146,6 +155,14 @@ export async function POST(request: NextRequest) {
       ...prepared.assistantPlaceholder,
       mode: 'image' as const,
       model: routeConfig.model,
+    }
+    failedImageContext = {
+      conversationId: persistedConversation.id,
+      projectId: persistedConversation.projectId ?? null,
+      messageId: placeholder.id ?? null,
+      prompt: prepared.userMessage.content,
+      model: routeConfig.model,
+      action,
     }
 
     const generated = await generateImageFromPrompt({
@@ -244,6 +261,42 @@ export async function POST(request: NextRequest) {
       conversationId: payload.conversationId,
       error: message,
     })
+
+    if (failedImageContext) {
+      await neonGeneratedImagesRepository
+        .create({
+          userId: auth.user.id,
+          projectId: failedImageContext.projectId,
+          conversationId: failedImageContext.conversationId,
+          messageId: failedImageContext.messageId,
+          imageGenerationEventId: null,
+          provider: 'openrouter',
+          model: failedImageContext.model,
+          prompt: failedImageContext.prompt,
+          negativePrompt: body?.negativePrompt ?? null,
+          storageProvider: null,
+          storageBucket: null,
+          storagePath: null,
+          sourceUrl: null,
+          width: null,
+          height: null,
+          status: 'failed',
+          isFavorite: false,
+          metadata: {
+            action: failedImageContext.action,
+            error: message.slice(0, 280),
+            recordedFor: 'admin_product_analytics',
+          },
+        })
+        .catch((loggingError) => {
+          debugImageRoute('failed-image-metadata-log-failed', {
+            error:
+              loggingError instanceof Error
+                ? loggingError.message
+                : 'Unknown failure metadata logging error',
+          })
+        })
+    }
 
     return NextResponse.json({ error: message }, { status: 500, headers })
   }
