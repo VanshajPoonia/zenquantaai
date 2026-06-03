@@ -6,6 +6,45 @@ The repository contains a real Zenquanta AI platform backed by Neon for runtime 
 
 Current direction: plan upgrades remain manual/admin-driven, payment automation is out of scope unless explicitly requested, and Neon/storage start fresh without importing Supabase database rows or storage objects.
 
+## 2026-06-03 - File And Object Storage Security Hardening
+
+- Reviewed private upload, generated image storage, protected file reads, file indexing/RAG, File Intelligence/Ask Files surfaces, Prism Studio gallery responses, file deletion/re-index APIs, and GitHub read-only import paths.
+- Findings:
+  - Protected file reads already checked Neon file ownership before object-store access, and direct object URLs were not exposed through File Intelligence or Prism Studio.
+  - Uploads had a 25MB helper limit, but route-level size rejection and shared MIME/data URL/object-ref validation could be tighter.
+  - Generated image ingestion rejected obvious non-HTTPS/private IPv4 URLs, but needed stronger data URL validation, image MIME checks, response size checks, and safer stored source URL validation.
+  - File indexing failures were safe in UI, but persisted metadata could store raw exception messages.
+  - GitHub imports were size-limited and user/project-scoped, but repo paths and skipped error reasons needed stricter normalization/scrubbing.
+- Fixes made:
+  - Added `lib/storage/security.ts` with shared private-file size caps, MIME normalization, object bucket/key validation, object ref validation, and strict base64 data URL parsing.
+  - Enforced safe object refs in `lib/storage/object-store.ts` for local and S3/R2 put/get/delete URL construction and protected app URL creation.
+  - Hardened `/api/attachments` and `lib/storage/attachments.ts` with early 25MB rejection, normalized MIME types, and strict imported data URL parsing while preserving unsupported-file upload behavior.
+  - Hardened generated-image ingestion in `lib/storage/generated-images.ts` with valid image data URL parsing, HTTPS/non-private URL checks, image response MIME checks, content-length/body size caps, and safe stored `sourceUrl` handling.
+  - Updated protected file reads to validate bucket/path params and use stored file names for `Content-Disposition` instead of internal object keys.
+  - Made conversation, file intelligence, file chunk, Project Home, and Prism gallery URL hydration tolerant of legacy malformed object refs by omitting protected URLs instead of throwing.
+  - Changed RAG indexing failure metadata to store a generic safe reason rather than raw provider/parser exception text.
+  - Added GitHub repo path normalization to reject absolute, traversal, backslash, control-character, and malformed paths before listing/fetch/import, and scrubbed raw provider errors from GitHub import skipped reasons.
+  - Tightened `/api/files` mixed project/conversation scope validation for Ask Files/File Intelligence listing.
+  - Added Vitest coverage for storage security helpers.
+- Verification: `npm run test` passed with 8 files and 38 tests; `npm run typecheck` passed; `npm run lint` passed with the existing 12 warnings; `npm run build` passed with the known Node `module.register()` deprecation warning.
+- Remaining risks: full runtime proof for private object access, generated-image remote fetch behavior, and GitHub provider failures still needs seeded integration/storage fixtures; this pass keeps those paths foreground, user-scoped, and server-token-only.
+
+## 2026-06-03 - User Scope And Privacy Hardening Pass
+
+- Reviewed protected API route families across search, projects, conversations, artifacts, prompt workflows/AI Playbooks, prompts, custom assistants, Model Duel, Prism/images, attachments/files, dashboard/settings, admin, memory, Pulse, and GitHub integration routes.
+- Confirmed safe boundaries that remain in place: normal feature routes use `requireAuthenticatedUser`, admin APIs use `requireAdminApiUser`, search repositories are user-scoped, private file reads stay behind `/api/files/object`, Prism stays on `/api/images/generate`, GitHub integration remains read-only/server-token-only, and admin raw-cost analytics remain admin-only.
+- Issues found and fixed:
+  - Scrubbed `/api/dashboard` `recentImages` so normal-user responses return safe summaries instead of raw `ImageGenerationEvent` rows with raw cost, margin, or private output URL arrays.
+  - Scrubbed `/api/images/history` and `/api/images/history/[id]` so Prism Studio receives protected app image URLs only and does not receive stored provider/source URLs.
+  - Validated conversation create/update `projectId` ownership before persisting, preserving `project-inbox` through the owned default-project path.
+  - Added early `404` checks in `/api/chat` and `/api/images/generate` when a supplied `conversationId` is missing or foreign, and validated client-supplied new conversation project scope before generation/persistence.
+  - Validated AI Playbook create/update `projectId` ownership before repository writes.
+  - Tightened mixed `projectId` plus `conversationId` inputs for attachments and playbook runs so both IDs must be owned and the conversation must belong to the supplied project.
+- Added `SECURITY_CHECKLIST.md` with route protection expectations for auth, ownership, private file/image URLs, billing/cost data, integrations/secrets, search, and memory.
+- Added focused Vitest coverage for safe dashboard image mapping and project/conversation scope helpers.
+- Verification: `npm run test` passed with 7 files and 33 tests; `npm run typecheck` passed; `npm run lint` passed with the existing 12 warnings; `npm run build` passed with the known Node `module.register()` deprecation warning.
+- Remaining risks: dynamic cross-user route checks still need seeded Neon/API fixtures for full runtime coverage; this pass used code review plus pure unit tests for the highest-risk response mapping and scope-validation seams.
+
 ## Post-Feature Product Audit - 2026-06-02
 
 Documentation-only audit after the recent feature wave. No product features, routes, APIs, auth, billing, storage, styling, dependencies, or runtime behavior were changed for this audit.
