@@ -17,59 +17,15 @@ import {
   zenPromptWorkflowSteps,
 } from '../schema'
 import { toIsoString } from './helpers'
+import {
+  buildSearchSnippet,
+  MIN_SEARCH_QUERY_LENGTH,
+  normalizeSearchQuery,
+  searchQueryToIlikePattern,
+  sortSearchResults,
+} from '@/lib/search/search-result-utils'
 
-const MIN_QUERY_LENGTH = 2
-const MAX_QUERY_LENGTH = 120
 const PER_ENTITY_LIMIT = 10
-const MAX_TOTAL_RESULTS = 50
-
-function normalizeQuery(query: string): string {
-  return query.replace(/\s+/g, ' ').trim().slice(0, MAX_QUERY_LENGTH)
-}
-
-function toPattern(query: string): string {
-  return `%${query.replace(/[\\%_]/g, (match) => `\\${match}`)}%`
-}
-
-function normalizeText(value: string | null | undefined): string {
-  return (value ?? '').replace(/\s+/g, ' ').trim()
-}
-
-function buildSnippet(query: string, ...values: Array<string | null | undefined>) {
-  const normalizedValues = values.map(normalizeText).filter(Boolean)
-  const normalizedQuery = query.toLowerCase()
-  const matchingValue =
-    normalizedValues.find((value) => value.toLowerCase().includes(normalizedQuery)) ??
-    normalizedValues[0] ??
-    ''
-
-  if (!matchingValue) return ''
-
-  const matchIndex = matchingValue.toLowerCase().indexOf(normalizedQuery)
-  if (matchIndex === -1) {
-    return matchingValue.length > 180
-      ? `${matchingValue.slice(0, 177).trimEnd()}...`
-      : matchingValue
-  }
-
-  const start = Math.max(0, matchIndex - 70)
-  const end = Math.min(matchingValue.length, matchIndex + query.length + 110)
-  const prefix = start > 0 ? '...' : ''
-  const suffix = end < matchingValue.length ? '...' : ''
-
-  return `${prefix}${matchingValue.slice(start, end).trim()}${suffix}`
-}
-
-function sortResults(results: SearchResult[]): SearchResult[] {
-  return [...results]
-    .sort((a, b) => {
-      const aTime = new Date(a.updatedAt ?? a.createdAt).getTime()
-      const bTime = new Date(b.updatedAt ?? b.createdAt).getTime()
-
-      return bTime - aTime || a.title.localeCompare(b.title)
-    })
-    .slice(0, MAX_TOTAL_RESULTS)
-}
 
 class NeonSearchRepository {
   async search(
@@ -77,10 +33,10 @@ class NeonSearchRepository {
     rawQuery: string,
     options: { projectId?: string | null } = {}
   ): Promise<SearchResult[]> {
-    const query = normalizeQuery(rawQuery)
-    if (query.length < MIN_QUERY_LENGTH) return []
+    const query = normalizeSearchQuery(rawQuery)
+    if (query.length < MIN_SEARCH_QUERY_LENGTH) return []
 
-    const pattern = toPattern(query)
+    const pattern = searchQueryToIlikePattern(query)
     const projectId = options.projectId?.trim() || null
 
     if (projectId) {
@@ -102,7 +58,7 @@ class NeonSearchRepository {
         this.searchModelComparisons(userId, query, pattern, projectId),
       ])
 
-      return sortResults([
+      return sortSearchResults([
         ...conversations,
         ...messages,
         ...artifacts,
@@ -137,7 +93,7 @@ class NeonSearchRepository {
       this.searchModelComparisons(userId, query, pattern),
     ])
 
-    return sortResults([
+    return sortSearchResults([
       ...projects,
       ...conversations,
       ...messages,
@@ -176,7 +132,7 @@ class NeonSearchRepository {
       id: row.id,
       entityType: 'project',
       title: row.name,
-      snippet: buildSnippet(query, row.description, row.name, row.color),
+      snippet: buildSearchSnippet(query, row.description, row.name, row.color),
       url: '/',
       target: { type: 'open_project', projectId: row.id },
       projectId: row.id,
@@ -226,7 +182,7 @@ class NeonSearchRepository {
       id: row.id,
       entityType: 'conversation',
       title: row.title,
-      snippet: buildSnippet(query, row.preview, row.memorySummary, row.title),
+      snippet: buildSearchSnippet(query, row.preview, row.memorySummary, row.title),
       url: '/',
       target: { type: 'open_conversation', conversationId: row.id },
       projectId: row.projectId,
@@ -291,7 +247,7 @@ class NeonSearchRepository {
       id: row.id,
       entityType: 'message',
       title: `Message in ${row.conversationTitle}`,
-      snippet: buildSnippet(query, row.content, row.model),
+      snippet: buildSearchSnippet(query, row.content, row.model),
       url: '/',
       target: {
         type: 'open_conversation',
@@ -336,7 +292,7 @@ class NeonSearchRepository {
       id: row.id,
       entityType: 'prompt',
       title: row.title,
-      snippet: buildSnippet(query, row.content, row.mode, row.title),
+      snippet: buildSearchSnippet(query, row.content, row.mode, row.title),
       url: '/',
       target: { type: 'open_prompt_library', promptId: row.id },
       projectId: null,
@@ -389,7 +345,7 @@ class NeonSearchRepository {
       id: row.id,
       entityType: 'artifact',
       title: row.title,
-      snippet: buildSnippet(
+      snippet: buildSearchSnippet(
         query,
         row.content,
         row.artifactType,
@@ -515,7 +471,7 @@ class NeonSearchRepository {
       id: row.id,
       entityType: 'prompt_workflow',
       title: row.title,
-      snippet: buildSnippet(query, row.description, row.title),
+      snippet: buildSearchSnippet(query, row.description, row.title),
       url: '/',
       target: { type: 'open_prompt_library', workflowId: row.id },
       projectId: row.projectId,
@@ -554,7 +510,7 @@ class NeonSearchRepository {
       id: row.id,
       entityType: 'custom_assistant',
       title: row.name,
-      snippet: buildSnippet(
+      snippet: buildSearchSnippet(
         query,
         row.description,
         row.systemInstructions,
@@ -612,7 +568,7 @@ class NeonSearchRepository {
       id: row.id,
       entityType: 'file',
       title: row.fileName,
-      snippet: buildSnippet(query, row.fileName, row.mimeType, row.visibility),
+      snippet: buildSearchSnippet(query, row.fileName, row.mimeType, row.visibility),
       url: '/',
       target: row.conversationId
         ? {
@@ -703,7 +659,7 @@ class NeonSearchRepository {
       id: row.id,
       entityType: 'generated_image',
       title: 'Prism image',
-      snippet: buildSnippet(query, row.prompt, row.negativePrompt, row.model),
+      snippet: buildSearchSnippet(query, row.prompt, row.negativePrompt, row.model),
       url: '/',
       target: {
         type: 'open_prism_history',
@@ -760,7 +716,7 @@ class NeonSearchRepository {
       id: row.id,
       entityType: 'model_comparison',
       title: 'Model Duel',
-      snippet: buildSnippet(query, row.prompt, row.status),
+      snippet: buildSearchSnippet(query, row.prompt, row.status),
       url: '/',
       target: {
         type: 'open_model_comparison',
