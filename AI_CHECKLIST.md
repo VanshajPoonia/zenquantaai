@@ -52,6 +52,42 @@ Known issue:
 npm run typecheck
 ```
 
+## Unit Tests
+
+```bash
+npm run test
+```
+
+Watch mode for local test iteration:
+
+```bash
+npm run test:watch
+```
+
+Current scope:
+
+- Vitest unit tests cover pure TypeScript helpers only.
+- Tests must not require OpenRouter, Tavily, Neon, S3/R2, GitHub, Supabase, Stripe, browser automation, paid services, or real server secrets.
+- Keep route handlers, database repositories, object storage clients, and live AI/search integrations out of unit tests unless they are isolated with explicit mocks.
+
+## E2E Smoke Tests
+
+```bash
+npm run test:e2e
+```
+
+Current scope:
+
+- Playwright smoke tests cover service-free route and form rendering only.
+- The v1 suite should not require OpenRouter, Tavily, Neon test data beyond protected redirects, S3/R2, GitHub, Supabase, Stripe, browser automation services, production credentials, or real secrets.
+- Authenticated workspace E2E coverage such as command palette open and global search empty state requires a future seeded Neon test database/session plan. Do not weaken auth or hardcode credentials to make those tests pass.
+
+If Playwright browser binaries are missing, install the Chromium browser dependency before running E2E locally:
+
+```bash
+npx playwright install chromium
+```
+
 ## Required Environment Variables
 
 From `.env.example`:
