@@ -101,6 +101,31 @@ Audit date: 2026-05-26. Documentation-only audit before new product features; no
 
 ## Completed Work
 
+### 2026-06-03 - Playwright E2E Smoke Test Setup
+
+- Added a small Playwright route/form smoke suite with `npm run test:e2e`, `playwright.config.ts`, and `tests/e2e/smoke.spec.ts`.
+- Covered service-free unauthenticated flows: root auth gate, sign-in form, sign-up form, protected dashboard/pricing/admin redirects, and public assistant pages for Nova, Velora, Axiom, Forge, Pulse, and Prism.
+- Documented authenticated E2E limitations in `tests/e2e/README.md`: workspace rendering, command palette, and global search need a future seeded Neon test database/session fixture rather than mocked production credentials or weakened auth.
+- Updated `AI_CHECKLIST.md` with E2E commands, scope, and the Playwright Chromium install fallback.
+- Preserved constraints: no real OpenRouter, Tavily, Neon data setup, S3/R2, GitHub, Supabase, Stripe, production credentials, auth bypass, or runtime behavior changes.
+- Verification: `npx playwright install chromium` was required once locally; `npm run test:e2e` passed with 12 Chromium smoke tests; `npm run test` passed with 6 files and 29 tests; `npm run typecheck` passed; `npm run lint` passed with the existing 12 warnings; `npm run build` passed with the known Node `module.register()` deprecation warning.
+
+### 2026-06-03 - Basic Automated Test Setup
+
+- Added a lightweight Vitest unit-test foundation with `npm run test` and `npm run test:watch`, using `vitest.config.ts` with Node environment and the existing `@/` alias.
+- Added pure unit coverage for assistant routing/config helpers, prompt precheck recommendations, pricing/billing display helpers, upgrade nudge helpers, file utility/status helpers, custom assistant validation, playbook variable/interpolation helpers, and search result normalization/sorting helpers.
+- Extracted pure search result helper logic into `lib/search/search-result-utils.ts` and kept the Neon search repository behavior unchanged by reusing that helper from `lib/db/repositories/search.ts`.
+- Updated `AI_CHECKLIST.md` with the new test commands and the unit-test boundary: no OpenRouter, Tavily, Neon, object storage, GitHub, Supabase, Stripe, browser automation, paid services, or real secrets required.
+- Preserved existing uncommitted smoke-test documentation and did not change runtime routes, auth, billing, storage, AI gateways, payment behavior, or external service integrations.
+- Verification: `npm run test` passed with 6 files and 29 tests; `npm run typecheck` passed; `npm run lint` passed with the existing 12 warnings; `npm run build` passed with the known Node `module.register()` deprecation warning.
+
+### 2026-06-03 - Manual Product Smoke Test Checklist
+
+- Added `docs/manual-product-smoke-test.md` as a documentation-only manual QA checklist covering auth, core workspace, projects, search, artifacts, AI Playbooks, assistants, files/RAG, Pulse, Prism, usage/plans, admin, GitHub read-only integration, and final regression checks.
+- The checklist includes test run metadata, environment prerequisites, safe-test warnings, pass/fail/blocked fields, steps, expected results, related routes/APIs, and notes for each smoke test.
+- Preserved constraints: no route/API/auth/billing/storage/runtime behavior changes, no Supabase runtime, no Stripe/payment automation, OpenRouter remains the AI gateway, Prism stays on `/api/images/generate`, and private files stay behind protected file routes.
+- Verification: `git diff --check` passed; `npm run typecheck` passed; `npm run lint` passed with the existing 12 warnings; `npm run build` passed with the known Node `module.register()` deprecation warning.
+
 ### 2026-05-28 - GitHub Read-Only Integration V1
 
 - Added read-only GitHub App integration scaffolding with Neon `zen_integration_accounts` and `zen_integration_items` tables, plus protected `/api/integrations/github/*` routes for connect callback, status, repo listing, safe file listing, selected import, explicit re-import, and local disconnect.
