@@ -11,6 +11,7 @@ import {
   GITHUB_IMPORT_MAX_FILES,
   GITHUB_IMPORT_MAX_TOTAL_BYTES,
   hashGitHubFile,
+  normalizeGitHubImportPath,
 } from './github'
 
 function titleForPath(repoFullName: string, path: string): string {
@@ -35,11 +36,30 @@ function safeSelection(input: GitHubImportRequest['files']) {
   return [
     ...new Map(
       input
-        .map((file) => ({ path: file.path.trim(), sha: file.sha?.trim() || null }))
+        .map((file) => ({
+          path: normalizeGitHubImportPath(file.path),
+          sha: file.sha?.trim() || null,
+        }))
         .filter((file) => file.path)
-        .map((file) => [file.path, file])
+        .map((file) => [file.path as string, { ...file, path: file.path as string }])
     ).values(),
   ].slice(0, GITHUB_IMPORT_MAX_FILES)
+}
+
+function safeImportErrorReason(error: unknown): string {
+  const message = error instanceof Error ? error.message : ''
+  const knownSafeFragments = [
+    'not importable',
+    'base64 file payload',
+    'exceeds the v1 import size limit',
+    'Selected files exceed',
+  ]
+
+  if (knownSafeFragments.some((fragment) => message.includes(fragment))) {
+    return message.slice(0, 180)
+  }
+
+  return 'The file could not be imported safely.'
 }
 
 export async function importGitHubRepositoryFiles(input: {
@@ -181,10 +201,7 @@ export async function importGitHubRepositoryFiles(input: {
     } catch (error) {
       skipped.push({
         path: selectedFile.path,
-        reason:
-          error instanceof Error
-            ? error.message
-            : 'The file could not be imported safely.',
+        reason: safeImportErrorReason(error),
       })
     }
   }

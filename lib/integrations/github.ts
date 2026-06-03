@@ -275,8 +275,32 @@ function encodePath(path: string): string {
   return path.split('/').map(encodeURIComponent).join('/')
 }
 
+export function normalizeGitHubImportPath(path: string): string | null {
+  const normalized = path.trim()
+  if (
+    !normalized ||
+    normalized.length > 512 ||
+    normalized.startsWith('/') ||
+    normalized.endsWith('/') ||
+    normalized.includes('\\') ||
+    /[\0-\x1F\x7F]/.test(normalized)
+  ) {
+    return null
+  }
+
+  const segments = normalized.split('/')
+  if (segments.some((segment) => !segment || segment === '.' || segment === '..')) {
+    return null
+  }
+
+  return segments.join('/')
+}
+
 function isUnsafePath(path: string): boolean {
-  const lower = path.toLowerCase()
+  const safePath = normalizeGitHubImportPath(path)
+  if (!safePath) return true
+
+  const lower = safePath.toLowerCase()
   const parts = lower.split('/')
   const skippedDirs = new Set([
     '.git',
@@ -426,7 +450,11 @@ export async function listImportableRepositoryFiles(input: {
   const files = (tree.tree ?? [])
     .filter((item) => item.type === 'blob' && item.path && item.sha)
     .map((item) => {
-      const path = item.path!
+      const path = normalizeGitHubImportPath(item.path!)
+      if (!path) {
+        skipped.push({ path: item.path!, reason: 'Invalid repository file path.' })
+        return null
+      }
       const size = Number(item.size ?? 0)
       if (isUnsafePath(path)) {
         skipped.push({ path, reason: 'Secrets, dependencies, build outputs, and lockfiles are skipped in v1.' })
@@ -483,13 +511,14 @@ export async function fetchRepositoryFile(input: {
   path: string
   ref: string
 }): Promise<GitHubFetchedFile> {
-  if (isUnsafePath(input.path) || !isImportableSourcePath(input.path)) {
+  const safePath = normalizeGitHubImportPath(input.path)
+  if (!safePath || isUnsafePath(safePath) || !isImportableSourcePath(safePath)) {
     throw new Error('This file is not importable in the read-only GitHub v1.')
   }
 
   const { token } = await createInstallationToken(input.installationId)
   const item = await githubJson<GitHubContentsFile>(
-    `/repos/${encodeURIComponent(input.owner)}/${encodeURIComponent(input.repo)}/contents/${encodePath(input.path)}?ref=${encodeURIComponent(input.ref)}`,
+    `/repos/${encodeURIComponent(input.owner)}/${encodeURIComponent(input.repo)}/contents/${encodePath(safePath)}?ref=${encodeURIComponent(input.ref)}`,
     { token }
   )
 
@@ -506,10 +535,10 @@ export async function fetchRepositoryFile(input: {
   }
 
   return {
-    path: item.path ?? input.path,
+    path: normalizeGitHubImportPath(item.path ?? safePath) ?? safePath,
     sha: item.sha ?? '',
     size: bytes.length,
-    mimeType: mimeTypeForPath(input.path),
+    mimeType: mimeTypeForPath(safePath),
     htmlUrl: item.html_url ?? null,
     bytes,
   }
