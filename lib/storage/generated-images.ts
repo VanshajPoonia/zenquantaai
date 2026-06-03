@@ -7,26 +7,23 @@ import {
 import { updateConversationSnapshot } from '@/lib/utils/chat'
 import { uploadAttachmentBinary } from './attachments'
 import { createPrivateFileUrl } from './object-store'
-
-function dataUrlToBuffer(dataUrl: string): {
-  mimeType: string
-  buffer: Buffer
-} | null {
-  const match = dataUrl.match(/^data:([^;]+);base64,(.+)$/)
-  if (!match) return null
-
-  return {
-    mimeType: match[1],
-    buffer: Buffer.from(match[2], 'base64'),
-  }
-}
+import {
+  assertSafePrivateFileSize,
+  MAX_PRIVATE_FILE_BYTES,
+  normalizeMimeType,
+  parseValidatedDataUrl,
+} from './security'
 
 function isPrivateHostname(hostname: string): boolean {
   const normalized = hostname.trim().toLowerCase()
   if (
     normalized === 'localhost' ||
+    normalized === '0.0.0.0' ||
+    normalized === '[::]' ||
+    normalized === '[::1]' ||
     normalized.endsWith('.localhost') ||
-    normalized.endsWith('.local')
+    normalized.endsWith('.local') ||
+    normalized.endsWith('.internal')
   ) {
     return true
   }
@@ -48,9 +45,12 @@ function isPrivateHostname(hostname: string): boolean {
 
 function assertSafeGeneratedImageUrl(value: string): void {
   if (value.startsWith('data:')) {
-    if (!value.startsWith('data:image/')) {
-      throw new Error('Generated image data URL must be an image.')
-    }
+    parseValidatedDataUrl({
+      dataUrl: value,
+      allowedMimePrefix: 'image/',
+      maxBytes: MAX_PRIVATE_FILE_BYTES,
+      label: 'Generated image data URL',
+    })
     return
   }
 
@@ -66,6 +66,12 @@ function assertSafeGeneratedImageUrl(value: string): void {
   }
 }
 
+function safeGeneratedImageSourceUrl(value: string | null | undefined): string | null {
+  if (!value || value.startsWith('data:')) return null
+  assertSafeGeneratedImageUrl(value)
+  return value
+}
+
 async function imageUrlToBuffer(url: string): Promise<{
   mimeType: string
   buffer: Buffer
@@ -73,7 +79,12 @@ async function imageUrlToBuffer(url: string): Promise<{
   assertSafeGeneratedImageUrl(url)
 
   if (url.startsWith('data:')) {
-    const parsed = dataUrlToBuffer(url)
+    const parsed = parseValidatedDataUrl({
+      dataUrl: url,
+      allowedMimePrefix: 'image/',
+      maxBytes: MAX_PRIVATE_FILE_BYTES,
+      label: 'Generated image data URL',
+    })
     if (!parsed) {
       throw new Error('Generated image data URL is invalid.')
     }
@@ -88,9 +99,22 @@ async function imageUrlToBuffer(url: string): Promise<{
     throw new Error('Unable to fetch generated image for storage.')
   }
 
+  const contentType = normalizeMimeType(response.headers.get('content-type'))
+  if (!contentType.startsWith('image/')) {
+    throw new Error('Generated image response was not an image.')
+  }
+
+  const contentLength = Number(response.headers.get('content-length') ?? 0)
+  if (contentLength > MAX_PRIVATE_FILE_BYTES) {
+    throw new Error('Generated image exceeds the 25MB storage limit.')
+  }
+
+  const buffer = Buffer.from(await response.arrayBuffer())
+  assertSafePrivateFileSize(buffer, 'Generated image')
+
   return {
-    mimeType: response.headers.get('content-type') || 'image/png',
-    buffer: Buffer.from(await response.arrayBuffer()),
+    mimeType: contentType,
+    buffer,
   }
 }
 
@@ -118,6 +142,7 @@ export async function storeGeneratedImageAttachment(input: {
   }
 
   const image = await imageUrlToBuffer(previewUrl)
+  const sourceUrl = safeGeneratedImageSourceUrl(input.sourceUrl)
   const fileName = generatedImageName(input.attachment)
   const uploaded = await uploadAttachmentBinary({
     userId: input.userId,
@@ -143,10 +168,7 @@ export async function storeGeneratedImageAttachment(input: {
     storageProvider: uploaded.storageProvider ?? 'external',
     storageBucket: uploaded.bucket ?? null,
     storagePath: uploaded.storagePath ?? null,
-    sourceUrl:
-      input.sourceUrl && !input.sourceUrl.startsWith('data:')
-        ? input.sourceUrl
-        : null,
+    sourceUrl,
     width: null,
     height: null,
     status: 'stored',

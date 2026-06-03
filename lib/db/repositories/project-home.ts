@@ -60,7 +60,11 @@ function toPrivateFileUrl(
 ): string | null {
   if (!bucket || !storagePath) return null
 
-  return createPrivateFileUrl({ bucket, storagePath, download })
+  try {
+    return createPrivateFileUrl({ bucket, storagePath, download })
+  } catch {
+    return null
+  }
 }
 
 function buildSuggestedActions(input: {

@@ -18,7 +18,11 @@ function parseDateParam(value: string | null): Date | null {
 
 function privateImageUrl(bucket: string | null, storagePath: string | null) {
   if (!bucket || !storagePath) return null
-  return createPrivateFileUrl({ bucket, storagePath })
+  try {
+    return createPrivateFileUrl({ bucket, storagePath })
+  } catch {
+    return null
+  }
 }
 
 export async function GET(request: NextRequest) {
@@ -79,7 +83,7 @@ export async function GET(request: NextRequest) {
         width: image.width,
         height: image.height,
         url: privateImageUrl(image.storageBucket, image.storagePath),
-        sourceUrl: image.sourceUrl,
+        sourceUrl: null,
         isFavorite: image.isFavorite,
         imageCreditsConsumed: usage?.imageCreditsConsumed ?? null,
         displayedCostUsd: usage?.displayedCostUsd ?? null,

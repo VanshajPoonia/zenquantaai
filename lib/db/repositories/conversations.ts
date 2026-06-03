@@ -49,10 +49,16 @@ async function hydrateAttachments<T extends { attachments?: Message['attachments
 
       return {
         ...attachment,
-        previewUrl: createPrivateFileUrl({
-          bucket: attachment.bucket,
-          storagePath: attachment.storagePath,
-        }),
+        previewUrl: (() => {
+          try {
+            return createPrivateFileUrl({
+              bucket: attachment.bucket!,
+              storagePath: attachment.storagePath!,
+            })
+          } catch {
+            return undefined
+          }
+        })(),
       }
     })
   )

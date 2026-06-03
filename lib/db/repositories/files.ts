@@ -83,7 +83,11 @@ function protectedObjectUrl(
   download = false
 ): string | null {
   if (!bucket || !storagePath) return null
-  return createPrivateFileUrl({ bucket, storagePath, download })
+  try {
+    return createPrivateFileUrl({ bucket, storagePath, download })
+  } catch {
+    return null
+  }
 }
 
 function fileToIntelligence(

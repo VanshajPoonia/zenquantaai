@@ -11,7 +11,11 @@ export const runtime = 'nodejs'
 
 function privateImageUrl(bucket: string | null, storagePath: string | null) {
   if (!bucket || !storagePath) return null
-  return createPrivateFileUrl({ bucket, storagePath })
+  try {
+    return createPrivateFileUrl({ bucket, storagePath })
+  } catch {
+    return null
+  }
 }
 
 function toResponseImage(image: Awaited<ReturnType<typeof neonGeneratedImagesRepository.get>>): PrismStudioImage {
@@ -30,7 +34,7 @@ function toResponseImage(image: Awaited<ReturnType<typeof neonGeneratedImagesRep
     width: image.width,
     height: image.height,
     url: privateImageUrl(image.storageBucket, image.storagePath),
-    sourceUrl: image.sourceUrl,
+    sourceUrl: null,
     isFavorite: image.isFavorite,
     imageCreditsConsumed: null,
     displayedCostUsd: null,

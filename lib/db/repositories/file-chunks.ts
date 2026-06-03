@@ -56,10 +56,14 @@ export interface RetrievedFileKnowledgeChunk {
 }
 
 function rowToRetrievedChunk(row: RetrievedFileChunkRow): RetrievedFileKnowledgeChunk {
-  const url =
-    row.bucket && row.storagePath
-      ? createPrivateFileUrl({ bucket: row.bucket, storagePath: row.storagePath })
-      : '#'
+  const url = (() => {
+    if (!row.bucket || !row.storagePath) return '#'
+    try {
+      return createPrivateFileUrl({ bucket: row.bucket, storagePath: row.storagePath })
+    } catch {
+      return '#'
+    }
+  })()
 
   return {
     id: row.id,

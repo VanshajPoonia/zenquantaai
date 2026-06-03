@@ -122,10 +122,10 @@ export async function indexUploadedFileForKnowledge(input: {
         embeddingModel,
       }),
     })
-  } catch (error) {
+  } catch {
     await neonFilesRepository.patch(input.userId, input.file.id, {
       metadata: withKnowledgeMetadata(input.file, 'failed', {
-        reason: error instanceof Error ? error.message : 'Unknown indexing error.',
+        reason: 'Indexing failed. Try re-indexing this file.',
       }),
     })
   }

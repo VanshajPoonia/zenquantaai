@@ -8,10 +8,15 @@ import {
   getObjectStore,
   getStorageMetadataProvider,
 } from './object-store'
+import {
+  assertSafePrivateFileSize,
+  MAX_PRIVATE_FILE_BYTES,
+  normalizeMimeType,
+  parseValidatedDataUrl,
+} from './security'
 
 export const ZEN_ATTACHMENT_BUCKET = 'zenquanta-files'
 const LEGACY_ATTACHMENT_BUCKET = ['zen', 'attachments'].join('-')
-const MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024
 
 function sanitizeSegment(value: string): string {
   return value
@@ -20,27 +25,8 @@ function sanitizeSegment(value: string): string {
     .replace(/^-+|-+$/g, '')
 }
 
-function dataUrlToBuffer(dataUrl: string): {
-  mimeType: string
-  buffer: Buffer
-} | null {
-  const match = dataUrl.match(/^data:([^;]+);base64,(.+)$/)
-  if (!match) return null
-
-  return {
-    mimeType: match[1],
-    buffer: Buffer.from(match[2], 'base64'),
-  }
-}
-
 function checksum(bytes: Buffer): string {
   return createHash('sha256').update(bytes).digest('hex')
-}
-
-function assertSafeAttachmentSize(bytes: Buffer): void {
-  if (bytes.byteLength > MAX_ATTACHMENT_BYTES) {
-    throw new Error('Attachment exceeds the 25MB upload limit.')
-  }
 }
 
 function createStoragePath(input: {
@@ -67,9 +53,10 @@ export async function uploadAttachmentBinary(input: {
 }): Promise<
   Pick<Attachment, 'bucket' | 'storagePath' | 'fileId' | 'storageProvider' | 'previewUrl'>
 > {
-  assertSafeAttachmentSize(input.bytes)
+  assertSafePrivateFileSize(input.bytes, 'Attachment')
 
   const attachmentId = input.attachmentId ?? createId('att')
+  const mimeType = normalizeMimeType(input.mimeType)
   const storagePath = createStoragePath({
     userId: input.userId,
     attachmentId,
@@ -80,7 +67,7 @@ export async function uploadAttachmentBinary(input: {
   const stored = await objectStore.putObject({
     bucket: objectStore.bucket,
     key: storagePath,
-    contentType: input.mimeType || 'application/octet-stream',
+    contentType: mimeType,
     body: input.bytes,
   })
 
@@ -95,7 +82,7 @@ export async function uploadAttachmentBinary(input: {
     storagePath: stored.key,
     publicUrl: null,
     fileName: input.fileName || 'attachment',
-    mimeType: input.mimeType || 'application/octet-stream',
+    mimeType,
     byteSize: input.bytes.byteLength,
     checksum: checksum(input.bytes),
     visibility: 'private',
@@ -108,7 +95,7 @@ export async function uploadAttachmentBinary(input: {
     userId: input.userId,
     file: fileMetadata,
     fileName: input.fileName || 'attachment',
-    mimeType: input.mimeType || 'application/octet-stream',
+    mimeType,
     bytes: input.bytes,
     projectId: input.projectId ?? null,
     conversationId: input.conversationId ?? null,
@@ -139,7 +126,11 @@ export async function uploadImportedAttachment(
 
   const dataUrlUpload =
     attachment.previewUrl && attachment.previewUrl.startsWith('data:')
-      ? dataUrlToBuffer(attachment.previewUrl)
+      ? parseValidatedDataUrl({
+          dataUrl: attachment.previewUrl,
+          maxBytes: MAX_PRIVATE_FILE_BYTES,
+          label: 'Attachment data URL',
+        })
       : null
 
   if (!dataUrlUpload) {

@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server'
 import { appendAuthCookies, requireAuthenticatedUser } from '@/lib/auth/session'
 import { neonFilesRepository } from '@/lib/db/repositories'
 import { getObjectStore } from '@/lib/storage/object-store'
+import { assertSafeObjectRef } from '@/lib/storage/security'
 
 export const runtime = 'nodejs'
 
@@ -26,6 +27,12 @@ export async function GET(request: NextRequest) {
     return createStorageError('File bucket and path are required.')
   }
 
+  try {
+    assertSafeObjectRef({ bucket, key: storagePath })
+  } catch {
+    return createStorageError('File bucket or path is invalid.')
+  }
+
   const file = await neonFilesRepository.getByObjectRef({
     userId: auth.user.id,
     bucket,
@@ -46,7 +53,7 @@ export async function GET(request: NextRequest) {
       'Content-Length': String(object.contentLength),
       'Cache-Control': 'private, no-store',
       'Content-Disposition': `${shouldDownload ? 'attachment' : 'inline'}; filename="${sanitizeDownloadName(
-        storagePath
+        file.fileName
       )}"`,
     })
 

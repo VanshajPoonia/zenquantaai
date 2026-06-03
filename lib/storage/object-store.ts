@@ -3,6 +3,12 @@ import 'server-only'
 import { createHash, createHmac } from 'crypto'
 import { mkdir, readFile, unlink, writeFile } from 'fs/promises'
 import path from 'path'
+import {
+  assertSafeObjectBucket,
+  assertSafeObjectKey,
+  assertSafeObjectRef,
+  normalizeMimeType,
+} from './security'
 
 export type ObjectStorageProvider = 'local' | 's3' | 'r2'
 
@@ -110,6 +116,7 @@ function assertS3Config(config: ObjectStorageConfig): void {
 }
 
 function createS3ObjectUrl(config: ObjectStorageConfig, bucket: string, key: string): URL {
+  assertSafeObjectRef({ bucket, key })
   const endpoint = config.endpoint.replace(/\/$/, '')
   return new URL(`${endpoint}/${encodeURIComponent(bucket)}/${encodeObjectKey(key)}`)
 }
@@ -185,6 +192,7 @@ class LocalObjectStore implements ObjectStore {
   }
 
   private resolvePath(bucket: string, key: string): string {
+    assertSafeObjectRef({ bucket, key })
     const objectPath = path.resolve(this.rootDir, bucket, key)
     const bucketRoot = path.resolve(this.rootDir, bucket)
 
@@ -197,12 +205,14 @@ class LocalObjectStore implements ObjectStore {
 
   async putObject(input: PutObjectInput): Promise<StoredObjectRef> {
     const bucket = input.bucket ?? this.bucket
+    assertSafeObjectBucket(bucket)
+    assertSafeObjectKey(input.key)
     const filePath = this.resolvePath(bucket, input.key)
     await mkdir(path.dirname(filePath), { recursive: true })
     await writeFile(filePath, input.body)
     await writeFile(
       `${filePath}.meta.json`,
-      JSON.stringify({ contentType: input.contentType })
+      JSON.stringify({ contentType: normalizeMimeType(input.contentType) })
     )
 
     return {
@@ -254,13 +264,15 @@ class S3CompatibleObjectStore implements ObjectStore {
 
   async putObject(input: PutObjectInput): Promise<StoredObjectRef> {
     const bucket = input.bucket ?? this.bucket
+    assertSafeObjectBucket(bucket)
+    assertSafeObjectKey(input.key)
     const url = createS3ObjectUrl(this.config, bucket, input.key)
     const payloadHash = sha256Hex(input.body)
     const headers = createS3Authorization({
       config: this.config,
       method: 'PUT',
       url,
-      contentType: input.contentType,
+      contentType: normalizeMimeType(input.contentType),
       payloadHash,
       date: new Date(),
     })
@@ -365,6 +377,7 @@ export function createPrivateFileUrl(input: {
   storagePath: string
   download?: boolean
 }): string {
+  assertSafeObjectRef({ bucket: input.bucket, key: input.storagePath })
   const params = new URLSearchParams({
     bucket: input.bucket,
     path: input.storagePath,

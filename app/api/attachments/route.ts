@@ -2,9 +2,11 @@ import { NextRequest, NextResponse } from 'next/server'
 import { appendAuthCookies, requireAuthenticatedUser } from '@/lib/auth/session'
 import {
   neonConversationRepository,
-  neonProjectsRepository,
 } from '@/lib/db/repositories'
+import { resolveOwnedProjectScope } from '@/lib/security/ownership'
+import { conversationBelongsToProject } from '@/lib/security/user-scope'
 import { uploadAttachmentBinary } from '@/lib/storage/attachments'
+import { MAX_PRIVATE_FILE_BYTES, normalizeMimeType } from '@/lib/storage/security'
 import { Attachment, AttachmentKind } from '@/types'
 
 export const runtime = 'nodejs'
@@ -89,16 +91,22 @@ export async function POST(request: NextRequest) {
     )
   }
 
+  if (files.some((file) => file.size > MAX_PRIVATE_FILE_BYTES)) {
+    return NextResponse.json(
+      { error: 'Attachments must be 25MB or smaller.' },
+      { status: 413 }
+    )
+  }
+
   const scopedProjectId =
     typeof projectId === 'string' && projectId ? projectId : null
   const scopedConversationId =
     typeof conversationId === 'string' && conversationId ? conversationId : null
+  let scopedConversationProjectId: string | null = null
 
-  if (scopedProjectId) {
-    const projects = await neonProjectsRepository.list(auth.user.id)
-    if (!projects.some((project) => project.id === scopedProjectId)) {
-      return NextResponse.json({ error: 'Project not found.' }, { status: 404 })
-    }
+  const projectScope = await resolveOwnedProjectScope(auth.user.id, scopedProjectId)
+  if (!projectScope.ok) {
+    return NextResponse.json({ error: 'Project not found.' }, { status: 404 })
   }
 
   if (scopedConversationId) {
@@ -112,25 +120,40 @@ export async function POST(request: NextRequest) {
         { status: 404 }
       )
     }
+    scopedConversationProjectId = conversation.projectId ?? null
+  }
+
+  if (
+    scopedConversationId &&
+    projectScope.projectId &&
+    !conversationBelongsToProject(scopedConversationProjectId, projectScope.projectId)
+  ) {
+    return NextResponse.json(
+      { error: 'Conversation does not belong to project.' },
+      { status: 400 }
+    )
   }
 
   const attachments = await Promise.all(
     files.map(async (file, index) => {
       const meta = metadata[index]
+      const mimeType = normalizeMimeType(
+        file.type || meta.mimeType || 'application/octet-stream'
+      )
       const uploaded = await uploadAttachmentBinary({
         userId: auth.user.id,
         attachmentId: meta.id,
         fileName: meta.name || file.name,
-        mimeType: meta.mimeType || file.type || 'application/octet-stream',
+        mimeType,
         bytes: Buffer.from(await file.arrayBuffer()),
-        projectId: scopedProjectId,
+        projectId: projectScope.projectId,
         conversationId: scopedConversationId,
       })
 
       return {
         ...meta,
         size: meta.size || file.size,
-        mimeType: meta.mimeType || file.type || 'application/octet-stream',
+        mimeType,
         ...uploaded,
         previewUrl: undefined,
       }
