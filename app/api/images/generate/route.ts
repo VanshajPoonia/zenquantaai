@@ -19,6 +19,7 @@ import {
   neonSubscriptionsRepository,
   neonUsageLimitOverridesRepository,
 } from '@/lib/db/repositories'
+import { resolveOwnedProjectScope } from '@/lib/security/ownership'
 import { storeLatestGeneratedImageInConversation } from '@/lib/storage/generated-images'
 import { createMessage } from '@/lib/utils/chat'
 import { ImageGenerateRequest, ImageGenerateResponse, ChatRequest } from '@/types'
@@ -54,6 +55,27 @@ export async function POST(request: NextRequest) {
     ? await neonConversationRepository.get(auth.user.id, body.conversationId)
     : null
 
+  if (body?.conversationId && !storedConversation) {
+    return NextResponse.json(
+      { error: 'Conversation not found.' },
+      { status: 404 }
+    )
+  }
+
+  const projectScope =
+    !storedConversation && body?.conversation
+      ? await resolveOwnedProjectScope(auth.user.id, body.conversation.projectId)
+      : { ok: true as const, projectId: null }
+
+  if (!projectScope.ok) {
+    return NextResponse.json({ error: 'Project not found.' }, { status: 404 })
+  }
+
+  const scopedConversation =
+    body?.conversation && projectScope.projectId
+      ? { ...body.conversation, projectId: projectScope.projectId }
+      : body?.conversation
+
   const requestMode = body?.targetMode === 'image' ? 'image' : body?.mode ?? 'image'
   const appSettings = await neonSettingsRepository.get(auth.user.id)
   const subscription = await neonSubscriptionsRepository.ensureForUser(auth.user)
@@ -80,7 +102,7 @@ export async function POST(request: NextRequest) {
   const payload: ChatRequest = {
     action,
     conversationId: storedConversation?.id ?? body?.conversationId,
-    conversation: storedConversation ?? body?.conversation,
+    conversation: storedConversation ?? scopedConversation,
     mode: body?.mode ?? 'image',
     targetMode: body?.targetMode,
     content: body?.prompt ?? body?.content,

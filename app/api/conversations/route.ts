@@ -6,6 +6,7 @@ import {
   neonProfilesRepository,
   neonSettingsRepository,
 } from '@/lib/db/repositories'
+import { resolveOwnedProjectScope } from '@/lib/security/ownership'
 import { AIMode, SessionSettings } from '@/types'
 
 export const runtime = 'nodejs'
@@ -37,10 +38,15 @@ export async function POST(request: NextRequest) {
   }
   const settings = await neonSettingsRepository.get(auth.user.id)
   const mode = body.mode ?? settings.defaultMode
+  const projectScope = await resolveOwnedProjectScope(auth.user.id, body.projectId)
+
+  if (!projectScope.ok) {
+    return NextResponse.json({ error: 'Project not found.' }, { status: 404 })
+  }
 
   const conversation = await neonConversationRepository.create(auth.user.id, {
     mode,
-    projectId: body.projectId,
+    projectId: projectScope.projectId ?? undefined,
     sessionSettings: createSessionSettings(mode, {
       ...settings.sessionDefaults,
       ...body.sessionSettings,

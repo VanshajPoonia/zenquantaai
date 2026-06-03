@@ -4,6 +4,7 @@ import {
   neonProfilesRepository,
   neonPromptWorkflowsRepository,
 } from '@/lib/db/repositories'
+import { resolveOwnedProjectScope } from '@/lib/security/ownership'
 import {
   normalizePromptWorkflowMetadata,
   normalizePromptWorkflowStepMetadata,
@@ -115,7 +116,16 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: parsed.error }, { status: 400 })
   }
 
-  const workflow = await neonPromptWorkflowsRepository.create(auth.user.id, parsed)
+  const projectScope = await resolveOwnedProjectScope(auth.user.id, parsed.projectId)
+
+  if (!projectScope.ok) {
+    return NextResponse.json({ error: 'Project not found.' }, { status: 404 })
+  }
+
+  const workflow = await neonPromptWorkflowsRepository.create(auth.user.id, {
+    ...parsed,
+    projectId: projectScope.projectId,
+  })
   const response = NextResponse.json(workflow, { status: 201 })
 
   if (auth.session.refreshed) {

@@ -4,6 +4,7 @@ import {
   neonConversationRepository,
   neonProfilesRepository,
 } from '@/lib/db/repositories'
+import { resolveOwnedProjectScope } from '@/lib/security/ownership'
 import { ConversationMutation } from '@/types'
 
 export const runtime = 'nodejs'
@@ -42,7 +43,19 @@ export async function PATCH(
   await neonProfilesRepository.ensureFromAuthUser(auth.user)
   const { id } = await params
   const body = (await request.json().catch(() => ({}))) as ConversationMutation
-  const conversation = await neonConversationRepository.patch(auth.user.id, id, body)
+  const mutation = { ...body }
+
+  if (Object.prototype.hasOwnProperty.call(body, 'projectId')) {
+    const projectScope = await resolveOwnedProjectScope(auth.user.id, body.projectId)
+
+    if (!projectScope.ok) {
+      return NextResponse.json({ error: 'Project not found.' }, { status: 404 })
+    }
+
+    mutation.projectId = projectScope.projectId ?? undefined
+  }
+
+  const conversation = await neonConversationRepository.patch(auth.user.id, id, mutation)
 
   if (!conversation) {
     return NextResponse.json({ error: 'Conversation not found.' }, { status: 404 })

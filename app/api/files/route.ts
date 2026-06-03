@@ -7,6 +7,7 @@ import {
   neonProjectsRepository,
 } from '@/lib/db/repositories'
 import { hasEmbeddingConfig } from '@/lib/rag/embeddings'
+import { conversationBelongsToProject } from '@/lib/security/user-scope'
 
 export const runtime = 'nodejs'
 
@@ -48,6 +49,13 @@ export async function GET(request: NextRequest) {
       return NextResponse.json(
         { error: 'Conversation not found.' },
         { status: 404 }
+      )
+    }
+
+    if (projectId && !conversationBelongsToProject(conversation.projectId, projectId)) {
+      return NextResponse.json(
+        { error: 'Conversation does not belong to project.' },
+        { status: 400 }
       )
     }
   }

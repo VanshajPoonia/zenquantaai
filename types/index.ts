@@ -1543,6 +1543,19 @@ export interface ImageGenerationEvent {
   createdAt: string
 }
 
+export interface DashboardRecentImageSummary {
+  id: string
+  conversationId: string | null
+  messageId: string | null
+  model: string
+  prompt: string
+  imageCount: number
+  imageCreditsConsumed: number
+  displayedCostUsd: number
+  outputCount: number
+  createdAt: string
+}
+
 export interface PlanChangeRequest {
   id: string
   userId: string

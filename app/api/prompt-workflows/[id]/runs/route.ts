@@ -3,9 +3,10 @@ import { appendAuthCookies, requireAuthenticatedUser } from '@/lib/auth/session'
 import {
   neonConversationRepository,
   neonProfilesRepository,
-  neonProjectsRepository,
   neonPromptWorkflowsRepository,
 } from '@/lib/db/repositories'
+import { resolveOwnedProjectScope } from '@/lib/security/ownership'
+import { conversationBelongsToProject } from '@/lib/security/user-scope'
 import { PromptWorkflowRunStatus } from '@/types'
 
 export const runtime = 'nodejs'
@@ -45,6 +46,7 @@ export async function POST(
   }
   const conversationId = body.conversationId?.trim() || null
   const projectId = body.projectId?.trim() || null
+  let scopedConversationProjectId: string | null = null
 
   if (conversationId) {
     const conversation = await neonConversationRepository.get(
@@ -57,18 +59,28 @@ export async function POST(
         { status: 404 }
       )
     }
+    scopedConversationProjectId = conversation.projectId ?? null
   }
 
-  if (projectId) {
-    const projects = await neonProjectsRepository.list(auth.user.id)
-    if (!projects.some((project) => project.id === projectId)) {
-      return NextResponse.json({ error: 'Project not found.' }, { status: 404 })
-    }
+  const projectScope = await resolveOwnedProjectScope(auth.user.id, projectId)
+  if (!projectScope.ok) {
+    return NextResponse.json({ error: 'Project not found.' }, { status: 404 })
+  }
+
+  if (
+    conversationId &&
+    projectScope.projectId &&
+    !conversationBelongsToProject(scopedConversationProjectId, projectScope.projectId)
+  ) {
+    return NextResponse.json(
+      { error: 'Conversation does not belong to project.' },
+      { status: 400 }
+    )
   }
 
   const run = await neonPromptWorkflowsRepository.createRun(auth.user.id, id, {
     conversationId,
-    projectId,
+    projectId: projectScope.projectId,
     variableValues: body.variableValues ?? {},
   })
 
@@ -151,15 +163,30 @@ export async function PATCH(
     )
   }
 
-  if (body?.conversationId) {
+  const scopedConversationId: string | null | undefined =
+    typeof body?.conversationId === 'string'
+      ? body.conversationId.trim() || null
+      : body?.conversationId
+
+  if (scopedConversationId) {
     const conversation = await neonConversationRepository.get(
       auth.user.id,
-      body.conversationId
+      scopedConversationId
     )
     if (!conversation) {
       return NextResponse.json(
         { error: 'Conversation not found.' },
         { status: 404 }
+      )
+    }
+
+    if (
+      existingRun.projectId &&
+      !conversationBelongsToProject(conversation.projectId, existingRun.projectId)
+    ) {
+      return NextResponse.json(
+        { error: 'Conversation does not belong to project.' },
+        { status: 400 }
       )
     }
   }
@@ -173,10 +200,7 @@ export async function PATCH(
     run =
       (await neonPromptWorkflowsRepository.updateRunStatus(auth.user.id, runId, {
         status: body.status,
-        conversationId:
-          typeof body.conversationId === 'string'
-            ? body.conversationId.trim() || null
-            : body.conversationId,
+        conversationId: scopedConversationId,
         error: compactError(body.error),
       })) ?? run
   }

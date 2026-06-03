@@ -18,6 +18,7 @@ import {
 import { getEffectiveSubscription } from '@/lib/billing/enforce'
 import { buildUsageLimitSnapshot } from '@/lib/billing/upgrade-nudges'
 import { usdToDisplayedCredits } from '@/lib/config'
+import { toSafeDashboardRecentImage } from '@/lib/security/user-scope'
 
 export const runtime = 'nodejs'
 
@@ -104,7 +105,7 @@ export async function GET(request: NextRequest) {
         ),
       },
       recentConversations: conversations.slice(0, 8),
-      recentImages: imageEvents.slice(0, 8),
+      recentImages: imageEvents.slice(0, 8).map(toSafeDashboardRecentImage),
     },
     { headers }
   )
