@@ -14,6 +14,13 @@ import {
 
 export const runtime = 'nodejs'
 
+function parseLimit(value: string | null): number | null {
+  if (!value) return null
+  const parsed = Number(value)
+  if (!Number.isFinite(parsed)) return null
+  return Math.max(1, Math.min(100, Math.floor(parsed)))
+}
+
 export async function GET(request: NextRequest) {
   const auth = await requireAuthenticatedUser(request)
   if ('response' in auth) return auth.response
@@ -37,6 +44,9 @@ export async function GET(request: NextRequest) {
     q: searchParams.get('q') ?? searchParams.get('query') ?? '',
     artifactType: isArtifactType(artifactType) ? artifactType : null,
     sourceType: isArtifactSourceType(sourceType) ? sourceType : null,
+    limit: parseLimit(searchParams.get('limit')),
+    beforeUpdatedAt:
+      searchParams.get('beforeUpdatedAt') ?? searchParams.get('before') ?? null,
   })
   const response = NextResponse.json(artifacts)
 

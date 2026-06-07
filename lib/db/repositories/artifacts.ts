@@ -1,6 +1,6 @@
 import 'server-only'
 
-import { SQL, and, desc, eq, ilike, or, sql } from 'drizzle-orm'
+import { SQL, and, desc, eq, ilike, lt, or, sql } from 'drizzle-orm'
 import {
   Artifact,
   ArtifactInput,
@@ -8,9 +8,15 @@ import {
   ArtifactPatch,
   ArtifactSourceType,
   ArtifactType,
+  ArtifactVersion,
 } from '@/types'
+import {
+  RESTORE_ARTIFACT_VERSION_ACTION,
+  getArtifactVersionAction,
+} from '@/lib/artifacts/versions'
 import { getDatabaseClient } from '../client'
 import {
+  zenArtifactVersions,
   zenArtifacts,
   zenConversations,
   zenMessages,
@@ -22,7 +28,15 @@ import { neonUsersRepository } from './users'
 const ARTIFACT_LIST_LIMIT = 100
 const MAX_QUERY_LENGTH = 120
 
+function normalizeLimit(value: number | null | undefined): number {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    return ARTIFACT_LIST_LIMIT
+  }
+  return Math.max(1, Math.min(ARTIFACT_LIST_LIMIT, Math.floor(value)))
+}
+
 type ArtifactRow = typeof zenArtifacts.$inferSelect
+type ArtifactVersionRow = typeof zenArtifactVersions.$inferSelect
 
 export class ArtifactReferenceNotFoundError extends Error {
   constructor(message = 'Artifact reference not found.') {
@@ -65,6 +79,40 @@ function rowToArtifact(row: ArtifactRow): Artifact {
   }
 }
 
+function rowToArtifactVersion(row: ArtifactVersionRow): ArtifactVersion {
+  return {
+    id: row.id,
+    artifactId: row.artifactId,
+    userId: row.userId,
+    title: row.title,
+    artifactType: row.artifactType as ArtifactType,
+    content: row.content,
+    metadata: toJsonObject<Record<string, unknown>>(row.metadata, {}),
+    createdAt: toIsoString(row.createdAt),
+    createdByAction: row.createdByAction,
+  }
+}
+
+function buildVersionValues(
+  artifact: ArtifactRow,
+  createdByAction: string | null
+): typeof zenArtifactVersions.$inferInsert {
+  return {
+    artifactId: artifact.id,
+    userId: artifact.userId,
+    title: artifact.title,
+    artifactType: artifact.artifactType,
+    content: artifact.content,
+    metadata: normalizeMetadata(artifact.metadata),
+    createdByAction,
+  }
+}
+
+function getDuplicateTitle(title: string): string {
+  const normalized = title.trim() || 'Untitled artifact'
+  return `Copy of ${normalized}`
+}
+
 class NeonArtifactsRepository {
   async list(
     userId: string,
@@ -86,6 +134,13 @@ class NeonArtifactsRepository {
       conditions.push(eq(zenArtifacts.sourceType, filters.sourceType))
     }
 
+    if (filters.beforeUpdatedAt) {
+      const before = new Date(filters.beforeUpdatedAt)
+      if (!Number.isNaN(before.getTime())) {
+        conditions.push(lt(zenArtifacts.updatedAt, before))
+      }
+    }
+
     if (query) {
       const pattern = toPattern(query)
       conditions.push(
@@ -104,7 +159,7 @@ class NeonArtifactsRepository {
       .from(zenArtifacts)
       .where(and(...conditions))
       .orderBy(desc(zenArtifacts.updatedAt))
-      .limit(ARTIFACT_LIST_LIMIT)
+      .limit(normalizeLimit(filters.limit))
 
     return rows.map(rowToArtifact)
   }
@@ -127,20 +182,31 @@ class NeonArtifactsRepository {
       conversationId: input.conversationId,
       sourceMessageId: input.sourceMessageId,
     })
-    const rows = await getDatabaseClient()
-      .insert(zenArtifacts)
-      .values({
-        userId,
-        projectId: references.projectId,
-        conversationId: references.conversationId,
-        sourceMessageId: references.sourceMessageId,
-        sourceType: input.sourceType,
-        title: input.title,
-        artifactType: input.artifactType,
-        content: input.content,
-        metadata: normalizeMetadata(input.metadata),
-      })
-      .returning()
+    const db = getDatabaseClient()
+    const rows = await db.transaction(async (tx) => {
+      const artifactRows = await tx
+        .insert(zenArtifacts)
+        .values({
+          userId,
+          projectId: references.projectId,
+          conversationId: references.conversationId,
+          sourceMessageId: references.sourceMessageId,
+          sourceType: input.sourceType,
+          title: input.title,
+          artifactType: input.artifactType,
+          content: input.content,
+          metadata: normalizeMetadata(input.metadata),
+        })
+        .returning()
+
+      if (artifactRows[0]) {
+        await tx
+          .insert(zenArtifactVersions)
+          .values(buildVersionValues(artifactRows[0], null))
+      }
+
+      return artifactRows
+    })
 
     if (!rows[0]) {
       throw new Error('Unable to create artifact.')
@@ -175,13 +241,167 @@ class NeonArtifactsRepository {
       values.metadata = normalizeMetadata(patch.metadata)
     }
 
-    const rows = await getDatabaseClient()
-      .update(zenArtifacts)
-      .set(values)
-      .where(and(eq(zenArtifacts.userId, userId), eq(zenArtifacts.id, artifactId)))
-      .returning()
+    const db = getDatabaseClient()
+    const rows = await db.transaction(async (tx) => {
+      const artifactRows = await tx
+        .update(zenArtifacts)
+        .set(values)
+        .where(and(eq(zenArtifacts.userId, userId), eq(zenArtifacts.id, artifactId)))
+        .returning()
+
+      if (artifactRows[0]) {
+        await tx
+          .insert(zenArtifactVersions)
+          .values(
+            buildVersionValues(
+              artifactRows[0],
+              getArtifactVersionAction(
+                toJsonObject<Record<string, unknown>>(artifactRows[0].metadata, {})
+              )
+            )
+          )
+      }
+
+      return artifactRows
+    })
 
     return rows[0] ? rowToArtifact(rows[0]) : null
+  }
+
+  async listVersions(
+    userId: string,
+    artifactId: string
+  ): Promise<ArtifactVersion[] | null> {
+    const artifact = await this.get(userId, artifactId)
+    if (!artifact) return null
+
+    const rows = await getDatabaseClient()
+      .select()
+      .from(zenArtifactVersions)
+      .where(
+        and(
+          eq(zenArtifactVersions.userId, userId),
+          eq(zenArtifactVersions.artifactId, artifactId)
+        )
+      )
+      .orderBy(desc(zenArtifactVersions.createdAt))
+
+    return rows.map(rowToArtifactVersion)
+  }
+
+  async restoreVersion(
+    userId: string,
+    artifactId: string,
+    versionId: string
+  ): Promise<{ artifact: Artifact; version: ArtifactVersion } | null> {
+    const db = getDatabaseClient()
+    const result = await db.transaction(async (tx) => {
+      const versionRows = await tx
+        .select()
+        .from(zenArtifactVersions)
+        .where(
+          and(
+            eq(zenArtifactVersions.userId, userId),
+            eq(zenArtifactVersions.artifactId, artifactId),
+            eq(zenArtifactVersions.id, versionId)
+          )
+        )
+        .limit(1)
+      const version = versionRows[0]
+
+      if (!version) return null
+
+      const artifactRows = await tx
+        .update(zenArtifacts)
+        .set({
+          title: version.title,
+          artifactType: version.artifactType,
+          content: version.content,
+          metadata: normalizeMetadata(version.metadata),
+          updatedAt: new Date(),
+        })
+        .where(and(eq(zenArtifacts.userId, userId), eq(zenArtifacts.id, artifactId)))
+        .returning()
+      const artifact = artifactRows[0]
+
+      if (!artifact) return null
+
+      const restoredVersionRows = await tx
+        .insert(zenArtifactVersions)
+        .values(buildVersionValues(artifact, RESTORE_ARTIFACT_VERSION_ACTION))
+        .returning()
+
+      return {
+        artifact,
+        version: restoredVersionRows[0],
+      }
+    })
+
+    if (!result?.artifact || !result.version) return null
+
+    return {
+      artifact: rowToArtifact(result.artifact),
+      version: rowToArtifactVersion(result.version),
+    }
+  }
+
+  async duplicateVersion(
+    userId: string,
+    artifactId: string,
+    versionId: string
+  ): Promise<Artifact | null> {
+    const db = getDatabaseClient()
+    const result = await db.transaction(async (tx) => {
+      const versionRows = await tx
+        .select()
+        .from(zenArtifactVersions)
+        .where(
+          and(
+            eq(zenArtifactVersions.userId, userId),
+            eq(zenArtifactVersions.artifactId, artifactId),
+            eq(zenArtifactVersions.id, versionId)
+          )
+        )
+        .limit(1)
+      const version = versionRows[0]
+
+      if (!version) return null
+
+      const sourceArtifactRows = await tx
+        .select()
+        .from(zenArtifacts)
+        .where(and(eq(zenArtifacts.userId, userId), eq(zenArtifacts.id, artifactId)))
+        .limit(1)
+      const sourceArtifact = sourceArtifactRows[0]
+
+      if (!sourceArtifact) return null
+
+      const artifactRows = await tx
+        .insert(zenArtifacts)
+        .values({
+          userId,
+          projectId: sourceArtifact.projectId,
+          conversationId: sourceArtifact.conversationId,
+          sourceMessageId: sourceArtifact.sourceMessageId,
+          sourceType: sourceArtifact.sourceType,
+          title: getDuplicateTitle(version.title),
+          artifactType: version.artifactType,
+          content: version.content,
+          metadata: normalizeMetadata(version.metadata),
+        })
+        .returning()
+      const artifact = artifactRows[0]
+
+      if (!artifact) return null
+
+      await tx
+        .insert(zenArtifactVersions)
+        .values(buildVersionValues(artifact, version.createdByAction))
+
+      return artifact
+    })
+
+    return result ? rowToArtifact(result) : null
   }
 
   async delete(userId: string, artifactId: string): Promise<boolean> {
