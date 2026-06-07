@@ -4,12 +4,15 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   Check,
   Clipboard,
+  CopyPlus,
   Download,
   FilePlus2,
   FileText,
+  History,
   Loader2,
   PencilLine,
   Plus,
+  RotateCcw,
   Save,
   Search,
   Sparkles,
@@ -30,6 +33,7 @@ import {
   ArtifactActionType,
   ArtifactSourceType,
   ArtifactType,
+  ArtifactVersion,
   Project,
 } from '@/types'
 import {
@@ -107,6 +111,29 @@ function formatDate(value: string) {
   }).format(date)
 }
 
+function formatDateTime(value: string) {
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return 'Unknown'
+
+  return new Intl.DateTimeFormat(undefined, {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  }).format(date)
+}
+
+function getVersionActionLabel(action?: string | null) {
+  if (!action) return 'Saved version'
+  if (action === 'restore_version') return 'Restored version'
+  if (action in ARTIFACT_ACTION_LABELS) {
+    return ARTIFACT_ACTION_LABELS[action as ArtifactActionType]
+  }
+
+  return action.replace(/_/g, ' ')
+}
+
 function artifactToDraft(artifact: Artifact): ArtifactDraft {
   return {
     id: artifact.id,
@@ -149,6 +176,9 @@ export function ArtifactStudio() {
     updateArtifact,
     deleteArtifact,
     runArtifactAction,
+    listArtifactVersions,
+    restoreArtifactVersion,
+    duplicateArtifactVersion,
   } = useChatContext()
   const [open, setOpen] = useState(false)
   const [artifacts, setArtifacts] = useState<Artifact[]>([])
@@ -174,6 +204,14 @@ export function ArtifactStudio() {
   const [copied, setCopied] = useState(false)
   const [previewCopied, setPreviewCopied] = useState(false)
   const [actionError, setActionError] = useState<string | null>(null)
+  const [historyOpen, setHistoryOpen] = useState(false)
+  const [versions, setVersions] = useState<ArtifactVersion[]>([])
+  const [selectedVersionId, setSelectedVersionId] = useState<string | null>(null)
+  const [isLoadingVersions, setIsLoadingVersions] = useState(false)
+  const [isRestoringVersion, setIsRestoringVersion] = useState(false)
+  const [isDuplicatingVersion, setIsDuplicatingVersion] = useState(false)
+  const [versionCopied, setVersionCopied] = useState(false)
+  const [historyError, setHistoryError] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   const defaultProjectId =
@@ -183,6 +221,10 @@ export function ArtifactStudio() {
     () => artifacts.filter((artifact) => matchesLocalQuery(artifact, query)),
     [artifacts, query]
   )
+  const selectedVersion =
+    versions.find((version) => version.id === selectedVersionId) ??
+    versions[0] ??
+    null
 
   const selectArtifact = useCallback((artifact: Artifact) => {
     setSelectedArtifact(artifact)
@@ -403,6 +445,95 @@ export function ArtifactStudio() {
     }
   }
 
+  const loadVersions = async (artifactId: string, focusVersionId?: string | null) => {
+    setIsLoadingVersions(true)
+    setHistoryError(null)
+
+    try {
+      const nextVersions = await listArtifactVersions(artifactId)
+      setVersions(nextVersions)
+      setSelectedVersionId(focusVersionId ?? nextVersions[0]?.id ?? null)
+    } catch (versionError) {
+      setHistoryError(
+        versionError instanceof Error
+          ? versionError.message
+          : 'Unable to load version history.'
+      )
+      setVersions([])
+      setSelectedVersionId(null)
+    } finally {
+      setIsLoadingVersions(false)
+    }
+  }
+
+  const openHistory = async () => {
+    if (!selectedArtifact) return
+
+    setHistoryOpen(true)
+    setVersionCopied(false)
+    await loadVersions(selectedArtifact.id)
+  }
+
+  const copySelectedVersion = async () => {
+    if (!selectedVersion?.content.trim()) return
+
+    await navigator.clipboard.writeText(selectedVersion.content)
+    setVersionCopied(true)
+    window.setTimeout(() => setVersionCopied(false), 1800)
+  }
+
+  const restoreSelectedVersion = async () => {
+    if (!selectedArtifact || !selectedVersion) return
+
+    setIsRestoringVersion(true)
+    setHistoryError(null)
+
+    try {
+      const restored = await restoreArtifactVersion(
+        selectedArtifact.id,
+        selectedVersion.id
+      )
+
+      if (!restored) {
+        setHistoryError('Artifact version could not be restored.')
+        return
+      }
+
+      selectArtifact(restored)
+      setActionPreview(null)
+      await loadArtifacts(restored.id)
+      await loadVersions(restored.id)
+    } finally {
+      setIsRestoringVersion(false)
+    }
+  }
+
+  const duplicateSelectedVersion = async () => {
+    if (!selectedArtifact || !selectedVersion) return
+
+    setIsDuplicatingVersion(true)
+    setHistoryError(null)
+
+    try {
+      const duplicated = await duplicateArtifactVersion(
+        selectedArtifact.id,
+        selectedVersion.id
+      )
+
+      if (!duplicated) {
+        setHistoryError('Artifact version could not be duplicated.')
+        return
+      }
+
+      selectArtifact(duplicated)
+      setHistoryOpen(false)
+      setActionPreview(null)
+      await loadArtifacts(duplicated.id)
+    } finally {
+      setIsDuplicatingVersion(false)
+    }
+  }
+
   return (
     <>
       <Dialog open={open} onOpenChange={setOpen}>
@@ -570,6 +701,18 @@ export function ArtifactStudio() {
                     <Download className="mr-2 size-4" />
                     Export
                   </Button>
+                  {selectedArtifact ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="rounded-xl"
+                      onClick={() => void openHistory()}
+                    >
+                      <History className="mr-2 size-4" />
+                      History
+                    </Button>
+                  ) : null}
                   {selectedArtifact ? (
                     <Button
                       type="button"
@@ -789,6 +932,185 @@ export function ArtifactStudio() {
                     <span>Updated {formatDate(selectedArtifact.updatedAt)}</span>
                   ) : null}
                 </div>
+              </div>
+            </section>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={historyOpen} onOpenChange={setHistoryOpen}>
+        <DialogContent className="max-h-[88vh] w-[calc(100vw-1rem)] max-w-5xl overflow-hidden rounded-2xl border-border/70 bg-background/95 p-0">
+          <DialogHeader className="border-b border-border/70 px-4 py-4 text-left sm:px-6">
+            <DialogTitle className="flex items-center gap-2">
+              <History className="size-5" />
+              Version history
+            </DialogTitle>
+            <DialogDescription>
+              Review saved artifact states, restore an earlier version, or duplicate
+              a version into a new artifact.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="grid min-h-0 gap-0 lg:grid-cols-[320px_1fr]">
+            <aside className="max-h-[70vh] min-h-0 overflow-y-auto border-b border-border/70 p-3 lg:border-b-0 lg:border-r">
+              {isLoadingVersions ? (
+                <div className="flex items-center gap-2 rounded-2xl border border-border/60 bg-card/40 px-4 py-5 text-sm text-muted-foreground">
+                  <Loader2 className="size-4 animate-spin" />
+                  Loading versions...
+                </div>
+              ) : historyError ? (
+                <div className="rounded-2xl border border-destructive/40 bg-destructive/10 px-4 py-5 text-sm text-destructive">
+                  {historyError}
+                </div>
+              ) : versions.length === 0 ? (
+                <div className="rounded-2xl border border-dashed border-border/60 bg-card/25 px-4 py-8 text-center text-sm text-muted-foreground">
+                  No saved versions are available yet.
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {versions.map((version) => (
+                    <button
+                      key={version.id}
+                      type="button"
+                      className={cn(
+                        'w-full rounded-2xl border p-3 text-left transition-colors',
+                        selectedVersion?.id === version.id
+                          ? 'border-primary/50 bg-primary/10'
+                          : 'border-border/60 bg-card/40 hover:border-primary/30 hover:bg-card/70'
+                      )}
+                      onClick={() => {
+                        setSelectedVersionId(version.id)
+                        setVersionCopied(false)
+                      }}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-medium text-foreground">
+                            {version.title}
+                          </p>
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            {formatDateTime(version.createdAt)}
+                          </p>
+                        </div>
+                        <Badge variant="secondary" className="rounded-full">
+                          {ARTIFACT_TYPE_LABELS[version.artifactType]}
+                        </Badge>
+                      </div>
+                      <div className="mt-3 flex flex-wrap gap-1.5">
+                        <Badge variant="outline" className="rounded-full">
+                          {getVersionActionLabel(version.createdByAction)}
+                        </Badge>
+                        <Badge variant="outline" className="rounded-full">
+                          {version.content.length} chars
+                        </Badge>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </aside>
+
+            <section className="flex max-h-[70vh] min-h-0 flex-col">
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/70 p-3">
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-medium text-foreground">
+                    {selectedVersion?.title ?? 'Select a version'}
+                  </p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {selectedVersion
+                      ? `${formatDateTime(selectedVersion.createdAt)} · ${getVersionActionLabel(
+                          selectedVersion.createdByAction
+                        )}`
+                      : 'Choose a saved version to preview it.'}
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="rounded-xl"
+                    disabled={!selectedVersion?.content.trim()}
+                    onClick={() => void copySelectedVersion()}
+                  >
+                    <Clipboard className="mr-2 size-4" />
+                    {versionCopied ? 'Copied' : 'Copy'}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="rounded-xl"
+                    disabled={!selectedVersion || isDuplicatingVersion}
+                    onClick={() => void duplicateSelectedVersion()}
+                  >
+                    {isDuplicatingVersion ? (
+                      <Loader2 className="mr-2 size-4 animate-spin" />
+                    ) : (
+                      <CopyPlus className="mr-2 size-4" />
+                    )}
+                    Duplicate
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    className="rounded-xl"
+                    disabled={!selectedVersion || isRestoringVersion}
+                    onClick={() => void restoreSelectedVersion()}
+                  >
+                    {isRestoringVersion ? (
+                      <Loader2 className="mr-2 size-4 animate-spin" />
+                    ) : (
+                      <RotateCcw className="mr-2 size-4" />
+                    )}
+                    Restore
+                  </Button>
+                </div>
+              </div>
+
+              <div className="min-h-0 flex-1 overflow-y-auto p-4">
+                {selectedVersion ? (
+                  <div className="space-y-3">
+                    <div className="grid gap-3 md:grid-cols-3">
+                      <div className="rounded-2xl border border-border/60 bg-card/35 p-3">
+                        <p className="text-xs text-muted-foreground">Type</p>
+                        <p className="mt-1 text-sm text-foreground">
+                          {ARTIFACT_TYPE_LABELS[selectedVersion.artifactType]}
+                        </p>
+                      </div>
+                      <div className="rounded-2xl border border-border/60 bg-card/35 p-3">
+                        <p className="text-xs text-muted-foreground">Saved</p>
+                        <p className="mt-1 text-sm text-foreground">
+                          {formatDateTime(selectedVersion.createdAt)}
+                        </p>
+                      </div>
+                      <div className="rounded-2xl border border-border/60 bg-card/35 p-3">
+                        <p className="text-xs text-muted-foreground">Action</p>
+                        <p className="mt-1 text-sm text-foreground">
+                          {getVersionActionLabel(selectedVersion.createdByAction)}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="max-h-72 overflow-y-auto whitespace-pre-wrap rounded-2xl border border-border/60 bg-card/35 p-3 font-mono text-xs leading-6 text-foreground">
+                      {selectedVersion.content}
+                    </div>
+
+                    <div className="rounded-2xl border border-border/60 bg-card/35 p-3">
+                      <p className="mb-2 text-xs font-medium text-muted-foreground">
+                        Metadata
+                      </p>
+                      <pre className="max-h-40 overflow-y-auto whitespace-pre-wrap text-xs leading-5 text-muted-foreground">
+                        {JSON.stringify(selectedVersion.metadata, null, 2)}
+                      </pre>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="rounded-2xl border border-dashed border-border/60 bg-card/25 px-4 py-10 text-center text-sm text-muted-foreground">
+                    Select a saved version to preview title, content, metadata,
+                    and restore options.
+                  </div>
+                )}
               </div>
             </section>
           </div>
