@@ -361,6 +361,12 @@ export interface Conversation extends ConversationSummary {
   messages: Message[]
   attachments?: Attachment[]
   usage?: UsageEstimate
+  messagePageInfo?: {
+    loadedCount: number
+    totalCount: number
+    hasMoreBefore: boolean
+    nextBefore?: string | null
+  }
 }
 
 export type Chat = Conversation
@@ -483,6 +489,34 @@ export interface ArtifactListFilters {
   q?: string
   artifactType?: ArtifactType | null
   sourceType?: ArtifactSourceType | null
+  limit?: number | null
+  beforeUpdatedAt?: string | null
+}
+
+export interface ArtifactVersion {
+  id: string
+  artifactId: string
+  userId: string
+  title: string
+  artifactType: ArtifactType
+  content: string
+  metadata: Record<string, unknown>
+  createdAt: string
+  createdByAction?: string | null
+}
+
+export interface ArtifactVersionListResponse {
+  artifactId: string
+  versions: ArtifactVersion[]
+}
+
+export interface ArtifactVersionRestoreResponse {
+  artifact: Artifact
+  version: ArtifactVersion
+}
+
+export interface ArtifactVersionDuplicateResponse {
+  artifact: Artifact
 }
 
 export type ArtifactActionType =
@@ -1231,6 +1265,13 @@ export interface ChatResponse {
   message: Message
   usage?: UsageEstimate
   subscriptionTier?: SubscriptionTier
+}
+
+export interface ConversationMessagesPageResponse {
+  conversationId: string
+  messages: Message[]
+  hasMoreBefore: boolean
+  nextBefore: string | null
 }
 
 export interface ImageGenerateRequest {

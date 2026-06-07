@@ -430,6 +430,12 @@ export const zenIntegrationItems = pgTable(
       table.userId,
       table.projectId
     ),
+    index('zen_integration_items_user_project_status_imported_perf_idx').on(
+      table.userId,
+      table.projectId,
+      table.status,
+      table.lastImportedAt
+    ),
     index('zen_integration_items_account_idx').on(table.accountId),
     index('zen_integration_items_file_idx').on(table.fileId),
     check(
@@ -496,6 +502,16 @@ export const zenConversations = pgTable(
   (table) => [
     index('zen_conversations_user_updated_idx').on(table.userId, table.updatedAt),
     index('zen_conversations_user_project_idx').on(table.userId, table.projectId),
+    index('zen_conversations_user_project_updated_perf_idx').on(
+      table.userId,
+      table.projectId,
+      table.updatedAt
+    ),
+    index('zen_conversations_user_assistant_updated_perf_idx').on(
+      table.userId,
+      table.assistantFamily,
+      table.updatedAt
+    ),
     check(
       'zen_conversations_mode_check',
       sql`${table.mode} in ('general', 'creative', 'logic', 'code', 'live', 'image')`
@@ -609,6 +625,11 @@ export const zenPromptWorkflows = pgTable(
       table.userId,
       table.projectId
     ),
+    index('zen_prompt_workflows_user_project_updated_perf_idx').on(
+      table.userId,
+      table.projectId,
+      table.updatedAt
+    ),
   ]
 )
 
@@ -671,6 +692,11 @@ export const zenPromptWorkflowRuns = pgTable(
   (table) => [
     index('zen_prompt_workflow_runs_user_created_idx').on(
       table.userId,
+      table.createdAt
+    ),
+    index('zen_prompt_workflow_runs_user_project_created_perf_idx').on(
+      table.userId,
+      table.projectId,
       table.createdAt
     ),
     index('zen_prompt_workflow_runs_workflow_created_idx').on(
@@ -744,6 +770,11 @@ export const zenModelComparisons = pgTable(
   (table) => [
     index('zen_model_comparisons_user_created_idx').on(
       table.userId,
+      table.createdAt
+    ),
+    index('zen_model_comparisons_user_project_created_perf_idx').on(
+      table.userId,
+      table.projectId,
       table.createdAt
     ),
     index('zen_model_comparisons_conversation_idx').on(table.conversationId),
@@ -847,6 +878,14 @@ export const zenUsageEvents = pgTable(
   (table) => [
     index('zen_usage_events_user_created_idx').on(table.userId, table.createdAt),
     index('zen_usage_events_conversation_idx').on(table.conversationId),
+    index('zen_usage_events_subscription_created_perf_idx').on(
+      table.subscriptionId,
+      table.createdAt
+    ),
+    index('zen_usage_events_assistant_created_perf_idx').on(
+      table.assistantFamily,
+      table.createdAt
+    ),
     check(
       'zen_usage_events_assistant_family_check',
       sql`${table.assistantFamily} in ('nova', 'velora', 'axiom', 'forge', 'pulse', 'prism')`
@@ -914,6 +953,14 @@ export const zenImageGenerationEvents = pgTable(
       table.userId,
       table.createdAt
     ),
+    index('zen_image_generation_events_subscription_created_perf_idx').on(
+      table.subscriptionId,
+      table.createdAt
+    ),
+    index('zen_image_generation_events_model_created_perf_idx').on(
+      table.model,
+      table.createdAt
+    ),
     check(
       'zen_image_generation_events_assistant_family_check',
       sql`${table.assistantFamily} = 'prism'`
@@ -950,6 +997,10 @@ export const zenPlanChangeRequests = pgTable(
     index('zen_plan_change_requests_status_created_idx').on(
       table.status,
       table.createdAt
+    ),
+    index('zen_plan_change_requests_status_updated_perf_idx').on(
+      table.status,
+      table.updatedAt
     ),
     check(
       'zen_plan_change_requests_current_tier_check',
@@ -1060,6 +1111,16 @@ export const zenFiles = pgTable(
   (table) => [
     index('zen_files_user_created_idx').on(table.userId, table.createdAt),
     index('zen_files_conversation_idx').on(table.conversationId),
+    index('zen_files_user_project_created_perf_idx').on(
+      table.userId,
+      table.projectId,
+      table.createdAt
+    ),
+    index('zen_files_user_object_ref_perf_idx').on(
+      table.userId,
+      table.bucket,
+      table.storagePath
+    ),
     check(
       'zen_files_provider_check',
       sql`${table.provider} in ('external', 'local')`
@@ -1208,6 +1269,45 @@ export const zenArtifacts = pgTable(
     ),
     check(
       'zen_artifacts_artifact_type_check',
+      sql`${table.artifactType} in (${sql.join(
+        artifactTypeCheck.map((artifactType) => sql`${artifactType}`),
+        sql`, `
+      )})`
+    ),
+  ]
+)
+
+export const zenArtifactVersions = pgTable(
+  'zen_artifact_versions',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    artifactId: uuid('artifact_id')
+      .notNull()
+      .references(() => zenArtifacts.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => zenUsers.id, { onDelete: 'cascade' }),
+    title: text('title').notNull(),
+    artifactType: text('artifact_type').notNull().default('document'),
+    content: text('content').notNull().default(''),
+    metadata: jsonb('metadata').notNull().default({}),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    createdByAction: text('created_by_action'),
+  },
+  (table) => [
+    index('zen_artifact_versions_user_artifact_created_idx').on(
+      table.userId,
+      table.artifactId,
+      table.createdAt
+    ),
+    index('zen_artifact_versions_artifact_created_idx').on(
+      table.artifactId,
+      table.createdAt
+    ),
+    check(
+      'zen_artifact_versions_artifact_type_check',
       sql`${table.artifactType} in (${sql.join(
         artifactTypeCheck.map((artifactType) => sql`${artifactType}`),
         sql`, `
