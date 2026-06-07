@@ -28,9 +28,11 @@ export function ChatArea() {
     editLastUserMessage,
     askAnotherMode,
     saveArtifact,
+    loadOlderMessages,
     streamingState,
   } = useChatContext()
   const [selectedPrompt, setSelectedPrompt] = useState('')
+  const [isLoadingOlder, setIsLoadingOlder] = useState(false)
   const scrollAreaRef = useRef<HTMLDivElement>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const previousMessageCountRef = useRef(0)
@@ -68,6 +70,16 @@ export function ChatArea() {
         .find((message) => message.role === 'assistant')?.id,
     [currentChat?.messages]
   )
+
+  const handleLoadOlder = async () => {
+    if (!currentChat?.id || isLoadingOlder) return
+    setIsLoadingOlder(true)
+    try {
+      await loadOlderMessages(currentChat.id)
+    } finally {
+      setIsLoadingOlder(false)
+    }
+  }
 
   const lastUserId = useMemo(
     () =>
@@ -233,6 +245,20 @@ export function ChatArea() {
                 </AlertDescription>
               </Alert>
             )}
+
+            {currentChat?.messagePageInfo?.hasMoreBefore &&
+            currentChat.messagePageInfo.nextBefore ? (
+              <div className="flex justify-center py-2">
+                <button
+                  type="button"
+                  onClick={() => void handleLoadOlder()}
+                  disabled={isLoadingOlder}
+                  className="rounded-full border border-border/70 bg-background/70 px-4 py-2 text-xs font-medium text-muted-foreground transition-colors hover:border-primary/50 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {isLoadingOlder ? 'Loading older messages...' : 'Load older messages'}
+                </button>
+              </div>
+            ) : null}
 
             {currentChat?.messages.map((message) => (
               <div

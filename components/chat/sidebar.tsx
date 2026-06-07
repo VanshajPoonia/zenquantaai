@@ -355,10 +355,6 @@ export function Sidebar({ onOpenSettings }: SidebarProps) {
     const matchingIds = new Set(
       conversations
         .filter((conversation) => {
-          const messageText = conversation.messages
-            .map((message) => message.content)
-            .join(' ')
-            .toLowerCase()
           const attachmentNames = (conversation.attachments ?? [])
             .map((attachment) => attachment.name)
             .join(' ')
@@ -369,7 +365,6 @@ export function Sidebar({ onOpenSettings }: SidebarProps) {
           return (
             conversation.title.toLowerCase().includes(query) ||
             conversation.preview.toLowerCase().includes(query) ||
-            messageText.includes(query) ||
             attachmentNames.includes(query) ||
             projectName.includes(query)
           )
