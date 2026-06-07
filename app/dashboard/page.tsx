@@ -33,14 +33,21 @@ export default async function DashboardPage({
   const { user, profile } = await requireServerUser()
   const params = await searchParams
   const adminRequired = params.admin === 'required'
-  const [subscription, usageEvents, imageEvents, requests, conversations] =
-    await Promise.all([
-      neonSubscriptionsRepository.ensureForUser(user),
-      neonUsageEventsRepository.listByUser(user.id),
-      neonImageGenerationEventsRepository.listByUser(user.id),
-      neonPlanRequestsRepository.listByUser(user.id),
-      neonConversationRepository.list(user.id),
-    ])
+  const subscription = await neonSubscriptionsRepository.ensureForUser(user)
+  const periodStart = new Date(subscription.currentPeriodStartedAt)
+  const periodEnd = new Date(subscription.currentPeriodEndsAt)
+  const [usageEvents, imageEvents, requests, conversations] = await Promise.all([
+    neonUsageEventsRepository.listByUser(user.id, {
+      from: periodStart,
+      to: periodEnd,
+    }),
+    neonImageGenerationEventsRepository.listByUser(user.id, {
+      from: periodStart,
+      to: periodEnd,
+    }),
+    neonPlanRequestsRepository.listByUser(user.id),
+    neonConversationRepository.list(user.id, { limit: 8 }),
+  ])
 
   const periodUsageEvents = filterEventsForSubscriptionPeriod(
     usageEvents,

@@ -1,5 +1,6 @@
 import 'server-only'
 
+import { inArray } from 'drizzle-orm'
 import {
   AdminAuditLog,
   AssistantFamily,
@@ -500,42 +501,10 @@ class NeonAdminRepository {
   async getOverview(filters: AdminAnalyticsFilters = {}): Promise<AdminOverview> {
     const normalizedFilters = normalizeAdminAnalyticsFilters(filters)
     const db = getDatabaseClient()
-    const [
-      profiles,
-      subscriptions,
-      usageEvents,
-      imageEvents,
-      requests,
-      projects,
-      promptLibraryItems,
-      workflowRuns,
-      workflowStepRuns,
-      modelComparisons,
-      modelComparisonCandidates,
-      files,
-      generatedImages,
-      customAssistants,
-      conversationRows,
-      messages,
-    ] =
-      await Promise.all([
-        neonProfilesRepository.list(),
-        neonSubscriptionsRepository.list(),
-        neonUsageEventsRepository.list(),
-        neonImageGenerationEventsRepository.list(),
-        neonPlanRequestsRepository.list(),
-        db.select().from(zenProjects),
-        db.select().from(zenPromptLibrary),
-        db.select().from(zenPromptWorkflowRuns),
-        db.select().from(zenPromptWorkflowStepRuns),
-        db.select().from(zenModelComparisons),
-        db.select().from(zenModelComparisonCandidates),
-        db.select().from(zenFiles),
-        db.select().from(zenGeneratedImages),
-        db.select().from(zenCustomAssistants),
-        db.select().from(zenConversations),
-        db.select().from(zenMessages),
-      ])
+    const [profiles, subscriptions] = await Promise.all([
+      neonProfilesRepository.list(),
+      neonSubscriptionsRepository.list(),
+    ])
 
     const profileByUserId = new Map(
       profiles.map((profile) => [profile.userId, profile])
@@ -551,6 +520,100 @@ class NeonAdminRepository {
     const filteredUserIds = new Set(
       subscriptionsForFilters.map((subscription) => subscription.userId)
     )
+    const filteredUserIdList = [...filteredUserIds]
+    const filterFromDate = parseDateInput(normalizedFilters.from)!
+    const filterToDate = endOfUtcDay(parseDateInput(normalizedFilters.to)!)
+
+    const [
+      usageEvents,
+      imageEvents,
+      requests,
+      projects,
+      promptLibraryItems,
+      workflowRuns,
+      modelComparisons,
+      files,
+      generatedImages,
+      customAssistants,
+      conversationRows,
+    ] =
+      filteredUserIdList.length === 0
+        ? [[], [], [], [], [], [], [], [], [], [], []]
+        : await Promise.all([
+            neonUsageEventsRepository.list({
+              userIds: filteredUserIdList,
+              assistantFamily: normalizedFilters.assistant,
+              from: filterFromDate,
+              to: filterToDate,
+            }),
+            neonImageGenerationEventsRepository.list({
+              userIds: filteredUserIdList,
+              assistantFamily: normalizedFilters.assistant,
+              from: filterFromDate,
+              to: filterToDate,
+            }),
+            neonPlanRequestsRepository.list({ userIds: filteredUserIdList }),
+            db
+              .select()
+              .from(zenProjects)
+              .where(inArray(zenProjects.userId, filteredUserIdList)),
+            db
+              .select()
+              .from(zenPromptLibrary)
+              .where(inArray(zenPromptLibrary.userId, filteredUserIdList)),
+            db
+              .select()
+              .from(zenPromptWorkflowRuns)
+              .where(inArray(zenPromptWorkflowRuns.userId, filteredUserIdList)),
+            db
+              .select()
+              .from(zenModelComparisons)
+              .where(inArray(zenModelComparisons.userId, filteredUserIdList)),
+            db
+              .select()
+              .from(zenFiles)
+              .where(inArray(zenFiles.userId, filteredUserIdList)),
+            db
+              .select()
+              .from(zenGeneratedImages)
+              .where(inArray(zenGeneratedImages.userId, filteredUserIdList)),
+            db
+              .select()
+              .from(zenCustomAssistants)
+              .where(inArray(zenCustomAssistants.userId, filteredUserIdList)),
+            db
+              .select()
+              .from(zenConversations)
+              .where(inArray(zenConversations.userId, filteredUserIdList)),
+          ])
+    const workflowRunIds = workflowRuns.map((run) => run.id)
+    const modelComparisonIds = modelComparisons.map((comparison) => comparison.id)
+    const conversationIds = conversationRows.map((conversation) => conversation.id)
+    const [workflowStepRuns, modelComparisonCandidates, messages] = await Promise.all([
+      workflowRunIds.length > 0
+        ? db
+            .select()
+            .from(zenPromptWorkflowStepRuns)
+            .where(inArray(zenPromptWorkflowStepRuns.runId, workflowRunIds))
+        : Promise.resolve([]),
+      modelComparisonIds.length > 0
+        ? db
+            .select()
+            .from(zenModelComparisonCandidates)
+            .where(
+              inArray(
+                zenModelComparisonCandidates.comparisonId,
+                modelComparisonIds
+              )
+            )
+        : Promise.resolve([]),
+      conversationIds.length > 0
+        ? db
+            .select()
+            .from(zenMessages)
+            .where(inArray(zenMessages.conversationId, conversationIds))
+        : Promise.resolve([]),
+    ])
     const filteredUsageEvents = usageEvents.filter(
       (event) =>
         filteredUserIds.has(event.userId) &&
@@ -1157,26 +1220,45 @@ class NeonAdminRepository {
 
   async listUserRows(filters: AdminAnalyticsFilters = {}): Promise<AdminUserRow[]> {
     const normalizedFilters = normalizeAdminAnalyticsFilters(filters)
-    const [profiles, subscriptions, overrides, usageEvents, imageEvents, requests] =
-      await Promise.all([
-        neonProfilesRepository.list(),
-        neonSubscriptionsRepository.list(),
-        neonUsageLimitOverridesRepository.list(),
-        neonUsageEventsRepository.list(),
-        neonImageGenerationEventsRepository.list(),
-        neonPlanRequestsRepository.list(),
-      ])
+    const [profiles, subscriptions, overrides] = await Promise.all([
+      neonProfilesRepository.list(),
+      neonSubscriptionsRepository.list(),
+      neonUsageLimitOverridesRepository.list(),
+    ])
+    const scopedSubscriptions = subscriptions.filter((subscription) => {
+      const profile =
+        profiles.find((item) => item.userId === subscription.userId) ?? null
+      return (
+        (!normalizedFilters.tier ||
+          subscription.tier === normalizedFilters.tier) &&
+        matchesUserSearch(subscription, profile, normalizedFilters.user)
+      )
+    })
+    const scopedUserIds = scopedSubscriptions.map(
+      (subscription) => subscription.userId
+    )
+    const filterFromDate = parseDateInput(normalizedFilters.from)!
+    const filterToDate = endOfUtcDay(parseDateInput(normalizedFilters.to)!)
+    const [usageEvents, imageEvents, requests] =
+      scopedUserIds.length === 0
+        ? [[], [], []]
+        : await Promise.all([
+            neonUsageEventsRepository.list({
+              userIds: scopedUserIds,
+              assistantFamily: normalizedFilters.assistant,
+              from: filterFromDate,
+              to: filterToDate,
+            }),
+            neonImageGenerationEventsRepository.list({
+              userIds: scopedUserIds,
+              assistantFamily: normalizedFilters.assistant,
+              from: filterFromDate,
+              to: filterToDate,
+            }),
+            neonPlanRequestsRepository.list({ userIds: scopedUserIds }),
+          ])
 
-    return subscriptions
-      .filter((subscription) => {
-        const profile =
-          profiles.find((item) => item.userId === subscription.userId) ?? null
-        return (
-          (!normalizedFilters.tier ||
-            subscription.tier === normalizedFilters.tier) &&
-          matchesUserSearch(subscription, profile, normalizedFilters.user)
-        )
-      })
+    return scopedSubscriptions
       .map((subscription) => {
         const profile =
           profiles.find((item) => item.userId === subscription.userId) ?? null

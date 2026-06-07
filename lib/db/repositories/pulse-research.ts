@@ -34,6 +34,7 @@ const MAX_RECENT_CONVERSATIONS = 16
 const MAX_RECENT_SOURCES = 80
 const MAX_RECENT_SEARCHES = 24
 const MAX_SAVED_SOURCES = 40
+const MAX_CONVERSATION_ROWS = 80
 const MAX_MESSAGE_ROWS = 700
 
 function rowToProject(row: ProjectRow): Project {
@@ -143,7 +144,8 @@ class NeonPulseResearchRepository {
               )
             : eq(zenConversations.userId, userId)
         )
-        .orderBy(desc(zenConversations.updatedAt)),
+        .orderBy(desc(zenConversations.updatedAt))
+        .limit(MAX_CONVERSATION_ROWS),
       db
         .select()
         .from(zenArtifacts)

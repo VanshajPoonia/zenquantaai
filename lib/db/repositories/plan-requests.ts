@@ -1,6 +1,6 @@
 import 'server-only'
 
-import { and, desc, eq } from 'drizzle-orm'
+import { SQL, and, desc, eq, inArray } from 'drizzle-orm'
 import { PlanChangeRequest, PlanRequestStatus, SubscriptionTier } from '@/types'
 import { getDatabaseClient } from '../client'
 import { zenAdminAuditLogs, zenPlanChangeRequests } from '../schema'
@@ -9,6 +9,19 @@ import { neonUsersRepository } from './users'
 
 type PlanRequestRow = typeof zenPlanChangeRequests.$inferSelect
 type AuditLogRow = typeof zenAdminAuditLogs.$inferSelect
+
+type PlanRequestListFilters = {
+  userIds?: string[]
+  status?: PlanRequestStatus | null
+  limit?: number | null
+}
+
+const MAX_PLAN_REQUEST_LIST_LIMIT = 1000
+
+function normalizeLimit(value: number | null | undefined): number | null {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return null
+  return Math.max(1, Math.min(MAX_PLAN_REQUEST_LIST_LIMIT, Math.floor(value)))
+}
 
 function rowToPlanRequest(row: PlanRequestRow): PlanChangeRequest {
   return {
@@ -40,11 +53,24 @@ function rowToAuditLog(row: AuditLogRow) {
 }
 
 class NeonPlanRequestsRepository {
-  async list(): Promise<PlanChangeRequest[]> {
-    const rows = await getDatabaseClient()
+  async list(filters: PlanRequestListFilters = {}): Promise<PlanChangeRequest[]> {
+    if (filters.userIds && filters.userIds.length === 0) return []
+
+    const conditions: SQL[] = []
+    if (filters.userIds?.length) {
+      conditions.push(inArray(zenPlanChangeRequests.userId, filters.userIds))
+    }
+    if (filters.status) {
+      conditions.push(eq(zenPlanChangeRequests.status, filters.status))
+    }
+
+    const limit = normalizeLimit(filters.limit)
+    const query = getDatabaseClient()
       .select()
       .from(zenPlanChangeRequests)
+      .where(conditions.length > 0 ? and(...conditions) : undefined)
       .orderBy(desc(zenPlanChangeRequests.createdAt))
+    const rows = limit ? await query.limit(limit) : await query
 
     return rows.map(rowToPlanRequest)
   }

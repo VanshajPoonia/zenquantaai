@@ -27,15 +27,31 @@ export async function GET(request: NextRequest) {
   if ('response' in auth) return auth.response
   await neonProfilesRepository.ensureFromAuthUser(auth.user)
 
-  const [subscription, override, textEvents, imageEvents, requests, conversations] =
-    await Promise.all([
-      neonSubscriptionsRepository.ensureForUser(auth.user),
-      neonUsageLimitOverridesRepository.getByUserId(auth.user.id),
-      neonUsageEventsRepository.listByUser(auth.user.id),
-      neonImageGenerationEventsRepository.listByUser(auth.user.id),
-      neonPlanRequestsRepository.listByUser(auth.user.id),
-      neonConversationRepository.list(auth.user.id),
-    ])
+  const [subscription, override] = await Promise.all([
+    neonSubscriptionsRepository.ensureForUser(auth.user),
+    neonUsageLimitOverridesRepository.getByUserId(auth.user.id),
+  ])
+  const periodStart = new Date(subscription.currentPeriodStartedAt)
+  const periodEnd = new Date(subscription.currentPeriodEndsAt)
+  const [
+    textEvents,
+    imageEvents,
+    recentImageEvents,
+    requests,
+    conversations,
+  ] = await Promise.all([
+    neonUsageEventsRepository.listByUser(auth.user.id, {
+      from: periodStart,
+      to: periodEnd,
+    }),
+    neonImageGenerationEventsRepository.listByUser(auth.user.id, {
+      from: periodStart,
+      to: periodEnd,
+    }),
+    neonImageGenerationEventsRepository.listByUser(auth.user.id, { limit: 8 }),
+    neonPlanRequestsRepository.listByUser(auth.user.id),
+    neonConversationRepository.list(auth.user.id, { limit: 8 }),
+  ])
   const effectiveSubscription = getEffectiveSubscription(subscription, override)
 
   const periodTextEvents = filterEventsForSubscriptionPeriod(textEvents, subscription)
@@ -104,8 +120,8 @@ export async function GET(request: NextRequest) {
           displayedCredits.totalDisplayedCredits
         ),
       },
-      recentConversations: conversations.slice(0, 8),
-      recentImages: imageEvents.slice(0, 8).map(toSafeDashboardRecentImage),
+      recentConversations: conversations,
+      recentImages: recentImageEvents.map(toSafeDashboardRecentImage),
     },
     { headers }
   )
