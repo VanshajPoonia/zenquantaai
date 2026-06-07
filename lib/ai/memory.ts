@@ -4,6 +4,8 @@ import { nowIso } from '@/lib/utils/chat'
 const RECENT_TURN_MESSAGE_LIMIT = 8
 const MAX_MEMORY_ITEMS = 6
 const MAX_MEMORY_LINE_LENGTH = 220
+const MAX_CONTEXT_MESSAGE_CHARS = 6_000
+const MAX_CONTEXT_TOTAL_CHARS = 24_000
 
 function normalizeWhitespace(input: string): string {
   return input.replace(/\s+/g, ' ').trim()
@@ -40,6 +42,53 @@ function getNonSystemMessages(conversation: Conversation): Message[] {
 function getRecentMessages(conversation: Conversation): Message[] {
   const messages = getNonSystemMessages(conversation)
   return messages.slice(-RECENT_TURN_MESSAGE_LIMIT)
+}
+
+export function selectBoundedContextMessages(
+  messages: Message[],
+  options: {
+    maxMessages?: number
+    maxMessageChars?: number
+    maxTotalChars?: number
+  } = {}
+): Message[] {
+  const maxMessages = options.maxMessages ?? RECENT_TURN_MESSAGE_LIMIT
+  const maxMessageChars = options.maxMessageChars ?? MAX_CONTEXT_MESSAGE_CHARS
+  const maxTotalChars = options.maxTotalChars ?? MAX_CONTEXT_TOTAL_CHARS
+  const recent = messages.filter((message) => message.role !== 'system').slice(-maxMessages)
+  const latestUser = [...recent].reverse().find((message) => message.role === 'user')
+  const selected: Message[] = []
+  let totalChars = 0
+
+  for (const message of [...recent].reverse()) {
+    const isLatestUser = latestUser?.id === message.id
+    const content =
+      message.content.length > maxMessageChars
+        ? `${message.content.slice(0, maxMessageChars).trimEnd()}\n[message truncated]`
+        : message.content
+    const nextMessage = content === message.content ? message : { ...message, content }
+    const nextSize = nextMessage.content.length
+
+    if (!isLatestUser && totalChars + nextSize > maxTotalChars) {
+      continue
+    }
+
+    selected.push(nextMessage)
+    totalChars += nextSize
+  }
+
+  if (latestUser && !selected.some((message) => message.id === latestUser.id)) {
+    selected.push(
+      latestUser.content.length > maxMessageChars
+        ? {
+            ...latestUser,
+            content: `${latestUser.content.slice(0, maxMessageChars).trimEnd()}\n[message truncated]`,
+          }
+        : latestUser
+    )
+  }
+
+  return selected.reverse()
 }
 
 function getOlderMessages(conversation: Conversation): Message[] {
@@ -176,7 +225,7 @@ export function buildMemoryBlock(summary?: string): string {
 }
 
 export function getRecentContextMessages(conversation: Conversation): Message[] {
-  return getRecentMessages(conversation)
+  return selectBoundedContextMessages(getRecentMessages(conversation))
 }
 
 export function updateConversationMemory(
