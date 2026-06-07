@@ -6,6 +6,79 @@ The repository contains a real Zenquanta AI platform backed by Neon for runtime 
 
 Current direction: plan upgrades remain manual/admin-driven, payment automation is out of scope unless explicitly requested, and Neon/storage start fresh without importing Supabase database rows or storage objects.
 
+## 2026-06-07 - 20-Commit GitHub Publish Handoff
+
+- Prepared the 2026-06-03 artifact version history, large-conversation performance/persistence, and database performance/indexing progress for a deliberate 20-commit publish to `origin/main`.
+- Scope for the publish: artifact version migrations/APIs/UI, conversation message paging and incremental persistence, bounded chat context, query caps/indexes for dashboard/admin/files/images/artifacts, focused tests, and the project task log entries above.
+- Verification before slicing: `npm run test` passed with 11 files and 45 tests; `npm run typecheck` passed; `npm run lint` passed with the existing 12 warnings; `npm run build` passed with the known Node `module.register()` deprecation warning.
+- GitHub note: `gh auth status` reports an invalid token, so this handoff uses direct `git push` to `origin/main` instead of GitHub CLI PR operations.
+
+## 2026-06-03 - Artifact Version History V1
+
+- Added Artifact Version History for saved artifacts:
+  - New forward-only migration `neon/migrations/20260603_zenquanta_artifact_versions.sql` creates `zen_artifact_versions`, indexes user/artifact history lookups, and backfills one baseline version per existing artifact.
+  - Drizzle schema now includes `zenArtifactVersions` with artifact/user cascade ownership and artifact-type validation.
+  - Artifact repository create/update paths now write version snapshots transactionally after successful artifact writes, so all existing save-as-artifact surfaces are covered.
+  - Artifact action preview remains unchanged and does not call AI or save automatically; once the user applies the preview and clicks Save, the update snapshot records `metadata.lastArtifactAction.actionType` as `created_by_action`.
+- Added protected version APIs:
+  - `GET /api/artifacts/[id]/versions`
+  - `POST /api/artifacts/[id]/versions/[versionId]/restore`
+  - `POST /api/artifacts/[id]/versions/[versionId]/duplicate`
+  - Routes require authenticated users and use repository-level `userId` scoping; missing or foreign artifacts/versions return `404`.
+- Updated Artifact Studio:
+  - Saved artifacts now expose a History button.
+  - Users can view version timestamps, artifact type, content length, action label, content, and metadata.
+  - Users can copy version content, restore a version into the current artifact, or duplicate a version as a separate artifact.
+- Added shared version response types and chat-context helpers for listing/restoring/duplicating versions.
+- Added unit coverage for artifact-version action extraction.
+- Verification: `npm run test` passed with 11 files and 45 tests; `npm run typecheck` passed; `npm run lint` passed with the existing 12 warnings; `npm run build` passed with the known Node `module.register()` deprecation warning.
+- Remaining risks: runtime version backfill/restore/duplicate behavior still needs seeded Neon manual QA; version diffs are metadata/time/content preview only, not a side-by-side textual diff.
+
+## 2026-06-03 - Large Conversation Performance And Persistence Safety
+
+- Implemented hybrid large-conversation loading:
+  - `/api/conversations` now returns lightweight conversation shells by default with preserved preview/message counts and empty `messages`.
+  - `/api/conversations/[id]?messageLimit=80` returns the newest message page for normal workspace opens.
+  - Added `GET /api/conversations/[id]/messages?limit=80&before=...` for older-message pagination.
+  - Added optional `messagePageInfo` to conversations so the UI knows loaded count, total count, older-page cursor, and whether more history exists.
+- Updated workspace behavior:
+  - Initial workspace restore uses shells, then hydrates the remembered active conversation with the latest 80 messages.
+  - Selecting/opening a shell conversation loads the newest message page on demand.
+  - Chat area now shows a `Load older messages` control when an older-page cursor exists.
+  - Sidebar local filtering now uses title, preview, project name, and attachment names; full message search remains the Neon-backed global/project search path.
+- Replaced destructive message persistence for normal chat/image sends:
+  - Conversation saves now upsert headers/messages instead of deleting and reinserting all messages.
+  - Chat and Prism generation persist the user message plus streaming placeholder first, then update the same assistant message on completion.
+  - Retry/regenerate/edit flows delete only the intended message tail before writing the new placeholder.
+  - Mid-stream failures or user stops mark the persisted assistant placeholder as `error` with safe text and any partial content/sources.
+- Added explicit context guards:
+  - OpenRouter text context still uses memory plus recent turns, now bounded by per-message and total character caps while always preserving the latest user request.
+  - `/api/chat` and `/api/images/generate` load only the newest stored message page for existing conversations and ignore client-sent conversation bodies for stored conversation context.
+  - Text streaming now passes the route abort signal into the OpenRouter streaming helper.
+- Added unit coverage for message-page merge/dedupe helpers and bounded context selection.
+- Verification: `npm run test` passed with 10 files and 42 tests; `npm run typecheck` passed; `npm run lint` passed with the existing 12 warnings; `npm run build` passed with the known Node `module.register()` deprecation warning.
+- Remaining risks: repository-level runtime behavior for tail deletion and partial failure persistence still needs seeded Neon integration tests; UI scroll-position preservation after prepending older pages is basic and may need refinement after manual QA with very long histories.
+
+## 2026-06-03 - Database Performance And Indexing Pass
+
+- Added forward-only Neon migration `neon/migrations/20260603_zenquanta_performance_indexes.sql`.
+- Indexes added:
+  - Scoped recent lists: conversations by user/project/updated and user/assistant/updated, files by user/project/created, playbooks by user/project/updated, playbook runs by user/project/created, Model Duel comparisons by user/project/created, and integration items by user/project/status/import time.
+  - Billing/admin filters: usage events by subscription/created and assistant/created, image generation events by subscription/created and model/created, plan requests by status/updated.
+  - Private object lookup: files by user/bucket/storage path.
+  - Existing ILIKE search paths: enabled `pg_trgm` and added GIN trigram indexes for conversation title/preview, message content, artifact title/content, prompt title/content, file name, generated-image prompt, Model Duel prompt, and custom-assistant name/instructions.
+- Mirrored representable b-tree indexes in `lib/db/schema.ts`; trigram/opclass indexes remain migration-only because they are search-performance details rather than table-shape metadata.
+- Query and pagination changes:
+  - `neonConversationRepository.list` now supports `projectId`, `limit`, `beforeUpdatedAt`, and optional message hydration; `GET /api/conversations` defaults to the latest 100 conversations while preserving the array response shape and full message hydration.
+  - `GET /api/images/history` supports `limit` and `before`, defaults Prism Studio history to 80 rows, and fetches usage details only for the returned image message ids.
+  - `GET /api/files` supports `limit` and `before`, defaults File Intelligence/Ask Files listing to 100 rows, and applies the cap in SQL.
+  - `GET /api/artifacts` supports `limit` and `beforeUpdatedAt`/`before`, keeping the existing max cap of 100 rows.
+  - Dashboard API and dashboard page now fetch current-subscription-period usage/image rows and only the recent conversations/image summaries needed for display instead of loading all user history.
+  - Admin overview/user rows now resolve plan/user filters first, then fetch user-scoped usage/image events and user-scoped product rows; workflow step runs, Model Duel candidates, and source-backed messages are loaded by scoped parent ids.
+  - Pulse Research Room now limits the recent conversation scan in SQL before fetching capped message/source rows.
+- Remaining risks: admin activation-funnel semantics still need all-time rows for some "first event" calculations, so product tables are user-scoped but not aggressively date-pruned everywhere; full query-plan proof needs seeded Neon data and `EXPLAIN ANALYZE` outside this code-only pass.
+- Verification: `npm run typecheck` passed; `npm run lint` passed with the existing 12 warnings; `npm run build` passed with the known Node `module.register()` deprecation warning.
+
 ## 2026-06-03 - File And Object Storage Security Hardening
 
 - Reviewed private upload, generated image storage, protected file reads, file indexing/RAG, File Intelligence/Ask Files surfaces, Prism Studio gallery responses, file deletion/re-index APIs, and GitHub read-only import paths.
