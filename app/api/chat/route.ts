@@ -16,7 +16,7 @@ import { resolveOwnedProjectScope } from '@/lib/security/ownership'
 import { buildCustomAssistantSnapshot } from '@/lib/custom-assistants/validation'
 import { updateConversationSnapshot } from '@/lib/utils/chat'
 import { encodeStreamEvent } from '@/lib/utils/stream'
-import { ChatRequest, CustomAssistant, SessionSettings } from '@/types'
+import { ChatRequest, CustomAssistant, MessageSource, SessionSettings } from '@/types'
 import {
   buildPromptTextForUsage,
   clampSessionSettingsMaxTokens,
@@ -167,7 +167,9 @@ export async function POST(request: NextRequest) {
   }
 
   const storedConversation = body.conversationId
-    ? await neonConversationRepository.get(auth.user.id, body.conversationId)
+    ? await neonConversationRepository.get(auth.user.id, body.conversationId, {
+        messageLimit: 80,
+      })
     : null
 
   if (body.conversationId && !storedConversation) {
@@ -247,6 +249,8 @@ export async function POST(request: NextRequest) {
   void (async () => {
     let conversationId = storedConversation?.id ?? payload.conversationId
     let messageId: string | undefined
+    let accumulated = ''
+    let persistedMessageSources: MessageSource[] = []
 
     try {
       const preparedBase = await prepareConversationForChat(payload)
@@ -338,6 +342,7 @@ export async function POST(request: NextRequest) {
         ...(webSearchContext?.sources ?? []),
         ...(fileKnowledgeContext?.sources ?? []),
       ]
+      persistedMessageSources = messageSources
       const promptText = buildPromptTextForUsage(
         prepared.generationConversation,
         payload.settings,
@@ -355,9 +360,22 @@ export async function POST(request: NextRequest) {
         walletType: routeConfig.walletType,
       })
 
-      const persistedConversation = await neonConversationRepository.save(
+      const placeholder = {
+        ...prepared.assistantPlaceholder,
+        mode: billingMode,
+        model: routeConfig.model,
+        assistantFamily: getAssistantFamilyFromMode(billingMode),
+        customAssistantId: customAssistant?.id ?? null,
+        customAssistant: customAssistantSnapshot,
+      }
+      const persistedConversation = await neonConversationRepository.saveTurnStart(
         auth.user.id,
-        prepared.conversation
+        {
+          conversation: prepared.conversation,
+          userMessage: prepared.userMessage,
+          assistantPlaceholder: placeholder,
+          action: payload.action,
+        }
       )
 
       debugChatRoute('request-start', {
@@ -368,15 +386,7 @@ export async function POST(request: NextRequest) {
       })
 
       conversationId = persistedConversation.id
-      messageId = prepared.assistantPlaceholder.id
-      const placeholder = {
-        ...prepared.assistantPlaceholder,
-        mode: billingMode,
-        model: routeConfig.model,
-        assistantFamily: getAssistantFamilyFromMode(billingMode),
-        customAssistantId: customAssistant?.id ?? null,
-        customAssistant: customAssistantSnapshot,
-      }
+      messageId = placeholder.id
 
       await writer.write(
         encodeStreamEvent({
@@ -424,7 +434,6 @@ export async function POST(request: NextRequest) {
         })
       )
 
-      let accumulated = ''
       let receivedChunkCount = 0
       let lastWorkingPhase: 'understanding' | 'organizing' | 'drafting' | 'refining' | 'finalizing' =
         'organizing'
@@ -445,6 +454,7 @@ export async function POST(request: NextRequest) {
         webSearchContext,
         fileKnowledgeContext,
         customAssistantContext,
+        signal: request.signal,
       })) {
         accumulated += chunk
         receivedChunkCount += 1
@@ -530,9 +540,11 @@ export async function POST(request: NextRequest) {
         }
       )
 
-      const savedConversation = await neonConversationRepository.save(
+      const savedConversation = await neonConversationRepository.saveAssistantCompletion(
         auth.user.id,
-        completedConversation
+        completedConversation,
+        completedConversation.messages.find((message) => message.id === placeholder.id) ??
+          placeholder
       )
 
       await logTextUsage({
@@ -577,18 +589,30 @@ export async function POST(request: NextRequest) {
         messageId: savedConversation.messages.at(-1)?.id,
       })
     } catch (error) {
+      const errorMessage = request.signal.aborted
+        ? 'Generation stopped.'
+        : toErrorMessage(error)
+      if (conversationId && messageId) {
+        await neonConversationRepository.markAssistantMessageError(auth.user.id, {
+          conversationId,
+          messageId,
+          content: accumulated,
+          error: errorMessage,
+          sources: persistedMessageSources,
+        })
+      }
       debugChatRoute('request-failure', {
         action: payload.action,
         conversationId,
         messageId,
-        error: toErrorMessage(error),
+        error: errorMessage,
       })
       await writer.write(
         encodeStreamEvent({
           type: 'error',
           conversationId,
           messageId,
-          error: toErrorMessage(error),
+          error: errorMessage,
           recoverable: true,
         })
       )
@@ -596,7 +620,7 @@ export async function POST(request: NextRequest) {
         action: payload.action,
         conversationId,
         messageId,
-        error: toErrorMessage(error),
+        error: errorMessage,
       })
     } finally {
       await writer.close()
