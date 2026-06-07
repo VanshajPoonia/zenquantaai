@@ -21,12 +21,17 @@ import {
   ArtifactInput,
   ArtifactListFilters,
   ArtifactPatch,
+  ArtifactVersion,
+  ArtifactVersionDuplicateResponse,
+  ArtifactVersionListResponse,
+  ArtifactVersionRestoreResponse,
   Attachment,
   AuthState,
   Chat,
   ChatAction,
   ChatRequest,
   Conversation,
+  ConversationMessagesPageResponse,
   ConversationSummary,
   CustomAssistant,
   CustomAssistantInput,
@@ -111,6 +116,7 @@ import {
   toAttachmentContext,
 } from '@/lib/utils/files'
 import { buildWorkflowStepPrompt } from '@/lib/utils/prompt-workflows'
+import { mergeConversationMessagePage } from '@/lib/conversations/message-pages'
 
 interface SendMessageInput {
   content: string
@@ -213,6 +219,7 @@ interface ChatContextType {
   currentChat: Chat | null
   setCurrentChat: (chat: ConversationSummary | Conversation | null) => void
   openConversation: (conversationId: string) => Promise<Conversation | null>
+  loadOlderMessages: (conversationId: string) => Promise<void>
   activeProjectHomeId: string | null
   openProjectHome: (projectId: string) => void
   goHome: () => void
@@ -298,6 +305,15 @@ interface ChatContextType {
     artifactId: string,
     actionType: ArtifactActionType
   ) => Promise<ArtifactActionResponse>
+  listArtifactVersions: (artifactId: string) => Promise<ArtifactVersion[]>
+  restoreArtifactVersion: (
+    artifactId: string,
+    versionId: string
+  ) => Promise<Artifact | null>
+  duplicateArtifactVersion: (
+    artifactId: string,
+    versionId: string
+  ) => Promise<Artifact | null>
   listPrismImages: (
     filters?: PrismStudioHistoryFilters
   ) => Promise<PrismStudioHistoryResponse>
@@ -389,6 +405,10 @@ function sortConversationList(conversations: Conversation[]): Conversation[] {
 
     return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
   })
+}
+
+function needsMessagePage(conversation: Conversation): boolean {
+  return conversation.messageCount > 0 && conversation.messages.length === 0
 }
 
 function sortProjects(projects: Project[]): Project[] {
@@ -793,6 +813,23 @@ export function ChatProvider({ children }: { children: ReactNode }) {
           : 'all'
       )
       commitState(normalizedConversations, activeConversation)
+      if (activeConversation && needsMessagePage(activeConversation)) {
+        void requestJson<Conversation>(
+          `/api/conversations/${activeConversation.id}?messageLimit=80`
+        )
+          .then((conversation) => {
+            const nextConversations = [
+              conversation,
+              ...conversationsRef.current.filter(
+                (item) => item.id !== conversation.id
+              ),
+            ]
+            commitState(nextConversations, conversation)
+          })
+          .catch((error) => {
+            console.error('Failed to load conversation messages.', error)
+          })
+      }
       setCurrentModeState(activeConversation?.mode ?? normalizedSettings.defaultMode)
       setDraftSessionSettings(
         createSessionSettings(
@@ -1018,6 +1055,15 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     setAuthError(null)
   }, [clearAuthedState])
 
+  const fetchConversationPage = useCallback(
+    async (conversationId: string) => {
+      return await requestJson<Conversation>(
+        `/api/conversations/${conversationId}?messageLimit=80`
+      )
+    },
+    [requestJson]
+  )
+
   const setCurrentChat = useCallback(
     (chat: ConversationSummary | Conversation | null) => {
       if (!chat) {
@@ -1038,8 +1084,24 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       setActiveProjectHomeId(null)
       setCurrentChatState(nextConversation)
       writeBrowserCurrentChatId(nextConversation.id)
+
+      if (needsMessagePage(nextConversation)) {
+        void fetchConversationPage(nextConversation.id)
+          .then((conversation) => {
+            const nextConversations = [
+              conversation,
+              ...conversationsRef.current.filter(
+                (item) => item.id !== conversation.id
+              ),
+            ]
+            commitState(nextConversations, conversation)
+          })
+          .catch((error) => {
+            console.error('Failed to load conversation messages.', error)
+          })
+      }
     },
-    [conversations]
+    [commitState, conversations, fetchConversationPage]
   )
 
   const openConversation = useCallback(
@@ -1052,13 +1114,14 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       if (existing) {
         commitState(conversationsRef.current, existing)
         setCurrentCustomAssistantId(existing.customAssistantId ?? null)
-        return existing
+
+        if (!needsMessagePage(existing)) {
+          return existing
+        }
       }
 
       try {
-        const conversation = await requestJson<Conversation>(
-          `/api/conversations/${conversationId}`
-        )
+        const conversation = await fetchConversationPage(conversationId)
         const nextConversations = [
           conversation,
           ...conversationsRef.current.filter(
@@ -1073,6 +1136,34 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         console.error('Failed to open conversation.', error)
         return null
       }
+    },
+    [commitState, fetchConversationPage]
+  )
+
+  const loadOlderMessages = useCallback(
+    async (conversationId: string) => {
+      const existing =
+        conversationsRef.current.find(
+          (conversation) => conversation.id === conversationId
+        ) ?? null
+      const before = existing?.messagePageInfo?.nextBefore
+
+      if (!existing || !before) return
+
+      const params = new URLSearchParams({
+        limit: '80',
+        before,
+      })
+      const page = await requestJson<ConversationMessagesPageResponse>(
+        `/api/conversations/${conversationId}/messages?${params.toString()}`
+      )
+      const merged = mergeConversationMessagePage(existing, page)
+      const nextConversations = [
+        merged,
+        ...conversationsRef.current.filter((item) => item.id !== merged.id),
+      ]
+
+      commitState(nextConversations, merged)
     },
     [commitState, requestJson]
   )
@@ -1689,6 +1780,10 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       if (filters.q) params.set('q', filters.q)
       if (filters.artifactType) params.set('artifactType', filters.artifactType)
       if (filters.sourceType) params.set('sourceType', filters.sourceType)
+      if (filters.limit) params.set('limit', String(filters.limit))
+      if (filters.beforeUpdatedAt) {
+        params.set('beforeUpdatedAt', filters.beforeUpdatedAt)
+      }
 
       const query = params.toString()
       return await requestJson<Artifact[]>(
@@ -1759,6 +1854,59 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       )
     },
     [requestJson]
+  )
+
+  const listArtifactVersions = useCallback(
+    async (artifactId: string) => {
+      const response = await requestJson<ArtifactVersionListResponse>(
+        `/api/artifacts/${artifactId}/versions`
+      )
+      return response.versions
+    },
+    [requestJson]
+  )
+
+  const restoreArtifactVersion = useCallback(
+    async (artifactId: string, versionId: string) => {
+      try {
+        const response = await requestJson<ArtifactVersionRestoreResponse>(
+          `/api/artifacts/${artifactId}/versions/${versionId}/restore`,
+          {
+            method: 'POST',
+          }
+        )
+        return response.artifact
+      } catch (error) {
+        console.error('Failed to restore artifact version.', error)
+        return null
+      }
+    },
+    [requestJson]
+  )
+
+  const duplicateArtifactVersion = useCallback(
+    async (artifactId: string, versionId: string) => {
+      try {
+        const response = await requestJson<ArtifactVersionDuplicateResponse>(
+          `/api/artifacts/${artifactId}/versions/${versionId}/duplicate`,
+          {
+            method: 'POST',
+          }
+        )
+
+        openWorkspaceTool({
+          tool: 'artifacts',
+          artifactId: response.artifact.id,
+          projectId: response.artifact.projectId,
+        })
+
+        return response.artifact
+      } catch (error) {
+        console.error('Failed to duplicate artifact version.', error)
+        return null
+      }
+    },
+    [openWorkspaceTool, requestJson]
   )
 
   const listPrismImages = useCallback(
@@ -2242,10 +2390,15 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
           switch (event.type) {
             case 'start': {
+              const startMessages = event.conversation.messages.some(
+                (message) => message.id === event.message.id
+              )
+                ? event.conversation.messages
+                : [...event.conversation.messages, event.message]
               const startedConversation = updateConversationSnapshot(
                 event.conversation,
                 {
-                  messages: [...event.conversation.messages, event.message],
+                  messages: startMessages,
                 }
               )
 
@@ -3377,6 +3530,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       currentChat,
       setCurrentChat,
       openConversation,
+      loadOlderMessages,
       activeProjectHomeId,
       openProjectHome,
       goHome,
@@ -3441,6 +3595,9 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       updateArtifact,
       deleteArtifact,
       runArtifactAction,
+      listArtifactVersions,
+      restoreArtifactVersion,
+      duplicateArtifactVersion,
       listPrismImages,
       updatePrismImage,
       listMemoryVault,
@@ -3500,7 +3657,9 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       isStreaming,
       isOnboardingOpen,
       listArtifacts,
+      listArtifactVersions,
       listFileIntelligence,
+      loadOlderMessages,
       listPrismImages,
       listMemoryVault,
       listPulseResearchRoom,
@@ -3548,6 +3707,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       statusLabel,
       stopStreaming,
       streamingState,
+      restoreArtifactVersion,
       testCustomAssistant,
       togglePinChat,
       updateArtifact,
@@ -3557,6 +3717,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       uploadProjectFiles,
       workspaceSearchRequest,
       workspaceToolRequest,
+      duplicateArtifactVersion,
     ]
   )
 
