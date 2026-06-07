@@ -1,6 +1,6 @@
 import 'server-only'
 
-import { and, desc, eq, gte, ilike, lte, or } from 'drizzle-orm'
+import { and, desc, eq, gte, ilike, lt, lte, or } from 'drizzle-orm'
 import { getDatabaseClient } from '../client'
 import { zenGeneratedImages } from '../schema'
 import { compactObject, toIsoString } from './helpers'
@@ -54,6 +54,15 @@ export interface GeneratedImageListFilters {
   favorite?: boolean | null
   from?: Date | null
   to?: Date | null
+  before?: Date | null
+  limit?: number | null
+}
+
+const MAX_GENERATED_IMAGE_LIST_LIMIT = 200
+
+function normalizeLimit(value: number | null | undefined, fallback = 80): number {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return fallback
+  return Math.max(1, Math.min(MAX_GENERATED_IMAGE_LIST_LIMIT, Math.floor(value)))
 }
 
 function rowToGeneratedImage(row: GeneratedImageRow): NeonGeneratedImageMetadata {
@@ -120,29 +129,40 @@ class NeonGeneratedImagesRepository {
       conditions.push(lte(zenGeneratedImages.createdAt, filters.to))
     }
 
+    if (filters.before) {
+      conditions.push(lt(zenGeneratedImages.createdAt, filters.before))
+    }
+
     const rows = await getDatabaseClient()
       .select()
       .from(zenGeneratedImages)
       .where(and(...conditions))
       .orderBy(desc(zenGeneratedImages.createdAt))
+      .limit(normalizeLimit(filters.limit))
 
     return rows.map(rowToGeneratedImage)
   }
 
   async listByConversation(
     userId: string,
-    conversationId: string
+    conversationId: string,
+    options: { limit?: number | null; before?: Date | null } = {}
   ): Promise<NeonGeneratedImageMetadata[]> {
+    const conditions = [
+      eq(zenGeneratedImages.userId, userId),
+      eq(zenGeneratedImages.conversationId, conversationId),
+    ]
+
+    if (options.before) {
+      conditions.push(lt(zenGeneratedImages.createdAt, options.before))
+    }
+
     const rows = await getDatabaseClient()
       .select()
       .from(zenGeneratedImages)
-      .where(
-        and(
-          eq(zenGeneratedImages.userId, userId),
-          eq(zenGeneratedImages.conversationId, conversationId)
-        )
-      )
+      .where(and(...conditions))
       .orderBy(desc(zenGeneratedImages.createdAt))
+      .limit(normalizeLimit(options.limit))
 
     return rows.map(rowToGeneratedImage)
   }

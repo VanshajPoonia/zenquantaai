@@ -16,6 +16,12 @@ function parseDateParam(value: string | null): Date | null {
   return Number.isNaN(date.getTime()) ? null : date
 }
 
+function parseLimit(value: string | null, fallback = 80): number {
+  const parsed = Number(value)
+  if (!Number.isFinite(parsed)) return fallback
+  return Math.max(1, Math.min(200, Math.floor(parsed)))
+}
+
 function privateImageUrl(bucket: string | null, storagePath: string | null) {
   if (!bucket || !storagePath) return null
   try {
@@ -37,6 +43,8 @@ export async function GET(request: NextRequest) {
     favoriteParam === 'true' ? true : favoriteParam === 'false' ? false : null
   const from = parseDateParam(searchParams.get('from'))
   const to = parseDateParam(searchParams.get('to'))
+  const before = parseDateParam(searchParams.get('before'))
+  const limit = parseLimit(searchParams.get('limit'))
 
   if (projectId) {
     const project = await neonProjectsRepository.get(auth.user.id, projectId)
@@ -45,16 +53,25 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  const [images, usageEvents] = await Promise.all([
-    neonGeneratedImagesRepository.listByUser(auth.user.id, {
-      q,
-      projectId,
-      favorite,
-      from,
-      to,
-    }),
-    neonImageGenerationEventsRepository.listByUser(auth.user.id),
-  ])
+  const images = await neonGeneratedImagesRepository.listByUser(auth.user.id, {
+    q,
+    projectId,
+    favorite,
+    from,
+    to,
+    before,
+    limit,
+  })
+  const messageIds = [
+    ...new Set(images.map((image) => image.messageId).filter(Boolean)),
+  ] as string[]
+  const usageEvents =
+    messageIds.length > 0
+      ? await neonImageGenerationEventsRepository.listByUserMessageIds(
+          auth.user.id,
+          messageIds
+        )
+      : []
   const usageByMessageId = new Map(
     usageEvents
       .filter((event) => event.messageId)
