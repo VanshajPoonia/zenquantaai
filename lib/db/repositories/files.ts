@@ -1,6 +1,6 @@
 import 'server-only'
 
-import { and, desc, eq, inArray, sql } from 'drizzle-orm'
+import { and, desc, eq, inArray, lt, sql } from 'drizzle-orm'
 import { normalizeFileKnowledge } from '@/lib/files/intelligence'
 import { createPrivateFileUrl } from '@/lib/storage/object-store'
 import { FileIntelligence } from '@/types'
@@ -16,6 +16,15 @@ type FileIntelligenceFilters = {
   projectId?: string | null
   conversationId?: string | null
   embeddingsAvailable: boolean
+  limit?: number | null
+  before?: Date | null
+}
+
+const MAX_FILE_LIST_LIMIT = 300
+
+function normalizeLimit(value: number | null | undefined, fallback = 100): number {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return fallback
+  return Math.max(1, Math.min(MAX_FILE_LIST_LIMIT, Math.floor(value)))
 }
 
 export type NeonFileProvider = 'external' | 'local'
@@ -151,12 +160,16 @@ class NeonFilesRepository {
     if (filters.conversationId) {
       conditions.push(eq(zenFiles.conversationId, filters.conversationId))
     }
+    if (filters.before) {
+      conditions.push(lt(zenFiles.createdAt, filters.before))
+    }
 
     const rows = await getDatabaseClient()
       .select()
       .from(zenFiles)
       .where(and(...conditions))
       .orderBy(desc(zenFiles.createdAt))
+      .limit(normalizeLimit(filters.ids?.length ? filters.ids.length : filters.limit))
 
     const files = rows.map(rowToFile)
     const chunkCounts = await this.chunkCountsByFileId(files.map((file) => file.id))
@@ -186,30 +199,45 @@ class NeonFilesRepository {
     )
   }
 
-  async listByUser(userId: string): Promise<NeonFileMetadata[]> {
+  async listByUser(
+    userId: string,
+    options: { limit?: number | null; before?: Date | null } = {}
+  ): Promise<NeonFileMetadata[]> {
+    const conditions = [eq(zenFiles.userId, userId)]
+    if (options.before) {
+      conditions.push(lt(zenFiles.createdAt, options.before))
+    }
+
     const rows = await getDatabaseClient()
       .select()
       .from(zenFiles)
-      .where(eq(zenFiles.userId, userId))
+      .where(and(...conditions))
       .orderBy(desc(zenFiles.createdAt))
+      .limit(normalizeLimit(options.limit))
 
     return rows.map(rowToFile)
   }
 
   async listByConversation(
     userId: string,
-    conversationId: string
+    conversationId: string,
+    options: { limit?: number | null; before?: Date | null } = {}
   ): Promise<NeonFileMetadata[]> {
+    const conditions = [
+      eq(zenFiles.userId, userId),
+      eq(zenFiles.conversationId, conversationId),
+    ]
+
+    if (options.before) {
+      conditions.push(lt(zenFiles.createdAt, options.before))
+    }
+
     const rows = await getDatabaseClient()
       .select()
       .from(zenFiles)
-      .where(
-        and(
-          eq(zenFiles.userId, userId),
-          eq(zenFiles.conversationId, conversationId)
-        )
-      )
+      .where(and(...conditions))
       .orderBy(desc(zenFiles.createdAt))
+      .limit(normalizeLimit(options.limit))
 
     return rows.map(rowToFile)
   }

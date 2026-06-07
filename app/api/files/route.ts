@@ -22,6 +22,18 @@ function parseIds(value: string | null): string[] {
   ].slice(0, 100)
 }
 
+function parseLimit(value: string | null, fallback = 100): number {
+  const parsed = Number(value)
+  if (!Number.isFinite(parsed)) return fallback
+  return Math.max(1, Math.min(300, Math.floor(parsed)))
+}
+
+function parseDateParam(value: string | null): Date | null {
+  if (!value) return null
+  const date = new Date(value)
+  return Number.isNaN(date.getTime()) ? null : date
+}
+
 export async function GET(request: NextRequest) {
   const auth = await requireAuthenticatedUser(request)
   if ('response' in auth) return auth.response
@@ -32,6 +44,8 @@ export async function GET(request: NextRequest) {
   const ids = parseIds(searchParams.get('ids'))
   const projectId = searchParams.get('projectId')?.trim() || null
   const conversationId = searchParams.get('conversationId')?.trim() || null
+  const limit = parseLimit(searchParams.get('limit'))
+  const before = parseDateParam(searchParams.get('before'))
 
   if (projectId) {
     const project = await neonProjectsRepository.get(auth.user.id, projectId)
@@ -66,6 +80,8 @@ export async function GET(request: NextRequest) {
     projectId,
     conversationId,
     embeddingsAvailable,
+    limit,
+    before,
   })
 
   if (ids.length > 0 && files.length !== ids.length) {
