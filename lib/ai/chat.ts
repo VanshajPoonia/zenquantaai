@@ -414,6 +414,7 @@ export async function* generateAssistantStream(input: {
   webSearchContext?: WebSearchContext
   fileKnowledgeContext?: FileKnowledgeContext
   customAssistantContext?: CustomAssistantRuntimeContext
+  signal?: AbortSignal
 }): AsyncIterable<string> {
   if (input.mode === 'image' || input.action === 'generate-image') {
     throw new Error('Image generation must use the dedicated image route.')
@@ -434,6 +435,7 @@ export async function* generateAssistantStream(input: {
       buildMockResponse(input.mode, latestPrompt, input.webSearchContext),
       16
     )) {
+      if (input.signal?.aborted) return
       yield chunk
     }
     return
@@ -452,6 +454,7 @@ export async function* generateAssistantStream(input: {
     temperature: input.settings.temperature,
     maxTokens: input.settings.maxTokens,
     topP: input.settings.topP,
+    signal: input.signal,
   })
 
   for await (const chunk of stream) {
@@ -871,8 +874,17 @@ export async function completeConversationWithAssistant(
     sources: options?.sources ?? assistantMessage.sources,
   }
 
+  const existingAssistantIndex = conversation.messages.findIndex(
+    (message) => message.id === finalAssistant.id
+  )
+  const nextMessages =
+    existingAssistantIndex === -1
+      ? [...conversation.messages, finalAssistant]
+      : conversation.messages.map((message) =>
+          message.id === finalAssistant.id ? finalAssistant : message
+        )
   const completedConversation = updateConversationSnapshot(conversation, {
-    messages: [...conversation.messages, finalAssistant],
+    messages: nextMessages,
   })
   const memoryUpdate = updateConversationMemory(
     completedConversation,

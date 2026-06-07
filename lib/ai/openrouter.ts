@@ -107,6 +107,31 @@ function createTimeoutSignal(timeoutMs: number, stage: string) {
   }
 }
 
+function combineAbortSignals(...signals: Array<AbortSignal | undefined>) {
+  const activeSignals = signals.filter(Boolean) as AbortSignal[]
+  if (activeSignals.length === 0) return undefined
+  if (activeSignals.length === 1) return activeSignals[0]
+  if (typeof AbortSignal.any === 'function') {
+    return AbortSignal.any(activeSignals)
+  }
+
+  const controller = new AbortController()
+  const abort = (event: Event) => {
+    const signal = event.target as AbortSignal
+    controller.abort(signal.reason)
+  }
+
+  for (const signal of activeSignals) {
+    if (signal.aborted) {
+      controller.abort(signal.reason)
+      break
+    }
+    signal.addEventListener('abort', abort, { once: true })
+  }
+
+  return controller.signal
+}
+
 function normalizeAbortError(error: unknown): never {
   if (error instanceof Error) {
     const name = (error as Error & { name?: string }).name
@@ -307,6 +332,7 @@ export async function* streamOpenRouterTextResponse(input: {
   temperature?: number
   maxTokens?: number
   topP?: number
+  signal?: AbortSignal
 }): AsyncIterable<string> {
   const runtimeConfig = getOpenRouterRuntimeConfig()
 
@@ -347,7 +373,7 @@ export async function* streamOpenRouterTextResponse(input: {
           : {}),
         stream: true,
       }),
-      signal: timeout.signal,
+      signal: combineAbortSignals(timeout.signal, input.signal),
     })
 
     if (!response.ok || !response.body) {
