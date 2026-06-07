@@ -9,6 +9,13 @@ import { ConversationMutation } from '@/types'
 
 export const runtime = 'nodejs'
 
+function parseMessageLimit(value: string | null): number | null {
+  if (!value) return null
+  const parsed = Number(value)
+  if (!Number.isFinite(parsed)) return null
+  return Math.max(1, Math.min(200, Math.floor(parsed)))
+}
+
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -18,7 +25,12 @@ export async function GET(
 
   await neonProfilesRepository.ensureFromAuthUser(auth.user)
   const { id } = await params
-  const conversation = await neonConversationRepository.get(auth.user.id, id)
+  const messageLimit = parseMessageLimit(request.nextUrl.searchParams.get('messageLimit'))
+  const conversation = await neonConversationRepository.get(
+    auth.user.id,
+    id,
+    messageLimit ? { messageLimit } : {}
+  )
 
   if (!conversation) {
     return NextResponse.json({ error: 'Conversation not found.' }, { status: 404 })
