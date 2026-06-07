@@ -52,7 +52,9 @@ export async function POST(request: NextRequest) {
   }
 
   const storedConversation = body?.conversationId
-    ? await neonConversationRepository.get(auth.user.id, body.conversationId)
+    ? await neonConversationRepository.get(auth.user.id, body.conversationId, {
+        messageLimit: 80,
+      })
     : null
 
   if (body?.conversationId && !storedConversation) {
@@ -168,16 +170,20 @@ export async function POST(request: NextRequest) {
       model: routeConfig.model,
     })
 
-    const persistedConversation = await neonConversationRepository.save(
-      auth.user.id,
-      prepared.conversation
-    )
-
     const placeholder = {
       ...prepared.assistantPlaceholder,
       mode: 'image' as const,
       model: routeConfig.model,
     }
+    const persistedConversation = await neonConversationRepository.saveTurnStart(
+      auth.user.id,
+      {
+        conversation: prepared.conversation,
+        userMessage: prepared.userMessage,
+        assistantPlaceholder: placeholder,
+        action,
+      }
+    )
     failedImageContext = {
       conversationId: persistedConversation.id,
       projectId: persistedConversation.projectId ?? null,
@@ -224,9 +230,11 @@ export async function POST(request: NextRequest) {
       sourceUrl: generated.imageUrl ?? null,
     })
 
-    const savedConversation = await neonConversationRepository.save(
+    const savedConversation = await neonConversationRepository.saveAssistantCompletion(
       auth.user.id,
-      durableConversation
+      durableConversation,
+      durableConversation.messages.find((message) => message.id === placeholder.id) ??
+        placeholder
     )
 
     await logImageUsage({
@@ -285,6 +293,14 @@ export async function POST(request: NextRequest) {
     })
 
     if (failedImageContext) {
+      if (failedImageContext.conversationId && failedImageContext.messageId) {
+        await neonConversationRepository.markAssistantMessageError(auth.user.id, {
+          conversationId: failedImageContext.conversationId,
+          messageId: failedImageContext.messageId,
+          error: message,
+        })
+      }
+
       await neonGeneratedImagesRepository
         .create({
           userId: auth.user.id,
