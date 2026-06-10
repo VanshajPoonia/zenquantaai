@@ -381,7 +381,7 @@ function CodeBlock({ code, language }: { code: string; language: string }) {
           </Tooltip>
         </TooltipProvider>
       </div>
-      <pre className="p-4 overflow-x-auto">
+      <pre className="overflow-x-auto p-3 sm:p-4">
         <code className="text-sm font-mono leading-relaxed">{code}</code>
       </pre>
     </div>
@@ -777,10 +777,10 @@ export function ChatMessage({
 
   if (message.role === 'user') {
     return (
-      <div className="flex justify-end mb-6 group">
-        <div className="flex items-start gap-3 max-w-[85%]">
-          <div className="flex flex-col items-end">
-            <div className="bg-primary text-primary-foreground rounded-2xl rounded-tr-md px-4 py-3 min-w-[280px]">
+      <div className="group mb-5 flex justify-end sm:mb-6">
+        <div className="flex max-w-[94%] items-start gap-2 sm:max-w-[85%] sm:gap-3">
+          <div className="flex min-w-0 flex-col items-end">
+            <div className="min-w-0 max-w-full rounded-2xl rounded-tr-md bg-primary px-3 py-2.5 text-primary-foreground sm:px-4 sm:py-3">
               {isEditing ? (
                 <div className="space-y-3">
                   <Textarea
@@ -816,7 +816,7 @@ export function ChatMessage({
               ) : (
                 <div>
                   {!!message.content && (
-                    <p className="text-sm leading-relaxed whitespace-pre-wrap">
+                    <p className="[overflow-wrap:anywhere] whitespace-pre-wrap text-sm leading-relaxed">
                       {message.content}
                     </p>
                   )}
@@ -828,7 +828,7 @@ export function ChatMessage({
                 </div>
               )}
             </div>
-            <div className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
+            <div className="mt-2 flex flex-wrap items-center justify-end gap-2 text-xs text-muted-foreground">
               <span>{formatMessageTime(message.createdAt)}</span>
               {isLastUser && !isEditing && (
                 <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -852,7 +852,7 @@ export function ChatMessage({
               )}
             </div>
           </div>
-          <div className="shrink-0 size-8 rounded-full bg-primary/20 flex items-center justify-center">
+          <div className="flex size-7 shrink-0 items-center justify-center rounded-full bg-primary/20 sm:size-8">
             <UserIcon className="size-4 text-primary" />
           </div>
         </div>
@@ -862,11 +862,11 @@ export function ChatMessage({
 
   return (
     <>
-      <div className="flex justify-start mb-6 group">
-        <div className="flex items-start gap-3 max-w-[85%]">
+      <div className="group mb-5 flex justify-start sm:mb-6">
+        <div className="flex max-w-[96%] items-start gap-2 sm:max-w-[88%] sm:gap-3">
           <div
             className={cn(
-              'shrink-0 size-8 rounded-full flex items-center justify-center border',
+              'flex size-7 shrink-0 items-center justify-center rounded-full border sm:size-8',
               getModeColorClasses(message.mode)
             )}
           >
@@ -878,10 +878,10 @@ export function ChatMessage({
               <ModeIcon mode={message.mode} size="sm" />
             )}
           </div>
-          <div className="flex-1">
+          <div className="min-w-0 flex-1">
             <div
               className={cn(
-                'bg-card border border-border rounded-2xl rounded-tl-md px-4 py-3 transition-colors',
+                'rounded-2xl rounded-tl-md border border-border bg-card px-3 py-2.5 transition-colors sm:px-4 sm:py-3',
                 isStreamingMessage &&
                   workingNotes.length > 0 &&
                   'cursor-pointer hover:border-border/80 hover:bg-card/95'
@@ -910,7 +910,7 @@ export function ChatMessage({
               {effectiveStatus === 'streaming' ? (
                 renderStreamingState(displayContent, message.mode)
               ) : (
-                <div className="prose prose-sm prose-invert max-w-none text-foreground">
+                <div className="prose prose-sm prose-invert max-w-none [overflow-wrap:anywhere] text-foreground">
                   {renderedContent}
                 </div>
               )}
