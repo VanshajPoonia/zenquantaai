@@ -6,6 +6,39 @@ The repository contains a real Zenquanta AI platform backed by Neon for runtime 
 
 Current direction: plan upgrades remain manual/admin-driven, payment automation is out of scope unless explicitly requested, and Neon/storage start fresh without importing Supabase database rows or storage objects.
 
+## 2026-06-11 - Fixed New-Conversation 404 In Prism And Model Duel
+
+- Audited every Neon-backed API route for the same premature-404 pattern fixed in `/api/chat` (client-generated `conversationId` for a not-yet-persisted conversation rejected before create/upsert can run). Artifacts, projects, prompts/workflows, files, Pulse research room, GitHub integration, and custom assistants only ever operate on server-issued IDs and were unaffected.
+- `app/api/images/generate/route.ts`: applied the same `&& !body?.conversation` exemption as `/api/chat`, so a brand-new conversation's first Prism request no longer 404s before `resolveConversation`/`save` can persist it.
+- `app/api/model-comparisons/route.ts`: the client (`runModelComparison` in `lib/chat-context.tsx`) never sent a `conversation` payload at all, so it always 404'd on a brand-new conversation's first Model Duel run. Added `conversation?: Conversation` to `ModelComparisonRequest` (`types/index.ts`), had the client send `conversation: currentChatRef.current ?? undefined`, and mirrored the route's `projectScope`/`scopedConversation`/404-exemption handling from `/api/chat` so new conversations persist correctly.
+- Verification: `npm run typecheck` passed.
+- Remaining risk: should manually verify in the browser that running Prism or Model Duel as the very first action in a brand-new chat persists the conversation without "Conversation not found."
+
+## 2026-06-11 - Fixed New-Conversation 404 In Chat Send
+
+- Fixed `/api/chat` returning `Conversation not found.` (404) for every first message of a brand-new conversation. The user-scoping check added in `8b7c7e0` ("tighten user scoped route validation") rejected client-generated `conversationId`s before `saveTurnStart` could create the row via `upsertConversationHeader`.
+- `app/api/chat/route.ts`: the early 404 now only fires when `body.conversationId` is set, no stored conversation exists, and the request also lacks a `body.conversation` seed payload (mirroring the existing `projectScope` fallback at the same spot). New conversations with a `conversation` payload now pass through and persist normally.
+- This also explains the "pressing Enter doesn't send" symptom: the composer's Enter handler was correct, but the resulting `/api/chat` request errored immediately on new chats, surfacing as a failed/erroring response.
+- Verification: `npm run typecheck` passed.
+- Remaining risk: should manually verify in the browser that starting a brand-new chat now persists and shows up in the sidebar/history without the "Conversation not found." error.
+
+## 2026-06-10 - Responsive Workspace Composer And Chat Flow
+
+- Compacted the workspace header/sidebar controls for small screens, including smaller hamburger buttons, tighter header spacing, hidden secondary actions on mobile, and a capped sidebar width that cannot consume the full viewport.
+- Reworked the composer layout so the textarea, tool controls, and send/stop actions stack naturally on mobile instead of overlapping; the tool row now scrolls horizontally, the send action becomes compact on small screens, and mobile keyboard-helper text is hidden.
+- Reduced the mobile footprint of the usage transparency hint and improved chat message wrapping/widths so long text, code, and attachments stay inside the viewport.
+- Updated chat scrolling so a new assistant response scrolls to the top of that response, streaming does not keep forcing the viewport downward while the user reads, and loading older messages preserves the current scroll position.
+- Fixed a runtime Drizzle schema mismatch where assistant recommendation events tried to insert an unused `project_id` column that the fresh Neon migration does not create.
+- Verification: `npm run typecheck` passed; `npm run lint` passed with the existing 11 warnings; `curl http://localhost:3000/` returned 200 while the dev server was running.
+- Remaining risk: real-device QA should still test a long streaming response on a narrow screen to tune exact scroll offset and composer height if needed.
+
+## 2026-06-10 - Nested Button Hydration Fix
+
+- Fixed a React/Next hydration warning caused by full-card `<button>` elements wrapping Radix `Checkbox` buttons.
+- Converted the onboarding starter-project/starter-prompts cards, Model Duel assistant selection cards, and GitHub import file rows to keyboard-accessible `div role="button"` wrappers while preserving click and Enter/Space toggling behavior.
+- Verification: `npm run typecheck` passed; `npm run lint` passed with the existing 12 warnings.
+- Remaining risk: browser-level manual QA should confirm each patched card still toggles as expected in its dialog.
+
 ## 2026-06-07 - 20-Commit GitHub Publish Handoff
 
 - Prepared the 2026-06-03 artifact version history, large-conversation performance/persistence, and database performance/indexing progress for a deliberate 20-commit publish to `origin/main`.
