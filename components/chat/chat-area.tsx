@@ -289,9 +289,9 @@ export function ChatArea() {
           <EmptyState onPromptSelect={setSelectedPrompt} />
         </div>
       ) : (
-        <ScrollArea ref={scrollAreaRef} className="flex-1 min-h-0">
-          <div className="max-w-4xl mx-auto px-4 py-6">
-            <div className="flex justify-center mb-6">
+        <ScrollArea ref={scrollAreaRef} className="min-h-0 flex-1 overscroll-contain">
+          <div className="mx-auto max-w-4xl px-3 py-4 sm:px-4 sm:py-6">
+            <div className="mb-4 flex justify-center sm:mb-6">
               <ModeSwitcherCompact />
             </div>
 
@@ -336,7 +336,7 @@ export function ChatArea() {
               <div
                 key={message.id}
                 id={`message-${message.id}`}
-                className="scroll-mt-24"
+                className="scroll-mt-4 sm:scroll-mt-6"
               >
                 <ChatMessage
                   message={message}
