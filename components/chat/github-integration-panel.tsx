@@ -495,11 +495,17 @@ export function GitHubIntegrationPanel() {
                   <div className="grid max-h-[430px] gap-2 overflow-y-auto p-3">
                     {filesResponse?.files.length ? (
                       filesResponse.files.map((file) => (
-                        <button
+                        <div
                           key={file.path}
-                          type="button"
-                          className="flex items-start gap-3 rounded-xl border border-border/50 bg-background/40 p-3 text-left transition-colors hover:border-primary/35"
+                          role="button"
+                          tabIndex={0}
+                          className="flex cursor-pointer items-start gap-3 rounded-xl border border-border/50 bg-background/40 p-3 text-left transition-colors hover:border-primary/35"
                           onClick={() => toggleFile(file)}
+                          onKeyDown={(event) => {
+                            if (event.key !== 'Enter' && event.key !== ' ') return
+                            event.preventDefault()
+                            toggleFile(file)
+                          }}
                         >
                           <Checkbox
                             checked={selectedPaths.includes(file.path)}
@@ -516,7 +522,7 @@ export function GitHubIntegrationPanel() {
                               {file.language ? <span>{file.language}</span> : null}
                             </span>
                           </span>
-                        </button>
+                        </div>
                       ))
                     ) : (
                       <div className="rounded-xl border border-dashed border-border/60 p-6 text-center text-sm text-muted-foreground">
