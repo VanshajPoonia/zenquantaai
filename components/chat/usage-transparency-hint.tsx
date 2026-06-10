@@ -287,13 +287,13 @@ export function UsageTransparencyHint({
   return (
     <div
       className={cn(
-        'mb-3 rounded-2xl border border-border/60 bg-card/55 p-3 text-xs text-muted-foreground shadow-sm',
+        'mb-2 rounded-xl border border-border/60 bg-card/55 p-2.5 text-xs text-muted-foreground shadow-sm sm:mb-3 sm:rounded-2xl sm:p-3',
         disabled && 'opacity-70'
       )}
     >
-      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-        <div className="min-w-0 space-y-2">
-          <div className="flex flex-wrap items-center gap-2">
+      <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+        <div className="min-w-0 space-y-1.5 sm:space-y-2">
+          <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
             <Badge variant="outline" className={cn('rounded-full', levelCopy.className)}>
               <Gauge className="size-3" />
               {levelCopy.label}
@@ -335,7 +335,7 @@ export function UsageTransparencyHint({
               </Badge>
             ) : null}
           </div>
-          <p className="leading-5">
+          <p className="line-clamp-2 leading-5 sm:line-clamp-none">
             {levelCopy.detail}{' '}
             {dashboard ? (
               <span>
@@ -353,7 +353,7 @@ export function UsageTransparencyHint({
         </div>
 
         <TooltipProvider delayDuration={250}>
-          <div className="flex shrink-0 flex-wrap gap-1.5">
+          <div className="hidden shrink-0 flex-wrap gap-1.5 sm:flex">
             {QUALITY_MODES.map((label) => (
               <Tooltip key={label}>
                 <TooltipTrigger asChild>
