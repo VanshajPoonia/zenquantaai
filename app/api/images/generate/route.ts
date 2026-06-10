@@ -57,7 +57,7 @@ export async function POST(request: NextRequest) {
       })
     : null
 
-  if (body?.conversationId && !storedConversation) {
+  if (body?.conversationId && !storedConversation && !body?.conversation) {
     return NextResponse.json(
       { error: 'Conversation not found.' },
       { status: 404 }
