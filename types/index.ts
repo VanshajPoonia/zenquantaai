@@ -754,6 +754,7 @@ export interface ModelComparisonRequest {
   mode: AIMode
   targetModes: AIMode[]
   conversationId?: string
+  conversation?: Conversation
   settings: SessionSettings
 }
 

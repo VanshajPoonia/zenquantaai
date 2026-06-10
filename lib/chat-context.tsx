@@ -3092,6 +3092,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
             mode: currentMode,
             targetModes,
             conversationId: currentChatRef.current?.id,
+            conversation: currentChatRef.current ?? undefined,
             settings: sessionSettings,
           }),
         })
