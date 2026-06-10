@@ -65,10 +65,10 @@ function ChatShell({
           type="button"
           variant="secondary"
           size="icon"
-          className="absolute left-4 top-4 z-40 size-10 rounded-xl border border-border/70 bg-card/90 shadow-lg backdrop-blur-sm"
+          className="absolute left-3 top-3 z-40 size-8 rounded-lg border border-border/70 bg-card/90 shadow-lg backdrop-blur-sm sm:left-4 sm:top-4 sm:size-10 sm:rounded-xl"
           onClick={toggleSidebar}
         >
-          <MenuIcon className="size-4" />
+          <MenuIcon className="size-3.5 sm:size-4" />
         </Button>
       )}
 
