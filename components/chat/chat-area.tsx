@@ -135,9 +135,19 @@ export function ChatArea() {
 
   const handleLoadOlder = async () => {
     if (!currentChat?.id || isLoadingOlder) return
+    const viewport = getScrollViewport()
+    const previousScrollHeight = viewport?.scrollHeight ?? 0
+    const previousScrollTop = viewport?.scrollTop ?? 0
+
     setIsLoadingOlder(true)
     try {
       await loadOlderMessages(currentChat.id)
+      requestAnimationFrame(() => {
+        const nextViewport = getScrollViewport()
+        if (!nextViewport || previousScrollHeight === 0) return
+        nextViewport.scrollTop =
+          nextViewport.scrollHeight - previousScrollHeight + previousScrollTop
+      })
     } finally {
       setIsLoadingOlder(false)
     }
