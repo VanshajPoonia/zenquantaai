@@ -33,6 +33,7 @@ import {
   shouldUseWebSearch,
 } from '@/lib/search/web-search'
 import { retrieveFileKnowledgeContext } from '@/lib/rag/retrieval'
+import { resolveOwnedProjectScope } from '@/lib/security/ownership'
 import { estimatePromptTokens } from '@/lib/utils/cost'
 import {
   AIMode,
@@ -111,9 +112,23 @@ export async function POST(request: NextRequest) {
     ? await neonConversationRepository.get(auth.user.id, body.conversationId)
     : null
 
-  if (body?.conversationId && !storedConversation) {
+  if (body?.conversationId && !storedConversation && !body?.conversation) {
     return NextResponse.json({ error: 'Conversation not found.' }, { status: 404 })
   }
+
+  const projectScope =
+    !storedConversation && body?.conversation
+      ? await resolveOwnedProjectScope(auth.user.id, body.conversation.projectId)
+      : { ok: true as const, projectId: null }
+
+  if (!projectScope.ok) {
+    return NextResponse.json({ error: 'Project not found.' }, { status: 404 })
+  }
+
+  const scopedConversation =
+    body?.conversation && projectScope.projectId
+      ? { ...body.conversation, projectId: projectScope.projectId }
+      : body?.conversation
 
   const appSettings = await neonSettingsRepository.get(auth.user.id)
   const subscription = await neonSubscriptionsRepository.ensureForUser(auth.user)
