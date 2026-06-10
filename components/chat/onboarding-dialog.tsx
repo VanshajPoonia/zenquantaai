@@ -265,10 +265,16 @@ export function OnboardingDialog() {
                     Recommended project: {starterPack.projectName}.
                   </p>
                 </div>
-                <button
-                  type="button"
+                <div
+                  role="button"
+                  tabIndex={0}
                   onClick={() => setCreateStarterProject((previous) => !previous)}
-                  className="flex w-full items-start gap-4 rounded-2xl border border-border/70 bg-card/60 p-5 text-left transition-colors hover:bg-card/80"
+                  onKeyDown={(event) => {
+                    if (event.key !== 'Enter' && event.key !== ' ') return
+                    event.preventDefault()
+                    setCreateStarterProject((previous) => !previous)
+                  }}
+                  className="flex w-full cursor-pointer items-start gap-4 rounded-2xl border border-border/70 bg-card/60 p-5 text-left transition-colors hover:bg-card/80"
                 >
                   <Checkbox
                     checked={createStarterProject}
@@ -280,7 +286,7 @@ export function OnboardingDialog() {
                       {starterPack.projectDescription}
                     </p>
                   </div>
-                </button>
+                </div>
               </div>
             ) : null}
 
@@ -295,10 +301,16 @@ export function OnboardingDialog() {
                   </p>
                 </div>
 
-                <button
-                  type="button"
+                <div
+                  role="button"
+                  tabIndex={0}
                   onClick={() => setInstallStarterPrompts((previous) => !previous)}
-                  className="flex w-full items-start gap-4 rounded-2xl border border-border/70 bg-card/60 p-5 text-left transition-colors hover:bg-card/80"
+                  onKeyDown={(event) => {
+                    if (event.key !== 'Enter' && event.key !== ' ') return
+                    event.preventDefault()
+                    setInstallStarterPrompts((previous) => !previous)
+                  }}
+                  className="flex w-full cursor-pointer items-start gap-4 rounded-2xl border border-border/70 bg-card/60 p-5 text-left transition-colors hover:bg-card/80"
                 >
                   <Checkbox
                     checked={installStarterPrompts}
@@ -310,7 +322,7 @@ export function OnboardingDialog() {
                       {starterPack.description}
                     </p>
                   </div>
-                </button>
+                </div>
 
                 <div className="grid gap-3 sm:grid-cols-2">
                   {PACK_IDS.map((packId) => {
