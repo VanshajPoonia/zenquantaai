@@ -424,23 +424,23 @@ export function Sidebar({ onOpenSettings }: SidebarProps) {
   return (
     <aside
       ref={sidebarRef}
-      style={{ width: `${sidebarWidth}px` }}
+      style={{ width: `min(${sidebarWidth}px, calc(100vw - 48px))` }}
       className="relative flex h-full min-h-0 shrink-0 flex-col border-r border-sidebar-border bg-sidebar"
     >
       {/* Header with logo and new chat */}
-      <div className="p-4 space-y-4">
+      <div className="space-y-3 p-3 sm:space-y-4 sm:p-4">
         <div className="flex items-center justify-between gap-2">
           <button
             type="button"
             onClick={goHome}
-            className="flex cursor-pointer items-center gap-3 rounded-2xl p-1 text-left transition-colors hover:bg-sidebar-accent/40"
+            className="flex min-w-0 cursor-pointer items-center gap-2 rounded-xl p-1 text-left transition-colors hover:bg-sidebar-accent/40 sm:gap-3 sm:rounded-2xl"
           >
-            <ZenquantaLogo className="size-9" />
-            <div>
-              <span className="font-bold text-lg text-sidebar-foreground tracking-tight">
+            <ZenquantaLogo className="size-7 sm:size-9" />
+            <div className="min-w-0">
+              <span className="text-base font-bold tracking-tight text-sidebar-foreground sm:text-lg">
                 Zenquanta
               </span>
-              <span className="ml-1.5 text-xs font-medium px-1.5 py-0.5 rounded bg-sidebar-primary/20 text-sidebar-primary">
+              <span className="ml-1 text-[10px] font-medium rounded bg-sidebar-primary/20 px-1 py-0.5 text-sidebar-primary sm:ml-1.5 sm:px-1.5 sm:text-xs">
                 AI
               </span>
             </div>
@@ -453,10 +453,10 @@ export function Sidebar({ onOpenSettings }: SidebarProps) {
                   type="button"
                   variant="ghost"
                   size="icon"
-                  className="size-9 rounded-xl text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground"
+                  className="size-8 rounded-lg text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground sm:size-9 sm:rounded-xl"
                   onClick={toggleSidebar}
                 >
-                  <PanelLeftClose className="size-4" />
+                  <PanelLeftClose className="size-3.5 sm:size-4" />
                 </Button>
               </TooltipTrigger>
               <TooltipContent side="bottom" className="text-xs">
