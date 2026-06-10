@@ -1048,7 +1048,6 @@ export const zenAssistantRecommendationEvents = pgTable(
     userId: uuid('user_id')
       .notNull()
       .references(() => zenUsers.id, { onDelete: 'cascade' }),
-    projectId: text('project_id'),
     conversationId: text('conversation_id').references(() => zenConversations.id, {
       onDelete: 'set null',
     }),
