@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useEffect, useMemo } from 'react'
+import { useCallback, useState, useRef, useEffect, useMemo } from 'react'
 import { BookOpen, FileText, Images, ImagePlus } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useChatContext } from '@/lib/chat-context'
@@ -59,7 +59,7 @@ export function Composer({ onSend, disabled, initialValue = '' }: ComposerProps)
   } | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const clearDraft = () => {
+  const clearDraft = useCallback(() => {
     setValue('')
     setPendingAttachments([])
     setComposerKind('chat')
@@ -67,7 +67,7 @@ export function Composer({ onSend, disabled, initialValue = '' }: ComposerProps)
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto'
     }
-  }
+  }, [])
   const promptDraft = useMemo(
     () => ({
       content: value,
