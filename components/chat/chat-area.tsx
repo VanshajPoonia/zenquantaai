@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useChatContext } from '@/lib/chat-context'
 import { getUpgradeNudgeForError } from '@/lib/billing/upgrade-nudges'
 import { AssistantHandoffTarget } from '@/lib/config/assistant-handoffs'
@@ -37,31 +37,93 @@ export function ChatArea() {
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const previousMessageCountRef = useRef(0)
   const previousChatIdRef = useRef<string | null>(null)
+  const previousStreamingMessageIdRef = useRef<string | null>(null)
+
+  const getScrollViewport = useCallback(() =>
+    scrollAreaRef.current?.querySelector(
+      '[data-slot="scroll-area-viewport"]'
+    ) as HTMLDivElement | null, [])
 
   useEffect(() => {
     const messageCount = currentChat?.messages.length ?? 0
     const isChatSwitch = currentChat?.id !== previousChatIdRef.current
+    const previousMessageCount = previousMessageCountRef.current
+    const currentStreamingMessageId = streamingState.messageId ?? null
+    const previousStreamingMessageId = previousStreamingMessageIdRef.current
+    const viewport = getScrollViewport()
+
+    if (!viewport || !messagesEndRef.current) {
+      previousChatIdRef.current = currentChat?.id ?? null
+      previousMessageCountRef.current = messageCount
+      previousStreamingMessageIdRef.current = currentStreamingMessageId
+      return
+    }
+
+    const scrollMessageToStart = (messageId: string, behavior: ScrollBehavior) => {
+      requestAnimationFrame(() => {
+        document.getElementById(`message-${messageId}`)?.scrollIntoView({
+          behavior,
+          block: 'start',
+        })
+      })
+    }
+
+    if (isChatSwitch) {
+      requestAnimationFrame(() => {
+        messagesEndRef.current?.scrollIntoView({
+          behavior: 'auto',
+          block: 'end',
+        })
+      })
+    } else if (
+      currentStreamingMessageId &&
+      currentStreamingMessageId !== previousStreamingMessageId
+    ) {
+      scrollMessageToStart(currentStreamingMessageId, 'smooth')
+    } else if (messageCount > previousMessageCount && !isLoadingOlder) {
+      const latestAssistant = [...(currentChat?.messages ?? [])]
+        .reverse()
+        .find((message) => message.role === 'assistant')
+
+      if (latestAssistant && streamingState.status !== 'streaming') {
+        scrollMessageToStart(latestAssistant.id, 'smooth')
+      }
+    } else if (streamingState.status !== 'streaming') {
+      const distanceFromBottom =
+        viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight
+      if (distanceFromBottom < 120) {
+        messagesEndRef.current.scrollIntoView({
+          behavior: 'smooth',
+          block: 'end',
+        })
+      }
+    }
+
     previousChatIdRef.current = currentChat?.id ?? null
     previousMessageCountRef.current = messageCount
+    previousStreamingMessageIdRef.current = currentStreamingMessageId
+  }, [
+    currentChat?.id,
+    currentChat?.messages,
+    getScrollViewport,
+    isLoadingOlder,
+    streamingState.messageId,
+    streamingState.status,
+  ])
 
-    const viewport = scrollAreaRef.current?.querySelector(
-      '[data-slot="scroll-area-viewport"]'
-    ) as HTMLDivElement | null
-
+  useEffect(() => {
+    const viewport = getScrollViewport()
     if (!viewport || !messagesEndRef.current) return
 
     const distanceFromBottom =
       viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight
-    const shouldFollow =
-      streamingState.status === 'streaming' || distanceFromBottom < 160 || isChatSwitch
-
-    if (!shouldFollow) return
+    if (streamingState.status === 'streaming' || distanceFromBottom > 120) return
 
     messagesEndRef.current.scrollIntoView({
-      behavior: streamingState.status === 'streaming' ? 'auto' : 'smooth',
+      behavior: 'smooth',
       block: 'end',
     })
-  }, [currentChat?.id, currentChat?.messages, streamingState.status])
+  }, [getScrollViewport, streamingState.status])
 
   const lastAssistantId = useMemo(
     () =>
