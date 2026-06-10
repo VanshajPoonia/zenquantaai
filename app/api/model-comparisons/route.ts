@@ -178,7 +178,7 @@ export async function POST(request: NextRequest) {
   const prepared = await prepareConversationForChat({
     action: 'send',
     conversationId: storedConversation?.id ?? body?.conversationId,
-    conversation: storedConversation ?? undefined,
+    conversation: storedConversation ?? scopedConversation,
     mode: baseMode,
     content,
     settings,
