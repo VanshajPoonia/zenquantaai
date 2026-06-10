@@ -469,16 +469,22 @@ export function ModelComparisonButton({
                 const family = getAssistantFamilyFromMode(mode)
                 const checked = selectedModes.includes(mode)
                 return (
-                  <button
+                  <div
                     key={mode}
-                    type="button"
+                    role="button"
+                    tabIndex={0}
                     className={cn(
-                      'flex min-h-[92px] items-start gap-2 rounded-2xl border p-3 text-left text-sm transition-colors',
+                      'flex min-h-[92px] cursor-pointer items-start gap-2 rounded-2xl border p-3 text-left text-sm transition-colors',
                       checked
                         ? 'border-primary/70 bg-primary/10 text-foreground shadow-lg shadow-black/10'
                         : 'border-border/60 bg-card/40 text-muted-foreground hover:text-foreground'
                     )}
                     onClick={() => toggleMode(mode)}
+                    onKeyDown={(event) => {
+                      if (event.key !== 'Enter' && event.key !== ' ') return
+                      event.preventDefault()
+                      toggleMode(mode)
+                    }}
                   >
                     <Checkbox checked={checked} className="mt-0.5 pointer-events-none" />
                     <span className="min-w-0">
@@ -492,7 +498,7 @@ export function ModelComparisonButton({
                         {ASSISTANT_FAMILY_COPY[family].description}
                       </span>
                     </span>
-                  </button>
+                  </div>
                 )
               })}
             </div>
