@@ -127,7 +127,7 @@ export function Composer({ onSend, disabled, initialValue = '' }: ComposerProps)
     const textarea = textareaRef.current
     if (textarea) {
       textarea.style.height = 'auto'
-      textarea.style.height = `${Math.min(textarea.scrollHeight, 200)}px`
+      textarea.style.height = `${Math.min(textarea.scrollHeight, 168)}px`
     }
   }, [value])
 
@@ -227,8 +227,8 @@ export function Composer({ onSend, disabled, initialValue = '' }: ComposerProps)
   }
 
   return (
-    <div className="sticky bottom-0 z-20 border-t border-border bg-gradient-to-t from-background via-background/95 to-background/70 backdrop-blur-xl px-4 pb-4 pt-6">
-      <div className="max-w-4xl mx-auto">
+    <div className="sticky bottom-0 z-20 border-t border-border bg-gradient-to-t from-background via-background/95 to-background/70 px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 backdrop-blur-xl sm:px-4 sm:pb-4 sm:pt-5">
+      <div className="mx-auto max-w-4xl">
         {draftRecommendation ? (
           <AssistantRecommendationChip
             recommendation={draftRecommendation}
@@ -247,7 +247,7 @@ export function Composer({ onSend, disabled, initialValue = '' }: ComposerProps)
         />
         <div
           className={cn(
-            'relative rounded-2xl border bg-card/80 backdrop-blur-sm transition-all duration-300',
+            'rounded-2xl border bg-card/80 backdrop-blur-sm transition-all duration-300',
             'focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-offset-background',
             'focus-within:border-opacity-50',
             getModeAccentClass(currentMode, 'ring').replace('ring-', 'focus-within:ring-') + '/50',
@@ -264,7 +264,7 @@ export function Composer({ onSend, disabled, initialValue = '' }: ComposerProps)
           />
 
           {pendingAttachments.length > 0 && (
-            <div className="flex flex-wrap gap-2 px-4 pt-4">
+            <div className="flex flex-wrap gap-2 px-3 pt-3 sm:px-4 sm:pt-4">
               {pendingAttachments.map((attachment) => (
                 <div
                   key={attachment.id}
@@ -295,7 +295,6 @@ export function Composer({ onSend, disabled, initialValue = '' }: ComposerProps)
             </div>
           )}
 
-          {/* Textarea */}
           <textarea
             ref={textareaRef}
             value={value}
@@ -309,16 +308,14 @@ export function Composer({ onSend, disabled, initialValue = '' }: ComposerProps)
             disabled={disabled}
             rows={1}
             className={cn(
-              'w-full resize-none bg-transparent px-4 pt-4 pb-14 text-foreground placeholder:text-muted-foreground',
+              'w-full resize-none bg-transparent px-3 pb-3 pt-3 text-sm leading-6 text-foreground placeholder:text-muted-foreground sm:px-4 sm:pt-4 sm:text-base',
               'focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed',
-              'min-h-[60px] max-h-[200px]'
+              'min-h-[76px] max-h-[168px]'
             )}
           />
 
-          {/* Bottom Bar */}
-          <div className="absolute bottom-2 left-2 right-2 flex items-center justify-between">
-            {/* Left Actions */}
-            <div className="flex items-center gap-2">
+          <div className="flex flex-col gap-2 border-t border-border/60 px-2 pb-2 pt-2 sm:flex-row sm:items-center sm:justify-between">
+            <div className="-mx-1 flex min-w-0 items-center gap-1 overflow-x-auto px-1 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:pb-0">
               <ModeSwitcherCompact />
               <CustomAssistantButton />
               <PromptLibraryButton
@@ -433,30 +430,30 @@ export function Composer({ onSend, disabled, initialValue = '' }: ComposerProps)
               </TooltipProvider>
             </div>
 
-            {/* Right Actions */}
-            <div className="flex items-center gap-2">
+            <div className="flex shrink-0 items-center justify-end gap-2">
               {isStreaming ? (
                 <>
                   <Button
                     onClick={() => void handleSubmit()}
                     disabled={(!value.trim() && pendingAttachments.length === 0) || disabled}
                     className={cn(
-                      'transition-all duration-300 text-white disabled:opacity-50',
+                      'h-9 rounded-xl px-3 text-white transition-all duration-300 disabled:opacity-50 sm:px-4',
                       getModeAccentClass(currentMode, 'bg'),
                       'hover:opacity-90',
                       getModeGlow(currentMode)
                     )}
                   >
-                    <SendIcon className="size-4 mr-2" />
-                    Queue
-                    {queuedPromptCount > 0 ? ` (${queuedPromptCount + 1})` : ''}
+                    <SendIcon className="size-4 sm:mr-2" />
+                    <span className="hidden sm:inline">
+                      Queue{queuedPromptCount > 0 ? ` (${queuedPromptCount + 1})` : ''}
+                    </span>
                   </Button>
                   <Button
                     onClick={handleStop}
-                    className="bg-destructive hover:bg-destructive/90 text-destructive-foreground"
+                    className="h-9 rounded-xl bg-destructive px-3 text-destructive-foreground hover:bg-destructive/90 sm:px-4"
                   >
-                    <StopIcon className="size-4 mr-2" />
-                    Stop
+                    <StopIcon className="size-4 sm:mr-2" />
+                    <span className="hidden sm:inline">Stop</span>
                   </Button>
                 </>
               ) : (
@@ -464,22 +461,23 @@ export function Composer({ onSend, disabled, initialValue = '' }: ComposerProps)
                   onClick={() => void handleSubmit()}
                   disabled={(!value.trim() && pendingAttachments.length === 0) || disabled}
                   className={cn(
-                    'transition-all duration-300 text-white disabled:opacity-50',
+                    'h-9 rounded-xl px-3 text-white transition-all duration-300 disabled:opacity-50 sm:min-w-24 sm:px-4',
                     getModeAccentClass(currentMode, 'bg'),
                     `hover:opacity-90`,
                     getModeGlow(currentMode)
                   )}
                 >
-                  <SendIcon className="size-4 mr-2" />
-                  {composerKind === 'image' ? 'Create' : 'Send'}
+                  <SendIcon className="size-4 sm:mr-2" />
+                  <span className="hidden sm:inline">
+                    {composerKind === 'image' ? 'Create' : 'Send'}
+                  </span>
                 </Button>
               )}
             </div>
           </div>
         </div>
 
-        {/* Helper text */}
-        <p className="text-xs text-muted-foreground text-center mt-3">
+        <p className="mt-2 hidden text-center text-xs text-muted-foreground sm:block">
           {composerKind === 'image' ? (
             <>
               Image mode generates a richer, more production-ready visual from your prompt.
