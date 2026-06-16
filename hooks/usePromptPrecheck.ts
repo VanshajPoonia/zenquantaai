@@ -45,6 +45,7 @@ export function usePromptPrecheck(input: {
     currentMode,
     currentChat,
     appSettings,
+    assistantPersonalizationSummary,
     setCurrentMode,
     beginPromptPrecheck,
     awaitRecommendationDecision,
@@ -134,6 +135,12 @@ export function usePromptPrecheck(input: {
           kind: attachment.kind,
           previewUrl: attachment.previewUrl,
         })),
+        personalization: {
+          enabled:
+            appSettings.assistantRecommendations.enabled &&
+            appSettings.assistantRecommendations.personalized,
+          summary: assistantPersonalizationSummary,
+        },
       })
 
       if (!recommendation.shouldRecommendSwitch) {
@@ -154,6 +161,8 @@ export function usePromptPrecheck(input: {
     return () => window.clearTimeout(timeout)
   }, [
     appSettings.assistantRecommendations.enabled,
+    appSettings.assistantRecommendations.personalized,
+    assistantPersonalizationSummary,
     currentMode,
     input.draft,
     pendingRecommendation,
@@ -217,6 +226,12 @@ export function usePromptPrecheck(input: {
             kind: attachment.kind,
             previewUrl: attachment.previewUrl,
           })),
+          personalization: {
+            enabled:
+              appSettings.assistantRecommendations.enabled &&
+              appSettings.assistantRecommendations.personalized,
+            summary: assistantPersonalizationSummary,
+          },
         })
 
         debugSendPipeline('precheck-result', {
@@ -292,6 +307,8 @@ export function usePromptPrecheck(input: {
     [
       appSettings.assistantRecommendations.autoSwitchOnHighConfidence,
       appSettings.assistantRecommendations.enabled,
+      appSettings.assistantRecommendations.personalized,
+      assistantPersonalizationSummary,
       awaitRecommendationDecision,
       beginPromptPrecheck,
       clearPromptPrecheck,
