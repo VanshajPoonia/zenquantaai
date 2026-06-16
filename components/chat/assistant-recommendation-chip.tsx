@@ -39,6 +39,7 @@ export function AssistantRecommendationChip({
 }: AssistantRecommendationChipProps) {
   const recommendedMode = FAMILY_TO_MODE[recommendation.predictedAssistant]
   const label = getFamilyLabel(recommendation.predictedAssistant)
+  const baseReason = recommendation.baseReason ?? recommendation.reason
 
   return (
     <div
@@ -70,9 +71,14 @@ export function AssistantRecommendationChip({
               {getConfidenceLabel(recommendation.confidence)}
             </span>
           </div>
-          <p className="mt-0.5 line-clamp-2 text-xs leading-5 text-muted-foreground">
-            {recommendation.reason}.
-          </p>
+          <div className="mt-0.5 space-y-0.5 text-xs leading-5 text-muted-foreground">
+            <p className="line-clamp-2">Recommended because {baseReason}.</p>
+            {recommendation.personalizedReason ? (
+              <p className="line-clamp-1 text-foreground/70">
+                {recommendation.personalizedReason}
+              </p>
+            ) : null}
+          </div>
         </div>
       </div>
 

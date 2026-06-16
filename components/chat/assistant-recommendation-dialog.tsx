@@ -42,6 +42,7 @@ export function AssistantRecommendationDialog({
 
   const currentMode = FAMILY_TO_MODE[recommendation.currentAssistant]
   const recommendedMode = FAMILY_TO_MODE[recommendation.predictedAssistant]
+  const baseReason = recommendation.baseReason ?? recommendation.reason
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -98,8 +99,13 @@ export function AssistantRecommendationDialog({
             <div className="rounded-2xl border border-border/70 bg-card/50 p-4">
               <p className="text-sm leading-7 text-foreground/90">
                 Best match: {getFamilyLabel(recommendation.predictedAssistant)} because{' '}
-                {recommendation.reason}.
+                {baseReason}.
               </p>
+              {recommendation.personalizedReason ? (
+                <p className="mt-2 text-xs leading-6 text-muted-foreground">
+                  {recommendation.personalizedReason}
+                </p>
+              ) : null}
             </div>
 
             <label className="flex items-start gap-3 rounded-2xl border border-border/50 bg-background/30 px-4 py-3">
