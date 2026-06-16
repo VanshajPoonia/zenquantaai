@@ -78,10 +78,12 @@ import {
   openAttachmentImageInNewTab,
 } from '@/lib/utils/image-download'
 import { ChatImageMessage } from './chat-image-message'
+import { FeedbackButtons } from './feedback-buttons'
 import { FileIntelligenceCard } from './file-intelligence-card'
 
 interface ChatMessageProps {
   message: Message
+  conversationId?: string | null
   onRegenerate?: () => void
   onRetry?: () => void
   onEdit?: (content: string, targetMessageId?: string) => void
@@ -637,6 +639,7 @@ function getFirstImageAttachment(message: Message): Attachment | null {
 
 export function ChatMessage({
   message,
+  conversationId,
   onRegenerate,
   onRetry,
   onEdit,
@@ -769,6 +772,10 @@ export function ChatMessage({
     Boolean(onQualityAction) &&
     effectiveStatus !== 'streaming' &&
     effectiveStatus !== 'error' &&
+    Boolean(message.content.trim())
+  const canSendFeedback =
+    message.role === 'assistant' &&
+    effectiveStatus === 'complete' &&
     Boolean(message.content.trim())
   const qualityGroups = useMemo(
     () => getQualityActionGroupsForMessage(message),
@@ -1074,6 +1081,21 @@ export function ChatMessage({
                     ))}
                   </DropdownMenuContent>
                 </DropdownMenu>
+              ) : null}
+
+              {canSendFeedback ? (
+                <FeedbackButtons
+                  entityType="message"
+                  entityId={message.id}
+                  metadata={{
+                    assistantFamily: message.assistantFamily,
+                    mode: message.mode,
+                    model: message.model,
+                    conversationId,
+                    sourceCount: message.sources?.length ?? 0,
+                    customAssistantId: message.customAssistantId,
+                  }}
+                />
               ) : null}
 
               {firstImageAttachment ? (
