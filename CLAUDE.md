@@ -27,5 +27,6 @@ Claude Code may act as a fallback coding agent only when Codex is unavailable, o
 - Use current repo facts only.
 - Do not treat this as the old four-mode app.
 - Do not modify application behavior during review/planning tasks.
+- Treat `.env.local` as the local-only secret file, do not commit it, and do not restore `.env.example` unless explicitly asked.
 - Prefer findings with file references, concrete risks, and practical next steps.
 - When asked to implement, update the shared memory files when the change affects project state, architecture decisions, setup, or handoff context.

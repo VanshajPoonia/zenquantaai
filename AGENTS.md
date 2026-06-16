@@ -115,6 +115,12 @@ Known command issues:
 - `npm run typecheck` runs `tsc --noEmit`.
 - `npm run build` should remain meaningful for production because `next.config.mjs` no longer ignores TypeScript build errors.
 
+## Environment Files
+
+- `.env.local` is the local secret file for development and must not be committed.
+- Do not recreate `.env.example` unless the user explicitly asks for a committed env template.
+- Documentation may list expected env variable names, but never copy real values from `.env.local`.
+
 ## Files To Update When Relevant
 
 - Update `AI_TASK_LOG.md` when work starts, finishes, or is handed off.

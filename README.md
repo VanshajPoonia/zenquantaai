@@ -247,11 +247,9 @@ npm install
 
 2. Create your local env file:
 
-```bash
-cp .env.example .env.local
-```
+Create or edit `.env.local` in the project root. This file is local-only and should not be committed.
 
-3. Fill in `.env.local`:
+3. Use these non-secret placeholder keys as the local reference:
 
 ```env
 OPENROUTER_API_KEY=
