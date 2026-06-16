@@ -225,6 +225,34 @@ export default async function AdminPage({
             />
           </AnalyticsCard>
 
+          <AnalyticsCard title="Feedback signals">
+            <InsightRow
+              label="Total feedback"
+              value={overview.productAnalytics.feedback.total.toLocaleString()}
+              detail={`${overview.productAnalytics.feedback.ratings.up.toLocaleString()} up · ${overview.productAnalytics.feedback.ratings.down.toLocaleString()} down · ${overview.productAnalytics.feedback.ratings.neutral.toLocaleString()} neutral.`}
+            />
+            <InsightRow
+              label="Downvote rate"
+              value={formatPercent(overview.productAnalytics.feedback.downvoteRate)}
+              detail="Computed from captured feedback events in the selected period."
+              tone={
+                overview.productAnalytics.feedback.downvoteRate >= 0.25 &&
+                overview.productAnalytics.feedback.ratings.down >= 5
+                  ? 'warning'
+                  : 'neutral'
+              }
+            />
+            {overview.productAnalytics.feedback.byEntityType.slice(0, 4).map((item) => (
+              <InsightRow
+                key={item.entityType}
+                label={item.entityType.replace(/_/g, ' ')}
+                value={item.total.toLocaleString()}
+                detail={`${item.up} up · ${item.down} down · ${item.neutral} neutral.`}
+                tone={item.down > item.up && item.down >= 3 ? 'warning' : 'neutral'}
+              />
+            ))}
+          </AnalyticsCard>
+
           <AnalyticsCard title="Operational signals">
             {overview.productAnalytics.operationalSignals.length ? (
               overview.productAnalytics.operationalSignals.map((item) => (

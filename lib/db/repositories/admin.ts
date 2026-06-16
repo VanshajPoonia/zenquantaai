@@ -7,6 +7,8 @@ import {
   AssistantRecommendationAnalyticsSummary,
   AssistantRecommendationEvent,
   DashboardUsageSummary,
+  FeedbackEntityType,
+  FeedbackRating,
   ImageGenerationEvent,
   PlanChangeRequest,
   Profile,
@@ -34,6 +36,7 @@ import {
 import { toIsoString } from './helpers'
 import { neonAssistantRecommendationEventsRepository } from './assistant-recommendations'
 import { neonConversationRepository } from './conversations'
+import { neonFeedbackRepository } from './feedback'
 import {
   neonAdminAuditLogsRepository,
   neonPlanRequestsRepository,
@@ -135,6 +138,23 @@ export interface AdminProductAnalytics {
     unsupported: number
     failed: number
     pending: number
+  }
+  feedback: {
+    total: number
+    ratings: Record<FeedbackRating, number>
+    downvoteRate: number
+    byEntityType: Array<{
+      entityType: FeedbackEntityType
+      total: number
+      up: number
+      down: number
+      neutral: number
+    }>
+    recentNegativeSignals: Array<{
+      entityType: FeedbackEntityType
+      count: number
+      detail: string
+    }>
   }
   operationalSignals: Array<{
     id: string
@@ -536,9 +556,10 @@ class NeonAdminRepository {
       generatedImages,
       customAssistants,
       conversationRows,
+      feedbackEvents,
     ] =
       filteredUserIdList.length === 0
-        ? [[], [], [], [], [], [], [], [], [], [], []]
+        ? [[], [], [], [], [], [], [], [], [], [], [], []]
         : await Promise.all([
             neonUsageEventsRepository.list({
               userIds: filteredUserIdList,
@@ -585,6 +606,12 @@ class NeonAdminRepository {
               .select()
               .from(zenConversations)
               .where(inArray(zenConversations.userId, filteredUserIdList)),
+            neonFeedbackRepository.listForAdminAnalytics({
+              userIds: filteredUserIdList,
+              from: filterFromDate,
+              to: filterToDate,
+              limit: 1000,
+            }),
           ])
     const workflowRunIds = workflowRuns.map((run) => run.id)
     const modelComparisonIds = modelComparisons.map((comparison) => comparison.id)
@@ -899,6 +926,11 @@ class NeonAdminRepository {
     const periodSourceBackedPulseMessages = sourceBackedPulseMessages.filter((message) =>
       isRowWithinPeriod(message, normalizedFilters)
     )
+    const periodFeedbackEvents = feedbackEvents.filter(
+      (event) =>
+        filteredUserIds.has(event.userId) &&
+        isWithinPeriod(event.createdAt, normalizedFilters)
+    )
 
     const fileIndexing = periodFiles.reduce<AdminProductAnalytics['fileIndexing']>(
       (counts, file) => {
@@ -918,6 +950,53 @@ class NeonAdminRepository {
         pending: 0,
       }
     )
+    const feedbackRatings: Record<FeedbackRating, number> = {
+      up: 0,
+      down: 0,
+      neutral: 0,
+    }
+    const feedbackEntityBuckets = new Map<
+      FeedbackEntityType,
+      {
+        entityType: FeedbackEntityType
+        total: number
+        up: number
+        down: number
+        neutral: number
+      }
+    >()
+
+    for (const event of periodFeedbackEvents) {
+      feedbackRatings[event.rating] += 1
+      const bucket = feedbackEntityBuckets.get(event.entityType) ?? {
+        entityType: event.entityType,
+        total: 0,
+        up: 0,
+        down: 0,
+        neutral: 0,
+      }
+      bucket.total += 1
+      bucket[event.rating] += 1
+      feedbackEntityBuckets.set(event.entityType, bucket)
+    }
+
+    const feedback: AdminProductAnalytics['feedback'] = {
+      total: periodFeedbackEvents.length,
+      ratings: feedbackRatings,
+      downvoteRate: rate(feedbackRatings.down, periodFeedbackEvents.length),
+      byEntityType: [...feedbackEntityBuckets.values()].sort(
+        (a, b) => b.total - a.total
+      ),
+      recentNegativeSignals: [...feedbackEntityBuckets.values()]
+        .filter((bucket) => bucket.down > 0)
+        .sort((a, b) => b.down - a.down)
+        .slice(0, 5)
+        .map((bucket) => ({
+          entityType: bucket.entityType,
+          count: bucket.down,
+          detail: `${bucket.down.toLocaleString()} downvotes across ${bucket.total.toLocaleString()} feedback events.`,
+        })),
+    }
     const failedWorkflowRuns = periodWorkflowRuns.filter(
       (run) => run.status === 'failed'
     ).length
@@ -1091,6 +1170,12 @@ class NeonAdminRepository {
           detail: `${fileIndexing.indexed} indexed, ${fileIndexing.skipped + fileIndexing.unsupported + fileIndexing.failed} skipped/unsupported/failed.`,
         },
         {
+          id: 'feedback',
+          label: 'Feedback submitted',
+          value: feedback.total,
+          detail: `${feedback.ratings.up} up · ${feedback.ratings.down} down · ${feedback.ratings.neutral} neutral.`,
+        },
+        {
           id: 'custom_assistants',
           label: 'Custom assistants created',
           value: periodCustomAssistants.length,
@@ -1098,7 +1183,18 @@ class NeonAdminRepository {
         },
       ],
       fileIndexing,
+      feedback,
       operationalSignals: [
+        {
+          id: 'negative_feedback',
+          label: 'Negative feedback',
+          value: feedback.ratings.down,
+          detail: `${Math.round(feedback.downvoteRate * 100)}% downvote rate across captured feedback.`,
+          tone:
+            feedback.downvoteRate >= 0.25 && feedback.ratings.down >= 5
+              ? 'warning'
+              : 'neutral',
+        },
         {
           id: 'failed_images',
           label: 'Failed image generations',
@@ -1350,7 +1446,7 @@ class NeonAdminRepository {
       neonImageGenerationEventsRepository.listByUser(userId),
       neonAssistantRecommendationEventsRepository.listByUser(userId),
       neonAdminAuditLogsRepository.listByTargetUser(userId),
-      neonConversationRepository.list(userId),
+      neonConversationRepository.list(userId, { includeMessages: false }),
     ])
 
     if (!subscription) return null
