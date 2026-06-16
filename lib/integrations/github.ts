@@ -3,7 +3,9 @@ import 'server-only'
 import { createHash, createSign } from 'crypto'
 import {
   GitHubImportableFile,
+  GitHubIntegrationAccount,
   GitHubIntegrationStatus,
+  GitHubIntegrationStatusAccount,
   GitHubRepositorySummary,
 } from '@/types'
 
@@ -110,15 +112,34 @@ export function getGitHubAppConfig(): {
   }
 }
 
+export function toClientGitHubIntegrationAccount(
+  account: GitHubIntegrationAccount | null
+): GitHubIntegrationStatusAccount | null {
+  if (!account) return null
+
+  return {
+    provider: 'github',
+    externalAccountLogin: account.externalAccountLogin,
+    externalAccountName: account.externalAccountName,
+    scopes: account.scopes,
+    status: account.status,
+    connectedAt: account.connectedAt,
+    revokedAt: account.revokedAt,
+    createdAt: account.createdAt,
+    updatedAt: account.updatedAt,
+  }
+}
+
 export function buildGitHubStatus(input: {
-  account: GitHubIntegrationStatus['account']
+  account: GitHubIntegrationAccount | null
 }): GitHubIntegrationStatus {
   const { configured, missing } = getGitHubAppConfig()
+  const account = toClientGitHubIntegrationAccount(input.account)
 
   return {
     configured,
-    connected: configured && input.account?.status === 'connected',
-    account: input.account,
+    connected: configured && account?.status === 'connected',
+    account,
     connectUrl: configured ? '/api/integrations/github/connect' : null,
     missingConfiguration: missing.length > 0 ? missing : undefined,
   }
