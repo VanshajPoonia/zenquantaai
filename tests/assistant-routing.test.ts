@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest'
+import { AssistantRecommendationResult } from '@/types'
 import { FAMILY_TO_MODE, MODE_TO_FAMILY } from '@/lib/config/assistants'
 import { getAssistantRecommendation } from '@/lib/router/assistantRecommendation'
+import {
+  buildAssistantRecommendationPersonalizationSummary,
+  personalizeAssistantRecommendation,
+} from '@/lib/router/personalization'
 
 describe('assistant routing and config helpers', () => {
   it('keeps assistant family and mode mappings in sync', () => {
@@ -70,5 +75,141 @@ describe('assistant routing and config helpers', () => {
 
     expect(result.lockedToCurrentAssistant).toBe(true)
     expect(result.shouldRecommendSwitch).toBe(false)
+  })
+
+  it('keeps the base recommendation unchanged when personalization is off', () => {
+    const input = {
+      prompt: 'Debug this TypeScript error in components/chat/composer.tsx.',
+      currentMode: 'general' as const,
+    }
+    const base = getAssistantRecommendation(input)
+    const personalizedOff = getAssistantRecommendation({
+      ...input,
+      personalization: {
+        enabled: false,
+        summary: buildAssistantRecommendationPersonalizationSummary({
+          recommendationEvents: [
+            {
+              recommendedAssistant: 'forge',
+              matchedSignals: ['code-intent'],
+              outcome: 'accepted',
+            },
+          ],
+        }),
+      },
+    })
+
+    expect(personalizedOff).toEqual(base)
+  })
+
+  it('adds a Forge personal explanation for coding prompts when accepted history agrees', () => {
+    const result = getAssistantRecommendation({
+      prompt: 'Fix this failing Next.js API route and TypeScript stack trace.',
+      currentMode: 'general',
+      personalization: {
+        enabled: true,
+        summary: buildAssistantRecommendationPersonalizationSummary({
+          recommendationEvents: [
+            {
+              recommendedAssistant: 'forge',
+              matchedSignals: ['code-intent'],
+              outcome: 'accepted',
+            },
+            {
+              recommendedAssistant: 'forge',
+              matchedSignals: ['file-extension'],
+              outcome: 'autoswitched',
+            },
+          ],
+        }),
+      },
+    })
+
+    expect(result.predictedAssistant).toBe('forge')
+    expect(result.personalized).toBe(true)
+    expect(result.personalizedReason).toContain('forge')
+    expect(result.matchedPersonalizationSignals).toContain('forge:code')
+  })
+
+  it('suppresses weak Pulse confidence when the user rejects Pulse for general tasks', () => {
+    const base: AssistantRecommendationResult = {
+      currentAssistant: 'nova',
+      predictedAssistant: 'pulse',
+      recommendedMode: 'live',
+      confidence: 0.8,
+      reason: 'it has a weak live-context hint',
+      matchedSignals: ['general-help'],
+      shouldRecommendSwitch: true,
+    }
+    const summary = buildAssistantRecommendationPersonalizationSummary({
+      recommendationEvents: [
+        {
+          recommendedAssistant: 'pulse',
+          matchedSignals: ['general-help'],
+          outcome: 'continued',
+        },
+        {
+          recommendedAssistant: 'pulse',
+          matchedSignals: ['general-help'],
+          outcome: 'cancelled',
+        },
+      ],
+    })
+    const result = personalizeAssistantRecommendation({
+      result: base,
+      enabled: true,
+      summary,
+    })
+
+    expect(result.predictedAssistant).toBe('pulse')
+    expect(result.confidence).toBeLessThan(base.confidence)
+    expect(result.personalizedReason).toContain('skip pulse')
+  })
+
+  it('uses Velora feedback for creative and copy prompts', () => {
+    const result = getAssistantRecommendation({
+      prompt: 'Rewrite this landing page copy with a warmer brand voice.',
+      currentMode: 'general',
+      personalization: {
+        enabled: true,
+        summary: buildAssistantRecommendationPersonalizationSummary({
+          feedbackEvents: [
+            {
+              entityType: 'message',
+              rating: 'up',
+              metadata: {
+                assistantFamily: 'velora',
+                mode: 'creative',
+              },
+            },
+          ],
+        }),
+      },
+    })
+
+    expect(result.predictedAssistant).toBe('velora')
+    expect(result.personalizedReason).toContain('velora')
+    expect(result.personalizedReason).toContain('copy and creative work')
+  })
+
+  it('does not let unrelated Model Duel winners override strong base rules', () => {
+    const result = getAssistantRecommendation({
+      prompt: 'Debug this React hook error in app/page.tsx.',
+      currentMode: 'general',
+      personalization: {
+        enabled: true,
+        summary: buildAssistantRecommendationPersonalizationSummary({
+          modelDuelWinners: [
+            {
+              assistantFamily: 'axiom',
+              mode: 'logic',
+            },
+          ],
+        }),
+      },
+    })
+
+    expect(result.predictedAssistant).toBe('forge')
+    expect(result.personalizedReason).toBeUndefined()
   })
 })
