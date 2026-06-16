@@ -1,13 +1,26 @@
 import 'server-only'
 
-import { and, desc, eq } from 'drizzle-orm'
+import { and, desc, eq, isNotNull } from 'drizzle-orm'
 import {
+  AssistantRecommendationPersonalizationSummary,
   AssistantRecommendationAnalyticsSummary,
   AssistantRecommendationEvent,
+  AssistantFamily,
+  AIMode,
+  FeedbackEntityType,
+  FeedbackRating,
   RecommendationOutcome,
 } from '@/types'
+import { buildAssistantRecommendationPersonalizationSummary } from '@/lib/router/personalization'
 import { getDatabaseClient } from '../client'
-import { zenAssistantRecommendationEvents, zenConversations } from '../schema'
+import {
+  zenAssistantRecommendationEvents,
+  zenConversations,
+  zenFeedbackEvents,
+  zenModelComparisonCandidates,
+  zenModelComparisons,
+  zenUsageEvents,
+} from '../schema'
 import { toIsoString, toJsonArray, toNumber } from './helpers'
 import { neonUsersRepository } from './users'
 
@@ -79,6 +92,12 @@ function buildAnalyticsSummary(
   }
 }
 
+function toSafeFeedbackMetadata(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {}
+}
+
 class NeonAssistantRecommendationEventsRepository {
   async list(): Promise<AssistantRecommendationEvent[]> {
     const rows = await getDatabaseClient()
@@ -140,6 +159,82 @@ class NeonAssistantRecommendationEventsRepository {
   async getAnalyticsSummary(): Promise<AssistantRecommendationAnalyticsSummary> {
     const events = await this.list()
     return buildAnalyticsSummary(events)
+  }
+
+  async getPersonalizationSummary(
+    userId: string
+  ): Promise<AssistantRecommendationPersonalizationSummary> {
+    const db = getDatabaseClient()
+    const [
+      recommendationEvents,
+      feedbackRows,
+      selectedCandidateRows,
+      usageRows,
+    ] = await Promise.all([
+      this.listByUser(userId),
+      db
+        .select({
+          entityType: zenFeedbackEvents.entityType,
+          rating: zenFeedbackEvents.rating,
+          metadata: zenFeedbackEvents.metadata,
+        })
+        .from(zenFeedbackEvents)
+        .where(eq(zenFeedbackEvents.userId, userId))
+        .orderBy(desc(zenFeedbackEvents.createdAt))
+        .limit(200),
+      db
+        .select({
+          assistantFamily: zenModelComparisonCandidates.assistantFamily,
+          mode: zenModelComparisonCandidates.mode,
+        })
+        .from(zenModelComparisons)
+        .innerJoin(
+          zenModelComparisonCandidates,
+          eq(
+            zenModelComparisonCandidates.id,
+            zenModelComparisons.selectedCandidateId
+          )
+        )
+        .where(
+          and(
+            eq(zenModelComparisons.userId, userId),
+            isNotNull(zenModelComparisons.selectedCandidateId)
+          )
+        )
+        .orderBy(desc(zenModelComparisons.updatedAt))
+        .limit(100),
+      db
+        .select({
+          assistantFamily: zenUsageEvents.assistantFamily,
+          mode: zenUsageEvents.mode,
+        })
+        .from(zenUsageEvents)
+        .where(eq(zenUsageEvents.userId, userId))
+        .orderBy(desc(zenUsageEvents.createdAt))
+        .limit(200),
+    ])
+
+    return buildAssistantRecommendationPersonalizationSummary({
+      windowDays: 90,
+      recommendationEvents: recommendationEvents.slice(0, 200).map((event) => ({
+        recommendedAssistant: event.recommendedAssistant,
+        matchedSignals: event.matchedSignals,
+        outcome: event.outcome,
+      })),
+      feedbackEvents: feedbackRows.map((event) => ({
+        entityType: event.entityType as FeedbackEntityType,
+        rating: event.rating as FeedbackRating,
+        metadata: toSafeFeedbackMetadata(event.metadata),
+      })),
+      modelDuelWinners: selectedCandidateRows.map((candidate) => ({
+        assistantFamily: candidate.assistantFamily as AssistantFamily,
+        mode: candidate.mode as AIMode,
+      })),
+      usageEvents: usageRows.map((event) => ({
+        assistantFamily: event.assistantFamily as AssistantFamily,
+        mode: event.mode as AIMode,
+      })),
+    })
   }
 }
 
