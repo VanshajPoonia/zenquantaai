@@ -6,6 +6,197 @@ The repository contains a real Zenquanta AI platform backed by Neon for runtime 
 
 Current direction: plan upgrades remain manual/admin-driven, payment automation is out of scope unless explicitly requested, and Neon/storage start fresh without importing Supabase database rows or storage objects.
 
+## 2026-06-16 - Personalized Assistant Recommendations V2
+
+- Added opt-in Personalized Assistant Recommendations v2 on top of the existing local Smart Assistant Router. Base prompt classification remains the source of truth; personalization only applies bounded confidence/explanation nudges when the user enables it.
+- Extended settings with `assistantRecommendations.personalized`, defaulting to `false` for existing and new users, and added a separate Settings toggle that is disabled when assistant recommendations are off.
+- Added safe personalization summary types and pure router helpers that derive task-level signals from recommendation outcomes, Feedback V1 metadata/ratings, selected Model Duel winners, and recent assistant usage without storing prompts, message content, snippets, raw costs, provider secrets, or cross-user data.
+- Added protected `GET /api/assistant-recommendations/personalization`, scoped to the authenticated user, and wired authenticated workspace hydration to fetch the summary only when personalization is enabled.
+- Updated inline recommendation chip and send-time recommendation dialog to show the base reason plus a subtle personalized explanation such as “You usually choose Forge for coding tasks.”
+- Added unit coverage for unchanged base routing when personalization is off, Forge/code acceptance history, Pulse rejection confidence suppression, Velora creative feedback, and unrelated Model Duel winner non-overrides.
+- Preserved constraints: no external ML, no OpenRouter routing call, no Supabase, no Stripe, no plan/model-limit bypass, and no hidden prompt/router auto-tuning beyond the opt-in local nudge.
+- Remaining risks: no seeded Neon/browser QA was run to verify a real account’s personalization summary over time; the v2 summary is request-time derived and may need caching if high-volume accounts make the settings/workspace load slower.
+- Verification: `npm run test` passed with 17 files and 73 tests; `npm run typecheck` passed; `npm run lint` passed with the existing 11 warnings and 0 errors; `npm run build` passed with the known Node `module.register()` deprecation warning.
+
+## 2026-06-16 - Feedback Loop V1
+
+- Added Feedback Loop v1 for user-scoped assistant/message, Model Duel candidate, artifact action, playbook run, Prism image, and backend-ready search-result feedback capture.
+- Added forward-only Neon migration `20260616_zenquanta_feedback_events.sql`, Drizzle `zenFeedbackEvents`, shared feedback request/response types, a pure validation/sanitization helper, and `neonFeedbackRepository`.
+- Added protected `POST /api/feedback`; it requires the authenticated Neon session, hydrates the user profile, validates entity/rating input, returns `404` for missing/foreign concrete entities, and stores sanitized append-only events.
+- Added reusable feedback controls to completed assistant messages, completed Model Duel candidates, artifact action previews, playbook final outputs, and selected Prism images. Downvotes can include an optional short reason; submissions show a lightweight thanks acknowledgement and make no AI call.
+- Extended admin product analytics with aggregate feedback counts, rating breakdowns, downvote rate, entity-type buckets, and negative-feedback operational signals. Normal users do not receive cross-user feedback data.
+- Search-result feedback is supported by the backend with sanitized metadata, but command-palette row UI wiring is deferred to keep the v1 UI low-risk.
+- Added focused Vitest coverage for feedback entity/rating validation, reason trimming, and metadata stripping of snippets, content, object-store internals, secrets, and raw-cost fields.
+- Verification: `npm run test` passed with 17 files and 68 tests; `npm run typecheck` passed; `npm run lint` passed with the existing 11 warnings and 0 errors; `npm run build` passed with the known Node `module.register()` deprecation warning; `git diff --check` passed.
+
+## 2026-06-16 - Workspace Home V1
+
+- Added Workspace Home v1 as the authenticated first screen inside `/` when no conversation or Project Home is open. `/dashboard` remains focused on usage, plan status, admin-adjacent dashboard data, and Activity Timeline.
+- Added shared `WorkspaceHome*` response types, `lib/workspace-home/suggestions.ts`, and unit-tested rule-based suggestion logic. Suggestions are deterministic and make no AI calls or token-using requests on page load.
+- Added `lib/db/repositories/workspace-home.ts` and exported `neonWorkspaceHomeRepository`; it derives capped, user-scoped summaries from existing Neon projects, conversations, artifacts, prompt workflow runs, files, and generated images. Responses exclude raw costs, admin data, provider secrets, direct object-store URLs, and large content payloads.
+- Added protected `GET /api/workspace-home`, which requires the authenticated Neon session, hydrates the user profile, computes a displayed-only usage snapshot from existing billing helpers, and returns continue items, recent workspace lists, suggestions, and generated timestamp.
+- Added `components/chat/workspace-home.tsx` and updated `components/chat/chat-area.tsx` so Project Home still wins when selected, active conversations still render normally, and Workspace Home replaces the old generic empty state for authenticated users with no active chat.
+- Quick actions use existing chat-context methods: new chat, inline new project, upload to target project, open Playbooks, prepare Prism image draft, open Pulse Research Room, and open global search.
+- Updated project/checklist docs to include `/api/workspace-home` and the authenticated `/` Workspace Home.
+- Remaining risks: no seeded Neon/browser QA was run to click every Workspace Home target; playbook-run links currently open the Playbooks surface rather than focusing an exact historical run row; upload quick action requires a target project.
+- Verification: `npm run test` passed with 16 files and 64 tests; `npm run typecheck` passed; `npm run lint` passed with the existing 11 warnings and 0 errors; `npm run build` passed with the known Node `module.register()` deprecation warning.
+
+## 2026-06-16 - Workspace Activity Timeline V1
+
+- Added Workspace Activity Timeline v1 as a user-scoped feed derived from existing Neon tables, without event sourcing, background jobs, external analytics, Supabase, Stripe, or a database migration.
+- Added shared activity domain types in `types/index.ts` plus pure timeline helpers in `lib/activity/timeline.ts` for valid event types, limit/cursor normalization, update-event suppression, safe workspace hrefs, and newest-first paging.
+- Added `lib/db/repositories/activity.ts` and exported `neonActivityRepository`; it derives capped activity from projects, conversations, user messages, files and knowledge status, artifacts, playbook runs, generated images, completed Model Duel records, custom assistants, and plan requests. All reads are scoped by authenticated `userId`; project filters remain project-scoped; raw cost, admin audit logs, provider secrets, and direct private file URLs are not exposed.
+- Added protected `GET /api/activity` with `requireAuthenticatedUser`, profile hydration, project ownership validation, and `projectId`, `type`, `limit`, and `before` filters. Invalid type/limit/cursor returns `400`; foreign project filters return `404`.
+- Added a server-rendered Activity Timeline card to `/dashboard` with project/type filters, compact chronological items, empty state, and links back to conversations/messages, Project Home, Artifact Studio, Ask Files, Prism Studio, Playbooks, Model Duel conversations, Custom Assistants, and Pricing.
+- Added lightweight workspace deep-link handling in `lib/chat-context.tsx` so dashboard links can open conversations/messages or the relevant workspace tool after authenticated workspace hydration.
+- Added Vitest coverage for activity helper behavior: mixed-source sorting, type/project/cursor/limit filtering, duplicate update suppression, event type validation, cursor/limit validation, and safe workspace link generation.
+- Remaining risks: no seeded Neon `EXPLAIN ANALYZE`, cross-user fixture, or browser QA was run for the derived feed; project/tool deep links use existing workspace tool request support and do not yet focus every nested entity such as a specific playbook workflow row.
+- Verification: `npm run test` passed with 15 files and 60 tests; `npm run typecheck` passed; `npm run lint` passed with the existing 11 warnings and 0 errors; `npm run build` passed with the known Node `module.register()` deprecation warning.
+
+## 2026-06-16 - Artifact Export Pack V1
+
+- Added server-backed Artifact Export Pack v1 for saved artifacts.
+- Added pure export formatting helpers for Markdown, plain text, and JSON with safe filename sanitization, MIME type selection, and a JSON envelope that excludes `userId`.
+- Added protected `GET /api/artifacts/[id]/export?format=markdown|text|json`, which requires the authenticated Neon session, reads artifacts through the user-scoped artifact repository, returns `404` for missing/foreign artifacts, returns `400` for unsupported formats, and sends attachment headers with `private, no-store` plus `nosniff`.
+- Updated Artifact Studio to replace the single Markdown-only export button with an export dropdown. Saved artifacts now export Markdown, plain text, or JSON through the protected route; unsaved drafts keep local Markdown export only.
+- Added focused Vitest coverage for export format validation, filename sanitization, Markdown/text content, and JSON export privacy.
+- PDF export remains out of scope for v1 because the repo has PDF extraction support but no safe existing PDF generation pattern, and no new document-generation dependency was added.
+- No database migration, external storage, Google Docs integration, Supabase, Stripe, billing, artifact editing, artifact versioning, search, or Project Home behavior changed.
+- Verification: `npm run test` passed with 14 files and 55 tests; `npm run typecheck` passed; `npm run lint` passed with the existing 11 warnings and 0 errors; `npm run build` passed with the known Node `module.register()` deprecation warning; `git diff --check` passed.
+
+## 2026-06-16 - Artifact Version History V1 Verification
+
+- Verified the existing Artifact Version History implementation instead of duplicating schema or routes.
+- Confirmed `neon/migrations/20260603_zenquanta_artifact_versions.sql` and `zenArtifactVersions` already provide the `zen_artifact_versions` table with artifact/user ownership, metadata snapshots, optional `created_by_action`, baseline backfill, and version lookup indexes.
+- Confirmed artifact create and update paths write version snapshots transactionally, restore writes a new `restore_version` snapshot, and duplicate creates a new artifact plus its initial version snapshot.
+- Confirmed applied Artifact Actions still follow the intended flow: `/api/artifacts/[id]/actions` performs a billed preview only, the UI stamps `metadata.lastArtifactAction` when the user applies the preview, and `created_by_action` is recorded only after the user explicitly saves the edited artifact.
+- Confirmed protected version APIs remain present and user-scoped: `GET /api/artifacts/[id]/versions`, `POST /api/artifacts/[id]/versions/[versionId]/restore`, and `POST /api/artifacts/[id]/versions/[versionId]/duplicate`; missing or foreign artifacts/versions return `404`.
+- Confirmed Project Home and global/project search continue to read current `zen_artifacts` rows rather than historical version rows, so restoring or duplicating updates the normal artifact surfaces without adding historical-version search noise.
+- No runtime code, public route, response type, Supabase, Stripe, realtime collaboration, external storage, automatic AI call, or billing behavior changed in this pass.
+- Verification: `npm run test` passed with 13 files and 49 tests; `npm run typecheck` passed; `npm run lint` passed with the existing 11 warnings and 0 errors; `npm run build` passed with the known Node `module.register()` deprecation warning; `git diff --check` passed.
+- Remaining risk: seeded Neon/manual browser QA should still exercise create, edit, action apply/save, history preview, restore, duplicate, Project Home, and search together on a real account.
+
+## 2026-06-16 - Large Conversation Performance And Persistence Safety Refresh
+
+- Confirmed the current large-conversation foundations are already present: `/api/conversations` returns message-light shells, `/api/conversations/[id]?messageLimit=80` hydrates the newest page, `/api/conversations/[id]/messages` loads older pages, the chat UI exposes `Load older messages`, and older-page prepends preserve scroll position.
+- Confirmed generation context is bounded before OpenRouter: conversation memory can be injected, only recent non-system messages are selected, per-message and total character caps are enforced, and the latest user request is preserved.
+- Confirmed normal text sends persist with header/message upserts instead of delete-and-reinsert, streaming passes the request abort signal, stopped/failed generations persist safe assistant error state, and Pulse/file sources persist on assistant messages.
+- Optimized conversation header refresh so saves aggregate message count, latest preview, token/cost totals, credits, and image count in SQL instead of selecting every message `usage` JSON payload for long conversations.
+- Tightened admin user detail loading so admin detail uses message-light conversation rows, matching the current UI which only shows conversation count.
+- Added pure unit coverage for mapping aggregate usage rows into the existing `UsageEstimate` shape.
+- Updated stale project risk documentation that still described conversation saves as destructive full rewrites.
+- Remaining risks: no seeded Neon `EXPLAIN ANALYZE` was run; multi-tab concurrent sends still rely on the client send queue and message upserts rather than a schema-backed send lease/version field; admin analytics still need aggregate/materialized reporting if production volume grows.
+- Verification: `npm run test` passed with 13 files and 49 tests; `npm run typecheck` passed; `npm run lint` passed with the existing 11 warnings and 0 errors; `npm run build` passed with the known Node `module.register()` deprecation warning; `git diff --check` passed.
+
+## 2026-06-16 - Incremental Database Performance And Indexing Pass
+
+- Reviewed Neon/Drizzle query patterns across search, projects, conversations/messages, artifacts, prompt workflows/runs, Prism history, dashboard/admin analytics, Model Duel, custom assistants, files, attachments, and GitHub integration imports.
+- Added forward-only migration `neon/migrations/20260616_zenquanta_incremental_performance_indexes.sql` for current high-frequency access paths:
+  - b-tree indexes for project lists, file conversation lists, generated-image project/favorite history, usage and image event user/admin filters, plan request user/status history, GitHub imported-file project summaries, and message attachment JSON cleanup.
+  - trigram indexes for existing ILIKE search fields not covered by the prior pass: project name/description, conversation memory summary, prompt workflow title/description, workflow step title/template, generated-image negative prompt, and custom assistant description.
+- Mirrored representable b-tree indexes in `lib/db/schema.ts`; trigram and JSONB GIN indexes remain migration-only performance details.
+- Improved query/list behavior without changing response shapes:
+  - Capped prompt library, prompt workflow, custom assistant, and project repository list methods with conservative defaults and maximums.
+  - Capped the admin plan-request list route to 200 rows by default and 1000 maximum while leaving internal analytics calls unbounded unless they pass a limit.
+  - Replaced file deletion attachment cleanup so it queries only owned messages whose attachment JSON contains the deleted file id, instead of hydrating every conversation and every message for the user.
+- Kept existing pagination unchanged for conversations, message pages, files, artifacts, Prism image history, search, and workflow runs because they already use limits/cursors.
+- Remaining risks: no seeded Neon dataset or `EXPLAIN ANALYZE` proof was run in this pass; admin overview still performs broad in-memory product analytics and should move to aggregate SQL, cached summaries, or materialized reporting tables once production volume justifies it; JSONB metadata ILIKE search remains intentionally unindexed.
+- Verification: `npm run typecheck` passed; `npm run lint` passed with the existing 11 warnings and 0 errors; `npm run build` passed with the known Node `module.register()` deprecation warning; `git diff --check` passed. `npm run test` was not run because this pass did not add or change test files.
+
+## 2026-06-16 - User-Scope And Privacy Hardening Pass
+
+- Reviewed route protection for `/api/search`, projects, conversations, artifacts, prompt workflows, prompts, custom assistants, model comparisons, images, attachments, protected file objects, dashboard, settings, admin routes, auth helpers, GitHub integration routes, and the relevant Neon repositories.
+- Confirmed the core user-owned routes require `requireAuthenticatedUser`, admin APIs require `requireAdminApiUser`, and owned resource IDs are generally validated through user-scoped repository lookups before reads/writes.
+- Confirmed private file reads go through `/api/files/object`, Prism history responses return protected private file URLs with `sourceUrl: null`, raw model cost/margin are scrubbed from normal user AI responses, and search queries remain scoped to `auth.user.id` with owned project validation.
+- Issue found and fixed: `/api/integrations/github` returned the full GitHub account shape, including provider/internal fields such as `installationId` and `syncState`. Added a client-safe GitHub account serializer so status responses expose only display-safe connection fields.
+- Added a unit test proving GitHub client status serialization omits installation IDs, sync metadata, provider/internal IDs, and private key values.
+- Remaining risks: no seeded cross-user database fixtures or authenticated E2E tests currently prove ownership boundaries at runtime; keep authenticated workspace/search/integration leakage tests deferred until a safe Neon/session fixture exists.
+- Verification: `npm run test` passed with 12 files and 47 tests; `npm run typecheck` passed; `npm run lint` passed with the existing 11 warnings and 0 errors; `npm run build` passed; `git diff --check` passed.
+
+## 2026-06-16 - Stabilized Playwright Smoke Tests
+
+- Stabilized the existing Playwright smoke suite instead of adding duplicate E2E infrastructure.
+- Switched Playwright to a dedicated local dev server on `127.0.0.1:3100` and kept `npm run test:e2e` as `playwright test`.
+- Updated route navigation helpers to wait for `domcontentloaded`, preserving smoke coverage for the unauthenticated auth gate, sign-in/sign-up forms, protected dashboard/pricing/admin redirects, and public assistant pages.
+- Documented that authenticated workspace, command palette, and global search E2E remain deferred until a seeded Neon/session fixture exists; tests must not use `.env.local` secrets, production credentials, real API keys, Supabase, Stripe, or external services.
+- Planning failure mode documented: the previous Playwright web server on port 3000 accepted connections but route requests hung, causing `page.goto` timeouts across all smoke routes.
+- Verification: `npm run test:e2e` passed with 12 Chromium smoke tests after rerunning with local-server sandbox approval; `npm run test` passed with 11 files and 45 tests; `npm run typecheck` passed; `npm run lint` passed with the existing 11 warnings and 0 errors; `npm run build` passed; `git diff --check` passed.
+
+## 2026-06-16 - Verified Automated Test Foundation
+
+- Confirmed the lightweight Vitest unit-test foundation already exists with `npm run test`, `npm run test:watch`, `vitest.config.ts`, Node test environment, and the existing `@/` alias.
+- Confirmed existing pure-helper coverage includes assistant routing/config, pricing/billing display helpers, prompt precheck/router behavior, file helpers, custom assistant validation, search result normalization, playbook variable interpolation, conversation/context helpers, artifact versions, storage/security, and user-scope security.
+- Updated `AI_CHECKLIST.md` to state that unit tests must not require `.env.local` values or read/copy local secrets.
+- No package scripts, dependencies, runtime code, Supabase, Stripe, external-service tests, or secret-dependent tests were added.
+- Verification before this entry: `npm run test` passed with 11 files and 45 tests, `npm run typecheck` passed, and `npm run lint` passed with 11 existing warnings and 0 errors.
+
+## 2026-06-16 - Refreshed Manual Product Smoke Test Checklist
+
+- Updated `docs/manual-product-smoke-test.md` in place as the complete manual QA checklist for sign-up through advanced Zenquanta AI product flows.
+- Refreshed the checklist metadata for the current `.env.local`/staging-safe workflow and Neon migrations through `20260603_zenquanta_performance_indexes.sql`.
+- Added standalone manual smoke coverage for onboarding/starter packs, authenticated password update/reset behavior, Model Duel, and Memory Vault.
+- Tightened regression checks for text/image route separation, private file route protection, user-scoped search/data access, GitHub read-only behavior, and manual plan/admin activation without Stripe/payment automation.
+- No runtime code changed.
+
+## 2026-06-16 - Aligned Environment Docs With `.env.local`
+
+- Updated repo workflow docs to treat `.env.local` as the intentional local-only development env file and to avoid restoring or committing `.env.example` unless explicitly requested.
+- Updated setup/checklist language to create or edit `.env.local` directly, while keeping env examples as non-secret placeholder key references only.
+- Added the artifact version history and performance index Neon migrations to the checklist migration list.
+- No product code changed. The previous post-feature audit found no required product-code fixes; the remaining work from that pass was stale environment/setup documentation.
+- Verification plan for this docs-only cleanup: `rg -n "\\.env\\.example" README.md AI_CHECKLIST.md AGENTS.md CLAUDE.md AI_TASK_LOG.md AI_PROJECT.md AI_DECISIONS.md`, `git diff --check`, and `git status -sb`.
+
+## 2026-06-16 - Post-Feature Product Audit
+
+- Performed a documentation-only audit of the recent Zenquanta AI feature wave across the required project docs, Neon schema/migrations/repositories, chat context, API routes, chat/admin/ui components, auth, billing, storage, RAG, search, and config modules.
+- No product code was changed. Follow-up env documentation now records that `.env.local` is the local-only development env file and `.env.example` should not be restored unless explicitly requested.
+
+| Feature name | Status | Main files involved | API routes involved | Database tables/migrations involved | User-facing UI entry point | Known risks | Recommended follow-up |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Command palette | Implemented | `components/chat/command-palette.tsx`, `components/chat/chat-layout.tsx`, `components/chat/header.tsx`, `lib/chat-context.tsx` | `/api/search` | Searches Neon user rows across conversations, messages, artifacts, prompts, files, generated images, model comparisons, custom assistants; `20260603_zenquanta_performance_indexes.sql` | Header search button and Cmd/Ctrl+K workspace palette | Depends on authenticated search responses; no seeded browser E2E in this audit | Add authenticated command-palette E2E coverage for opening each result/action type |
+| Global search | Implemented | `app/api/search/route.ts`, `lib/db/repositories/search.ts`, `components/chat/command-palette.tsx` | `/api/search` | User-scoped Neon search over conversation, message, artifact, prompt, file, image, model comparison, and custom assistant tables | Command palette global search mode | Results include content snippets, so session/auth leakage tests matter | Add fixtures proving one user cannot see another user's snippets or rows |
+| Onboarding and starter packs | Implemented | `components/chat/onboarding-dialog.tsx`, `app/api/onboarding/route.ts`, `lib/config/onboarding.ts` | `/api/onboarding` | `zen_user_settings`, `zen_projects`, `zen_prompt_library` | First-run onboarding dialog | Repeat-completion/idempotency was not browser-tested here | Add onboarding repeat-run and starter-pack creation tests |
+| Project Home | Implemented | `components/chat/project-home.tsx`, `app/api/projects/[id]/home/route.ts`, `lib/db/repositories/project-home.ts` | `/api/projects/[id]/home` | `zen_projects`, `zen_conversations`, `zen_files`, `zen_generated_images`, `zen_prompt_workflows`, `zen_artifacts`, `zen_integration_items` | Project panel/home surface in workspace | Route has a harmless extra project-list query; no seeded project-home QA | Remove redundant query and add project-home fixture coverage |
+| Project-specific search | Implemented | `components/chat/command-palette.tsx`, `components/chat/project-home.tsx`, `app/api/search/route.ts`, `lib/db/repositories/search.ts` | `/api/search?projectId=...` | Same search tables with owned project validation; `20260603_zenquanta_performance_indexes.sql` | Project Home search action and command palette project scope | Project scope excludes non-project-owned resources such as reusable prompts/custom assistants by design | Add leakage tests for foreign `projectId` and document scoped result behavior |
+| Artifact Studio | Implemented | `components/chat/artifact-studio.tsx`, `app/api/artifacts/*`, `lib/db/repositories/artifacts.ts` | `/api/artifacts`, `/api/artifacts/[id]`, `/api/artifacts/[id]/versions`, restore, duplicate | `zen_artifacts`, `zen_artifact_versions`; `20260526_zenquanta_artifacts.sql`, `20260603_zenquanta_artifact_versions.sql` | Artifact Studio panel and save/open artifact actions | Version behavior was not seeded-Neon/browser-tested here | Add version history restore/duplicate integration QA |
+| Artifact actions | Implemented | `app/api/artifacts/[id]/actions/route.ts`, `components/chat/artifact-studio.tsx`, `lib/ai/chat.ts`, `lib/billing/*` | `/api/artifacts/[id]/actions` | `zen_artifacts`, `zen_usage_events` | Artifact Studio action controls | Action previews are billed AI outputs but not automatically persisted | Add UX tests for preview, apply, and save-as-version flow |
+| AI Playbooks | Implemented | `components/chat/playbook-studio.tsx`, `app/api/prompt-workflows/*`, `lib/db/repositories/prompt-workflows.ts` | `/api/prompt-workflows`, `/api/prompt-workflows/[id]`, `/api/prompt-workflows/[id]/runs` | `zen_prompt_workflows`, `zen_prompt_workflow_steps`, `zen_prompt_workflow_runs`, `zen_prompt_workflow_step_runs`; `20260522_zenquanta_prompt_workflows.sql` | Playbook Studio and workspace actions | V1 runs foreground queued chat/image actions, not a background automation engine | Add recovery/partial-run QA for foreground execution |
+| Playbook Builder improvements | Implemented | `components/chat/playbook-studio.tsx`, `lib/config/playbook-templates.ts`, prompt workflow repository | `/api/prompt-workflows*` | Prompt workflow metadata JSON; `20260528_zenquanta_playbook_builder_metadata.sql` | Playbook Builder/Studio | Metadata is flexible JSON and usage estimates are qualitative | Add validation tests for builder metadata and template loading |
+| Smart Assistant Router | Implemented | `lib/router/*`, `hooks/usePromptPrecheck.ts`, `components/chat/smart-router-dialog.tsx`, `components/chat/assistant-recommendation-chip.tsx` | `/api/assistant-recommendations` | `zen_assistant_recommendation_events` | Composer recommendation chip/dialog | Rule quality can be noisy; telemetry is useful but not proof of routing accuracy | Review telemetry and add suppression/acceptance heuristics after real usage |
+| Assistant Handoffs | Implemented | `lib/config/assistant-handoffs.ts`, `components/chat/message.tsx`, `lib/chat-context.tsx` | Existing `/api/chat` or `/api/images/generate` paths | Normal conversation/message/usage tables | Message-level handoff menu | Handoffs are not separately tracked as analytics events | Add optional handoff telemetry if product decisions need it |
+| Quality-check actions | Implemented | `lib/config/assistant-quality-actions.ts`, `components/chat/message.tsx`, `lib/chat-context.tsx` | Existing `/api/chat` or `/api/images/generate` paths | Normal conversation/message/usage tables | Message quality/action menu | Action provenance is mostly prompt/content based, not structured metadata | Add lightweight action metadata if auditability becomes important |
+| Memory Vault | Implemented | `components/chat/memory-vault.tsx`, `app/api/memory-vault/route.ts`, `app/api/conversations/[id]/memory/route.ts`, `lib/db/repositories/memory-vault.ts` | `/api/memory-vault`, `/api/conversations/[id]/memory` | `zen_conversations.memory_summary`, `memory_updated_at`, `session_settings` | Memory Vault panel and conversation memory controls | Memory is conversation-derived and should not become hidden global preference memory without a privacy design | Add explicit preference-memory design only if requested later |
+| Model Duel | Implemented | `components/chat/model-comparison-button.tsx`, `app/api/model-comparisons/*`, `lib/db/repositories/model-comparisons.ts` | `/api/model-comparisons`, `/api/model-comparisons/[id]/choose` | `zen_model_comparisons`, `zen_model_comparison_candidates`; `20260522_zenquanta_model_comparisons.sql` | Composer Model Duel button | Text-only by design; first-action flow was not browser-tested in this audit | Add seeded QA for brand-new conversation Model Duel and candidate billing |
+| Prism Studio | Implemented | `components/chat/prism-studio.tsx`, `app/api/images/history/*`, `app/api/images/generate/route.ts`, `lib/db/repositories/generated-images.ts` | `/api/images/generate`, `/api/images/history`, `/api/images/history/[id]` | `zen_generated_images`, `zen_image_generation_events`; `20260528_zenquanta_prism_studio_metadata.sql` | Prism Studio panel and Prism assistant flow | Requires storage health for protected URLs; gallery pagination/assets were not manually inspected here | Add gallery asset-health QA against production-like object storage |
+| Pulse Research Room | Implemented | `components/chat/pulse-research-room.tsx`, `app/api/pulse/research-room/route.ts`, `lib/db/repositories/pulse-research.ts`, `lib/search/web-search.ts` | `/api/pulse/research-room`, plus `/api/chat` when sending research prompts | `zen_messages.sources`, conversations, artifacts as saved outputs | Pulse Research Room panel | Tavily absence degrades search capability; source-history UX needs real API QA | Add source-history tests with and without `TAVILY_API_KEY` |
+| File Intelligence Cards | Implemented | `components/chat/file-intelligence-card.tsx`, `app/api/files/*`, `lib/db/repositories/files.ts`, `lib/rag/*` | `/api/files`, `/api/files/[id]`, `/api/files/[id]/reindex`, `/api/files/object` | `zen_files`, `zen_file_chunks`; `20260522_zenquanta_file_knowledge.sql` | File cards in attachments/project/file panels | GitHub external files intentionally have no object-store download URL | Improve external-file states and add bulk/file-manager QA |
+| Ask Files | Implemented | `components/chat/ask-files-panel.tsx`, `lib/chat-context.tsx`, `lib/rag/retrieval.ts`, `/api/chat` file-context handling | `/api/files`, `/api/chat` | `zen_files`, `zen_file_chunks` | Ask Files panel and file-context composer flow | Quality depends on extracted chunks and embedding config; large selected-file sets need caps | Add selected-file cap UX and citation display checks |
+| PDF text extraction without OCR | Implemented | `lib/rag/extraction.ts`, `lib/rag/indexing.ts`, `lib/utils/files.ts` | Upload/reindex paths through `/api/attachments`, `/api/files/[id]/reindex`, and `/api/chat` retrieval | `zen_files.metadata.knowledgeBase`, `zen_file_chunks` | File upload, File Intelligence Card, Ask Files | Scanned/image-only or password-protected PDFs remain unsupported by design | Add OCR as a separate future milestone with explicit cost/privacy decisions |
+| Usage transparency | Implemented | `components/chat/usage-transparency-hint.tsx`, `app/api/dashboard/route.ts`, `lib/billing/*` | `/api/dashboard`, normal AI action routes | `zen_subscriptions`, `zen_usage_events`, `zen_image_generation_events`, `zen_plan_change_requests` | Composer usage hint, dashboard, pricing surfaces | Composer hint is qualitative and not a binding quote | Calibrate labels against real usage data after launch |
+| Upgrade nudges | Implemented | `components/chat/upgrade-nudges.tsx`, `app/pricing/page.tsx`, `app/dashboard/page.tsx`, `app/api/plan-requests/route.ts` | `/api/plan-requests`, `/api/dashboard` | `zen_plan_change_requests`, `zen_subscriptions`, usage tables | Composer/errors, pricing, dashboard | Dismissal/visibility behavior may be session-local depending on surface | Add persistent nudge dismissal only if it improves UX |
+| Admin product analytics | Implemented | `app/admin/page.tsx`, `components/admin/*`, `app/api/admin/overview/route.ts`, `lib/db/repositories/admin.ts` | `/api/admin/overview`, `/api/admin/users`, `/api/admin/plan-requests` | Profiles, subscriptions, usage, image events, projects, files, workflows, comparisons, custom assistants, plan requests | `/admin` | Request-time aggregation may get heavy with large datasets | Add caching or materialized summaries once production volume justifies it |
+| Custom Assistant Builder v2 | Implemented | `components/chat/custom-assistant-button.tsx`, `app/api/custom-assistants/*`, `lib/db/repositories/custom-assistants.ts`, `lib/config/custom-assistants.ts` | `/api/custom-assistants`, `/api/custom-assistants/[id]`, `/api/custom-assistants/test` | `zen_custom_assistants`; `20260525_zenquanta_custom_assistants.sql`, `20260528_zenquanta_custom_assistant_builder_v2.sql` | Composer private assistant builder | Text-only/private by design; prompt-library references live in metadata | Add project-scoping/sharing only as an explicit future feature |
+| Integration architecture planning | Implemented | `AI_DECISIONS.md`, `AI_PROJECT.md`, `AI_CHECKLIST.md`, `AI_TASK_LOG.md` | None for planning itself | Planning plus `zen_integration_accounts`, `zen_integration_items` for GitHub | Docs and GitHub panel | Roadmap/docs can drift because GitHub shipped before broader provider rollout | Reconcile roadmap and token-encryption policy before adding more providers |
+| GitHub read-only integration | Implemented | `components/chat/github-integration-panel.tsx`, `app/api/integrations/github/*`, `lib/integrations/github.ts`, `lib/integrations/github-import.ts`, `lib/db/repositories/integrations.ts` | `/api/integrations/github/connect`, `/callback`, `/repositories`, `/repository`, `/import`, `/status` | `zen_integration_accounts`, `zen_integration_items`, imported `zen_files`/`zen_file_chunks`; `20260528_zenquanta_github_readonly_integrations.sql` | GitHub integration panel, Project Home imported context | Current code is read-only; external App configuration and removal flows still need production QA | Validate GitHub App permissions in production and add imported-content remove/disconnect UX |
+
+Cross-cutting audit checks:
+
+- User scoping: new protected routes use `requireAuthenticatedUser`, project filters validate owned projects, search uses `userId` filters, file object reads verify owned private metadata before object-store access, and admin routes use `requireAdminApiUser`.
+- Neon repositories: audited feature routes call the fresh Neon repository layer rather than Supabase runtime clients. No runtime Supabase client reintroduction was found outside historical docs/migrations.
+- Billing: `/api/chat`, `/api/images/generate`, artifact actions, Model Duel candidates, and custom assistant tests enforce/log usage. Playbooks, handoffs, and quality actions dispatch through the existing billed chat/image paths. Normal user responses scrub `rawCostUsd` and `marginUsd`.
+- Prism separation: `/api/chat` rejects image/Prism requests and keeps image generation on `/api/images/generate`.
+- Private files: private file reads go through `/api/files/object`; generated image history returns protected file URLs and hides source URLs; global/project search is auth-protected and user-scoped.
+- GitHub integration: route surface is read-only repository listing/summary/import. No GitHub write route was found; installation tokens appear short-lived and `encrypted_token_payload` is currently not persisted.
+- Admin/raw cost boundaries: raw cost and margin analytics are exposed through admin repository/routes/pages only; normal dashboard/pricing surfaces use displayed usage summaries.
+- Payments: no Stripe checkout, webhooks, customer portal, or payment automation was found; manual plan requests/admin activation remain the current billing workflow.
+
+Verification:
+
+- `npm run typecheck` passed.
+- `npm run lint` passed with 11 existing warnings: two raw `<img>` warnings, several unused symbol warnings in chat/UI/db utilities, and two `actionTypes` type-only warnings.
+- `npm run build` passed with the known Node `module.register()` deprecation warning under Next.js 16.2.0/Turbopack.
+- Runtime browser QA and seeded Neon integration tests were not performed in this audit.
+
 ## 2026-06-11 - Fixed New-Conversation 404 In Prism And Model Duel
 
 - Audited every Neon-backed API route for the same premature-404 pattern fixed in `/api/chat` (client-generated `conversationId` for a not-yet-persisted conversation rejected before create/upsert can run). Artifacts, projects, prompts/workflows, files, Pulse research room, GitHub integration, and custom assistants only ever operate on server-issued IDs and were unaffected.
@@ -277,7 +468,7 @@ Audit date: 2026-05-26. Documentation-only audit before new product features; no
 - Implemented server-only GitHub App JWT and installation-token helpers using Node crypto/fetch only; no OAuth package, webhook processor, write endpoint, Supabase, Stripe, external vector DB, or new AI gateway was added.
 - Imports are foreground and user-selected. V1 offers README, `package.json`, and safe text/source files under per-file and total size limits, skips dependencies/build outputs/lockfiles/secrets-like paths/binaries, and stores imported content as private `zen_files` metadata plus `zen_file_chunks` through the existing RAG indexing path.
 - Added a GitHub repo context workspace panel, command palette action, and Project Home GitHub section with connected account, imported repo/file counts, last import, re-import, disconnect, and Ask Files handoff.
-- Added GitHub App env placeholders to `.env.example`: `GITHUB_APP_ID`, `GITHUB_APP_CLIENT_ID`, `GITHUB_APP_PRIVATE_KEY`, and `GITHUB_APP_CALLBACK_URL`.
+- Historical note: at the time, GitHub App env placeholders were added to `.env.example`; current setup now documents these keys as `.env.local` placeholders instead.
 - Verification: `npm run typecheck` passes; `npm run lint` passes with the existing 12 warnings; `npm run build` passes with the existing Node `module.register()` deprecation warning.
 - Remaining risks: GitHub App installation must be configured externally with read-only Metadata/Contents permissions; v1 stores imported snapshots in Neon chunks/file metadata rather than object-store snapshots, so protected file download is not available for GitHub-imported external files; imports are capped foreground operations with no scheduled sync or webhook refresh.
 
