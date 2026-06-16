@@ -70,6 +70,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
+import { FeedbackButtons } from './feedback-buttons'
 
 const ASSISTANT_FAMILIES = Object.keys(WORKFLOW_FAMILY_TO_MODE) as AssistantFamily[]
 const PROJECT_FILTER_ALL = '__all__'
@@ -1001,6 +1002,19 @@ export function PlaybookStudio() {
                               Export
                             </Button>
                           </div>
+                          <FeedbackButtons
+                            entityType="playbook_run"
+                            entityId={selectedRun.id}
+                            metadata={{
+                              workflowId: selectedRun.workflowId,
+                              status: selectedRun.status,
+                              projectId: selectedRun.projectId,
+                              conversationId:
+                                selectedRun.conversationId ??
+                                selectedRun.finalOutput.conversationId,
+                            }}
+                            allowNeutral
+                          />
                         </div>
                       ) : (
                         <p className="mt-3 rounded-lg border border-dashed border-border/70 p-4 text-sm text-muted-foreground">
