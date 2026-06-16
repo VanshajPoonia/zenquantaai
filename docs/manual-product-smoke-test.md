@@ -10,7 +10,9 @@ Use this checklist for a full manual QA pass from first sign-up through advanced
 - App URL:
 - Commit SHA:
 - Browser and OS:
-- Database: Neon migrations applied through `20260528_zenquanta_github_readonly_integrations.sql` yes / no
+- Database: Neon migrations applied through `20260603_zenquanta_performance_indexes.sql` yes / no
+- Environment source: local `.env.local` / staging environment variables / production environment variables
+- Real secret values copied into this document: no
 - Storage provider: local / s3 / r2
 - OpenRouter configured: yes / no
 - Tavily configured pass: yes / no
@@ -28,6 +30,7 @@ Use this checklist for a full manual QA pass from first sign-up through advanced
 - Do not test Stripe, checkout, customer portal, payment-provider sync, or payment webhooks. They should not exist in Zenquanta AI.
 - Do not use real private customer files, production secrets, or external repositories with sensitive contents.
 - Do not expose or copy server secrets into the browser: OpenRouter, Tavily, embeddings, Neon, storage, and GitHub App keys must remain server-only.
+- Use `.env.local` only for local development secrets. In staging/production, verify behavior through deployed environment variables without copying values into notes or screenshots.
 - Text generation must go through `/api/chat`; Prism image generation must go through `/api/images/generate`.
 - Private file reads must go through `/api/files/object`, never direct bucket URLs.
 
@@ -90,10 +93,59 @@ Use this checklist for a full manual QA pass from first sign-up through advanced
 - Status: [ ] Pass [ ] Fail [ ] Blocked
 - Steps:
   1. Request a password reset for a test account.
-  2. Open `/auth/reset-password` with the expected reset-token flow if available.
-  3. Attempt a password update with invalid and valid token states.
-- Expected result: Safe messages are shown, invalid tokens fail, and a valid reset updates the password without exposing secrets.
+  2. Open `/auth/reset-password` with valid reset/session state if available.
+  3. Open `/auth/reset-password?auth=unsupported`, `?auth=failed`, and `?auth=missing-token`.
+  4. Attempt a password update with no valid auth/reset session, a short password, and a valid password.
+- Expected result: Safe messages are shown for unsupported/failed/missing reset states, unauthenticated update returns a safe failure, short passwords are rejected, and a valid reset/session updates the password without exposing secrets.
 - Related route/API: `/api/auth/password/reset-request`, `/api/auth/password/update`, `/auth/reset-password`
+- Notes:
+
+### Authenticated password update
+
+- Status: [ ] Pass [ ] Fail [ ] Blocked
+- Steps:
+  1. Sign in with a disposable QA account.
+  2. Open the password update/reset UI path available to the account.
+  3. Submit a password shorter than 8 characters.
+  4. Submit a valid replacement password.
+  5. Sign out, then sign in with the new password and verify the old password no longer works.
+- Expected result: The short password is rejected, the valid password update succeeds only for the authenticated/reset session, existing cookies are handled safely, and the new password works.
+- Related route/API: `/api/auth/password/update`, `/api/auth/password/sign-in`, `/api/auth/sign-out`
+- Notes: Use a disposable QA account so the password can be rotated freely.
+
+## Onboarding And Starter Packs
+
+### First-run onboarding
+
+- Status: [ ] Pass [ ] Fail [ ] Blocked
+- Steps:
+  1. Sign up as a brand-new user.
+  2. Verify the onboarding dialog appears before normal workspace usage.
+  3. Select a use case and recommended assistant/starter pack.
+- Expected result: Onboarding is shown only for the new user, stores the selected onboarding state, and does not send an AI request automatically.
+- Related route/API: `/api/onboarding`, `/api/settings`
+- Notes:
+
+### Install starter prompts and project
+
+- Status: [ ] Pass [ ] Fail [ ] Blocked
+- Steps:
+  1. In onboarding, enable starter prompts.
+  2. Enable starter project creation.
+  3. Complete onboarding and refresh the workspace.
+- Expected result: Starter prompts are added to the signed-in user's prompt library, the optional starter project is user-owned, and the selected default assistant is applied.
+- Related route/API: `/api/onboarding`, `/api/prompts`, `/api/projects`, `/api/settings`
+- Notes:
+
+### Reopen or skip onboarding
+
+- Status: [ ] Pass [ ] Fail [ ] Blocked
+- Steps:
+  1. Reopen onboarding from Settings.
+  2. Complete it again with a different starter pack.
+  3. Test the skip/dismiss path on a disposable new user.
+- Expected result: Reopening updates onboarding settings safely, duplicate starter data is handled without cross-user leakage, and skipping keeps the workspace usable.
+- Related route/API: `/api/onboarding`, `/api/settings`
 - Notes:
 
 ## Core Workspace
@@ -481,6 +533,29 @@ Use this checklist for a full manual QA pass from first sign-up through advanced
 - Related route/API: `/api/chat`, `/api/images/generate`
 - Notes:
 
+### Model Duel
+
+- Status: [ ] Pass [ ] Fail [ ] Blocked
+- Steps:
+  1. Type a text prompt in the composer.
+  2. Open Model Duel and select at least two available text assistants/models.
+  3. Run the duel, review candidates, and choose one winner.
+  4. Refresh the conversation.
+- Expected result: Model Duel is text-only, every generated candidate is billed/logged through text usage, raw provider cost is not shown to the user, and only the selected winner is saved into the conversation.
+- Related route/API: `/api/model-comparisons`, `/api/model-comparisons/[id]/choose`, `/api/chat`
+- Notes:
+
+### Model Duel limit and error states
+
+- Status: [ ] Pass [ ] Fail [ ] Blocked
+- Steps:
+  1. Try Model Duel with no prompt.
+  2. Try an unavailable assistant/model on the current plan if safely possible.
+  3. Try near a text usage limit with a disposable QA user.
+- Expected result: Empty, unavailable, and limit states show safe user-facing errors or upgrade nudges without bypassing billing enforcement.
+- Related route/API: `/api/model-comparisons`, `/api/dashboard`, `/api/plan-requests`
+- Notes:
+
 ### Custom assistant create/edit/test/delete
 
 - Status: [ ] Pass [ ] Fail [ ] Blocked
@@ -491,6 +566,42 @@ Use this checklist for a full manual QA pass from first sign-up through advanced
   4. Edit, duplicate, pin, select, and delete a disposable assistant.
 - Expected result: Custom assistants remain private, text-only, and billed through existing text generation when tested; Prism/image modes are not available.
 - Related route/API: `/api/custom-assistants`, `/api/custom-assistants/[id]`, `/api/custom-assistants/test`, `/api/chat`
+- Notes:
+
+## Memory Vault
+
+### Open Memory Vault
+
+- Status: [ ] Pass [ ] Fail [ ] Blocked
+- Steps:
+  1. Create or open conversations with and without memory summaries.
+  2. Open Memory Vault from Settings, Command Palette, and Project Home.
+  3. Filter or navigate by project if data exists.
+- Expected result: Memory Vault loads only the signed-in user's conversation memory summaries, shows honest empty states, and does not invent memory for conversations without summaries.
+- Related route/API: `/api/memory-vault`, `/api/conversations`
+- Notes:
+
+### Copy and clear conversation memory
+
+- Status: [ ] Pass [ ] Fail [ ] Blocked
+- Steps:
+  1. Open a conversation with a memory summary.
+  2. Copy the summary from Memory Vault.
+  3. Clear the summary for that conversation.
+  4. Refresh and verify conversation messages remain.
+- Expected result: Copy works, clearing memory removes only the memory summary/status, and original messages remain intact.
+- Related route/API: `/api/memory-vault`, `/api/conversations/[id]/memory`
+- Notes:
+
+### Memory user scoping
+
+- Status: [ ] Pass [ ] Fail [ ] Blocked
+- Steps:
+  1. Create a unique memory-bearing conversation as user A.
+  2. Sign in as user B.
+  3. Open Memory Vault and attempt direct access to user A's conversation memory route if safe.
+- Expected result: User B cannot see, copy, or clear user A's memory data.
+- Related route/API: `/api/memory-vault`, `/api/conversations/[id]/memory`
 - Notes:
 
 ## Files And RAG
@@ -859,8 +970,31 @@ Use this checklist for a full manual QA pass from first sign-up through advanced
 - Steps:
   1. Use two normal users with unique projects, artifacts, files, searches, images, and GitHub imports.
   2. Try to access or search data across users.
-- Expected result: No cross-user data leakage occurs.
-- Related route/API: all protected user routes
+- Expected result: No cross-user data leakage occurs, including global search, project search, files, generated images, artifacts, Model Duel records, Memory Vault, and GitHub imports.
+- Related route/API: all protected user routes, `/api/search`, `/api/files/object`, `/api/memory-vault`, `/api/model-comparisons`
+- Notes:
+
+### Private file route protection
+
+- Status: [ ] Pass [ ] Fail [ ] Blocked
+- Steps:
+  1. Upload a private file as user A.
+  2. Open or download it through the app.
+  3. Inspect the network request and copied URL shape.
+  4. Sign in as user B and attempt the same protected file URL if safe.
+- Expected result: File access goes through `/api/files/object`, direct bucket URLs are not exposed, and user B cannot read user A's file.
+- Related route/API: `/api/files/object`, `/api/files`, `/api/attachments`
+- Notes:
+
+### Text/image route separation regression
+
+- Status: [ ] Pass [ ] Fail [ ] Blocked
+- Steps:
+  1. Send text prompts through every text assistant, handoff, quality action, custom assistant test, Model Duel, and text playbook step.
+  2. Generate images through Prism, Prism Studio prompt reuse, and any image playbook step.
+  3. Inspect network requests.
+- Expected result: Text generation uses `/api/chat` or text-specific action routes that call text billing; Prism image generation uses `/api/images/generate`; `/api/chat` rejects Prism/image requests.
+- Related route/API: `/api/chat`, `/api/images/generate`, `/api/artifacts/[id]/actions`, `/api/custom-assistants/test`, `/api/model-comparisons`
 - Notes:
 
 ### Server-only secrets
