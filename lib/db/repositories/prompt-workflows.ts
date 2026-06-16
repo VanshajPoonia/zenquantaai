@@ -44,6 +44,16 @@ type WorkflowRunRow = typeof zenPromptWorkflowRuns.$inferSelect
 type WorkflowStepRunRow = typeof zenPromptWorkflowStepRuns.$inferSelect
 type MessageRow = typeof zenMessages.$inferSelect
 
+const DEFAULT_WORKFLOW_LIST_LIMIT = 100
+const MAX_WORKFLOW_LIST_LIMIT = 200
+
+function normalizeListLimit(value: number | null | undefined): number {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    return DEFAULT_WORKFLOW_LIST_LIMIT
+  }
+  return Math.max(1, Math.min(MAX_WORKFLOW_LIST_LIMIT, Math.floor(value)))
+}
+
 function isTerminalRunStatus(status: PromptWorkflowRunStatus | undefined): boolean {
   return status === 'complete' || status === 'failed' || status === 'cancelled'
 }
@@ -195,13 +205,17 @@ function normalizeWorkflowInput(
 }
 
 class NeonPromptWorkflowsRepository {
-  async list(userId: string): Promise<PromptWorkflow[]> {
+  async list(
+    userId: string,
+    options: { limit?: number | null } = {}
+  ): Promise<PromptWorkflow[]> {
     const db = getDatabaseClient()
     const rows = await db
       .select()
       .from(zenPromptWorkflows)
       .where(eq(zenPromptWorkflows.userId, userId))
       .orderBy(desc(zenPromptWorkflows.updatedAt))
+      .limit(normalizeListLimit(options.limit))
 
     if (rows.length === 0) return []
 
