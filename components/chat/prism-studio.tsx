@@ -41,6 +41,7 @@ import {
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
+import { FeedbackButtons } from './feedback-buttons'
 
 const PROJECT_FILTER_ALL = 'all'
 
@@ -563,6 +564,18 @@ export function PrismStudio() {
                           Save prompt as Artifact
                         </Button>
                       </div>
+
+                      <FeedbackButtons
+                        entityType="image_generation"
+                        entityId={selectedImage.id}
+                        metadata={{
+                          model: selectedImage.model,
+                          status: selectedImage.status,
+                          projectId: selectedImage.projectId,
+                          conversationId: selectedImage.conversationId,
+                        }}
+                        allowNeutral
+                      />
 
                       <div className="space-y-2">
                         <p className="text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
