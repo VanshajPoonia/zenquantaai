@@ -25,6 +25,16 @@ function normalizeProject(input: Project): Project {
 
 type ProjectRow = typeof zenProjects.$inferSelect
 
+const DEFAULT_PROJECT_LIST_LIMIT = 100
+const MAX_PROJECT_LIST_LIMIT = 300
+
+function normalizeLimit(value: number | null | undefined): number {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    return DEFAULT_PROJECT_LIST_LIMIT
+  }
+  return Math.max(1, Math.min(MAX_PROJECT_LIST_LIMIT, Math.floor(value)))
+}
+
 function rowToProject(row: ProjectRow): Project {
   return normalizeProject({
     id: row.id,
@@ -61,13 +71,17 @@ class NeonProjectsRepository {
     return rows[0] ? rowToProject(rows[0]) : null
   }
 
-  async list(userId: string): Promise<Project[]> {
+  async list(
+    userId: string,
+    options: { limit?: number | null } = {}
+  ): Promise<Project[]> {
     const db = getDatabaseClient()
     const rows = await db
       .select()
       .from(zenProjects)
       .where(eq(zenProjects.userId, userId))
       .orderBy(desc(zenProjects.isDefault), desc(zenProjects.updatedAt))
+      .limit(normalizeLimit(options.limit))
 
     const projects = rows.map(rowToProject)
 
