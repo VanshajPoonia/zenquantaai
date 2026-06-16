@@ -23,6 +23,10 @@ import {
   ARTIFACT_ACTION_LABELS,
   ARTIFACT_ACTION_TYPES,
 } from '@/lib/artifacts/actions'
+import {
+  ArtifactExportFormat,
+  sanitizeArtifactExportBaseName,
+} from '@/lib/artifacts/export'
 import { ARTIFACT_SOURCE_TYPES, ARTIFACT_TYPES } from '@/lib/artifacts/validation'
 import { useChatContext } from '@/lib/chat-context'
 import { cn } from '@/lib/utils'
@@ -55,6 +59,14 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
 import {
   Select,
@@ -64,6 +76,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
+import { FeedbackButtons } from './feedback-buttons'
 
 const ARTIFACT_TYPE_LABELS: Record<ArtifactType, string> = {
   document: 'Document',
@@ -364,8 +377,24 @@ export function ArtifactStudio() {
 
   const exportDraft = () => {
     if (!draft.content.trim()) return
-    const safeTitle = draft.title.trim().replace(/[^a-z0-9_-]+/gi, '-').toLowerCase()
+    const safeTitle = sanitizeArtifactExportBaseName(draft.title)
     downloadTextFile(`${safeTitle || 'artifact'}.md`, draft.content, 'text/markdown')
+  }
+
+  const exportSavedArtifact = (format: ArtifactExportFormat) => {
+    if (!draft.id) {
+      exportDraft()
+      return
+    }
+
+    const anchor = document.createElement('a')
+    anchor.href = `/api/artifacts/${encodeURIComponent(
+      draft.id
+    )}/export?format=${encodeURIComponent(format)}`
+    anchor.rel = 'noopener'
+    document.body.appendChild(anchor)
+    anchor.click()
+    anchor.remove()
   }
 
   const runSelectedAction = async () => {
@@ -690,17 +719,55 @@ export function ArtifactStudio() {
                     <Clipboard className="mr-2 size-4" />
                     {copied ? 'Copied' : 'Copy'}
                   </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="rounded-xl"
-                    disabled={!draft.content.trim()}
-                    onClick={exportDraft}
-                  >
-                    <Download className="mr-2 size-4" />
-                    Export
-                  </Button>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="rounded-xl"
+                        disabled={!draft.content.trim()}
+                      >
+                        <Download className="mr-2 size-4" />
+                        Export
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-56">
+                      {draft.id ? (
+                        <>
+                          <DropdownMenuLabel>Export saved artifact</DropdownMenuLabel>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem
+                            onSelect={() => exportSavedArtifact('markdown')}
+                          >
+                            <FileText className="size-4" />
+                            Markdown .md
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onSelect={() => exportSavedArtifact('text')}
+                          >
+                            <FileText className="size-4" />
+                            Plain text .txt
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onSelect={() => exportSavedArtifact('json')}
+                          >
+                            <FileText className="size-4" />
+                            JSON .json
+                          </DropdownMenuItem>
+                        </>
+                      ) : (
+                        <>
+                          <DropdownMenuLabel>Draft export</DropdownMenuLabel>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem onSelect={exportDraft}>
+                            <FileText className="size-4" />
+                            Draft Markdown .md
+                          </DropdownMenuItem>
+                        </>
+                      )}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                   {selectedArtifact ? (
                     <Button
                       type="button"
@@ -851,6 +918,22 @@ export function ArtifactStudio() {
                     <div className="mt-3 max-h-64 overflow-y-auto whitespace-pre-wrap rounded-xl border border-border/60 bg-background/60 p-3 font-mono text-xs leading-6 text-foreground">
                       {actionPreview.content}
                     </div>
+                    {draft.id ? (
+                      <FeedbackButtons
+                        entityType="artifact_action"
+                        entityId={draft.id}
+                        metadata={{
+                          actionType: actionPreview.actionType,
+                          assistantFamily: actionPreview.assistantFamily,
+                          mode: actionPreview.mode,
+                          model: actionPreview.model,
+                          artifactType: draft.artifactType,
+                          truncated: actionPreview.truncated,
+                        }}
+                        className="mt-3"
+                        allowNeutral
+                      />
+                    ) : null}
                   </div>
                 ) : null}
 
