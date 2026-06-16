@@ -29,6 +29,7 @@ This is the current six-assistant platform, not the old four-mode version.
 ## Implemented Features
 
 - Authenticated workspace.
+- Workspace Home as the authenticated `/` first screen for continuing recent work and opening core workspace tools.
 - ID/password auth backed by fresh Neon credentials.
 - Six assistant families.
 - Streamed text chat.
@@ -41,6 +42,7 @@ This is the current six-assistant platform, not the old four-mode version.
 - Text/code uploaded-file knowledge indexing and retrieval with Neon pgvector.
 - Generated image files stored through the neutral storage abstraction.
 - Local prompt precheck and assistant recommendations.
+- Opt-in personalized assistant recommendation nudges derived from user-owned behavior summaries.
 - Projects.
 - Project Home dashboards with project-scoped conversations, files, generated images, playbooks, memory status, and rule-based next actions.
 - Global/project-scoped search and authenticated command palette.
@@ -118,7 +120,9 @@ Mode mapping:
 - `/api/files/[id]`: remove owned file metadata, chunks, private object access, and attachment access refs.
 - `/api/files/object`: protected private file object reads.
 - `/api/dashboard`: user dashboard data.
+- `/api/workspace-home`: user-scoped Workspace Home aggregate for continue items, recent projects/conversations/artifacts/playbook runs/files/images, rule-based suggestions, and displayed usage snapshot.
 - `/api/assistant-recommendations`: recommendation telemetry.
+- `/api/assistant-recommendations/personalization`: user-scoped safe personalization summary for opt-in assistant recommendations.
 - `/api/plan-requests`: user plan requests.
 - `/api/admin/*`: admin overview, users, and plan requests.
 - `/api/auth/*`: session, sign-in, sign-up, sign-out, unsupported magic-link compatibility, and password reset/update.
@@ -152,6 +156,7 @@ Active Neon runtime data paths are:
 - `/api/custom-assistants/[id]`
 - `/api/custom-assistants/test`
 - `/api/assistant-recommendations`
+- `/api/assistant-recommendations/personalization`
 - `/api/projects`
 - `/api/projects/[id]`
 - `/api/projects/[id]/home`
@@ -385,7 +390,7 @@ Accepted aliases in code include:
 - `npm run build` no longer ignores TypeScript build errors.
 - Package manager is ambiguous: `pnpm-lock.yaml` exists, while `README.md` documents `npm install`.
 - File storage access keys must remain server-only.
-- Conversation saves currently delete and reinsert messages, which may be risky for large histories or concurrent writes.
+- Conversation saves now upsert message rows and page large histories, but multi-tab concurrent sends still do not have a schema-backed send lease/version check.
 - Neon starts fresh and does not preserve old Supabase rows.
 - Settings, prompts, prompt workflows, text model comparisons, private custom text assistants, assistant recommendation telemetry, projects, conversations, messages, conversation memory, billing/admin data, usage records, plan requests, dashboard data, image history, and admin mutations are wired to Neon.
 - Prompt workflows are presented as AI Playbooks in the workspace. The backend route/table names remain `prompt-workflows` for compatibility.
