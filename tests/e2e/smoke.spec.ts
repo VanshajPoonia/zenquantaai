@@ -28,11 +28,15 @@ async function expectAuthGate(page: Page) {
   await expect(page.getByPlaceholder('Enter your password')).toBeVisible()
 }
 
+async function gotoSmokeRoute(page: Page, path: string) {
+  await page.goto(path, { waitUntil: 'domcontentloaded' })
+}
+
 test.describe('Zenquanta smoke routes', () => {
   test('landing route loads the unauthenticated auth gate', async ({ page }) => {
     const pageErrors = collectPageErrors(page)
 
-    await page.goto('/')
+    await gotoSmokeRoute(page, '/')
 
     await expectAuthGate(page)
     expect(pageErrors).toEqual([])
@@ -41,7 +45,7 @@ test.describe('Zenquanta smoke routes', () => {
   test('sign-in form renders on the auth gate', async ({ page }) => {
     const pageErrors = collectPageErrors(page)
 
-    await page.goto('/')
+    await gotoSmokeRoute(page, '/')
 
     await expect(page.getByPlaceholder('Enter your ID')).toBeVisible()
     await expect(page.getByPlaceholder('Enter your password')).toBeVisible()
@@ -52,7 +56,7 @@ test.describe('Zenquanta smoke routes', () => {
   test('sign-up form renders from the auth gate', async ({ page }) => {
     const pageErrors = collectPageErrors(page)
 
-    await page.goto('/')
+    await gotoSmokeRoute(page, '/')
     await page.getByRole('button', { name: 'Create account' }).first().click()
 
     await expect(page.getByPlaceholder('Choose your ID')).toBeVisible()
@@ -65,7 +69,7 @@ test.describe('Zenquanta smoke routes', () => {
   test('dashboard protects unauthenticated users', async ({ page }) => {
     const pageErrors = collectPageErrors(page)
 
-    await page.goto('/dashboard')
+    await gotoSmokeRoute(page, '/dashboard')
 
     await expect(page).toHaveURL('/')
     await expectAuthGate(page)
@@ -75,7 +79,7 @@ test.describe('Zenquanta smoke routes', () => {
   test('pricing protects unauthenticated users', async ({ page }) => {
     const pageErrors = collectPageErrors(page)
 
-    await page.goto('/pricing')
+    await gotoSmokeRoute(page, '/pricing')
 
     await expect(page).toHaveURL('/')
     await expectAuthGate(page)
@@ -85,7 +89,7 @@ test.describe('Zenquanta smoke routes', () => {
   test('admin blocks users without an authenticated admin session', async ({ page }) => {
     const pageErrors = collectPageErrors(page)
 
-    await page.goto('/admin')
+    await gotoSmokeRoute(page, '/admin')
 
     await expect(page).toHaveURL('/')
     await expectAuthGate(page)
@@ -107,7 +111,7 @@ test.describe('Zenquanta smoke routes', () => {
     }) => {
       const pageErrors = collectPageErrors(page)
 
-      await page.goto(assistant.path)
+      await gotoSmokeRoute(page, assistant.path)
 
       await expect(
         page.getByRole('heading', { name: assistant.name })
