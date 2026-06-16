@@ -17,7 +17,9 @@ import {
   AIMode,
   Attachment,
   FileIntelligence,
+  FileKnowledgeSource,
   Message,
+  MessageSource,
   MODE_CONFIGS,
   MODE_ORDER,
 } from '@/lib/types'
@@ -533,42 +535,107 @@ function AttachmentList({
   )
 }
 
+function isFileKnowledgeSource(source: MessageSource): source is FileKnowledgeSource {
+  return source.kind === 'file'
+}
+
 function SourceList({ message }: { message: Message }) {
   const sources = message.sources ?? []
   if (sources.length === 0) return null
 
+  const fileSources = sources.filter(isFileKnowledgeSource)
+  const webSources = sources.filter((source) => !isFileKnowledgeSource(source))
+  const hasMixed = fileSources.length > 0 && webSources.length > 0
+
   return (
-    <div className="mt-3 rounded-xl border border-border/60 bg-background/40 px-3 py-2.5">
-      <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-        Sources
-      </p>
-      <div className="mt-2 space-y-2">
-        {sources.map((source) => (
-          <a
-            key={`${source.id}-${source.url}`}
-            href={source.url}
-            target="_blank"
-            rel="noreferrer"
-            className="group flex items-start gap-2 text-xs leading-5 text-foreground/90 transition-colors hover:text-foreground sm:text-sm"
-          >
-            <span className="mt-0.5 shrink-0 rounded-md border border-border/70 bg-background/70 px-1.5 py-0.5 text-[11px] text-muted-foreground">
-              {source.id}
-            </span>
-            <span className="min-w-0">
-              <span className="block truncate font-medium">{source.title}</span>
-              <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                {source.domain}
-                <ExternalLink className="size-3 opacity-70 transition-opacity group-hover:opacity-100" />
-              </span>
-              {source.kind === 'file' && source.snippet ? (
-                <span className="mt-1 block line-clamp-2 text-xs leading-5 text-muted-foreground">
-                  {source.snippet}
+    <div className="mt-3 space-y-2">
+      {fileSources.length > 0 ? (
+        <div className="rounded-xl border border-border/60 bg-background/40 px-3 py-2.5">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+            {hasMixed ? 'File context used' : 'Sources'}
+          </p>
+          <div className="mt-2 space-y-2.5">
+            {fileSources.map((source) => {
+              const hasLink = Boolean(source.url && source.url !== '#')
+              const chunkLabel = `Chunk ${source.chunkIndex + 1}`
+              const inner = (
+                <>
+                  <FileText className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" />
+                  <span className="min-w-0 flex-1">
+                    <span className="flex flex-wrap items-center gap-1.5">
+                      <span className="truncate text-xs font-medium text-foreground/90">
+                        {source.title}
+                      </span>
+                      <span className="shrink-0 rounded border border-border/60 bg-background/60 px-1 py-px text-[10px] text-muted-foreground">
+                        {chunkLabel}
+                      </span>
+                    </span>
+                    {source.snippet ? (
+                      <span className="mt-1 block line-clamp-3 text-xs leading-5 text-muted-foreground">
+                        {source.snippet}
+                      </span>
+                    ) : (
+                      <span className="mt-1 block text-xs text-muted-foreground/60">
+                        Relevant file context used
+                      </span>
+                    )}
+                  </span>
+                </>
+              )
+
+              return hasLink ? (
+                <a
+                  key={source.chunkId}
+                  href={source.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="group flex items-start gap-2 text-xs leading-5 text-foreground/90 transition-colors hover:text-foreground"
+                >
+                  {inner}
+                  <ExternalLink className="mt-0.5 size-3 shrink-0 text-muted-foreground opacity-60 transition-opacity group-hover:opacity-100" />
+                </a>
+              ) : (
+                <div
+                  key={source.chunkId}
+                  className="flex items-start gap-2 text-xs leading-5 text-foreground/90"
+                >
+                  {inner}
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      ) : null}
+
+      {webSources.length > 0 ? (
+        <div className="rounded-xl border border-border/60 bg-background/40 px-3 py-2.5">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+            {hasMixed ? 'Web sources' : 'Sources'}
+          </p>
+          <div className="mt-2 space-y-2">
+            {webSources.map((source) => (
+              <a
+                key={`${source.id}-${source.url}`}
+                href={source.url}
+                target="_blank"
+                rel="noreferrer"
+                className="group flex items-start gap-2 text-xs leading-5 text-foreground/90 transition-colors hover:text-foreground sm:text-sm"
+              >
+                <span className="mt-0.5 shrink-0 rounded-md border border-border/70 bg-background/70 px-1.5 py-0.5 text-[11px] text-muted-foreground">
+                  {source.id}
                 </span>
-              ) : null}
-            </span>
-          </a>
-        ))}
-      </div>
+                <span className="min-w-0">
+                  <span className="block truncate font-medium">{source.title}</span>
+                  <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                    {source.domain}
+                    <ExternalLink className="size-3 opacity-70 transition-opacity group-hover:opacity-100" />
+                  </span>
+                </span>
+              </a>
+            ))}
+          </div>
+        </div>
+      ) : null}
     </div>
   )
 }
