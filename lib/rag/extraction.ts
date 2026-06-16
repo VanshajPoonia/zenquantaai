@@ -41,6 +41,10 @@ const TEXT_FILE_EXTENSIONS = new Set([
   'sh',
 ])
 const PDF_MIME_TYPES = new Set(['application/pdf', 'application/x-pdf'])
+const DOCX_MIME_TYPES = new Set([
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/docx',
+])
 const MAX_EXTRACTED_CHARS = 160_000
 const MAX_CHUNK_CHARS = 1_200
 const CHUNK_OVERLAP_CHARS = 180
@@ -89,6 +93,44 @@ export function isPdfKnowledgeFile(input: {
   return PDF_MIME_TYPES.has(mimeType) || extension === 'pdf'
 }
 
+export function isDocxKnowledgeFile(input: {
+  fileName: string
+  mimeType: string
+}): boolean {
+  const mimeType = input.mimeType.toLowerCase()
+  const extension = extensionOf(input.fileName)
+
+  return DOCX_MIME_TYPES.has(mimeType) || extension === 'docx'
+}
+
+function isJsonKnowledgeFile(input: { fileName: string; mimeType: string }): boolean {
+  return (
+    input.mimeType.toLowerCase() === 'application/json' ||
+    extensionOf(input.fileName) === 'json'
+  )
+}
+
+function isCsvKnowledgeFile(input: { fileName: string; mimeType: string }): boolean {
+  const mimeType = input.mimeType.toLowerCase()
+  const extension = extensionOf(input.fileName)
+  return (
+    mimeType === 'text/csv' ||
+    mimeType === 'application/csv' ||
+    extension === 'csv'
+  )
+}
+
+function isMarkdownKnowledgeFile(input: { fileName: string; mimeType: string }): boolean {
+  const mimeType = input.mimeType.toLowerCase()
+  const extension = extensionOf(input.fileName)
+  return (
+    mimeType === 'text/markdown' ||
+    mimeType === 'text/x-markdown' ||
+    extension === 'md' ||
+    extension === 'mdx'
+  )
+}
+
 function normalizeExtractedText(input: string): string {
   return input
     .replace(/\0/g, '')
@@ -102,7 +144,7 @@ function looksBinary(text: string): boolean {
   if (!text) return false
 
   const sample = text.slice(0, 4096)
-  const replacementCount = (sample.match(/\uFFFD/g) ?? []).length
+  const replacementCount = (sample.match(/�/g) ?? []).length
   return replacementCount / sample.length > 0.05
 }
 
@@ -171,13 +213,254 @@ async function extractTextFromPdfBytes(input: {
   }
 }
 
+async function extractTextFromDocxBytes(input: {
+  bytes: Buffer
+}): Promise<ExtractedFileText> {
+  const mammoth = await import('mammoth')
+
+  try {
+    const result = await mammoth.extractRawText({ buffer: input.bytes })
+    const normalized = normalizeExtractedText(result.value).slice(0, MAX_EXTRACTED_CHARS)
+
+    if (!normalized) {
+      return {
+        text: '',
+        status: 'empty',
+        reason: 'No text content was found in the DOCX file.',
+      }
+    }
+
+    return { text: normalized, status: 'extracted' }
+  } catch {
+    return {
+      text: '',
+      status: 'unsupported',
+      reason: 'The DOCX file could not be parsed. It may be encrypted or corrupted.',
+    }
+  }
+}
+
+function extractTextFromJsonBytes(input: { bytes: Buffer }): ExtractedFileText {
+  const raw = new TextDecoder('utf-8', { fatal: false }).decode(input.bytes)
+
+  if (looksBinary(raw)) {
+    return {
+      text: '',
+      status: 'unsupported',
+      reason: 'The file could not be decoded as text.',
+    }
+  }
+
+  try {
+    const parsed = JSON.parse(raw) as unknown
+    const pretty = JSON.stringify(parsed, null, 2)
+    const normalized = normalizeExtractedText(pretty).slice(0, MAX_EXTRACTED_CHARS)
+
+    if (!normalized) {
+      return {
+        text: '',
+        status: 'empty',
+        reason: 'JSON parsed but produced no extractable content.',
+      }
+    }
+
+    return { text: normalized, status: 'extracted' }
+  } catch {
+    return {
+      text: '',
+      status: 'unsupported',
+      reason: 'The file is not valid JSON and could not be indexed.',
+    }
+  }
+}
+
+// Minimal RFC 4180 CSV parser. Caps input scanning at 2× MAX_EXTRACTED_CHARS
+// to avoid scanning multi-million-row files, and stops after maxRows rows.
+function parseCsvRows(input: string, maxRows: number): string[][] {
+  const rows: string[][] = []
+  let i = 0
+  const scanLimit = Math.min(input.length, MAX_EXTRACTED_CHARS * 2)
+
+  while (i < scanLimit && rows.length < maxRows) {
+    const row: string[] = []
+
+    while (i < scanLimit) {
+      let field = ''
+
+      if (input[i] === '"') {
+        // Quoted field — handles embedded commas, newlines, and escaped quotes ("")
+        i++ // skip opening quote
+        while (i < scanLimit) {
+          if (input[i] === '"') {
+            if (input[i + 1] === '"') {
+              field += '"'
+              i += 2
+            } else {
+              i++ // skip closing quote
+              break
+            }
+          } else {
+            field += input[i++]
+          }
+        }
+      } else {
+        // Unquoted field — read until comma or end of record
+        while (
+          i < scanLimit &&
+          input[i] !== ',' &&
+          input[i] !== '\n' &&
+          !(input[i] === '\r' && input[i + 1] === '\n')
+        ) {
+          field += input[i++]
+        }
+      }
+
+      row.push(field.trim())
+
+      if (
+        i >= scanLimit ||
+        input[i] === '\n' ||
+        (input[i] === '\r' && input[i + 1] === '\n')
+      ) {
+        if (i < scanLimit && input[i] === '\r') i++
+        if (i < scanLimit) i++
+        break
+      }
+
+      if (input[i] === ',') i++
+    }
+
+    if (row.length > 0 && !(row.length === 1 && row[0] === '')) {
+      rows.push(row)
+    }
+  }
+
+  return rows
+}
+
+function extractTextFromCsvBytes(input: { bytes: Buffer }): ExtractedFileText {
+  const raw = new TextDecoder('utf-8', { fatal: false }).decode(input.bytes)
+
+  if (looksBinary(raw)) {
+    return {
+      text: '',
+      status: 'unsupported',
+      reason: 'The file could not be decoded as text.',
+    }
+  }
+
+  const rows = parseCsvRows(raw, 10_000)
+
+  if (rows.length === 0) {
+    return { text: '', status: 'empty', reason: 'CSV file contains no data.' }
+  }
+
+  const headers = rows[0]
+  const dataRows = rows.slice(1)
+
+  if (dataRows.length === 0) {
+    return {
+      text: '',
+      status: 'empty',
+      reason: 'CSV file has headers but no data rows.',
+    }
+  }
+
+  const lines: string[] = [`Columns: ${headers.join(', ')}`, '']
+  let charCount = lines.join('\n').length
+
+  for (const row of dataRows) {
+    const pairs = headers
+      .map((header, colIndex) => {
+        const value = row[colIndex] ?? ''
+        return value ? `${header}: ${value}` : null
+      })
+      .filter((pair): pair is string => pair !== null)
+
+    if (pairs.length > 0) {
+      const line = pairs.join(' | ')
+      lines.push(line)
+      charCount += line.length + 1
+      if (charCount >= MAX_EXTRACTED_CHARS) break
+    }
+  }
+
+  const normalized = normalizeExtractedText(lines.join('\n')).slice(
+    0,
+    MAX_EXTRACTED_CHARS
+  )
+
+  if (!normalized) {
+    return {
+      text: '',
+      status: 'empty',
+      reason: 'CSV file produced no extractable content.',
+    }
+  }
+
+  return { text: normalized, status: 'extracted' }
+}
+
+function extractTextFromMarkdownBytes(input: { bytes: Buffer }): ExtractedFileText {
+  const raw = new TextDecoder('utf-8', { fatal: false }).decode(input.bytes)
+
+  if (looksBinary(raw)) {
+    return {
+      text: '',
+      status: 'unsupported',
+      reason: 'The file could not be decoded as text.',
+    }
+  }
+
+  // Strip markdown rendering syntax while keeping prose content.
+  // Order matters: fenced blocks and inline code must be stripped before
+  // bold/italic markers to avoid corrupting code content.
+  const stripped = raw
+    .replace(/```[^\n]*\n([\s\S]*?)```/g, '$1')
+    .replace(/`([^`\n]+)`/g, '$1')
+    .replace(/^#{1,6}\s+/gm, '')
+    .replace(/\*\*\*([^*\n]+)\*\*\*/g, '$1')
+    .replace(/___([^_\n]+)___/g, '$1')
+    .replace(/\*\*([^*\n]+)\*\*/g, '$1')
+    .replace(/__([^_\n]+)__/g, '$1')
+    .replace(/\*([^*\n]+)\*/g, '$1')
+    .replace(/_([^_\n]+)_/g, '$1')
+    .replace(/~~([^~\n]+)~~/g, '$1')
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+    .replace(/\[([^\]]+)\]\[[^\]]*\]/g, '$1')
+    .replace(/!\[[^\]]*\]\([^)]+\)/g, '')
+    .replace(/^>\s*/gm, '')
+    .replace(/^[ \t]*[-*+]\s+/gm, '')
+    .replace(/^[ \t]*\d+\.\s+/gm, '')
+    .replace(/^[-*_]{3,}\s*$/gm, '')
+    .replace(/<[^>]+>/g, '')
+    .replace(/^\|[-|: ]+\|$/gm, '')
+    .replace(/\|/g, ' ')
+
+  const normalized = normalizeExtractedText(stripped).slice(0, MAX_EXTRACTED_CHARS)
+
+  if (!normalized) {
+    return {
+      text: '',
+      status: 'empty',
+      reason: 'No extractable content found in markdown file.',
+    }
+  }
+
+  return { text: normalized, status: 'extracted' }
+}
+
 export async function extractTextFromFileBytes(input: {
   bytes: Buffer
   fileName: string
   mimeType: string
 }): Promise<ExtractedFileText> {
   if (isPdfKnowledgeFile(input)) {
-    return await extractTextFromPdfBytes({ bytes: input.bytes })
+    return extractTextFromPdfBytes({ bytes: input.bytes })
+  }
+
+  if (isDocxKnowledgeFile(input)) {
+    return extractTextFromDocxBytes({ bytes: input.bytes })
   }
 
   if (!isTextKnowledgeFile(input)) {
@@ -185,10 +468,23 @@ export async function extractTextFromFileBytes(input: {
       text: '',
       status: 'unsupported',
       reason:
-        'Only text, code-like, and text-based PDF files are indexed in this knowledge-base version.',
+        'Only text, code-like, PDF, and DOCX files are indexed in this knowledge-base version.',
     }
   }
 
+  if (isJsonKnowledgeFile(input)) {
+    return extractTextFromJsonBytes({ bytes: input.bytes })
+  }
+
+  if (isCsvKnowledgeFile(input)) {
+    return extractTextFromCsvBytes({ bytes: input.bytes })
+  }
+
+  if (isMarkdownKnowledgeFile(input)) {
+    return extractTextFromMarkdownBytes({ bytes: input.bytes })
+  }
+
+  // Generic UTF-8 text and code files
   const decoded = new TextDecoder('utf-8', { fatal: false }).decode(input.bytes)
   if (looksBinary(decoded)) {
     return {
