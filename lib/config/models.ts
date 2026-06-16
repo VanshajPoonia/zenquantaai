@@ -229,6 +229,7 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   assistantRecommendations: {
     enabled: true,
     autoSwitchOnHighConfidence: false,
+    personalized: false,
   },
   sessionDefaults: createSessionSettings('general'),
   gatewayDrafts: {

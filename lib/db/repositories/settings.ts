@@ -83,6 +83,9 @@ function normalizeSettings(input: Partial<AppSettings>): AppSettings {
       autoSwitchOnHighConfidence:
         input.assistantRecommendations?.autoSwitchOnHighConfidence ??
         DEFAULT_APP_SETTINGS.assistantRecommendations.autoSwitchOnHighConfidence,
+      personalized:
+        input.assistantRecommendations?.personalized ??
+        DEFAULT_APP_SETTINGS.assistantRecommendations.personalized,
     },
     sessionDefaults: createSessionSettings(defaultMode, {
       temperature:

@@ -444,7 +444,7 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                 </p>
               </div>
 
-              <div className="grid gap-4 md:grid-cols-2">
+              <div className="grid gap-4 md:grid-cols-3">
                 <div className="flex items-center justify-between rounded-xl border border-border px-3 py-3">
                   <div>
                     <p className="text-xs font-medium sm:text-sm">
@@ -487,6 +487,33 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                         assistantRecommendations: {
                           ...previous.assistantRecommendations,
                           autoSwitchOnHighConfidence: checked,
+                        },
+                      }))
+                    }
+                  />
+                </div>
+
+                <div className="flex items-center justify-between rounded-xl border border-border px-3 py-3">
+                  <div>
+                    <p className="text-xs font-medium sm:text-sm">
+                      Personalize recommendations
+                    </p>
+                    <p className="text-[11px] text-muted-foreground">
+                      Use only your own feedback and choices to fine-tune suggestions.
+                    </p>
+                  </div>
+                  <Switch
+                    checked={
+                      localSettings.assistantRecommendations.enabled &&
+                      localSettings.assistantRecommendations.personalized
+                    }
+                    disabled={!localSettings.assistantRecommendations.enabled}
+                    onCheckedChange={(checked) =>
+                      setLocalSettings((previous) => ({
+                        ...previous,
+                        assistantRecommendations: {
+                          ...previous.assistantRecommendations,
+                          personalized: checked,
                         },
                       }))
                     }
