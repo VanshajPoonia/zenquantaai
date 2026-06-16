@@ -98,6 +98,10 @@ export type AccentStyle = 'mode' | 'glass'
 
 export type ResponseStyle = 'balanced' | 'concise' | 'detailed'
 
+export type UsageOptimization = 'balanced' | 'fast' | 'best_quality' | 'lowest_usage'
+
+export type DefaultProjectBehavior = 'last_used' | 'inbox'
+
 export type AuthStatus = 'loading' | 'authenticated' | 'unauthenticated'
 
 export type RecommendationOutcome =
@@ -295,6 +299,8 @@ export interface AppSettings {
   accentStyle: AccentStyle
   defaultMode: AIMode
   responseStyle: ResponseStyle
+  usageOptimization: UsageOptimization
+  defaultProjectBehavior: DefaultProjectBehavior
   assistantRecommendations: AssistantRecommendationSettings
   sessionDefaults: SessionSettings
   gatewayDrafts: OpenRouterSettingsDraft

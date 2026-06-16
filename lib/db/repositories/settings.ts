@@ -13,9 +13,11 @@ import {
 import {
   AppSettings,
   AppSettingsPatch,
+  DefaultProjectBehavior,
   OnboardingState,
   OnboardingUseCase,
   StarterPackId,
+  UsageOptimization,
 } from '@/types'
 import { getDatabaseClient } from '../client'
 import { zenUserSettings } from '../schema'
@@ -68,6 +70,18 @@ function normalizeOnboarding(input?: Partial<OnboardingState>): OnboardingState 
   }
 }
 
+const VALID_USAGE_OPTIMIZATIONS = new Set<UsageOptimization>([
+  'balanced',
+  'fast',
+  'best_quality',
+  'lowest_usage',
+])
+
+const VALID_DEFAULT_PROJECT_BEHAVIORS = new Set<DefaultProjectBehavior>([
+  'last_used',
+  'inbox',
+])
+
 function normalizeSettings(input: Partial<AppSettings>): AppSettings {
   const defaultMode = input.defaultMode ?? DEFAULT_APP_SETTINGS.defaultMode
 
@@ -76,6 +90,18 @@ function normalizeSettings(input: Partial<AppSettings>): AppSettings {
     accentStyle: input.accentStyle ?? DEFAULT_APP_SETTINGS.accentStyle,
     defaultMode,
     responseStyle: input.responseStyle ?? DEFAULT_APP_SETTINGS.responseStyle,
+    usageOptimization:
+      typeof input.usageOptimization === 'string' &&
+      VALID_USAGE_OPTIMIZATIONS.has(input.usageOptimization as UsageOptimization)
+        ? (input.usageOptimization as UsageOptimization)
+        : DEFAULT_APP_SETTINGS.usageOptimization,
+    defaultProjectBehavior:
+      typeof input.defaultProjectBehavior === 'string' &&
+      VALID_DEFAULT_PROJECT_BEHAVIORS.has(
+        input.defaultProjectBehavior as DefaultProjectBehavior
+      )
+        ? (input.defaultProjectBehavior as DefaultProjectBehavior)
+        : DEFAULT_APP_SETTINGS.defaultProjectBehavior,
     assistantRecommendations: {
       enabled:
         input.assistantRecommendations?.enabled ??

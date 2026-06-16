@@ -6,6 +6,7 @@ import {
   ModelRouteConfig,
   SessionSettings,
   SubscriptionTier,
+  UsageOptimization,
 } from '@/types'
 import {
   getAssistantFamilyFromMode,
@@ -221,11 +222,35 @@ export function createSessionSettings(
   }
 }
 
+const USAGE_OPTIMIZATION_TO_MODEL_OVERRIDE: Record<UsageOptimization, ModelOverrideOption> = {
+  balanced: 'auto',
+  fast: 'gemini',
+  best_quality: 'claude',
+  lowest_usage: 'deepseek',
+}
+
+export function getModelOverrideForUsageOptimization(
+  optimization: UsageOptimization
+): ModelOverrideOption {
+  return USAGE_OPTIMIZATION_TO_MODEL_OVERRIDE[optimization]
+}
+
+export function getUsageOptimizationFromModelOverride(
+  modelOverride: ModelOverrideOption
+): UsageOptimization {
+  for (const [opt, override] of Object.entries(USAGE_OPTIMIZATION_TO_MODEL_OVERRIDE)) {
+    if (override === modelOverride) return opt as UsageOptimization
+  }
+  return 'balanced'
+}
+
 export const DEFAULT_APP_SETTINGS: AppSettings = {
   theme: 'dark',
   accentStyle: 'mode',
   defaultMode: 'general',
   responseStyle: 'balanced',
+  usageOptimization: 'balanced',
+  defaultProjectBehavior: 'last_used',
   assistantRecommendations: {
     enabled: true,
     autoSwitchOnHighConfidence: false,
