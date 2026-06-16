@@ -40,6 +40,39 @@ export type GatewayId = 'openrouter'
 
 export type MessageRole = 'system' | 'user' | 'assistant'
 
+export type FeedbackEntityType =
+  | 'message'
+  | 'model_candidate'
+  | 'artifact_action'
+  | 'playbook_run'
+  | 'image_generation'
+  | 'search_result'
+
+export type FeedbackRating = 'up' | 'down' | 'neutral'
+
+export interface FeedbackEvent {
+  id: string
+  userId: string
+  entityType: FeedbackEntityType
+  entityId: string
+  rating: FeedbackRating
+  reason?: string | null
+  metadata: Record<string, unknown>
+  createdAt: string
+}
+
+export interface FeedbackSubmitRequest {
+  entityType: FeedbackEntityType
+  entityId: string
+  rating: FeedbackRating
+  reason?: string | null
+  metadata?: Record<string, unknown> | null
+}
+
+export interface FeedbackSubmitResponse {
+  feedback: FeedbackEvent
+}
+
 export type ChatAction =
   | 'send'
   | 'generate-image'
@@ -176,6 +209,35 @@ export interface OpenRouterSettingsDraft {
 export interface AssistantRecommendationSettings {
   enabled: boolean
   autoSwitchOnHighConfidence: boolean
+  personalized: boolean
+}
+
+export type AssistantRecommendationPersonalizationTask =
+  | 'general'
+  | 'creative'
+  | 'analysis'
+  | 'code'
+  | 'current'
+  | 'image'
+
+export interface AssistantRecommendationPersonalizationSignal {
+  assistant: AssistantFamily
+  task: AssistantRecommendationPersonalizationTask
+  score: number
+  positiveCount: number
+  negativeCount: number
+  reason: string
+}
+
+export interface AssistantRecommendationPersonalizationSummary {
+  generatedAt: string
+  windowDays: number
+  recommendationEventCount: number
+  feedbackEventCount: number
+  modelDuelSelectionCount: number
+  usageEventCount: number
+  signals: AssistantRecommendationPersonalizationSignal[]
+  assistantAffinities: AssistantRecommendationPersonalizationSignal[]
 }
 
 export type OnboardingStatus = 'not_started' | 'completed' | 'skipped'
@@ -810,6 +872,226 @@ export interface SearchResponse {
   results: SearchResult[]
 }
 
+export type WorkspaceActivityType =
+  | 'conversation_created'
+  | 'conversation_updated'
+  | 'message_sent'
+  | 'project_created'
+  | 'project_updated'
+  | 'file_uploaded'
+  | 'file_indexed'
+  | 'file_skipped'
+  | 'file_unsupported'
+  | 'file_failed'
+  | 'artifact_created'
+  | 'artifact_updated'
+  | 'playbook_run_started'
+  | 'playbook_run_completed'
+  | 'playbook_run_failed'
+  | 'image_generated'
+  | 'model_duel_completed'
+  | 'custom_assistant_created'
+  | 'plan_request_submitted'
+  | 'plan_request_updated'
+
+export type WorkspaceActivitySourceType =
+  | 'conversation'
+  | 'message'
+  | 'project'
+  | 'file'
+  | 'artifact'
+  | 'playbook_run'
+  | 'generated_image'
+  | 'model_comparison'
+  | 'custom_assistant'
+  | 'plan_request'
+
+export interface WorkspaceActivityItem {
+  id: string
+  type: WorkspaceActivityType
+  sourceType: WorkspaceActivitySourceType
+  sourceId: string
+  occurredAt: string
+  title: string
+  description: string
+  href: string
+  target: SearchResultTarget
+  projectId?: string | null
+  projectName?: string | null
+  conversationId?: string | null
+  metadata?: Record<string, string | number | boolean | null>
+}
+
+export interface WorkspaceActivityResponse {
+  items: WorkspaceActivityItem[]
+  nextCursor: string | null
+  filters: {
+    projectId: string | null
+    type: WorkspaceActivityType | null
+    limit: number
+    before: string | null
+  }
+  generatedAt: string
+}
+
+export type WorkspaceHomeContinueItemType =
+  | 'conversation'
+  | 'project'
+  | 'artifact'
+  | 'playbook_run'
+  | 'file'
+  | 'image'
+
+export type WorkspaceHomeSuggestedActionType =
+  | 'new_chat'
+  | 'new_project'
+  | 'upload_file'
+  | 'run_playbook'
+  | 'generate_image'
+  | 'open_pulse_research'
+  | 'search_workspace'
+  | 'open_dashboard'
+  | 'open_pricing'
+  | 'continue_conversation'
+
+export interface WorkspaceHomeContinueItem {
+  id: string
+  type: WorkspaceHomeContinueItemType
+  title: string
+  description: string
+  occurredAt: string
+  projectId?: string | null
+  projectName?: string | null
+  target: SearchResultTarget
+}
+
+export interface WorkspaceHomeProjectSummary {
+  id: string
+  name: string
+  description?: string | null
+  color: string
+  isDefault: boolean
+  createdAt: string
+  updatedAt: string
+}
+
+export interface WorkspaceHomeConversationSummary {
+  id: string
+  title: string
+  preview: string
+  mode: AIMode
+  assistantFamily: AssistantFamily
+  projectId?: string | null
+  projectName?: string | null
+  messageCount: number
+  isPinned: boolean
+  createdAt: string
+  updatedAt: string
+}
+
+export interface WorkspaceHomeArtifactSummary {
+  id: string
+  title: string
+  artifactType: ArtifactType
+  sourceType: ArtifactSourceType
+  projectId?: string | null
+  projectName?: string | null
+  conversationId?: string | null
+  sourceMessageId?: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export interface WorkspaceHomePlaybookRunSummary {
+  id: string
+  workflowId?: string | null
+  workflowTitle: string
+  status: PromptWorkflowRunStatus
+  projectId?: string | null
+  projectName?: string | null
+  conversationId?: string | null
+  startedAt: string
+  completedAt?: string | null
+  updatedAt: string
+}
+
+export interface WorkspaceHomeFileSummary {
+  id: string
+  fileName: string
+  mimeType?: string | null
+  byteSize?: number | null
+  projectId?: string | null
+  projectName?: string | null
+  conversationId?: string | null
+  messageId?: string | null
+  knowledgeStatus: FileKnowledgeStatus
+  knowledgeStatusLabel: string
+  knowledgeReason?: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export interface WorkspaceHomeImageSummary {
+  id: string
+  prompt: string
+  model: string
+  status: string
+  projectId?: string | null
+  projectName?: string | null
+  conversationId?: string | null
+  messageId?: string | null
+  width?: number | null
+  height?: number | null
+  isFavorite: boolean
+  createdAt: string
+  updatedAt: string
+}
+
+export interface WorkspaceHomeSuggestedAction {
+  id: string
+  type: WorkspaceHomeSuggestedActionType
+  title: string
+  description: string
+  projectId?: string | null
+  priority: number
+}
+
+export interface WorkspaceHomeUsageLimitSnapshot {
+  used: number
+  limit: number
+  remaining: number
+  ratio: number
+}
+
+export interface WorkspaceHomeUsageSnapshot {
+  planTier: SubscriptionTier
+  subscriptionStatus: SubscriptionStatus
+  displayedCreditsTotal: number
+  displayedCreditsUsed: number
+  displayedCreditsRemaining: number
+  dailyMessages: WorkspaceHomeUsageLimitSnapshot
+  dailyImages: WorkspaceHomeUsageLimitSnapshot
+  imageCredits: WorkspaceHomeUsageLimitSnapshot
+  displayedCredits: WorkspaceHomeUsageLimitSnapshot
+  pendingPlanRequest: Pick<
+    PlanChangeRequest,
+    'id' | 'requestedTier' | 'status' | 'createdAt' | 'updatedAt'
+  > | null
+}
+
+export interface WorkspaceHomeResponse {
+  continueItems: WorkspaceHomeContinueItem[]
+  recentProjects: WorkspaceHomeProjectSummary[]
+  recentConversations: WorkspaceHomeConversationSummary[]
+  recentArtifacts: WorkspaceHomeArtifactSummary[]
+  recentPlaybookRuns: WorkspaceHomePlaybookRunSummary[]
+  recentFiles: WorkspaceHomeFileSummary[]
+  recentImages: WorkspaceHomeImageSummary[]
+  suggestedActions: WorkspaceHomeSuggestedAction[]
+  usageSnapshot: WorkspaceHomeUsageSnapshot
+  generatedAt: string
+}
+
 export type ProjectHomeSuggestedActionType =
   | 'start_chat'
   | 'upload_file'
@@ -1040,10 +1322,22 @@ export interface GitHubIntegrationAccount {
   updatedAt: string
 }
 
+export interface GitHubIntegrationStatusAccount {
+  provider: 'github'
+  externalAccountLogin: string | null
+  externalAccountName: string | null
+  scopes: string[]
+  status: IntegrationAccountStatus
+  connectedAt: string
+  revokedAt: string | null
+  createdAt: string
+  updatedAt: string
+}
+
 export interface GitHubIntegrationStatus {
   configured: boolean
   connected: boolean
-  account: GitHubIntegrationAccount | null
+  account: GitHubIntegrationStatusAccount | null
   connectUrl: string | null
   missingConfiguration?: string[]
 }
@@ -1259,6 +1553,10 @@ export interface AssistantRecommendationResult {
   matchedSignals: string[]
   shouldRecommendSwitch: boolean
   lockedToCurrentAssistant?: boolean
+  baseReason?: string
+  personalizedReason?: string
+  personalized?: boolean
+  matchedPersonalizationSignals?: string[]
 }
 
 export interface ChatResponse {
