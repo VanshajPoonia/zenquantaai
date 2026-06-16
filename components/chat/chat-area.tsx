@@ -17,6 +17,7 @@ import { EmptyState } from './empty-state'
 import { Composer } from './composer'
 import { ModeSwitcherCompact } from './mode-switcher'
 import { ProjectHome } from './project-home'
+import { WorkspaceHome } from './workspace-home'
 
 export function ChatArea() {
   const {
@@ -275,7 +276,8 @@ export function ChatArea() {
   }
 
   const showProjectHome = !currentChat && Boolean(activeProjectHomeId)
-  const showEmptyState = !currentChat || currentChat.messages.length === 0
+  const showWorkspaceHome = !currentChat && !activeProjectHomeId
+  const showEmptyState = (currentChat?.messages.length ?? 0) === 0
   const upgradeErrorNudge = getUpgradeNudgeForError(streamingState.error)
 
   return (
@@ -283,6 +285,10 @@ export function ChatArea() {
       {showProjectHome && activeProjectHomeId ? (
         <div className="flex-1 min-h-0 overflow-y-auto">
           <ProjectHome projectId={activeProjectHomeId} />
+        </div>
+      ) : showWorkspaceHome ? (
+        <div className="flex-1 min-h-0 overflow-y-auto">
+          <WorkspaceHome />
         </div>
       ) : showEmptyState ? (
         <div className="flex-1 min-h-0 overflow-y-auto">
@@ -340,6 +346,7 @@ export function ChatArea() {
               >
                 <ChatMessage
                   message={message}
+                  conversationId={currentChat.id}
                   isStreamingMessage={
                     message.id === streamingState.messageId &&
                     streamingState.status === 'streaming'
