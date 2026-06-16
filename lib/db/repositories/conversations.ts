@@ -2,9 +2,9 @@ import 'server-only'
 
 import { SQL, and, asc, desc, eq, gt, inArray, lt, sql } from 'drizzle-orm'
 import { createSessionSettings, DEFAULT_PROJECT_ID } from '@/lib/config'
+import { conversationUsageAggregateToEstimate } from '@/lib/conversations/usage-aggregate'
 import { getAssistantFamilyFromMode } from '@/lib/config/assistants'
 import { createPrivateFileUrl } from '@/lib/storage/object-store'
-import { sumUsageEstimates } from '@/lib/utils/cost'
 import {
   createConversation,
   sortConversationSummaries,
@@ -528,40 +528,33 @@ class NeonConversationsRepository {
     conversation: Conversation
   ): Promise<void> {
     const db = getDatabaseClient()
-    const [countRow] = await db
-      .select({ count: sql<number>`count(*)::int` })
+    const [summaryRow] = await db
+      .select({
+        messageCount: sql<number>`count(*)::int`,
+        latestContent: sql<string | null>`(array_agg(${zenMessages.content} order by ${zenMessages.createdAt} desc) filter (where ${zenMessages.role} <> 'system'))[1]`,
+        promptTokens: sql<number>`coalesce(sum((${zenMessages.usage}->>'promptTokens')::numeric), 0)::float8`,
+        completionTokens: sql<number>`coalesce(sum((${zenMessages.usage}->>'completionTokens')::numeric), 0)::float8`,
+        totalTokens: sql<number>`coalesce(sum((${zenMessages.usage}->>'totalTokens')::numeric), 0)::float8`,
+        rawCostUsd: sql<number>`coalesce(sum((${zenMessages.usage}->>'rawCostUsd')::numeric), 0)::float8`,
+        displayedCostUsd: sql<number>`coalesce(sum((${zenMessages.usage}->>'displayedCostUsd')::numeric), 0)::float8`,
+        estimatedCostUsd: sql<number>`coalesce(sum((${zenMessages.usage}->>'estimatedCostUsd')::numeric), 0)::float8`,
+        displayMultiplier: sql<number>`coalesce((array_agg((${zenMessages.usage}->>'displayMultiplier')::numeric order by ${zenMessages.createdAt} desc) filter (where ${zenMessages.usage} is not null))[1], 1)::float8`,
+        marginUsd: sql<number>`coalesce(sum((${zenMessages.usage}->>'marginUsd')::numeric), 0)::float8`,
+        creditsConsumed: sql<number>`coalesce(sum((${zenMessages.usage}->>'creditsConsumed')::numeric), 0)::float8`,
+        imageCount: sql<number>`coalesce(sum((${zenMessages.usage}->>'imageCount')::numeric), 0)::float8`,
+      })
       .from(zenMessages)
       .where(eq(zenMessages.conversationId, conversation.id))
-    const [latestRow] = await db
-      .select({ content: zenMessages.content })
-      .from(zenMessages)
-      .where(
-        and(
-          eq(zenMessages.conversationId, conversation.id),
-          sql`${zenMessages.role} <> 'system'`
-        )
-      )
-      .orderBy(desc(zenMessages.createdAt))
-      .limit(1)
-    const usageRows = await db
-      .select({ usage: zenMessages.usage })
-      .from(zenMessages)
-      .where(eq(zenMessages.conversationId, conversation.id))
-    const usage = sumUsageEstimates(
-      usageRows.map((row) =>
-        row.usage
-          ? toJsonObject<UsageEstimate>(row.usage, {} as UsageEstimate)
-          : undefined
-      )
-    )
+    const usage = conversationUsageAggregateToEstimate(summaryRow)
 
     await db
       .update(zenConversations)
       .set({
-        preview: latestRow?.content
-          ? latestRow.content.replace(/\s+/g, ' ').trim().slice(0, 120)
+        preview: summaryRow?.latestContent
+          ? summaryRow.latestContent.replace(/\s+/g, ' ').trim().slice(0, 120)
           : conversation.preview,
-        messageCount: Number(countRow?.count) || conversation.messageCount,
+        messageCount:
+          Number(summaryRow?.messageCount) || conversation.messageCount,
         usage,
         updatedAt: toDate(conversation.updatedAt),
       })
@@ -708,37 +701,45 @@ class NeonConversationsRepository {
   }
 
   async removeFileAttachmentAccess(userId: string, fileId: string): Promise<void> {
-    const conversations = await this.list(userId)
-    const affected = conversations.filter((conversation) =>
-      conversation.messages.some((message) =>
-        (message.attachments ?? []).some((attachment) => attachment.fileId === fileId)
+    const db = getDatabaseClient()
+    const candidateRows = await db
+      .select({ message: zenMessages })
+      .from(zenMessages)
+      .innerJoin(
+        zenConversations,
+        eq(zenConversations.id, zenMessages.conversationId)
       )
-    )
+      .where(
+        and(
+          eq(zenConversations.userId, userId),
+          sql`${zenMessages.attachments} @> ${JSON.stringify([{ fileId }])}::jsonb`
+        )
+      )
 
     await Promise.all(
-      affected.map((conversation) =>
-        this.save(userId, {
-          ...conversation,
-          messages: conversation.messages.map((message) => ({
-            ...message,
-            attachments: (message.attachments ?? []).map((attachment) => {
-              if (attachment.fileId !== fileId) return attachment
+      candidateRows.map(async ({ message }) => {
+        const attachments = toJsonArray<Attachment>(message.attachments)
+        const nextAttachments = attachments.map((attachment) => {
+          if (attachment.fileId !== fileId) return attachment
 
-              return {
-                id: attachment.id,
-                kind: attachment.kind,
-                name: attachment.name,
-                mimeType: attachment.mimeType,
-                size: attachment.size,
-                createdAt: attachment.createdAt,
-                textContent: attachment.textContent,
-                textExcerpt: attachment.textExcerpt,
-                isExtracted: attachment.isExtracted,
-              }
-            }),
-          })),
+          return {
+            id: attachment.id,
+            kind: attachment.kind,
+            name: attachment.name,
+            mimeType: attachment.mimeType,
+            size: attachment.size,
+            createdAt: attachment.createdAt,
+            textContent: attachment.textContent,
+            textExcerpt: attachment.textExcerpt,
+            isExtracted: attachment.isExtracted,
+          }
         })
-      )
+
+        await db
+          .update(zenMessages)
+          .set({ attachments: nextAttachments })
+          .where(eq(zenMessages.id, message.id))
+      })
     )
   }
 }
