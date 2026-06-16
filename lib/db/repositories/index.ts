@@ -1,5 +1,6 @@
 import 'server-only'
 
+export { neonActivityRepository } from './activity'
 export { neonAdminRepository } from './admin'
 export {
   ArtifactReferenceNotFoundError,
@@ -8,6 +9,10 @@ export {
 export { neonAssistantRecommendationEventsRepository } from './assistant-recommendations'
 export { neonConversationRepository } from './conversations'
 export { neonCustomAssistantsRepository } from './custom-assistants'
+export {
+  FeedbackEntityNotFoundError,
+  neonFeedbackRepository,
+} from './feedback'
 export { neonFileChunksRepository } from './file-chunks'
 export { neonFilesRepository } from './files'
 export type { NeonFileMetadata } from './files'
@@ -37,3 +42,4 @@ export {
   neonUsageEventsRepository,
 } from './usage-events'
 export { neonUsersRepository } from './users'
+export { neonWorkspaceHomeRepository } from './workspace-home'

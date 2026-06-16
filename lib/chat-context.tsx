@@ -15,6 +15,7 @@ import {
   AIMode,
   AppSettings,
   AppSettingsPatch,
+  AssistantRecommendationPersonalizationSummary,
   Artifact,
   ArtifactActionResponse,
   ArtifactActionType,
@@ -165,6 +166,19 @@ type WorkspaceTool =
   | 'ask-files'
   | 'github-integration'
 
+const WORKSPACE_DEEP_LINK_TOOLS = new Set<WorkspaceTool>([
+  'prompt-library',
+  'playbooks',
+  'model-comparison',
+  'custom-assistants',
+  'artifacts',
+  'memory-vault',
+  'prism-studio',
+  'pulse-research-room',
+  'ask-files',
+  'github-integration',
+])
+
 type WorkspaceToolRequestInput =
   | WorkspaceTool
   | {
@@ -239,6 +253,7 @@ interface ChatContextType {
   sessionSettings: SessionSettings
   updateSessionSettings: (settings: Partial<SessionSettings>) => void
   appSettings: AppSettings
+  assistantPersonalizationSummary: AssistantRecommendationPersonalizationSummary | null
   saveAppSettings: (settings: AppSettingsPatch) => Promise<AppSettings>
   isOnboardingOpen: boolean
   openOnboarding: () => void
@@ -466,6 +481,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const [conversations, setConversations] = useState<Conversation[]>([])
   const [currentChat, setCurrentChatState] = useState<Conversation | null>(null)
   const [appSettings, setAppSettings] = useState<AppSettings>(DEFAULT_APP_SETTINGS)
+  const [assistantPersonalizationSummary, setAssistantPersonalizationSummary] =
+    useState<AssistantRecommendationPersonalizationSummary | null>(null)
   const [draftSessionSettings, setDraftSessionSettings] = useState<SessionSettings>(
     DEFAULT_APP_SETTINGS.sessionDefaults
   )
@@ -507,6 +524,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const workspaceSearchRequestIdRef = useRef(0)
   const composerDraftRequestIdRef = useRef(0)
   const hasAutoOpenedOnboardingRef = useRef(false)
+  const activityDeepLinkHandledRef = useRef(false)
 
   const chats = useMemo(
     () => sortConversationSummaries(conversations.map(toConversationSummary)),
@@ -563,6 +581,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     setPromptWorkflows([])
     setCustomAssistants([])
     setCurrentCustomAssistantId(null)
+    setAssistantPersonalizationSummary(null)
     setQueuedPrompts([])
     setWorkspaceToolRequest(null)
     setWorkspaceSearchRequest(null)
@@ -788,6 +807,13 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         ])
 
       const normalizedSettings = normalizeAppSettingsState(settings)
+      const nextPersonalizationSummary =
+        normalizedSettings.assistantRecommendations.enabled &&
+        normalizedSettings.assistantRecommendations.personalized
+          ? await requestJson<AssistantRecommendationPersonalizationSummary>(
+              '/api/assistant-recommendations/personalization'
+            )
+          : null
       const normalizedProjects = sortProjects(nextProjects)
       const normalizedPrompts = sortPrompts(nextPrompts)
       const normalizedWorkflows = sortPromptWorkflows(nextWorkflows)
@@ -801,6 +827,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       const storedProjectId = readBrowserSelectedProjectId()
 
       setAppSettings(normalizedSettings)
+      setAssistantPersonalizationSummary(nextPersonalizationSummary)
       setProjects(normalizedProjects)
       setPromptLibrary(normalizedPrompts)
       setPromptWorkflows(normalizedWorkflows)
@@ -1299,6 +1326,91 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     [goHome, setSelectedProjectId]
   )
 
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    if (activityDeepLinkHandledRef.current) return
+    if (authState.status !== 'authenticated' || !hasLoadedWorkspaceData) return
+
+    const params = new URLSearchParams(window.location.search)
+    const tool = params.get('tool') as WorkspaceTool | null
+    const conversationId = params.get('conversationId')
+    const messageId = params.get('messageId')
+    const projectId = params.get('projectId')
+    const artifactId = params.get('artifactId')
+    const imageId = params.get('imageId')
+    const fileId = params.get('fileId')
+    const view = params.get('view')
+    const isWorkspaceTool =
+      tool !== null && WORKSPACE_DEEP_LINK_TOOLS.has(tool)
+
+    if (!isWorkspaceTool && !conversationId && !(projectId && view === 'project')) {
+      return
+    }
+
+    activityDeepLinkHandledRef.current = true
+
+    const clearActivityParams = () => {
+      const nextParams = new URLSearchParams(window.location.search)
+      for (const key of [
+        'tool',
+        'conversationId',
+        'messageId',
+        'projectId',
+        'artifactId',
+        'imageId',
+        'fileId',
+        'view',
+        'workflowId',
+        'assistantId',
+        'comparisonId',
+      ]) {
+        nextParams.delete(key)
+      }
+      const nextSearch = nextParams.toString()
+      window.history.replaceState(
+        null,
+        '',
+        `${window.location.pathname}${nextSearch ? `?${nextSearch}` : ''}`
+      )
+    }
+
+    if (isWorkspaceTool) {
+      openWorkspaceTool({
+        tool,
+        artifactId,
+        imageId,
+        fileId,
+        projectId,
+      })
+      clearActivityParams()
+      return
+    }
+
+    if (conversationId) {
+      void openConversation(conversationId).then(() => {
+        if (!messageId) return
+        window.setTimeout(() => {
+          document
+            .getElementById(`message-${messageId}`)
+            ?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+        }, 220)
+      })
+      clearActivityParams()
+      return
+    }
+
+    if (projectId && view === 'project') {
+      openProjectHome(projectId)
+      clearActivityParams()
+    }
+  }, [
+    authState.status,
+    hasLoadedWorkspaceData,
+    openConversation,
+    openProjectHome,
+    openWorkspaceTool,
+  ])
+
   const createNewChat = useCallback(async () => {
     streamAbortRef.current?.abort()
     streamAbortRef.current = null
@@ -1358,6 +1470,18 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
       const normalized = normalizeAppSettingsState(nextSettings)
       setAppSettings(normalized)
+      if (
+        normalized.assistantRecommendations.enabled &&
+        normalized.assistantRecommendations.personalized
+      ) {
+        setAssistantPersonalizationSummary(
+          await requestJson<AssistantRecommendationPersonalizationSummary>(
+            '/api/assistant-recommendations/personalization'
+          )
+        )
+      } else {
+        setAssistantPersonalizationSummary(null)
+      }
 
       if (!currentChat) {
         setCurrentModeState(normalized.defaultMode)
@@ -3551,6 +3675,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       sessionSettings,
       updateSessionSettings,
       appSettings,
+      assistantPersonalizationSummary,
       saveAppSettings,
       isOnboardingOpen,
       openOnboarding,
@@ -3622,6 +3747,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     }),
     [
       appSettings,
+      assistantPersonalizationSummary,
       askAnotherMode,
       authError,
       authState,
