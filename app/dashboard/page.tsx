@@ -1,9 +1,16 @@
 import Link from 'next/link'
 import { requireServerUser } from '@/lib/auth/require-admin'
 import {
+  DEFAULT_ACTIVITY_LIMIT,
+  isWorkspaceActivityType,
+  WORKSPACE_ACTIVITY_TYPES,
+} from '@/lib/activity/timeline'
+import {
+  neonActivityRepository,
   neonConversationRepository,
   neonImageGenerationEventsRepository,
   neonPlanRequestsRepository,
+  neonProjectsRepository,
   neonSubscriptionsRepository,
   neonUsageEventsRepository,
 } from '@/lib/db/repositories'
@@ -24,6 +31,10 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import {
+  WorkspaceActivityItem,
+  WorkspaceActivityType,
+} from '@/types'
 
 export default async function DashboardPage({
   searchParams,
@@ -33,10 +44,21 @@ export default async function DashboardPage({
   const { user, profile } = await requireServerUser()
   const params = await searchParams
   const adminRequired = params.admin === 'required'
+  const requestedActivityProjectId = firstParam(params.activityProjectId)
+  const requestedActivityType = firstParam(params.activityType)
+  const activityType = isWorkspaceActivityType(requestedActivityType)
+    ? requestedActivityType
+    : null
   const subscription = await neonSubscriptionsRepository.ensureForUser(user)
   const periodStart = new Date(subscription.currentPeriodStartedAt)
   const periodEnd = new Date(subscription.currentPeriodEndsAt)
-  const [usageEvents, imageEvents, requests, conversations] = await Promise.all([
+  const projects = await neonProjectsRepository.list(user.id, { limit: 100 })
+  const activityProjectId = projects.some(
+    (project) => project.id === requestedActivityProjectId
+  )
+    ? requestedActivityProjectId
+    : null
+  const [usageEvents, imageEvents, requests, conversations, activity] = await Promise.all([
     neonUsageEventsRepository.listByUser(user.id, {
       from: periodStart,
       to: periodEnd,
@@ -47,6 +69,11 @@ export default async function DashboardPage({
     }),
     neonPlanRequestsRepository.listByUser(user.id),
     neonConversationRepository.list(user.id, { limit: 8 }),
+    neonActivityRepository.list(user.id, {
+      limit: DEFAULT_ACTIVITY_LIMIT,
+      projectId: activityProjectId,
+      type: activityType,
+    }),
   ])
 
   const periodUsageEvents = filterEventsForSubscriptionPeriod(
@@ -212,6 +239,80 @@ export default async function DashboardPage({
           </Card>
         </div>
 
+        <Card className="rounded-3xl border-border/70 bg-card/70">
+          <CardHeader className="gap-4">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+              <div>
+                <CardTitle>Activity timeline</CardTitle>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  Recent workspace changes from conversations, projects, files,
+                  artifacts, playbooks, Prism, Model Duel, assistants, and plan
+                  requests.
+                </p>
+              </div>
+              <form className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
+                <label className="flex flex-col gap-1 text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">
+                  Project
+                  <select
+                    name="activityProjectId"
+                    defaultValue={activityProjectId ?? ''}
+                    className="h-10 rounded-xl border border-border/70 bg-background/70 px-3 text-sm normal-case tracking-normal text-foreground outline-none transition focus:border-primary"
+                  >
+                    <option value="">All projects</option>
+                    {projects.map((project) => (
+                      <option key={project.id} value={project.id}>
+                        {project.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="flex flex-col gap-1 text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">
+                  Type
+                  <select
+                    name="activityType"
+                    defaultValue={activityType ?? ''}
+                    className="h-10 rounded-xl border border-border/70 bg-background/70 px-3 text-sm normal-case tracking-normal text-foreground outline-none transition focus:border-primary"
+                  >
+                    <option value="">All activity</option>
+                    {WORKSPACE_ACTIVITY_TYPES.map((type) => (
+                      <option key={type} value={type}>
+                        {activityTypeLabel(type)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <div className="flex items-end gap-2">
+                  <Button type="submit" className="h-10 rounded-xl">
+                    Apply
+                  </Button>
+                  {activityProjectId || activityType ? (
+                    <Button asChild type="button" variant="secondary" className="h-10 rounded-xl">
+                      <Link href="/dashboard">Reset</Link>
+                    </Button>
+                  ) : null}
+                </div>
+              </form>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {activity.items.length > 0 ? (
+              <div className="space-y-3">
+                {activity.items.map((item) => (
+                  <ActivityTimelineItem key={item.id} item={item} />
+                ))}
+              </div>
+            ) : (
+              <div className="rounded-2xl border border-dashed border-border/70 bg-background/30 px-5 py-8 text-center">
+                <p className="font-medium text-foreground">No activity yet</p>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  New workspace activity will appear here after you create chats,
+                  files, artifacts, images, playbooks, or plan requests.
+                </p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
         <div className="grid gap-5 lg:grid-cols-2">
           <Card className="rounded-3xl border-border/70 bg-card/70">
             <CardHeader>
@@ -261,6 +362,56 @@ export default async function DashboardPage({
         </div>
       </div>
     </main>
+  )
+}
+
+function firstParam(value: string | string[] | undefined): string | null {
+  if (Array.isArray(value)) return value[0] ?? null
+  return value ?? null
+}
+
+function activityTypeLabel(type: WorkspaceActivityType): string {
+  return type
+    .split('_')
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ')
+}
+
+function activityTimeLabel(value: string): string {
+  return new Intl.DateTimeFormat('en', {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  }).format(new Date(value))
+}
+
+function ActivityTimelineItem({ item }: { item: WorkspaceActivityItem }) {
+  return (
+    <div className="rounded-2xl border border-border/60 bg-background/40 px-4 py-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0 space-y-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge variant="secondary">{activityTypeLabel(item.type)}</Badge>
+            <span className="text-xs text-muted-foreground">
+              {activityTimeLabel(item.occurredAt)}
+            </span>
+            {item.projectName ? (
+              <Badge variant="outline">{item.projectName}</Badge>
+            ) : null}
+          </div>
+          <div>
+            <p className="truncate font-medium text-foreground">{item.title}</p>
+            <p className="mt-1 line-clamp-2 text-sm leading-6 text-muted-foreground">
+              {item.description}
+            </p>
+          </div>
+        </div>
+        <Button asChild variant="outline" size="sm" className="shrink-0 rounded-xl">
+          <Link href={item.href}>Open</Link>
+        </Button>
+      </div>
+    </div>
   )
 }
 
