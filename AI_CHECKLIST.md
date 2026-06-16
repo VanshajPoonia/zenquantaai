@@ -67,6 +67,7 @@ npm run test:watch
 Current scope:
 
 - Vitest unit tests cover pure TypeScript helpers only.
+- Unit tests must not require `.env.local` values and must not read, print, snapshot, or copy local secrets.
 - Tests must not require OpenRouter, Tavily, Neon, S3/R2, GitHub, Supabase, Stripe, browser automation, paid services, or real server secrets.
 - Keep route handlers, database repositories, object storage clients, and live AI/search integrations out of unit tests unless they are isolated with explicit mocks.
 
@@ -79,7 +80,8 @@ npm run test:e2e
 Current scope:
 
 - Playwright smoke tests cover service-free route and form rendering only.
-- The v1 suite should not require OpenRouter, Tavily, Neon test data beyond protected redirects, S3/R2, GitHub, Supabase, Stripe, browser automation services, production credentials, or real secrets.
+- The v1 suite starts a local Next dev server on `127.0.0.1:3100` with webpack by default, unless `PLAYWRIGHT_BASE_URL` is set.
+- E2E smoke tests must not require `.env.local` secrets, OpenRouter, Tavily, Neon test data beyond protected redirects, S3/R2, GitHub, Supabase, Stripe, browser automation services, production credentials, or real secrets.
 - Authenticated workspace E2E coverage such as command palette open and global search empty state requires a future seeded Neon test database/session plan. Do not weaken auth or hardcode credentials to make those tests pass.
 
 If Playwright browser binaries are missing, install the Chromium browser dependency before running E2E locally:
@@ -90,7 +92,7 @@ npx playwright install chromium
 
 ## Required Environment Variables
 
-From `.env.example`:
+Expected `.env.local` keys:
 
 ```env
 OPENROUTER_API_KEY=
@@ -135,6 +137,7 @@ Neon currently provides a server-only client, Drizzle schema definitions, a serv
 - text and image usage records
 - plan requests and admin audit logs
 - assistant recommendation telemetry
+- opt-in assistant recommendation personalization summaries
 - file metadata
 - generated image metadata
 - uploaded-file text chunks and pgvector embeddings for project knowledge
@@ -158,6 +161,7 @@ Current Neon-backed runtime routes:
 - `/api/custom-assistants/[id]`
 - `/api/custom-assistants/test`
 - `/api/assistant-recommendations`
+- `/api/assistant-recommendations/personalization`
 - `/api/projects`
 - `/api/projects/[id]`
 - `/api/projects/[id]/home`
@@ -176,6 +180,7 @@ Current Neon-backed runtime routes:
 - billing enforcement and image usage logging inside `/api/images/generate`
 - `/api/images/history`
 - `/api/dashboard` and `/dashboard`
+- `/api/workspace-home` and the authenticated `/` Workspace Home
 - `/pricing` and `/api/plan-requests`
 - `/api/admin/*`, `/admin`, and `/admin/users/[id]`
 - auth profile/role hydration
@@ -197,6 +202,15 @@ Expected private bucket:
 
 Local storage writes to `.storage/zenquanta`, which is gitignored. Production storage should use server-only S3-compatible/R2 credentials. Do not expose storage access keys to the frontend.
 
+## Route Protection And Privacy Expectations
+
+- User-owned API routes must require the authenticated Neon session and use the session `user.id` for all reads, writes, searches, and deletes.
+- Admin routes must use admin-role protection before returning analytics, raw costs, user details, plan controls, or audit data.
+- Project, conversation, artifact, file, image, prompt, playbook, comparison, memory, and integration IDs must be validated through owned lookups before route handlers act on them.
+- Private object-store files and generated images must use protected file routes or protected generated URLs; do not expose raw object-store credentials or direct private storage keys as access URLs.
+- Client responses must not expose integration installation IDs, sync internals, token payloads, raw provider payloads, private provider URLs, raw model cost, margin, or server-only env values.
+- `.env.local` remains local-only. Do not copy, print, snapshot, or commit local secrets in docs, tests, logs, traces, or reports.
+
 ## Migration Order
 
 Fresh foundation migration available for Neon:
@@ -214,6 +228,9 @@ Fresh foundation migration available for Neon:
 11. `neon/migrations/20260528_zenquanta_prism_studio_metadata.sql`
 12. `neon/migrations/20260528_zenquanta_custom_assistant_builder_v2.sql`
 13. `neon/migrations/20260528_zenquanta_github_readonly_integrations.sql`
+14. `neon/migrations/20260603_zenquanta_artifact_versions.sql`
+15. `neon/migrations/20260603_zenquanta_performance_indexes.sql`
+16. `neon/migrations/20260616_zenquanta_incremental_performance_indexes.sql`
 
 Apply with a Postgres client or Neon SQL editor. CLI example:
 
@@ -244,7 +261,7 @@ Before changing persistence code again:
 ## Local Verification Flow
 
 1. Install dependencies.
-2. Create `.env.local` from `.env.example`.
+2. Create or update `.env.local` locally; do not commit it.
 3. Fill OpenRouter, Neon, file storage, Tavily, and embeddings values as needed.
 4. If testing GitHub repo context, configure a GitHub App with read-only Metadata and Contents permissions and set `GITHUB_APP_ID`, `GITHUB_APP_CLIENT_ID`, `GITHUB_APP_PRIVATE_KEY`, and `GITHUB_APP_CALLBACK_URL`.
 5. Apply the fresh Neon migrations for database/auth flows.
