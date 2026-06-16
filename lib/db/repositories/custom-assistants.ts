@@ -19,6 +19,16 @@ type CustomAssistantRow = typeof zenCustomAssistants.$inferSelect
 
 export type CustomAssistantPatch = Partial<CustomAssistantInput>
 
+const DEFAULT_CUSTOM_ASSISTANT_LIST_LIMIT = 100
+const MAX_CUSTOM_ASSISTANT_LIST_LIMIT = 200
+
+function normalizeLimit(value: number | null | undefined): number {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    return DEFAULT_CUSTOM_ASSISTANT_LIST_LIMIT
+  }
+  return Math.max(1, Math.min(MAX_CUSTOM_ASSISTANT_LIST_LIMIT, Math.floor(value)))
+}
+
 function rowToCustomAssistant(row: CustomAssistantRow): CustomAssistant {
   return {
     id: row.id,
@@ -44,12 +54,16 @@ function rowToCustomAssistant(row: CustomAssistantRow): CustomAssistant {
 }
 
 class NeonCustomAssistantsRepository {
-  async list(userId: string): Promise<CustomAssistant[]> {
+  async list(
+    userId: string,
+    options: { limit?: number | null } = {}
+  ): Promise<CustomAssistant[]> {
     const rows = await getDatabaseClient()
       .select()
       .from(zenCustomAssistants)
       .where(eq(zenCustomAssistants.userId, userId))
       .orderBy(desc(zenCustomAssistants.updatedAt))
+      .limit(normalizeLimit(options.limit))
 
     return rows.map(rowToCustomAssistant).sort((a, b) => {
       if (a.isEnabled !== b.isEnabled) return a.isEnabled ? -1 : 1
