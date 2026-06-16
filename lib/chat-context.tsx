@@ -824,7 +824,10 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         normalizedConversations.find(
           (conversation) => conversation.id === currentChatId
         ) ?? null
-      const storedProjectId = readBrowserSelectedProjectId()
+      const storedProjectId =
+        normalizedSettings.defaultProjectBehavior !== 'inbox'
+          ? readBrowserSelectedProjectId()
+          : null
 
       setAppSettings(normalizedSettings)
       setAssistantPersonalizationSummary(nextPersonalizationSummary)
