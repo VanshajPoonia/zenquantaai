@@ -46,6 +46,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
+import { FeedbackButtons } from './feedback-buttons'
 
 const TEXT_COMPARE_MODES: AIMode[] = [
   'general',
@@ -662,6 +663,22 @@ export function ModelComparisonButton({
                               Save artifact
                             </Button>
                           </div>
+                          {completed ? (
+                            <FeedbackButtons
+                              entityType="model_candidate"
+                              entityId={candidate.id}
+                              metadata={{
+                                comparisonId: comparison.id,
+                                candidateLabel: candidate.label,
+                                assistantFamily: candidate.assistantFamily,
+                                mode: candidate.mode,
+                                model: candidate.model,
+                                selectedWinner:
+                                  comparison.selectedCandidateId === candidate.id,
+                              }}
+                              allowNeutral
+                            />
+                          ) : null}
                         </div>
                       </div>
                     )
