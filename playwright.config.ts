@@ -1,7 +1,7 @@
 import path from 'node:path'
 import { defineConfig, devices } from '@playwright/test'
 
-const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? 'http://127.0.0.1:3000'
+const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? 'http://127.0.0.1:3100'
 const fontMockPath = path.resolve(
   __dirname,
   'tests/e2e/next-font-google-mocks.cjs'
@@ -28,7 +28,7 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: 'npm run build -- --webpack && npm run start',
+    command: 'npm run dev -- --webpack --hostname 127.0.0.1 --port 3100',
     env: {
       ...process.env,
       NEXT_FONT_GOOGLE_MOCKED_RESPONSES:
