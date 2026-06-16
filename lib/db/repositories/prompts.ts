@@ -10,6 +10,16 @@ import { neonUsersRepository } from './users'
 
 type PromptRow = typeof zenPromptLibrary.$inferSelect
 
+const DEFAULT_PROMPT_LIST_LIMIT = 200
+const MAX_PROMPT_LIST_LIMIT = 500
+
+function normalizeLimit(value: number | null | undefined): number {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    return DEFAULT_PROMPT_LIST_LIMIT
+  }
+  return Math.max(1, Math.min(MAX_PROMPT_LIST_LIMIT, Math.floor(value)))
+}
+
 function rowToPrompt(row: PromptRow): PromptLibraryItem {
   return {
     id: row.id,
@@ -22,12 +32,16 @@ function rowToPrompt(row: PromptRow): PromptLibraryItem {
 }
 
 class NeonPromptsRepository {
-  async list(userId: string): Promise<PromptLibraryItem[]> {
+  async list(
+    userId: string,
+    options: { limit?: number | null } = {}
+  ): Promise<PromptLibraryItem[]> {
     const rows = await getDatabaseClient()
       .select()
       .from(zenPromptLibrary)
       .where(eq(zenPromptLibrary.userId, userId))
       .orderBy(desc(zenPromptLibrary.updatedAt))
+      .limit(normalizeLimit(options.limit))
 
     return rows.map(rowToPrompt)
   }
