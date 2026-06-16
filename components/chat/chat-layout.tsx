@@ -40,13 +40,24 @@ function ChatShell({
 }) {
   const [isAssistantHelpOpen, setIsAssistantHelpOpen] = useState(false)
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false)
-  const { authState, isSidebarOpen, toggleSidebar, workspaceSearchRequest } =
+  const { authState, isSidebarOpen, toggleSidebar, workspaceSearchRequest, openWorkspaceTool } =
     useChatContext()
 
   useEffect(() => {
     if (!workspaceSearchRequest) return
     setIsCommandPaletteOpen(true)
   }, [workspaceSearchRequest])
+
+  useEffect(() => {
+    if (authState.status !== 'authenticated') return
+    const params = new URLSearchParams(window.location.search)
+    const fileId = params.get('openAskFiles')
+    if (!fileId) return
+    params.delete('openAskFiles')
+    const newSearch = params.toString()
+    window.history.replaceState(null, '', newSearch ? `?${newSearch}` : window.location.pathname)
+    openWorkspaceTool({ tool: 'ask-files', fileId })
+  }, [authState.status, openWorkspaceTool])
 
   if (authState.status === 'loading') {
     return <LoadingScreen />

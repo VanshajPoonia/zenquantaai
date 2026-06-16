@@ -722,6 +722,9 @@ export function Sidebar({ onOpenSettings }: SidebarProps) {
                 <Link href="/dashboard">Dashboard</Link>
               </DropdownMenuItem>
               <DropdownMenuItem asChild>
+                <Link href="/knowledge">Knowledge Library</Link>
+              </DropdownMenuItem>
+              <DropdownMenuItem asChild>
                 <Link href="/pricing">Plans</Link>
               </DropdownMenuItem>
               {authState.user?.role === 'admin' ? (
