@@ -125,6 +125,7 @@ function fileToIntelligence(
     metadata: {
       private: file.visibility === 'private',
       provider: file.provider,
+      source: typeof file.metadata.source === 'string' ? file.metadata.source : null,
     },
   }
 }
