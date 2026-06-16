@@ -6,6 +6,115 @@ The repository contains a real Zenquanta AI platform backed by Neon for runtime 
 
 Current direction: plan upgrades remain manual/admin-driven, payment automation is out of scope unless explicitly requested, and Neon/storage start fresh without importing Supabase database rows or storage objects.
 
+## 2026-06-16 - Google Drive Read-Only Integration Plan
+
+**Goal**: Plan a safe Google Drive integration for importing selected Drive documents into Zenquanta projects and Ask Files. Documentation only — no code changed.
+
+**Deliverable**: `docs/integrations/google-drive-readonly-plan.md`
+
+**Key decisions documented**:
+
+- **OAuth scope**: `drive.readonly` recommended for v1 (enables folder browsing + content download). `drive.file` + Google Picker deferred to a future version. Always request `offline` access for `refresh_token`.
+- **Token storage**: Use existing `zen_integration_accounts.encrypted_token_payload` (jsonb column already present, currently null for GitHub). AES-256-GCM encryption with key from `GOOGLE_DRIVE_TOKEN_ENCRYPTION_KEY` env var; plaintext tokens never stored. Token refresh logic detects expiry before each API call and updates DB.
+- **Schema change**: Update `integrationProviderCheck` in `lib/db/schema.ts` to include `'google-drive'`. One migration SQL statement to update the check constraint on `zen_integration_accounts`. No new tables needed.
+- **Import path**: Mirrors GitHub import exactly — Drive bytes fetched server-side, written to `zen_files` with `provider: 'external'` (no object storage), indexed via `indexUploadedFileForKnowledge()`, tracked in `zen_integration_items` with `externalId = driveFileId`.
+- **Google Workspace files**: Google Doc → export DOCX → mammoth; Google Sheet → export CSV. Slides/Drawings/Scripts skipped in v1.
+- **File types**: All existing Zenquanta extractors apply (PDF, DOCX, TXT, CSV, Markdown, JSON, code).
+- **No background sync in v1**: All imports are user-triggered. No webhooks, cron, or Changes API.
+- **Revocation**: DELETE route decrypts token, calls Google revoke endpoint, clears `encryptedTokenPayload`, sets status `revoked`. Imported files remain as Zenquanta knowledge.
+- **Drive API 401/403**: Treated as implicit revocation; sets status to `error` and surfaces reconnect CTA.
+- **Knowledge Library**: `metadata.source = 'google-drive'` already surfaced by `fileToIntelligence`. Option A: add "Google Drive" tab alongside GitHub tab. Option B (deferred): show Drive badge in "All" tab only.
+
+**New lib files planned**: `lib/integrations/google-drive.ts`, `lib/integrations/google-drive-import.ts`, `lib/integrations/google-drive-tokens.ts`
+
+**New API routes planned** (7): `GET/DELETE /api/integrations/google-drive`, `GET /api/integrations/google-drive/connect`, `GET /api/integrations/google-drive/callback`, `GET /api/integrations/google-drive/files`, `POST /api/integrations/google-drive/import`, `POST /api/integrations/google-drive/reimport`
+
+**New env vars**: `GOOGLE_DRIVE_CLIENT_ID`, `GOOGLE_DRIVE_CLIENT_SECRET`, `GOOGLE_DRIVE_CALLBACK_URL`, `GOOGLE_DRIVE_TOKEN_ENCRYPTION_KEY`
+
+**Security risks addressed**: token encryption at rest, CSRF state cookie pattern (same as GitHub), SSRF mitigated by Drive API own-account scoping, size limits enforced before reading response body, refresh race condition noted (defer to v1.1), revocation detection on 401/403.
+
+**No code changed. No app behavior modified.** Ready for implementation when requested.
+
+## 2026-06-16 - Knowledge Library v1
+
+**Goal**: Dedicated page where users can browse, filter, and manage all uploaded and imported knowledge files across projects.
+
+**New route**: `/knowledge` (dynamic, server-rendered, auth-gated via `requireServerUser`).
+
+**Files changed**:
+
+- **`lib/db/repositories/files.ts`** — `fileToIntelligence` now exposes `source` from the raw DB metadata in `FileIntelligence.metadata`. GitHub files carry `source: 'github'`; upload files have `source: null`. This enables client-side source detection without a full DB query.
+- **`app/api/files/[id]/route.ts`** — New `PATCH` handler accepts `{ projectId: string | null }`. Validates the project belongs to the authenticated user before patching. Returns updated `FileIntelligence` on success. Existing `DELETE` is unchanged.
+- **`app/knowledge/page.tsx`** — Server component. Auth gates with `requireServerUser`, fetches user's project list, renders `KnowledgeLibraryClient`.
+- **`app/knowledge/knowledge-library-client.tsx`** — Client component. Fetches files from `/api/files` with project scoping. Tabs: All / Indexed / Skipped+Failed / GitHub. Project filter select, search input. Renders `FileIntelligenceCard` for each file with source badge, project context, and "Assign to project" button. Actions available: View (protected URL), Download, Ask this file (navigates to `/?openAskFiles=<fileId>`), Re-index, Assign to project (dialog with PATCH call), Remove (with AlertDialog confirm).
+- **`components/chat/chat-layout.tsx`** — `ChatShell` reads the `openAskFiles` URL param on mount (once `authState.status === 'authenticated'`) and calls `openWorkspaceTool({ tool: 'ask-files', fileId })`. Cleans up the URL with `window.history.replaceState`. This closes the round-trip from Knowledge Library → workspace Ask Files.
+- **`components/chat/sidebar.tsx`** — Added `Knowledge Library` link in the user account dropdown alongside Dashboard and Plans.
+
+**Source detection**: `file.metadata?.source === 'github'` for GitHub-imported files; all others treated as uploads. No object-storage path is exposed to the browser; `viewUrl` and `downloadUrl` point to `/api/files/object?…` (the authenticated protected route).
+
+**Not implemented in v1**: multi-select bulk actions, pagination beyond the 300-file limit, conversation-scoped view, GitHub-specific reimport button from the library page.
+
+**Verification**: `npm run typecheck` ✓ · `npm run lint` 0 errors, 10 pre-existing warnings ✓ · `npm run build` all 58+ routes ✓ (new `/knowledge` route appears as `ƒ Dynamic`).
+
+## 2026-06-16 - Expanded File Extraction for Business and Developer Files
+
+- Expanded `lib/rag/extraction.ts` to support Markdown, JSON, CSV, and DOCX beyond plain text/code and PDF.
+- Added `mammoth 1.12.0` (no native deps) via pnpm for DOCX text extraction; added `types/mammoth.d.ts` with a minimal ambient declaration since no `@types/mammoth` package exists on npm.
+- **Markdown (`.md`, `.mdx`)**: Previously read as raw UTF-8 (worked but syntax tokens polluted embeddings). Now strips markdown rendering markers (headings, bold/italic, inline code, fenced code blocks kept as content, links reduced to display text, images removed, blockquotes/bullets/table pipes cleaned) before normalizing and chunking, producing cleaner prose for vector embeddings.
+- **JSON (`.json`, `application/json`)**: Previously read as raw UTF-8. Now validates with `JSON.parse` and pretty-prints with `JSON.stringify(…, null, 2)` so chunks align on object boundaries rather than arbitrary character positions. Returns `unsupported` with a clear reason if the file is not valid JSON.
+- **CSV (`.csv`, `text/csv`)**: Previously read as raw UTF-8. Now parsed with a minimal RFC 4180 parser (handles quoted fields containing commas, newlines, and escaped `""` pairs) and converts each data row to `Header: value | Header: value` format for readable semantic search. Capped at 10,000 rows and 2× `MAX_EXTRACTED_CHARS` of input scanning to avoid huge memory use on large exports.
+- **DOCX (`.docx`)**: Was previously `unsupported`. Now extracted via `mammoth.extractRawText`, which handles standard Word document structure (paragraphs, headings, lists). Returns `unsupported` with a clear reason for encrypted or corrupted files. Dynamic import (`await import('mammoth')`) keeps mammoth out of the critical path for non-DOCX uploads.
+- **Unchanged behavior**: All other text and code file types (`.ts`, `.py`, `.sql`, `.html`, etc.) continue through the existing generic UTF-8 reader path. PDF handling is unchanged.
+- **Dispatcher order**: PDF → DOCX → (unsupported boundary for non-text) → JSON → CSV → Markdown → generic text. DOCX check must precede the `!isTextKnowledgeFile` guard because DOCX is binary.
+- **Skipped / not supported**: OCR, image-based PDFs, password-protected DOCX, external parsing services, external vector DBs, Supabase, Stripe.
+- `isDocxKnowledgeFile` is now exported alongside `isTextKnowledgeFile` and `isPdfKnowledgeFile` so future upload-path code can detect DOCX without re-implementing the same logic.
+- Did not change `lib/rag/indexing.ts` (unchanged — already calls `extractTextFromFileBytes` and handles all status variants), `lib/storage/attachments.ts` (unchanged), or any API routes.
+- Verification: `npm run typecheck` ✓ · `npm run test` 73/73 ✓ · `npm run lint` 0 errors, 10 pre-existing warnings ✓ · `npm run build` all routes ✓
+
+## 2026-06-16 - Ask Files Source Citations V1
+
+- Improved `SourceList` in `components/chat/message.tsx` to properly display file chunk citations when users ask questions about uploaded files.
+- **What changed**: Replaced the flat single-section source list with a type-aware split that handles file and web sources separately.
+- **File sources now show**:
+  - `FileText` icon to visually distinguish from web links
+  - File name (from `source.title`, which is the original `fileName` from `zen_files`)
+  - **Chunk label** (`Chunk N` derived from `source.chunkIndex + 1`) — honest section indicator, no fake page numbers
+  - Snippet text (line-clamp-3, up to 700 chars from the chunk content already stored in `FileKnowledgeSource.snippet`)
+  - "Open file" link via `ExternalLink` icon if `source.url !== '#'`; non-clickable `<div>` if URL is `'#'` (no bucket/storagePath stored)
+  - Honest `"Relevant file context used"` label when snippet is absent
+- **Web sources**: unchanged behavior — sequential ID badge, domain, external link icon
+- **Mixed responses** (file context + web search): two separate panels labeled "File context used" and "Web sources"; single-type responses keep the existing "Sources" label
+- **No backend changes needed**: the full data pipeline was already in place — `lib/rag/retrieval.ts` retrieves `FileKnowledgeSource` with all required fields, `/api/chat/route.ts` streams them via the `sources` event and persists them to `zen_messages.sources`, and the `FileKnowledgeSource` type already carries `fileName`, `chunkId`, `chunkIndex`, `snippet`, `score`, `fileId`, and `url`.
+- Added `FileKnowledgeSource` and `MessageSource` imports to `message.tsx` to enable the `isFileKnowledgeSource` type guard.
+- Did not add page numbers (no page data exists in chunks), did not expose private files beyond existing storage URLs, did not add an external vector DB, did not add Supabase or Stripe, did not bypass billing.
+- Remaining risks: `source.url` for file sources is a pre-signed or local storage URL generated server-side at retrieval time. Pre-signed URLs expire; if a user opens a persisted message hours later the "Open file" link may no longer work. The graceful `'#'`-check prevents broken links but does not guarantee freshness for stored old responses.
+- Verification: `npm run typecheck` ✓ · `npm run lint` 0 errors, 10 pre-existing warnings ✓ · `npm run build` 57 routes ✓
+
+## 2026-06-16 - User Preference Center V1
+
+- Implemented User Preference Center v1 as an expanded and reorganized settings modal (`components/chat/settings-modal.tsx`).
+- Added two new functional settings:
+  - **Usage Optimization** (`usageOptimization: UsageOptimization`) — 4-card picker (Balanced / Fast / Best Quality / Lowest Usage) that maps directly to `sessionDefaults.modelOverride` (`auto` / `gemini` / `claude` / `deepseek`). Selecting a card sets the default model profile for new sessions without bypassing plan or model limits. Per-session overrides remain available in the session panel.
+  - **Default Project Behavior** (`defaultProjectBehavior: DefaultProjectBehavior`) — 2-option picker (Remember last project / Always start in Inbox) wired to workspace load in `lib/chat-context.tsx`. When `inbox` is selected, the stored browser project selection is ignored on auth restore and new sessions always open in the general workspace (`all`).
+- Added `UsageOptimization` and `DefaultProjectBehavior` types to `types/index.ts`.
+- Added `getModelOverrideForUsageOptimization` and `getUsageOptimizationFromModelOverride` helpers to `lib/config/models.ts`.
+- Updated `DEFAULT_APP_SETTINGS` with `usageOptimization: 'balanced'` and `defaultProjectBehavior: 'last_used'` defaults.
+- Updated `lib/db/repositories/settings.ts` with validated normalization for both new fields; unknown values fall back to defaults.
+- All 10 requested settings are now present and functional in the modal:
+  1. Default assistant (existing mode grid, relabeled "Default Assistant")
+  2. Default response style (Balanced / Concise / Detailed)
+  3. Memory enabled/disabled (Session Feature Defaults toggle)
+  4. File context default (Session Feature Defaults toggle)
+  5. Web search default (Session Feature Defaults toggle)
+  6. Assistant recommendation toggle
+  7. Personalized recommendation toggle
+  8. Usage optimization preference (Fast / Balanced / Best Quality / Lowest Usage)
+  9. Default project behavior (Inbox / Last Used)
+  10. Theme/UI preferences (dark theme locked + accent style picker)
+- Did not expose raw cost, add Supabase, add Stripe, or bypass plan limits.
+- Remaining risks: `usageOptimization` is derived from `sessionDefaults.modelOverride` at render time via `getUsageOptimizationFromModelOverride`; if a user manually sets `modelOverride` to `gpt` or `qwen` in the session panel, the preference center will show `balanced` as the nearest match until they explicitly select an optimization card.
+- Verification pending: `npm run typecheck`, `npm run lint`, `npm run build`.
+
 ## 2026-06-16 - Personalized Assistant Recommendations V2
 
 - Added opt-in Personalized Assistant Recommendations v2 on top of the existing local Smart Assistant Router. Base prompt classification remains the source of truth; personalization only applies bounded confidence/explanation nudges when the user enables it.
