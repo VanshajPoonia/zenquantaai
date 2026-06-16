@@ -71,6 +71,17 @@ const artifactTypeCheck = [
   'workflow_output',
 ] as const
 
+const feedbackEntityTypeCheck = [
+  'message',
+  'model_candidate',
+  'artifact_action',
+  'playbook_run',
+  'image_generation',
+  'search_result',
+] as const
+
+const feedbackRatingCheck = ['up', 'down', 'neutral'] as const
+
 export const zenUsers = pgTable(
   'zen_users',
   {
@@ -436,6 +447,15 @@ export const zenIntegrationItems = pgTable(
       table.status,
       table.lastImportedAt
     ),
+    index('zen_integration_items_user_project_provider_repo_imported_perf_idx').on(
+      table.userId,
+      table.projectId,
+      table.provider,
+      table.status,
+      table.repoFullName,
+      table.branch,
+      table.lastImportedAt
+    ),
     index('zen_integration_items_account_idx').on(table.accountId),
     index('zen_integration_items_file_idx').on(table.fileId),
     check(
@@ -471,6 +491,11 @@ export const zenProjects = pgTable(
   (table) => [
     primaryKey({ columns: [table.userId, table.id] }),
     index('zen_projects_user_updated_idx').on(table.userId, table.updatedAt),
+    index('zen_projects_user_default_updated_perf_idx').on(
+      table.userId,
+      table.isDefault,
+      table.updatedAt
+    ),
   ]
 )
 
@@ -886,6 +911,11 @@ export const zenUsageEvents = pgTable(
       table.assistantFamily,
       table.createdAt
     ),
+    index('zen_usage_events_user_assistant_created_perf_idx').on(
+      table.userId,
+      table.assistantFamily,
+      table.createdAt
+    ),
     check(
       'zen_usage_events_assistant_family_check',
       sql`${table.assistantFamily} in ('nova', 'velora', 'axiom', 'forge', 'pulse', 'prism')`
@@ -961,6 +991,11 @@ export const zenImageGenerationEvents = pgTable(
       table.model,
       table.createdAt
     ),
+    index('zen_image_generation_events_user_model_created_perf_idx').on(
+      table.userId,
+      table.model,
+      table.createdAt
+    ),
     check(
       'zen_image_generation_events_assistant_family_check',
       sql`${table.assistantFamily} = 'prism'`
@@ -1001,6 +1036,11 @@ export const zenPlanChangeRequests = pgTable(
     index('zen_plan_change_requests_status_updated_perf_idx').on(
       table.status,
       table.updatedAt
+    ),
+    index('zen_plan_change_requests_user_status_created_perf_idx').on(
+      table.userId,
+      table.status,
+      table.createdAt
     ),
     check(
       'zen_plan_change_requests_current_tier_check',
@@ -1115,6 +1155,11 @@ export const zenFiles = pgTable(
       table.projectId,
       table.createdAt
     ),
+    index('zen_files_user_conversation_created_perf_idx').on(
+      table.userId,
+      table.conversationId,
+      table.createdAt
+    ),
     index('zen_files_user_object_ref_perf_idx').on(
       table.userId,
       table.bucket,
@@ -1210,6 +1255,12 @@ export const zenGeneratedImages = pgTable(
     ),
     index('zen_generated_images_user_favorite_created_idx').on(
       table.userId,
+      table.isFavorite,
+      table.createdAt
+    ),
+    index('zen_generated_images_user_project_favorite_created_perf_idx').on(
+      table.userId,
+      table.projectId,
       table.isFavorite,
       table.createdAt
     ),
@@ -1309,6 +1360,55 @@ export const zenArtifactVersions = pgTable(
       'zen_artifact_versions_artifact_type_check',
       sql`${table.artifactType} in (${sql.join(
         artifactTypeCheck.map((artifactType) => sql`${artifactType}`),
+        sql`, `
+      )})`
+    ),
+  ]
+)
+
+export const zenFeedbackEvents = pgTable(
+  'zen_feedback_events',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => zenUsers.id, { onDelete: 'cascade' }),
+    entityType: text('entity_type').notNull(),
+    entityId: text('entity_id').notNull(),
+    rating: text('rating').notNull(),
+    reason: text('reason'),
+    metadata: jsonb('metadata').notNull().default({}),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    index('zen_feedback_events_user_entity_created_idx').on(
+      table.userId,
+      table.entityType,
+      table.entityId,
+      table.createdAt
+    ),
+    index('zen_feedback_events_entity_rating_created_idx').on(
+      table.entityType,
+      table.rating,
+      table.createdAt
+    ),
+    index('zen_feedback_events_user_created_idx').on(
+      table.userId,
+      table.createdAt
+    ),
+    check(
+      'zen_feedback_events_entity_type_check',
+      sql`${table.entityType} in (${sql.join(
+        feedbackEntityTypeCheck.map((entityType) => sql`${entityType}`),
+        sql`, `
+      )})`
+    ),
+    check(
+      'zen_feedback_events_rating_check',
+      sql`${table.rating} in (${sql.join(
+        feedbackRatingCheck.map((rating) => sql`${rating}`),
         sql`, `
       )})`
     ),
