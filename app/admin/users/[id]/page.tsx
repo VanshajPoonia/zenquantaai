@@ -8,13 +8,14 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { DetailedPlanLimitFields } from '@/components/admin/plan-limit-fields'
+import { UserPurgeCard } from '@/components/admin/user-purge-card'
 
 export default async function AdminUserDetailPage({
   params,
 }: {
   params: Promise<{ id: string }>
 }) {
-  await requireAdmin()
+  const { user } = await requireAdmin()
   const { id } = await params
   const detail = await neonAdminRepository.getUserDetail(id)
 
@@ -133,6 +134,11 @@ export default async function AdminUserDetailPage({
                 ))}
               </CardContent>
             </Card>
+
+            <UserPurgeCard
+              targetUserId={detail.subscription.userId}
+              currentAdminUserId={user.id}
+            />
           </div>
         </div>
       </div>
