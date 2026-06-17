@@ -123,4 +123,3 @@ describe('user purge helpers', () => {
     })
   })
 })
-

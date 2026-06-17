@@ -29,4 +29,3 @@ export async function POST(request: NextRequest) {
   if (auth.session.refreshed) appendAuthCookies(response.headers, auth.session)
   return response
 }
-

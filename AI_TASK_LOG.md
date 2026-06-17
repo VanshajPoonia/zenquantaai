@@ -6,6 +6,81 @@ The repository contains a real Zenquanta AI platform backed by Neon for runtime 
 
 Current direction: plan upgrades remain manual/admin-driven, payment automation is out of scope unless explicitly requested, and Neon/storage start fresh without importing Supabase database rows or storage objects.
 
+## 2026-06-17 - Manual Per-User Cleanup SQL Support Guide
+
+**Goal**: Replace vague beta manual cleanup fallback notes with an operator-safe SQL guide for one-user cleanup when self-serve/admin purge fails or needs manual follow-up.
+
+**Files changed**:
+- `docs/support/per-user-cleanup-sql.md` — New support guide covering warnings, target verification, object-ref export, dry-run counts, workspace-data cleanup SQL, full-account tombstone cleanup SQL, cascade notes, object-storage cleanup, verification queries, protected URL checks, and safe audit/support logging.
+- `docs/BETA_LAUNCH_CHECKLIST.md` — §19 now points operators to the support SQL playbook as the manual fallback path.
+
+**Coverage**: The guide covers current user-owned Neon tables from `lib/db/schema.ts`, including auth/profile/session/credential rows, conversations/messages/memory, projects, prompts, workflows/steps/runs, custom assistants, artifacts/versions/shares, template shares, model comparisons/candidates, files/chunks, generated images/image events, usage/subscriptions/plan requests/overrides, recommendation/feedback telemetry, GitHub integration accounts/items, and admin audit references.
+
+**Assumptions**: Self-serve/admin purge remains the primary path. The SQL guide is fallback-only, does not execute destructive SQL itself, does not hard-delete `zen_users`, and keeps `.env.local`/secrets out of docs.
+
+**Verification**: `git diff --check` passed. Typecheck, lint, and build were skipped because this is docs-only.
+
+---
+
+## 2026-06-17 - AI_CHECKLIST Neon Migration Order Sync
+
+**Goal**: Verify and record that `AI_CHECKLIST.md` uses the current authoritative Neon migration order.
+
+**Verified**:
+- Inspected `neon/migrations/` and confirmed the 19 current Neon migration files are present.
+- Cross-checked `AI_CHECKLIST.md` against `docs/BETA_LAUNCH_CHECKLIST.md`; both list the same 19-file order, including `20260616_zenquanta_artifact_shares.sql`, `20260616_zenquanta_feedback_events.sql`, `20260616_zenquanta_incremental_performance_indexes.sql`, and `20260617_zenquanta_template_shares.sql`.
+
+**Files changed**:
+- `AI_TASK_LOG.md` — Added this docs-only verification entry.
+
+**Not changed**: Runtime code, `.env.example`, Supabase, Stripe, and the existing uncommitted purge implementation were not touched for this task.
+
+**Checks**: `git diff --check` passed. Typecheck, lint, and build were skipped because this was a docs-only verification/logging pass.
+
+---
+
+## 2026-06-17 - Self-Serve Data Deletion / User Purge v1
+
+**Goal**: Add foreground, authenticated deletion flows for user workspace-data deletion, user full-account deletion, and admin target-user purge.
+
+**Implemented**:
+- Added shared purge types plus pure validation/sanitization helpers for scopes, typed confirmations, safe grouped previews/results, object-ref normalization, deletion-order documentation, and tombstone patches.
+- Added server-only purge repository/service layers that collect upload/generated-image object refs first, revoke database access through scoped deletes/tombstoning, then attempt object-store deletion best-effort.
+- Added protected routes: `POST /api/account/delete-data/preview`, `POST /api/account/delete-data`, `POST /api/admin/users/[id]/purge/preview`, and `POST /api/admin/users/[id]/purge`.
+- Added Settings Danger Zone controls for users and an admin purge card on `/admin/users/[id]`, including preview summaries, scope selection, typed confirmations, self-purge prevention for admins, and full-account sign-out redirect acknowledgement.
+- Updated project/checklist/beta/decision docs for the tombstone-account decision, route coverage, 19-file migration list, and beta deletion verification.
+
+**Safety behavior**: Preview/result payloads expose grouped counts only. They do not expose bucket names, storage keys, source URLs, content, raw model costs, provider tokens, or secrets. Full-account deletion preserves scrubbed `zen_users` / `zen_profiles` rows so admin audit references remain intact.
+
+**Verification**:
+- `npm run test -- --run tests/user-purge-utils.test.ts` passed.
+- `npm run test` passed: 18 files, 78 tests.
+- `npm run typecheck` passed.
+- `npm run lint` passed with 10 existing warnings and 0 errors.
+- `npm run build` passed.
+- `git diff --check` passed.
+
+**Remaining risks**: No seeded Neon/browser manual QA was run yet, so the first staging pass should test user data-only deletion, user full-account deletion, admin purge, self-purge blocking, protected file/image 404s after purge, and safe partial object-cleanup reporting.
+
+---
+
+## 2026-06-17 - Developer Handoff Doc
+
+**Goal**: Give the next coding agent (ChatGPT/Codex) a single self-contained entry point to continue the project. Documentation only.
+
+**Files changed**:
+- `docs/HANDOFF.md` — New handoff doc: TL;DR, non-negotiable ground rules (no Supabase/Stripe, secrets server-only, no `.env.example`, separate text/image transports, where each concern lives), required-reading order, current shipped state, environment status, prioritized open work, definition of done, and the handoff-back protocol.
+
+**Environment status captured**: Operator confirms Neon is running, an admin user exists in `zen_profiles`, and all 19 Neon migrations are applied — including the three newest (`20260616_zenquanta_artifact_shares`, `20260616_zenquanta_feedback_events`, `20260617_zenquanta_template_shares`), which the operator ran on 2026-06-16/17. `/admin/system-health` is noted as an optional green-light sanity check, not a required remediation step.
+
+**Open work flagged for the next agent (prioritized)**: (1) self-serve data deletion to replace the manual `BETA_LAUNCH_CHECKLIST.md` §19 cleanup; (2) sync the 16→19 migration list in `AI_CHECKLIST.md`; (3) draft the exact per-user cleanup query set.
+
+**Verified**: Doc-only change. No runtime code modified, so typecheck/lint/build were not re-run.
+
+**Next steps**: Point ChatGPT/Codex at `docs/HANDOFF.md` (with repo access) or share it plus the six required-reading files (plain web, no secrets). Default first task is self-serve data deletion.
+
+---
+
 ## 2026-06-17 - Beta Launch Checklist & Bug Bash Plan
 
 **Goal**: Prepare Zenquanta AI for a small private beta with an operator/admin-facing readiness checklist and tester bug-bash plan. Documentation only.

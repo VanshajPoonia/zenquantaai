@@ -91,4 +91,3 @@ export async function executeUserPurge(input: {
     signedOut: input.scope === 'full_account',
   }
 }
-

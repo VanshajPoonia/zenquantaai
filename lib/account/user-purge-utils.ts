@@ -202,4 +202,3 @@ export function buildTombstoneUserPatch() {
     updatedAt: new Date(),
   }
 }
-
