@@ -181,8 +181,10 @@ Current Neon-backed runtime routes:
 - `/api/images/history`
 - `/api/dashboard` and `/dashboard`
 - `/api/workspace-home` and the authenticated `/` Workspace Home
+- `/api/account/delete-data/preview`
+- `/api/account/delete-data`
 - `/pricing` and `/api/plan-requests`
-- `/api/admin/*`, `/admin`, `/admin/users/[id]`, and `/admin/system-health`
+- `/api/admin/*`, `/api/admin/users/[id]/purge/preview`, `/api/admin/users/[id]/purge`, `/admin`, `/admin/users/[id]`, and `/admin/system-health`
 - auth profile/role hydration
 - local browser import app-data writes
 
@@ -209,6 +211,8 @@ Local storage writes to `.storage/zenquanta`, which is gitignored. Production st
 - Project, conversation, artifact, file, image, prompt, playbook, comparison, memory, and integration IDs must be validated through owned lookups before route handlers act on them.
 - Private object-store files and generated images must use protected file routes or protected generated URLs; do not expose raw object-store credentials or direct private storage keys as access URLs.
 - Client responses must not expose integration installation IDs, sync internals, token payloads, raw provider payloads, private provider URLs, raw model cost, margin, or server-only env values.
+- Self-serve and admin purge previews/results must return grouped safe counts only. Do not expose object bucket names, storage keys, source URLs, content, raw costs, secrets, or provider tokens.
+- Full-account deletion tombstones `zen_users`/`zen_profiles` to preserve admin audit logs while removing credentials, sessions, integrations, PII, and user-owned product data.
 - `.env.local` remains local-only. Do not copy, print, snapshot, or commit local secrets in docs, tests, logs, traces, or reports.
 
 ## Migration Order
@@ -230,7 +234,10 @@ Fresh foundation migration available for Neon:
 13. `neon/migrations/20260528_zenquanta_github_readonly_integrations.sql`
 14. `neon/migrations/20260603_zenquanta_artifact_versions.sql`
 15. `neon/migrations/20260603_zenquanta_performance_indexes.sql`
-16. `neon/migrations/20260616_zenquanta_incremental_performance_indexes.sql`
+16. `neon/migrations/20260616_zenquanta_artifact_shares.sql`
+17. `neon/migrations/20260616_zenquanta_feedback_events.sql`
+18. `neon/migrations/20260616_zenquanta_incremental_performance_indexes.sql`
+19. `neon/migrations/20260617_zenquanta_template_shares.sql`
 
 Apply with a Postgres client or Neon SQL editor. CLI example:
 
