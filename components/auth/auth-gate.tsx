@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Eye, EyeOff, LifeBuoy } from 'lucide-react'
 import { useChatContext } from '@/lib/chat-context'
 import { Button } from '@/components/ui/button'
@@ -27,6 +27,14 @@ export function AuthGate() {
     'idle' | 'submitting' | 'signed-in' | 'error'
   >('idle')
   const [message, setMessage] = useState('')
+
+  useEffect(() => {
+    const searchParams = new URLSearchParams(window.location.search)
+
+    if (searchParams.get('accountDeleted') === '1') {
+      setMessage('Your account was deleted and you have been signed out.')
+    }
+  }, [])
 
   function toAuthErrorMessage(error: unknown, fallback: string): string {
     if (!(error instanceof Error)) return fallback
