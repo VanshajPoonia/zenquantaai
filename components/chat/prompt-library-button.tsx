@@ -1,15 +1,20 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   ArrowDown,
   ArrowUp,
   BookText,
   BookmarkPlus,
+  Check,
+  Link2,
+  Loader2,
   Pencil,
   Play,
   Plus,
+  Share2,
   Trash2,
+  X,
 } from 'lucide-react'
 import { ASSISTANT_FAMILY_COPY } from '@/lib/config/assistants'
 import { useChatContext } from '@/lib/chat-context'
@@ -25,6 +30,10 @@ import {
   PromptWorkflow,
   PromptWorkflowStepInput,
   PromptWorkflowVariable,
+  TemplateShareCreated,
+  TemplateShareInfo,
+  TemplateShareType,
+  TemplateShareVisibility,
 } from '@/types'
 import { Button } from '@/components/ui/button'
 import {
@@ -153,6 +162,21 @@ export function PromptLibraryButton({
   const [runValues, setRunValues] = useState<Record<string, string>>({})
   const [isRunningWorkflow, setIsRunningWorkflow] = useState(false)
 
+  // Share state
+  const [shareTarget, setShareTarget] = useState<{
+    type: TemplateShareType
+    id: string
+    title: string
+  } | null>(null)
+  const [shares, setShares] = useState<TemplateShareInfo[]>([])
+  const [isLoadingShares, setIsLoadingShares] = useState(false)
+  const [isCreatingShare, setIsCreatingShare] = useState(false)
+  const [shareError, setShareError] = useState<string | null>(null)
+  const [newShareVisibility, setNewShareVisibility] = useState<TemplateShareVisibility>('public_link')
+  const [newShareExpiresAt, setNewShareExpiresAt] = useState('')
+  const [justCreatedShare, setJustCreatedShare] = useState<TemplateShareCreated | null>(null)
+  const [shareLinkCopied, setShareLinkCopied] = useState(false)
+
   const visiblePrompts = promptLibrary.filter(
     (prompt) => prompt.mode === 'any' || prompt.mode === currentMode
   )
@@ -275,6 +299,92 @@ export function PromptLibraryButton({
     }
   }
 
+  const openShares = useCallback(
+    async (type: TemplateShareType, id: string, title: string) => {
+      setShareTarget({ type, id, title })
+      setJustCreatedShare(null)
+      setShareError(null)
+      setNewShareVisibility('public_link')
+      setNewShareExpiresAt('')
+      setIsLoadingShares(true)
+      setShares([])
+      try {
+        const endpoint =
+          type === 'prompt'
+            ? `/api/prompts/${id}/shares`
+            : `/api/prompt-workflows/${id}/shares`
+        const res = await fetch(endpoint)
+        if (res.ok) {
+          const data = (await res.json()) as TemplateShareInfo[]
+          setShares(data)
+        }
+      } finally {
+        setIsLoadingShares(false)
+      }
+    },
+    []
+  )
+
+  const createShareLink = async () => {
+    if (!shareTarget) return
+    setIsCreatingShare(true)
+    setShareError(null)
+    try {
+      const endpoint =
+        shareTarget.type === 'prompt'
+          ? `/api/prompts/${shareTarget.id}/shares`
+          : `/api/prompt-workflows/${shareTarget.id}/shares`
+      const res = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          visibility: newShareVisibility,
+          expiresAt: newShareExpiresAt || null,
+        }),
+      })
+      if (res.ok) {
+        const created = (await res.json()) as TemplateShareCreated
+        setJustCreatedShare(created)
+        const shareInfo: TemplateShareInfo = {
+          id: created.id,
+          templateType: created.templateType,
+          templateId: created.templateId,
+          visibility: created.visibility,
+          expiresAt: created.expiresAt,
+          revokedAt: created.revokedAt,
+          createdAt: created.createdAt,
+        }
+        setShares((previous) => [shareInfo, ...previous])
+      } else {
+        setShareError('Failed to create share link.')
+      }
+    } catch {
+      setShareError('Failed to create share link.')
+    } finally {
+      setIsCreatingShare(false)
+    }
+  }
+
+  const revokeShareLink = async (shareId: string) => {
+    if (!shareTarget) return
+    const endpoint =
+      shareTarget.type === 'prompt'
+        ? `/api/prompts/${shareTarget.id}/shares/${shareId}`
+        : `/api/prompt-workflows/${shareTarget.id}/shares/${shareId}`
+    const res = await fetch(endpoint, { method: 'DELETE' })
+    if (res.ok) {
+      setShares((previous) => previous.filter((s) => s.id !== shareId))
+      if (justCreatedShare?.id === shareId) setJustCreatedShare(null)
+    }
+  }
+
+  const copyShareLink = async (token: string) => {
+    const url = `${window.location.origin}/share/templates/${token}`
+    await navigator.clipboard.writeText(url).catch(() => null)
+    setShareLinkCopied(true)
+    setTimeout(() => setShareLinkCopied(false), 2000)
+  }
+
   return (
     <>
       <Popover open={isPopoverOpen} onOpenChange={setIsPopoverOpen}>
@@ -359,15 +469,26 @@ export function PromptLibraryButton({
                             {prompt.content}
                           </p>
                         </div>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon-sm"
-                          className="size-7 shrink-0"
-                          onClick={() => deletePrompt(prompt.id)}
-                        >
-                          <Trash2 className="size-3.5" />
-                        </Button>
+                        <div className="flex shrink-0 items-center gap-1">
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon-sm"
+                            className="size-7"
+                            onClick={() => void openShares('prompt', prompt.id, prompt.title)}
+                          >
+                            <Share2 className="size-3.5" />
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon-sm"
+                            className="size-7"
+                            onClick={() => deletePrompt(prompt.id)}
+                          >
+                            <Trash2 className="size-3.5" />
+                          </Button>
+                        </div>
                       </div>
                       <Button
                         type="button"
@@ -433,6 +554,15 @@ export function PromptLibraryButton({
                             onClick={() => openWorkflowEditor(workflow)}
                           >
                             <Pencil className="size-3.5" />
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon-sm"
+                            className="size-7"
+                            onClick={() => void openShares('playbook', workflow.id, workflow.title)}
+                          >
+                            <Share2 className="size-3.5" />
                           </Button>
                           <Button
                             type="button"
@@ -671,6 +801,157 @@ export function PromptLibraryButton({
               onClick={() => void saveWorkflowDraft()}
             >
               Save AI Playbook
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Share Dialog */}
+      <Dialog
+        open={Boolean(shareTarget)}
+        onOpenChange={(open) => {
+          if (!open) {
+            setShareTarget(null)
+            setJustCreatedShare(null)
+            setShareError(null)
+            setShares([])
+          }
+        }}
+      >
+        <DialogContent className="w-[calc(100vw-1rem)] max-w-lg rounded-2xl border-border/70 bg-background/95">
+          <DialogHeader>
+            <DialogTitle>Share Template</DialogTitle>
+            <DialogDescription>
+              {shareTarget?.type === 'prompt'
+                ? 'Create a link to share this prompt. Anyone with the link can preview and copy it.'
+                : 'Create a link to share this AI Playbook. Anyone with the link can preview and copy it.'}
+            </DialogDescription>
+          </DialogHeader>
+
+          {shareTarget ? (
+            <div className="space-y-4">
+              {/* Just-created link */}
+              {justCreatedShare ? (
+                <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-3">
+                  <p className="mb-2 text-xs font-medium text-emerald-400">
+                    Share link created — copy it now. It won&apos;t be shown again.
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <code className="min-w-0 flex-1 truncate rounded-lg bg-background/60 px-2 py-1 text-xs text-foreground">
+                      {typeof window !== 'undefined'
+                        ? `${window.location.origin}/share/templates/${justCreatedShare.token}`
+                        : `/share/templates/${justCreatedShare.token}`}
+                    </code>
+                    <Button
+                      type="button"
+                      size="icon-sm"
+                      variant="outline"
+                      className="size-7 shrink-0"
+                      onClick={() => void copyShareLink(justCreatedShare.token)}
+                    >
+                      {shareLinkCopied ? (
+                        <Check className="size-3.5 text-emerald-400" />
+                      ) : (
+                        <Link2 className="size-3.5" />
+                      )}
+                    </Button>
+                  </div>
+                </div>
+              ) : null}
+
+              {/* Create new share */}
+              <div className="space-y-3 rounded-2xl border border-border/60 bg-card/50 p-3">
+                <p className="text-xs font-medium text-muted-foreground">
+                  Create new share link
+                </p>
+                <div className="grid grid-cols-2 gap-2">
+                  <Select
+                    value={newShareVisibility}
+                    onValueChange={(v) => setNewShareVisibility(v as TemplateShareVisibility)}
+                  >
+                    <SelectTrigger className="h-8 text-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="public_link">Public link</SelectItem>
+                      <SelectItem value="private_link">Private link</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Input
+                    type="date"
+                    value={newShareExpiresAt}
+                    onChange={(e) => setNewShareExpiresAt(e.target.value)}
+                    placeholder="Expiry (optional)"
+                    className="h-8 text-xs"
+                  />
+                </div>
+                {shareError ? (
+                  <p className="text-xs text-destructive">{shareError}</p>
+                ) : null}
+                <Button
+                  type="button"
+                  size="sm"
+                  className="w-full rounded-xl"
+                  disabled={isCreatingShare}
+                  onClick={() => void createShareLink()}
+                >
+                  {isCreatingShare ? (
+                    <Loader2 className="mr-2 size-3.5 animate-spin" />
+                  ) : (
+                    <Share2 className="mr-2 size-3.5" />
+                  )}
+                  Create share link
+                </Button>
+              </div>
+
+              {/* Active shares */}
+              {isLoadingShares ? (
+                <div className="flex items-center justify-center py-4">
+                  <Loader2 className="size-4 animate-spin text-muted-foreground" />
+                </div>
+              ) : shares.length > 0 ? (
+                <div className="space-y-2">
+                  <p className="text-xs font-medium text-muted-foreground">
+                    Active links
+                  </p>
+                  {shares.map((share) => (
+                    <div
+                      key={share.id}
+                      className="flex items-center gap-2 rounded-xl border border-border/60 bg-card/40 px-3 py-2"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <p className="text-xs text-muted-foreground">
+                          {share.visibility === 'public_link' ? 'Public' : 'Private'}
+                          {share.expiresAt
+                            ? ` · Expires ${new Date(share.expiresAt).toLocaleDateString()}`
+                            : ''}
+                          {' · '}Created{' '}
+                          {new Date(share.createdAt).toLocaleDateString()}
+                        </p>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon-sm"
+                        className="size-6 shrink-0 text-muted-foreground hover:text-destructive"
+                        onClick={() => void revokeShareLink(share.id)}
+                      >
+                        <X className="size-3" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setShareTarget(null)}
+            >
+              Close
             </Button>
           </DialogFooter>
         </DialogContent>
