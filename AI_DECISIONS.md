@@ -263,6 +263,17 @@ Evidence:
 - Supabase Auth users, sessions, and passwords are not imported, copied, backfilled, or preserved.
 - Existing users must sign up again.
 
+## Full Account Deletion Uses Tombstoned Users
+
+Decision: Self-serve full-account deletion and admin user purge remove user-owned data, credentials, sessions, integrations, and PII, but tombstone `zen_users` / `zen_profiles` instead of hard-deleting those rows.
+
+Reason:
+
+- Admin audit logs reference user rows and should remain intact after a deletion request.
+- Tombstoning preserves referential integrity while removing login IDs, email/display names, external auth identifiers, credentials, sessions, provider tokens, and product data.
+- Object storage cleanup is best-effort after database access is revoked, so protected file/image URLs stop working even if private bucket cleanup needs manual follow-up.
+- Workspace-data deletion is intentionally less destructive: it clears user-owned workspace/product data while leaving the account, credentials, session baseline, subscription baseline, and role available.
+
 ## Neon Starts Fresh
 
 Decision: Neon is a fresh database foundation. Do not import, copy, backfill, or preserve Supabase database rows.
