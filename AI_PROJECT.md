@@ -142,6 +142,8 @@ The fresh Neon schema lives in `neon/migrations/20260522_zenquanta_fresh_initial
 
 Neon repositories live in `lib/db/repositories/*`. They cover fresh Neon users/auth identity mapping, profiles, subscriptions, usage, plan requests, admin audit logs, projects, conversations/messages/memory, prompts, prompt workflows and run records, text model comparisons and candidates, settings, assistant recommendations, file metadata, and generated image metadata.
 
+Self-serve data deletion is implemented as foreground authenticated routes. Users can preview/delete workspace data or full accounts through `/api/account/delete-data/*`; admins can preview/purge another user through `/api/admin/users/[id]/purge/*`. Full-account deletion tombstones the user/profile rows after removing credentials, sessions, integrations, PII, and user-owned product data so admin audit rows keep valid references. Object storage cleanup is best-effort after database access is revoked.
+
 Active Neon runtime data paths are:
 
 - `/api/settings`
@@ -178,7 +180,9 @@ Active Neon runtime data paths are:
 - `/api/pulse/research-room`
 - `/api/dashboard` and `/dashboard`
 - `/pricing` and `/api/plan-requests`
-- `/api/admin/*`, `/admin`, and `/admin/users/[id]`
+- `/api/account/delete-data/preview`
+- `/api/account/delete-data`
+- `/api/admin/*`, `/api/admin/users/[id]/purge/preview`, `/api/admin/users/[id]/purge`, `/admin`, and `/admin/users/[id]`
 - auth profile/role hydration
 - local browser import app-data writes
 
@@ -209,6 +213,13 @@ Neon migration order:
 10. `20260528_zenquanta_playbook_builder_metadata.sql`
 11. `20260528_zenquanta_prism_studio_metadata.sql`
 12. `20260528_zenquanta_custom_assistant_builder_v2.sql`
+13. `20260528_zenquanta_github_readonly_integrations.sql`
+14. `20260603_zenquanta_artifact_versions.sql`
+15. `20260603_zenquanta_performance_indexes.sql`
+16. `20260616_zenquanta_artifact_shares.sql`
+17. `20260616_zenquanta_feedback_events.sql`
+18. `20260616_zenquanta_incremental_performance_indexes.sql`
+19. `20260617_zenquanta_template_shares.sql`
 
 Historical Supabase migration order documented in `README.md`:
 
