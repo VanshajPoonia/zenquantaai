@@ -8,13 +8,17 @@ import {
   Download,
   FilePlus2,
   FileText,
+  Globe,
   History,
+  Link2,
   Loader2,
+  Lock,
   PencilLine,
   Plus,
   RotateCcw,
   Save,
   Search,
+  Share2,
   Sparkles,
   Trash2,
   X,
@@ -35,6 +39,9 @@ import {
   Artifact,
   ArtifactActionResponse,
   ArtifactActionType,
+  ArtifactShareCreated,
+  ArtifactShareInfo,
+  ArtifactShareVisibility,
   ArtifactSourceType,
   ArtifactType,
   ArtifactVersion,
@@ -226,6 +233,17 @@ export function ArtifactStudio() {
   const [versionCopied, setVersionCopied] = useState(false)
   const [historyError, setHistoryError] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [shareOpen, setShareOpen] = useState(false)
+  const [shares, setShares] = useState<ArtifactShareInfo[]>([])
+  const [isLoadingShares, setIsLoadingShares] = useState(false)
+  const [isCreatingShare, setIsCreatingShare] = useState(false)
+  const [shareError, setShareError] = useState<string | null>(null)
+  const [newShareVisibility, setNewShareVisibility] =
+    useState<ArtifactShareVisibility>('public_link')
+  const [newShareExpiresAt, setNewShareExpiresAt] = useState('')
+  const [justCreatedShare, setJustCreatedShare] =
+    useState<ArtifactShareCreated | null>(null)
+  const [shareLinkCopied, setShareLinkCopied] = useState(false)
 
   const defaultProjectId =
     selectedProjectId === 'all' ? null : selectedProjectId
@@ -563,6 +581,103 @@ export function ArtifactStudio() {
     }
   }
 
+  const openShares = async (artifactId: string) => {
+    setShareOpen(true)
+    setShareError(null)
+    setJustCreatedShare(null)
+    setShareLinkCopied(false)
+    setNewShareVisibility('public_link')
+    setNewShareExpiresAt('')
+    setIsLoadingShares(true)
+
+    try {
+      const response = await fetch(`/api/artifacts/${encodeURIComponent(artifactId)}/shares`)
+      if (!response.ok) throw new Error('Unable to load share links.')
+      const data = (await response.json()) as ArtifactShareInfo[]
+      setShares(data)
+    } catch (loadError) {
+      setShareError(
+        loadError instanceof Error ? loadError.message : 'Unable to load share links.'
+      )
+      setShares([])
+    } finally {
+      setIsLoadingShares(false)
+    }
+  }
+
+  const createShareLink = async () => {
+    if (!selectedArtifact) return
+
+    setIsCreatingShare(true)
+    setShareError(null)
+    setJustCreatedShare(null)
+    setShareLinkCopied(false)
+
+    try {
+      const body: { visibility: ArtifactShareVisibility; expiresAt?: string | null } = {
+        visibility: newShareVisibility,
+        expiresAt: newShareExpiresAt || null,
+      }
+      const response = await fetch(
+        `/api/artifacts/${encodeURIComponent(selectedArtifact.id)}/shares`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        }
+      )
+      if (!response.ok) {
+        const data = (await response.json().catch(() => ({}))) as { error?: string }
+        throw new Error(data.error ?? 'Unable to create share link.')
+      }
+      const created = (await response.json()) as ArtifactShareCreated
+      setJustCreatedShare(created)
+      const shareInfo: ArtifactShareInfo = {
+        id: created.id,
+        artifactId: created.artifactId,
+        visibility: created.visibility,
+        expiresAt: created.expiresAt,
+        revokedAt: created.revokedAt,
+        createdAt: created.createdAt,
+      }
+      setShares((previous) => [shareInfo, ...previous])
+      setNewShareExpiresAt('')
+    } catch (createError) {
+      setShareError(
+        createError instanceof Error ? createError.message : 'Unable to create share link.'
+      )
+    } finally {
+      setIsCreatingShare(false)
+    }
+  }
+
+  const revokeShareLink = async (shareId: string) => {
+    if (!selectedArtifact) return
+
+    try {
+      const response = await fetch(
+        `/api/artifacts/${encodeURIComponent(selectedArtifact.id)}/shares/${encodeURIComponent(shareId)}`,
+        { method: 'DELETE' }
+      )
+      if (!response.ok) throw new Error('Unable to revoke share link.')
+      setShares((previous) => previous.filter((share) => share.id !== shareId))
+      if (justCreatedShare?.id === shareId) {
+        setJustCreatedShare(null)
+      }
+    } catch (revokeError) {
+      setShareError(
+        revokeError instanceof Error ? revokeError.message : 'Unable to revoke share link.'
+      )
+    }
+  }
+
+  const copyShareLink = async (token: string) => {
+    const url = `${window.location.origin}/share/artifacts/${encodeURIComponent(token)}`
+    await navigator.clipboard.writeText(url)
+    setShareLinkCopied(true)
+    window.setTimeout(() => setShareLinkCopied(false), 1800)
+  }
+
   return (
     <>
       <Dialog open={open} onOpenChange={setOpen}>
@@ -778,6 +893,18 @@ export function ArtifactStudio() {
                     >
                       <History className="mr-2 size-4" />
                       History
+                    </Button>
+                  ) : null}
+                  {selectedArtifact ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="rounded-xl"
+                      onClick={() => void openShares(selectedArtifact.id)}
+                    >
+                      <Share2 className="mr-2 size-4" />
+                      Share
                     </Button>
                   ) : null}
                   {selectedArtifact ? (
@@ -1196,6 +1323,190 @@ export function ArtifactStudio() {
                 )}
               </div>
             </section>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={shareOpen}
+        onOpenChange={(nextOpen) => {
+          setShareOpen(nextOpen)
+          if (!nextOpen) {
+            setJustCreatedShare(null)
+            setShareError(null)
+          }
+        }}
+      >
+        <DialogContent className="max-h-[88vh] w-[calc(100vw-1rem)] max-w-xl overflow-hidden rounded-2xl border-border/70 bg-background/95 p-0">
+          <DialogHeader className="border-b border-border/70 px-4 py-4 text-left sm:px-6">
+            <DialogTitle className="flex items-center gap-2">
+              <Share2 className="size-5" />
+              Share artifact
+            </DialogTitle>
+            <DialogDescription>
+              Create a link to share this artifact. Links are read-only. Revoke
+              them at any time to stop access.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="flex max-h-[72vh] min-h-0 flex-col overflow-y-auto p-4 sm:p-6">
+            {justCreatedShare ? (
+              <div className="mb-4 rounded-2xl border border-primary/35 bg-primary/10 p-3">
+                <p className="mb-2 text-sm font-medium text-foreground">
+                  Share link created
+                </p>
+                <div className="flex items-center gap-2">
+                  <code className="min-w-0 flex-1 truncate rounded-xl border border-border/60 bg-background/70 px-3 py-2 text-xs text-foreground">
+                    {`${typeof window !== 'undefined' ? window.location.origin : ''}/share/artifacts/${justCreatedShare.token}`}
+                  </code>
+                  <Button
+                    type="button"
+                    size="sm"
+                    className="shrink-0 rounded-xl"
+                    onClick={() => void copyShareLink(justCreatedShare.token)}
+                  >
+                    {shareLinkCopied ? (
+                      <Check className="size-4" />
+                    ) : (
+                      <Clipboard className="size-4" />
+                    )}
+                  </Button>
+                </div>
+              </div>
+            ) : null}
+
+            <div className="mb-4 rounded-2xl border border-border/60 bg-card/35 p-3">
+              <p className="mb-3 text-sm font-medium text-foreground">
+                Create new share link
+              </p>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div>
+                  <label className="mb-1 block text-xs text-muted-foreground">
+                    Visibility
+                  </label>
+                  <Select
+                    value={newShareVisibility}
+                    onValueChange={(value) =>
+                      setNewShareVisibility(value as ArtifactShareVisibility)
+                    }
+                  >
+                    <SelectTrigger className="h-10 w-full rounded-xl">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="public_link">
+                        <span className="flex items-center gap-2">
+                          <Globe className="size-3.5" />
+                          Public link
+                        </span>
+                      </SelectItem>
+                      <SelectItem value="private_link">
+                        <span className="flex items-center gap-2">
+                          <Lock className="size-3.5" />
+                          Private link
+                        </span>
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs text-muted-foreground">
+                    Expires (optional)
+                  </label>
+                  <Input
+                    type="date"
+                    value={newShareExpiresAt}
+                    min={new Date().toISOString().slice(0, 10)}
+                    onChange={(event) => setNewShareExpiresAt(event.target.value)}
+                    className="h-10 rounded-xl"
+                  />
+                </div>
+              </div>
+              {shareError ? (
+                <p className="mt-2 rounded-xl border border-destructive/35 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+                  {shareError}
+                </p>
+              ) : null}
+              <Button
+                type="button"
+                size="sm"
+                className="mt-3 rounded-xl"
+                disabled={isCreatingShare}
+                onClick={() => void createShareLink()}
+              >
+                {isCreatingShare ? (
+                  <Loader2 className="mr-2 size-4 animate-spin" />
+                ) : (
+                  <Link2 className="mr-2 size-4" />
+                )}
+                Create link
+              </Button>
+            </div>
+
+            <div>
+              <p className="mb-3 text-sm font-medium text-foreground">
+                Active share links
+              </p>
+              {isLoadingShares ? (
+                <div className="flex items-center gap-2 rounded-2xl border border-border/60 bg-card/40 px-4 py-5 text-sm text-muted-foreground">
+                  <Loader2 className="size-4 animate-spin" />
+                  Loading share links...
+                </div>
+              ) : shares.length === 0 ? (
+                <div className="rounded-2xl border border-dashed border-border/60 bg-card/25 px-4 py-6 text-center text-sm text-muted-foreground">
+                  No active share links.
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {shares.map((share) => (
+                    <div
+                      key={share.id}
+                      className="flex items-center justify-between gap-3 rounded-2xl border border-border/60 bg-card/35 p-3"
+                    >
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <Badge variant="outline" className="rounded-full">
+                            {share.visibility === 'public_link' ? (
+                              <span className="flex items-center gap-1">
+                                <Globe className="size-3" />
+                                Public
+                              </span>
+                            ) : (
+                              <span className="flex items-center gap-1">
+                                <Lock className="size-3" />
+                                Private
+                              </span>
+                            )}
+                          </Badge>
+                          {share.expiresAt ? (
+                            <Badge variant="secondary" className="rounded-full">
+                              Expires {formatDate(share.expiresAt)}
+                            </Badge>
+                          ) : (
+                            <Badge variant="secondary" className="rounded-full">
+                              No expiry
+                            </Badge>
+                          )}
+                        </div>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          Created {formatDate(share.createdAt)}
+                        </p>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="shrink-0 rounded-xl text-destructive hover:text-destructive"
+                        onClick={() => void revokeShareLink(share.id)}
+                      >
+                        <X className="mr-1 size-4" />
+                        Revoke
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         </DialogContent>
       </Dialog>
