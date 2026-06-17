@@ -9,11 +9,16 @@ import {
   MODE_CONFIGS,
   MODE_ORDER,
   SYSTEM_PRESET_CONFIGS,
+  UserPurgeCounts,
+  UserPurgePreview,
+  UserPurgeResult,
+  UserPurgeScope,
   UsageOptimization,
   createSessionSettings,
   getModelOverrideForUsageOptimization,
   getUsageOptimizationFromModelOverride,
 } from '@/lib/types'
+import { AlertTriangle, Loader2, Trash2 } from 'lucide-react'
 import {
   ModeIcon,
   getModeAccentClass,
@@ -29,6 +34,7 @@ import {
 } from '@/components/ui/dialog'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
@@ -101,6 +107,23 @@ const PROJECT_BEHAVIOR_OPTIONS: ProjectBehaviorOption[] = [
   },
 ]
 
+const PURGE_COUNT_LABELS: Array<{ key: keyof UserPurgeCounts; label: string }> = [
+  { key: 'conversations', label: 'Conversations' },
+  { key: 'projects', label: 'Projects' },
+  { key: 'files', label: 'Files' },
+  { key: 'generatedImages', label: 'Generated images' },
+  { key: 'artifacts', label: 'Artifacts' },
+  { key: 'prompts', label: 'Prompts' },
+  { key: 'playbooks', label: 'Playbooks/runs' },
+  { key: 'customAssistants', label: 'Custom assistants' },
+  { key: 'modelComparisons', label: 'Model Duel records' },
+  { key: 'integrations', label: 'Integrations' },
+  { key: 'usageAndPlanData', label: 'Usage/plan data' },
+  { key: 'telemetry', label: 'Telemetry' },
+  { key: 'sessions', label: 'Sessions' },
+  { key: 'objectRefs', label: 'Storage objects' },
+]
+
 function ModeSelectionCard({
   mode,
   active,
@@ -169,6 +192,199 @@ function UsageOptimizationCard({
         <p className="text-xs leading-5 text-muted-foreground">{option.hint}</p>
       </div>
     </button>
+  )
+}
+
+function UserDeletionDangerZone() {
+  const [scope, setScope] = useState<UserPurgeScope>('workspace_data')
+  const [preview, setPreview] = useState<UserPurgePreview | null>(null)
+  const [confirmation, setConfirmation] = useState('')
+  const [status, setStatus] = useState<'idle' | 'loading' | 'deleting' | 'done'>('idle')
+  const [error, setError] = useState<string | null>(null)
+  const [result, setResult] = useState<UserPurgeResult | null>(null)
+
+  const resetForScope = (nextScope: UserPurgeScope) => {
+    setScope(nextScope)
+    setPreview(null)
+    setConfirmation('')
+    setError(null)
+    setResult(null)
+    setStatus('idle')
+  }
+
+  const loadPreview = async () => {
+    setStatus('loading')
+    setError(null)
+    setResult(null)
+    try {
+      const response = await fetch('/api/account/delete-data/preview', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ scope }),
+      })
+      const body = (await response.json().catch(() => ({}))) as {
+        preview?: UserPurgePreview
+        error?: string
+      }
+      if (!response.ok || !body.preview) {
+        throw new Error(body.error ?? 'Unable to preview deletion.')
+      }
+      setPreview(body.preview)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unable to preview deletion.')
+    } finally {
+      setStatus('idle')
+    }
+  }
+
+  const runDeletion = async () => {
+    setStatus('deleting')
+    setError(null)
+    try {
+      const response = await fetch('/api/account/delete-data', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ scope, confirmation }),
+      })
+      const body = (await response.json().catch(() => ({}))) as {
+        result?: UserPurgeResult
+        redirectTo?: string | null
+        error?: string
+      }
+      if (!response.ok || !body.result) {
+        throw new Error(body.error ?? 'Unable to delete data.')
+      }
+      setResult(body.result)
+      setStatus('done')
+      if (body.redirectTo) {
+        window.location.href = body.redirectTo
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unable to delete data.')
+      setStatus('idle')
+    }
+  }
+
+  return (
+    <div className="space-y-4 rounded-2xl border border-destructive/40 bg-destructive/5 p-4 sm:p-5">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <div className="flex items-center gap-2">
+            <AlertTriangle className="size-4 text-destructive" />
+            <h3 className="text-base font-semibold text-foreground">Danger Zone</h3>
+          </div>
+          <p className="mt-1 text-xs leading-6 text-muted-foreground sm:text-sm">
+            Preview and delete your Zenquanta data. This action is irreversible.
+          </p>
+        </div>
+        <Badge variant="destructive" className="w-fit rounded-full">
+          Irreversible
+        </Badge>
+      </div>
+
+      <div className="grid gap-3 md:grid-cols-[220px_1fr]">
+        <div className="space-y-2">
+          <Label>Deletion scope</Label>
+          <Select
+            value={scope}
+            onValueChange={(value) => resetForScope(value as UserPurgeScope)}
+          >
+            <SelectTrigger className="rounded-xl">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="workspace_data">Delete workspace data</SelectItem>
+              <SelectItem value="full_account">Delete full account</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <p className="self-end text-xs leading-6 text-muted-foreground">
+          {scope === 'workspace_data'
+            ? 'Keeps your sign-in account, current plan, and role, but removes workspace data and usage history.'
+            : 'Removes credentials, sessions, integrations, workspace data, and personal identifiers, then signs you out.'}
+        </p>
+      </div>
+
+      <Button
+        type="button"
+        variant="outline"
+        className="rounded-xl"
+        disabled={status === 'loading' || status === 'deleting'}
+        onClick={() => void loadPreview()}
+      >
+        {status === 'loading' ? (
+          <Loader2 className="mr-2 size-4 animate-spin" />
+        ) : (
+          <Trash2 className="mr-2 size-4" />
+        )}
+        Preview deletion
+      </Button>
+
+      {preview ? (
+        <div className="space-y-3 rounded-2xl border border-border/70 bg-background/45 p-3">
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+            {PURGE_COUNT_LABELS.map(({ key, label }) => (
+              <div
+                key={key}
+                className="rounded-xl border border-border/60 bg-card/40 px-3 py-2"
+              >
+                <p className="text-[11px] text-muted-foreground">{label}</p>
+                <p className="mt-1 text-lg font-semibold text-foreground">
+                  {preview.counts[key].toLocaleString()}
+                </p>
+              </div>
+            ))}
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="delete-confirmation">
+              Type{' '}
+              <span className="font-mono text-foreground">
+                {preview.requiresConfirmation}
+              </span>{' '}
+              to confirm
+            </Label>
+            <Input
+              id="delete-confirmation"
+              value={confirmation}
+              onChange={(event) => setConfirmation(event.target.value)}
+              className="rounded-xl"
+              autoComplete="off"
+            />
+          </div>
+          <Button
+            type="button"
+            variant="destructive"
+            className="rounded-xl"
+            disabled={
+              status === 'deleting' ||
+              confirmation.trim() !== preview.requiresConfirmation
+            }
+            onClick={() => void runDeletion()}
+          >
+            {status === 'deleting' ? (
+              <Loader2 className="mr-2 size-4 animate-spin" />
+            ) : (
+              <Trash2 className="mr-2 size-4" />
+            )}
+            {scope === 'full_account' ? 'Delete account' : 'Delete workspace data'}
+          </Button>
+        </div>
+      ) : null}
+
+      {result ? (
+        <p className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-300">
+          Deletion completed. Object cleanup: {result.objectDeletion.deleted}/
+          {result.objectDeletion.attempted} removed
+          {result.partialFailure ? ', with some storage cleanup failures.' : '.'}
+        </p>
+      ) : null}
+
+      {error ? (
+        <p className="rounded-xl border border-destructive/35 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+          {error}
+        </p>
+      ) : null}
+    </div>
   )
 }
 
@@ -714,6 +930,10 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                 </Button>
               </div>
             </div>
+
+            <Separator />
+
+            <UserDeletionDangerZone />
           </TabsContent>
 
           <TabsContent value="about" className="min-h-0 flex-1 space-y-4 overflow-y-auto pr-1 pb-6 sm:pr-2">
