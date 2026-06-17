@@ -82,6 +82,10 @@ const feedbackEntityTypeCheck = [
 
 const feedbackRatingCheck = ['up', 'down', 'neutral'] as const
 
+const artifactShareVisibilityCheck = ['public_link', 'private_link'] as const
+
+const templateShareTypeCheck = ['prompt', 'playbook'] as const
+
 export const zenUsers = pgTable(
   'zen_users',
   {
@@ -1360,6 +1364,76 @@ export const zenArtifactVersions = pgTable(
       'zen_artifact_versions_artifact_type_check',
       sql`${table.artifactType} in (${sql.join(
         artifactTypeCheck.map((artifactType) => sql`${artifactType}`),
+        sql`, `
+      )})`
+    ),
+  ]
+)
+
+export const zenArtifactShares = pgTable(
+  'zen_artifact_shares',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    artifactId: uuid('artifact_id')
+      .notNull()
+      .references(() => zenArtifacts.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => zenUsers.id, { onDelete: 'cascade' }),
+    tokenHash: text('token_hash').notNull(),
+    visibility: text('visibility').notNull().default('public_link'),
+    expiresAt: timestamp('expires_at', { withTimezone: true }),
+    revokedAt: timestamp('revoked_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('zen_artifact_shares_token_hash_idx').on(table.tokenHash),
+    index('zen_artifact_shares_artifact_idx').on(table.artifactId),
+    index('zen_artifact_shares_user_artifact_idx').on(table.userId, table.artifactId),
+    check(
+      'zen_artifact_shares_visibility_check',
+      sql`${table.visibility} in (${sql.join(
+        artifactShareVisibilityCheck.map((v) => sql`${v}`),
+        sql`, `
+      )})`
+    ),
+  ]
+)
+
+export const zenTemplateShares = pgTable(
+  'zen_template_shares',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    templateType: text('template_type').notNull(),
+    templateId: text('template_id').notNull(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => zenUsers.id, { onDelete: 'cascade' }),
+    tokenHash: text('token_hash').notNull(),
+    visibility: text('visibility').notNull().default('public_link'),
+    expiresAt: timestamp('expires_at', { withTimezone: true }),
+    revokedAt: timestamp('revoked_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('zen_template_shares_token_hash_idx').on(table.tokenHash),
+    index('zen_template_shares_template_idx').on(table.templateType, table.templateId),
+    index('zen_template_shares_user_template_idx').on(table.userId, table.templateType, table.templateId),
+    check(
+      'zen_template_shares_template_type_check',
+      sql`${table.templateType} in (${sql.join(
+        templateShareTypeCheck.map((v) => sql`${v}`),
+        sql`, `
+      )})`
+    ),
+    check(
+      'zen_template_shares_visibility_check',
+      sql`${table.visibility} in (${sql.join(
+        artifactShareVisibilityCheck.map((v) => sql`${v}`),
         sql`, `
       )})`
     ),

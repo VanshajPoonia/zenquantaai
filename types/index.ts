@@ -587,6 +587,109 @@ export interface ArtifactVersionDuplicateResponse {
   artifact: Artifact
 }
 
+export type ArtifactShareVisibility = 'public_link' | 'private_link'
+
+export interface ArtifactShareInfo {
+  id: string
+  artifactId: string
+  visibility: ArtifactShareVisibility
+  expiresAt: string | null
+  revokedAt: string | null
+  createdAt: string
+}
+
+export interface ArtifactShareCreated extends ArtifactShareInfo {
+  token: string
+}
+
+export interface ArtifactShareInput {
+  visibility?: ArtifactShareVisibility
+  expiresAt?: string | null
+}
+
+export interface PublicArtifactShare {
+  share: {
+    id: string
+    visibility: ArtifactShareVisibility
+    expiresAt: string | null
+    createdAt: string
+  }
+  artifact: {
+    title: string
+    artifactType: ArtifactType
+    content: string
+  }
+}
+
+export type TemplateShareType = 'prompt' | 'playbook'
+
+export type TemplateShareVisibility = 'public_link' | 'private_link'
+
+export interface TemplateShareInfo {
+  id: string
+  templateType: TemplateShareType
+  templateId: string
+  visibility: TemplateShareVisibility
+  expiresAt: string | null
+  revokedAt: string | null
+  createdAt: string
+}
+
+export interface TemplateShareCreated extends TemplateShareInfo {
+  token: string
+}
+
+export interface TemplateShareInput {
+  visibility?: TemplateShareVisibility
+  expiresAt?: string | null
+}
+
+export interface PublicPromptShare {
+  share: {
+    id: string
+    visibility: TemplateShareVisibility
+    expiresAt: string | null
+    createdAt: string
+  }
+  template: {
+    type: 'prompt'
+    title: string
+    content: string
+    mode: AIMode | 'any'
+  }
+}
+
+export interface PublicPlaybookShare {
+  share: {
+    id: string
+    visibility: TemplateShareVisibility
+    expiresAt: string | null
+    createdAt: string
+  }
+  template: {
+    type: 'playbook'
+    title: string
+    description: string | null
+    variables: PromptWorkflowVariable[]
+    steps: Array<{
+      title: string | null
+      order: number
+      assistantFamily: AssistantFamily
+      mode: AIMode
+      template: string
+      variableNames: string[]
+    }>
+  }
+}
+
+export type PublicTemplateShare = PublicPromptShare | PublicPlaybookShare
+
+export interface TemplateCopyResult {
+  type: TemplateShareType
+  id: string
+  title: string
+}
+
 export type ArtifactActionType =
   | 'improve_writing'
   | 'make_shorter'
@@ -1973,4 +2076,25 @@ export interface DashboardUsageSummary {
     displayedCostUsd: number
     rawCostUsd?: number
   }>
+}
+
+export type HealthStatus = 'healthy' | 'degraded' | 'missing' | 'unknown'
+
+export interface HealthCheck {
+  id: string
+  label: string
+  status: HealthStatus
+  message: string
+  detail?: string
+}
+
+export interface SystemHealthReport {
+  checkedAt: string
+  checks: HealthCheck[]
+  summary: {
+    healthy: number
+    degraded: number
+    missing: number
+    unknown: number
+  }
 }
