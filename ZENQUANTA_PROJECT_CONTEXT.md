@@ -84,7 +84,7 @@ Actual stack from the repo:
 - Package manager situation: `README.md` documents `npm install` and scripts use npm names; `pnpm-lock.yaml` and `node_modules/.pnpm` exist. Decide npm vs pnpm before dependency changes.
 - Deployment assumptions visible in repo: Next.js app with Vercel Analytics and server route handlers; no `vercel.json` is present; production storage is expected to use S3-compatible/R2 env vars if local storage is not acceptable.
 
-Important environment variables from `.env.example`:
+Important environment variables (configure locally in `.env.local`; there is no committed `.env.example`):
 
 - `OPENROUTER_API_KEY`
 - `OPENROUTER_BASE_URL`
@@ -713,7 +713,7 @@ Config and tooling:
 - `next.config.mjs`: Next config with `images.unoptimized = true`.
 - `tsconfig.json`: strict TypeScript config.
 - `eslint.config.mjs`: ESLint flat config.
-- `.env.example`: expected env var names, but note `.env.example` is currently listed in `.gitignore`.
+- `.env.local`: local-only secret file holding the expected env var names/values; it is gitignored and must not be committed. There is no committed `.env.example` template (recreate one only if explicitly requested).
 
 ## 18. Important Constraints For Future AI Agents
 

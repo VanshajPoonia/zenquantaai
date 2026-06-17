@@ -182,7 +182,7 @@ Current Neon-backed runtime routes:
 - `/api/dashboard` and `/dashboard`
 - `/api/workspace-home` and the authenticated `/` Workspace Home
 - `/pricing` and `/api/plan-requests`
-- `/api/admin/*`, `/admin`, and `/admin/users/[id]`
+- `/api/admin/*`, `/admin`, `/admin/users/[id]`, and `/admin/system-health`
 - auth profile/role hydration
 - local browser import app-data writes
 
@@ -310,6 +310,7 @@ Before changing persistence code again:
 - Confirm failed Prism metadata rows are safe for admin analytics: no raw object URLs, bucket credentials, or provider secrets.
 - Confirm Pulse Research Room shows only owned message sources/artifacts and stays honest when Tavily is unavailable or no source-backed messages exist.
 - Do not claim automated payments, checkout, customer portal, webhooks, or subscription automation. Manual plan requests and admin activation are the intended flow unless explicitly changed later.
+- Confirm `/admin/system-health` is admin-only and never returns raw secret values, credentials, or full connection strings. Only sanitized hostnames and bucket names may appear.
 - Confirm raw model cost remains admin-only and user dashboards expose displayed usage only.
 
 ## Common Failure Points
