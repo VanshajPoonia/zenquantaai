@@ -1,6 +1,7 @@
 import 'server-only'
 
 export { neonActivityRepository } from './activity'
+export { neonArtifactSharesRepository } from './artifact-shares'
 export { neonAdminRepository } from './admin'
 export {
   ArtifactReferenceNotFoundError,
@@ -31,6 +32,7 @@ export { neonProjectsRepository } from './projects'
 export { neonPulseResearchRepository } from './pulse-research'
 export { neonPromptsRepository } from './prompts'
 export { neonSearchRepository } from './search'
+export { neonTemplateSharesRepository } from './template-shares'
 export { neonSettingsRepository } from './settings'
 export {
   buildTierRebasedUsageOverridePatch,
