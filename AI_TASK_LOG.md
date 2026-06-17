@@ -2,9 +2,169 @@
 
 ## Current Status
 
-The repository contains a real Zenquanta AI platform backed by Neon for runtime app data and credentials auth, neutral private file storage for new uploads/generated images, and OpenRouter for AI transport. Shared AI project memory files exist at the repo root. The workspace now includes Neon-backed global search through `/api/search`, a Cmd/Ctrl+K command palette, first-run onboarding through `/api/onboarding`, Artifact Studio through `/api/artifacts`, Prism Studio through `/api/images/history`, Pulse Research Room through `/api/pulse/research-room`, File Intelligence Cards through `/api/files`, Ask Files through the existing `/api/chat` file-context path, GitHub read-only repo context through `/api/integrations/github/*`, and a Memory Vault for visible conversation memory controls. The prompt library includes reusable Neon-backed prompt workflows, the composer includes Model Duel for text assistant comparisons, and the admin dashboard includes filtered cost/margin analytics.
+The repository contains a real Zenquanta AI platform backed by Neon for runtime app data and credentials auth, neutral private file storage for new uploads/generated images, and OpenRouter for AI transport. Shared AI project memory files exist at the repo root. The workspace now includes Neon-backed global search through `/api/search`, a Cmd/Ctrl+K command palette, first-run onboarding through `/api/onboarding`, Artifact Studio through `/api/artifacts` (with shareable links via `/share/artifacts/[token]`), Prism Studio through `/api/images/history`, Pulse Research Room through `/api/pulse/research-room`, File Intelligence Cards through `/api/files`, Ask Files through the existing `/api/chat` file-context path, GitHub read-only repo context through `/api/integrations/github/*`, and a Memory Vault for visible conversation memory controls. The prompt library includes reusable Neon-backed prompt workflows (with shareable links via `/share/templates/[token]`), the composer includes Model Duel for text assistant comparisons, and the admin dashboard includes filtered cost/margin analytics.
 
 Current direction: plan upgrades remain manual/admin-driven, payment automation is out of scope unless explicitly requested, and Neon/storage start fresh without importing Supabase database rows or storage objects.
+
+## 2026-06-17 - Beta Launch Checklist & Bug Bash Plan
+
+**Goal**: Prepare Zenquanta AI for a small private beta with an operator/admin-facing readiness checklist and tester bug-bash plan. Documentation only.
+
+**Files changed**:
+- `docs/BETA_LAUNCH_CHECKLIST.md` — New 20-section beta launch + bug bash doc: required env vars, Neon migration order (authoritative 19-file list), admin setup, storage provider checks, OpenRouter/Tavily/embeddings/GitHub verification, manual plan request + admin activation, file/search privacy, usage/billing + Prism credit enforcement, mobile checks, known limitations, bug report template, rollback plan, manual data-deletion notes, first 10 tester tasks, and a sign-off block. Points operators at `/admin/system-health` as the pre-flight.
+- `ZENQUANTA_PROJECT_CONTEXT.md` — Fixed two stale `.env.example` references (lines ~87 and ~716) to reflect that secrets live in `.env.local` and there is no committed `.env.example`.
+
+**`.env.example` → `.env.local` sweep**: Searched the repo for `.env.example` references. The recent docs (`README.md`, `AGENTS.md`, `CLAUDE.md`, `AI_CHECKLIST.md`, `AI_PROJECT.md`) and the System Health validator already use `.env.local` correctly. Only `ZENQUANTA_PROJECT_CONTEXT.md` still pointed at `.env.example` as a live file — now corrected. Remaining `.env.example` mentions are intentional policy statements ("do not recreate/add to `.env.example` unless explicitly requested") in `AGENTS.md`, `CLAUDE.md`, and the integration plan docs, plus one historical note in this log — all left as-is. No `.env.example` file exists on disk; `.gitignore` still ignores it (harmless).
+
+**Beta readiness status**: Documentation and pre-flight tooling are ready. Core platform (Neon auth, chat, projects, billing/usage, admin) is implemented. Open items before invites are operational, not code: apply all 19 Neon migrations to a fresh DB, set required env vars, promote an admin in `zen_profiles`, choose a durable storage provider (s3/r2) if uploads must persist, take a Neon snapshot for rollback, and draft the per-user manual-deletion query set (no self-serve account deletion exists yet).
+
+**Verified**: Doc-only change. No runtime code modified, so typecheck/lint/build were not re-run for this task. Migration list and env var names cross-checked against `neon/migrations/`, `AI_CHECKLIST.md`, and `AI_PROJECT.md`.
+
+**Next steps**: Operator works through `docs/BETA_LAUNCH_CHECKLIST.md` §1–§4, confirms `/admin/system-health` shows 0 missing required services, then sends the §20 task script to the first cohort. Consider a future self-serve data-deletion endpoint to replace the manual cleanup in §19.
+
+---
+
+## 2026-06-17 - Shareable Prompt and Playbook Templates v1
+
+**Goal**: Allow users to create controlled share links for prompt templates and AI Playbook templates. Public visitors can preview the template and copy it into their own workspace. Run history, conversations, and project data are never exposed.
+
+**Files changed**:
+- `lib/db/schema.ts` — Added `zenTemplateShares` table and `templateShareTypeCheck` constant
+- `neon/migrations/20260617_zenquanta_template_shares.sql` — Migration SQL for `zen_template_shares`
+- `types/index.ts` — Added `TemplateShareType`, `TemplateShareVisibility`, `TemplateShareInfo`, `TemplateShareCreated`, `TemplateShareInput`, `PublicPromptShare`, `PublicPlaybookShare`, `PublicTemplateShare`, `TemplateCopyResult`
+- `lib/db/repositories/template-shares.ts` — New repository: `create`, `list`, `revoke`, `getPublicByToken`, `copyToWorkspace`
+- `lib/db/repositories/index.ts` — Exports `neonTemplateSharesRepository`
+- `app/api/prompts/[id]/shares/route.ts` — `GET` (list) + `POST` (create) for prompt shares
+- `app/api/prompts/[id]/shares/[shareId]/route.ts` — `DELETE` (revoke) for prompt shares
+- `app/api/prompt-workflows/[id]/shares/route.ts` — `GET` (list) + `POST` (create) for playbook shares
+- `app/api/prompt-workflows/[id]/shares/[shareId]/route.ts` — `DELETE` (revoke) for playbook shares
+- `app/api/share/templates/[token]/route.ts` — Public JSON API (no auth)
+- `app/api/share/templates/[token]/copy/route.ts` — Copy-to-workspace endpoint (auth required)
+- `app/share/templates/[token]/page.tsx` — Public read-only server component; shows prompt content or playbook steps
+- `app/share/templates/[token]/copy-button.tsx` — Client component for copy-into-workspace CTA
+- `components/chat/prompt-library-button.tsx` — Share button on prompt cards + playbook cards, share dialog (create/copy/revoke)
+
+**Architecture decisions**:
+- **Single table**: `zen_template_shares` stores both prompt and playbook shares with `template_type: 'prompt' | 'playbook'` and `template_id: text` (no FK, since prompts use a composite PK `(user_id, id)` which cannot be referenced with a simple FK). Share records linger as audit trail after template deletion; `getPublicByToken` returns null if the underlying template no longer exists.
+- **Token model**: Identical to artifact shares — 32 random bytes base64url (43 chars). Raw token returned only on creation; SHA-256 hash stored in DB. Token validation regex `/^[A-Za-z0-9_-]{40,60}$/` on public routes.
+- **Copy-to-workspace**: `POST /api/share/templates/[token]/copy` (auth required). For prompts: inserts into `zen_prompt_library`. For playbooks: inserts into `zen_prompt_workflows` + `zen_prompt_workflow_steps` with fresh IDs. No run history, no project scoping, no conversation data copied.
+- **Public page**: `/share/templates/[token]` server component. Shows prompt content (monospace) or playbook title/description/variables/steps (assistant + template text). `CopyToWorkspaceButton` client component redirects unauthenticated users to `/sign-in?next=...`.
+- **Private data**: `getPublicByToken` never returns `userId`, `projectId`, `conversationId`, run history, or workflow run outputs. For playbooks, step IDs are excluded from the public payload.
+- **Revocation**: `revokedAt` field; revoked links immediately return 404 at the public API and page level.
+- **Expiry**: `expiresAt` nullable; checked server-side.
+
+**Verified**: `npm run typecheck` clean, `npm run lint` 0 errors (10 pre-existing warnings), `npm run build` succeeds with all 8 new routes in the manifest.
+
+**Remaining risks**:
+- Migration `neon/migrations/20260617_zenquanta_template_shares.sql` must be run in Neon before the feature is live.
+- `template_id` has no FK — if a prompt or playbook is deleted, its shares become silently 404-returning dead links (audit trail preserved, no cascade). This is intentional.
+- Unauthenticated copy flow redirects to `/sign-in` which must exist (it does in this repo).
+
+**Next steps**: Run the Neon migration. Consider surfacing "shared" badge on prompt/playbook cards if they have active share links (requires client-side share count check).
+
+---
+
+## 2026-06-17 - Production Environment Validator v1
+
+**Goal**: Provide admins a server-only diagnostic tool at `/admin/system-health` (and `GET /api/admin/system-health`) that checks whether all required env vars and service dependencies are configured, without exposing any secret values.
+
+**Files changed**:
+- `types/index.ts` — Added `HealthStatus`, `HealthCheck`, `SystemHealthReport`
+- `lib/system-health/checks.ts` — New server-only module: 12 named checks across DB, AI services, web search, embeddings, storage, and environment. Returns `SystemHealthReport` with per-check status and summary counts.
+- `app/api/admin/system-health/route.ts` — Admin-only `GET` route. Returns `SystemHealthReport` JSON. Protected by `requireAdminApiUser`.
+- `app/admin/system-health/page.tsx` — Admin-only server component with `requireAdmin`. Renders grouped check cards (Database / AI Services / Web Search / RAG / File Storage / Environment). Shows healthy/degraded/missing/unknown status with icons and summary chips.
+- `app/admin/page.tsx` — Added "System health" button link in the header next to "Back to app".
+
+**Checks implemented**:
+1. `db_url` — DATABASE_URL / NEON_DATABASE_URL / POSTGRES_URL presence. Shows sanitized host, never credentials.
+2. `db_connect` — Live `SELECT 1` via Neon client. Reports connection failure message safely.
+3. `db_schema` — Queries `information_schema.tables` for 5 expected tables (`zen_users`, `zen_subscriptions`, `zen_auth_sessions`, `zen_artifact_shares`, `zen_template_shares`). Lists missing tables when any absent.
+4. `pgvector` — Queries `pg_available_extensions WHERE name = 'vector'`. Distinguishes not-available vs available-but-not-installed vs installed (with version).
+5. `openrouter` — OPENROUTER_API_KEY present via `hasOpenRouterConfig()`.
+6. `tavily` — TAVILY_API_KEY via `hasWebSearchConfig()`. Missing = degraded (not missing), Pulse degrades gracefully.
+7. `embeddings` — EMBEDDINGS_API_KEY or OPENAI_API_KEY via `hasEmbeddingConfig()`. Missing = degraded; shows current model name.
+8. `storage_provider` — FILE_STORAGE_PROVIDER resolved value. Local in production = degraded with warning.
+9. `storage_creds` — If s3/r2, checks endpoint/access-key-id/secret/bucket all present. Shows endpoint hostname and bucket name (no secret values).
+10. `auth_security` — NODE_ENV check: production = cookies use Secure flag; non-production = degraded with dev note.
+11. `app_url` — NEXT_PUBLIC_APP_URL or VERCEL_URL; missing = degraded (share links may use wrong base URL).
+12. `deploy_env` — VERCEL_ENV / NODE_ENV detection for deployment context.
+
+**Architecture decisions**:
+- No secret values ever returned. Endpoint URLs truncated to hostname only. Credentials shown as `(configured)` or listed as missing by var name only.
+- All DB checks wrapped in try/catch — a check failure captures the error message safely and returns `unknown` or `missing`, never throws through the route.
+- DB checks run in parallel (`Promise.all`) to minimize latency.
+- `dynamic = 'force-dynamic'` on the page so checks always run fresh (not cached at build time).
+- Never calls paid AI APIs (no OpenRouter completions, no embedding generation, no Tavily search). DB `SELECT 1` and extension queries are free reads.
+
+**Verified**: `npm run typecheck` clean, `npm run lint` 0 errors, `npm run build` succeeds with 2 new routes in manifest.
+
+---
+
+## 2026-06-17 - Shareable Artifact Links v1
+
+**Goal**: Allow users to create controlled share links for selected artifacts. Links are read-only. Revoked links stop working immediately.
+
+**Files changed**:
+- `lib/db/schema.ts` — Added `zenArtifactShares` table and `artifactShareVisibilityCheck` constant
+- `neon/migrations/20260616_zenquanta_artifact_shares.sql` — Migration SQL for `zen_artifact_shares`
+- `types/index.ts` — Added `ArtifactShareVisibility`, `ArtifactShareInfo`, `ArtifactShareCreated`, `ArtifactShareInput`, `PublicArtifactShare`
+- `lib/db/repositories/artifact-shares.ts` — New repository: `create`, `list`, `revoke`, `getPublicByToken`
+- `lib/db/repositories/index.ts` — Exports `neonArtifactSharesRepository`
+- `app/api/artifacts/[id]/shares/route.ts` — `GET` (list) + `POST` (create)
+- `app/api/artifacts/[id]/shares/[shareId]/route.ts` — `DELETE` (revoke)
+- `app/api/share/artifacts/[token]/route.ts` — Public JSON API (no auth)
+- `app/share/artifacts/[token]/page.tsx` — Public read-only server component page
+- `components/chat/artifact-studio.tsx` — Share button + Share dialog (create/copy/revoke)
+
+**Architecture decisions**:
+- **Token model**: 32 random bytes as `base64url` (43 chars). Raw token never stored — only SHA-256 hash stored in `zen_artifact_shares.token_hash`. Unique index on hash. Identical to session token pattern in `lib/auth/session.ts`.
+- **Token validation**: Public routes reject tokens that don't match `/^[A-Za-z0-9_-]{40,60}$/` before hitting DB.
+- **Visibility**: `public_link` (no auth required) or `private_link` (same token-gate, future use). Both currently accessible by anyone with the token — token entropy provides the access control.
+- **Expiry**: `expiresAt` nullable. Checked server-side on `getPublicByToken` — expired links return null.
+- **Revocation**: Sets `revokedAt`. `list()` filters `revokedAt IS NULL`. `getPublicByToken` returns null if revoked. Revoked at token remains in DB for audit.
+- **Public page**: `/share/artifacts/[token]` is a Next.js server component. Calls repository directly (no auth check). Exposes only `title`, `artifactType`, `content` — no userId, projectId, conversationId, metadata.
+- **Token delivery**: Raw token returned only on `POST` creation response (`ArtifactShareCreated`). Not stored in client state after the dialog closes.
+- **Security**: Share links expose no project files, conversation history, or owner workspace data. `Content-Security-Policy` and `robots` meta on the public page set to `noindex` for private links.
+
+**Verified**: `npm run typecheck` clean, `npm run lint` 0 errors, `npm run build` succeeds with all 4 new routes in the manifest.
+
+**Remaining risks**:
+- Migration must be run in Neon before the share feature can be used. Artifact owners will need to run `20260616_zenquanta_artifact_shares.sql`.
+- Token validation regex assumes base64url output from Node `randomBytes(32).toString('base64url')` (always 43 chars). Range 40–60 gives buffer if source changes.
+- `private_link` and `public_link` are currently equivalent in access (token is the only gate). Future implementation could require Zenquanta login for `private_link`.
+
+**Next steps**: Run the Neon migration. Consider adding a per-artifact share count to the `ProjectHomeArtifactSummary` or workspace home surface if shares become a first-class metric.
+
+---
+
+## 2026-06-16 - Notion Read-Only Integration Plan
+
+**Goal**: Plan a safe Notion integration for importing selected pages and databases into Zenquanta projects and Ask Files. Documentation only — no code changed.
+
+**Deliverable**: `docs/integrations/notion-readonly-plan.md`
+
+**Key decisions documented**:
+
+- **OAuth model**: Notion uses capability-based permissions set at the developer portal, not OAuth scope strings. Required capabilities: `read_content` + `read_user_info` only. Insert/update capabilities must remain off. The user selects which pages to share inside Notion's OAuth UI — no folder-browser UX is needed post-connect.
+- **Token storage**: Notion access tokens are permanent (no expiry, no refresh_token). AES-256-GCM encryption using existing `zen_integration_accounts.encrypted_token_payload` column. Key from `NOTION_TOKEN_ENCRYPTION_KEY` env var. No refresh logic needed — simpler than Drive, but permanent tokens carry higher breach risk.
+- **Content assembly**: Notion has no binary file download. Pages are assembled by recursively fetching blocks via `GET /v1/blocks/{id}/children` (paginated, depth limit 6, block count limit 500) and rendering to Markdown using a `renderBlocksToMarkdown()` function. Output stored as `mimeType: 'text/markdown'` bytes, fed into the existing `indexUploadedFileForKnowledge()` pipeline unchanged.
+- **Database import**: `POST /v1/databases/{id}/query` (cap 50 rows). Properties extracted as a structured Markdown document — block-level content per row is not fetched in v1.
+- **Schema change**: Update `integrationProviderCheck` in `lib/db/schema.ts` to include `'notion'` (and `'google-drive'` if that migration has not yet run). One migration SQL statement.
+- **Import path**: Mirrors GitHub import — `zen_files` with `provider: 'external'`, `bucket: null`, `storagePath: null`, `metadata.source: 'notion'`. Tracked in `zen_integration_items` with `externalId: 'notion-page:{pageId}'` or `'notion-db:{databaseId}'`.
+- **Revocation**: No public Notion revoke endpoint. DELETE route clears `encryptedTokenPayload`, sets `status: 'revoked'`. UI instructs user to also revoke from their Notion connected apps settings.
+- **Re-import optimization**: Store `lastEditedTime` from Notion in item metadata. On reimport, check current `lastEditedTime` before re-fetching all blocks.
+- **No background sync in v1**: Notion has no public webhook/push API for page changes. User-triggered only.
+- **Rate limiting**: Notion enforces 3 req/sec per integration. Block pagination calls must be sequential.
+
+**New lib files planned**: `lib/integrations/notion.ts`, `lib/integrations/notion-import.ts`, `lib/integrations/notion-tokens.ts`
+
+**New API routes planned** (7): `GET/DELETE /api/integrations/notion`, `GET /api/integrations/notion/connect`, `GET /api/integrations/notion/callback`, `GET /api/integrations/notion/pages`, `POST /api/integrations/notion/import`, `POST /api/integrations/notion/reimport`
+
+**New env vars**: `NOTION_CLIENT_ID`, `NOTION_CLIENT_SECRET`, `NOTION_CALLBACK_URL`, `NOTION_TOKEN_ENCRYPTION_KEY`
+
+**Security risks addressed**: permanent token (no expiry) requires encryption key discipline, CSRF state cookie, block ID validation (UUID format check), memory limit on block fetch, rate limit handling, 401 detection sets `status: 'error'`.
+
+**No code changed. No app behavior modified.** Ready for implementation when requested.
 
 ## 2026-06-16 - Google Drive Read-Only Integration Plan
 

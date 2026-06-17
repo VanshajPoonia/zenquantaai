@@ -58,9 +58,14 @@ export default async function AdminPage({
               Zenquanta control room
             </h1>
           </div>
-          <Button asChild variant="secondary" className="rounded-xl">
-            <Link href="/">Back to app</Link>
-          </Button>
+          <div className="flex gap-2">
+            <Button asChild variant="outline" className="rounded-xl">
+              <Link href="/admin/system-health">System health</Link>
+            </Button>
+            <Button asChild variant="secondary" className="rounded-xl">
+              <Link href="/">Back to app</Link>
+            </Button>
+          </div>
         </div>
 
         {updated ? (
