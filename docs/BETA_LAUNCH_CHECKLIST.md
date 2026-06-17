@@ -281,8 +281,10 @@ State these up front so testers don't file them as bugs:
 
 - **Manual billing**: plans are activated by an admin after a request; there is no
   checkout, card entry, or instant upgrade.
-- **No self-serve account/data deletion yet** — deletion is handled manually by the
-  operator on request (see §19).
+- **Self-serve deletion exists, but is irreversible** — users can delete workspace
+  data or the full account from Settings; admins can purge another user from
+  `/admin/users/[id]`. Manual operator cleanup remains the fallback if an object
+  cleanup failure needs follow-up (see §19).
 - **Pulse search needs Tavily**; if it's off for the beta, answers won't cite live sources.
 - **File knowledge (RAG)** only indexes text/code files and **text-based** PDFs.
   Scanned/image-only PDFs are **not** OCR'd or indexed.
@@ -354,32 +356,43 @@ Triage labels for the operator: `blocker`, `privacy`, `billing`, `data-loss`,
 
 ## 19. Data deletion / manual cleanup notes
 
-There is no self-serve account-deletion flow yet, so deletion is operator-driven.
+Self-serve deletion is implemented as foreground, authenticated routes:
 
-Self-serve pieces that **do** exist:
+- User workspace-data preview/delete: `/api/account/delete-data/preview` and
+  `/api/account/delete-data` with confirmation `DELETE DATA`.
+- User full-account preview/delete: same routes with confirmation equal to the
+  user's login ID when present, otherwise `DELETE ACCOUNT`.
+- Admin target-user preview/purge: `/api/admin/users/[id]/purge/preview` and
+  `/api/admin/users/[id]/purge` with confirmation `<target user id> PURGE`.
 
-- Delete a file: `DELETE /api/files/[id]` removes file metadata, `zen_file_chunks`,
-  and private object access + attachment refs.
-- Delete a conversation: `/api/conversations/[id]`.
-- Clear a conversation memory summary (does not delete messages).
-- Revoke artifact/template share links.
+Expected behavior:
 
-Operator manual cleanup (when a tester asks to be removed):
+- [ ] User workspace-data deletion leaves sign-in working but removes chats,
+      projects, uploads, generated images, artifacts, playbooks, prompts,
+      integrations, usage/plan data, recommendation/feedback telemetry, and
+      settings.
+- [ ] User full-account deletion also removes credentials/sessions/integration
+      tokens, tombstones `zen_users` / `zen_profiles`, clears auth cookies, and
+      redirects to `/` with an account-deleted acknowledgement.
+- [ ] Admin purge is blocked for the currently authenticated admin and writes safe
+      `admin_user_purge_previewed` / `admin_user_purged` audit rows for other
+      users.
+- [ ] Preview/result payloads show grouped counts only, never bucket names,
+      storage keys, source URLs, raw costs, content, secrets, or provider tokens.
+- [ ] Protected file/generated-image URLs return 404 after database access is
+      revoked, even if object deletion needs manual follow-up.
 
-- [ ] Identify the user's `zen_users` / `zen_profiles` id.
-- [ ] Remove or anonymize their owned rows: conversations/messages, projects,
-      prompts, workflows + runs, custom assistants, artifacts (+ versions + shares),
-      model comparisons, files (+ chunks), generated images, memory, usage records,
-      plan requests, recommendation/feedback telemetry, sessions, and integration
-      records.
-- [ ] Delete their objects from file storage (uploads + generated images) in the
-      bucket / local dir.
-- [ ] Confirm protected file/image URLs for that user 404 afterward.
-- [ ] Log the deletion request and completion (date, who, scope) — keep no secrets.
+Manual cleanup fallback:
 
-> Track FK/cascade behavior in `lib/db/schema.ts` so a single user delete doesn't
-> leave orphaned rows. Document the exact cleanup query set before the first
-> deletion request arrives.
+- [ ] Use `docs/support/per-user-cleanup-sql.md` as the operator SQL playbook
+      when the self-serve/admin purge flow fails or cannot be used.
+- [ ] If a purge reports object cleanup failures, inspect server logs/storage
+      tooling and delete the remaining private objects without copying keys into
+      user-facing reports.
+- [ ] If a route fails mid-request, re-run preview for the target user and verify
+      whether DB access is already revoked before touching object storage.
+- [ ] Log the deletion request and completion (date, who, scope, safe counts) —
+      keep no secrets.
 
 ---
 
