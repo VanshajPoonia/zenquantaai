@@ -34,6 +34,7 @@ export { neonPromptsRepository } from './prompts'
 export { neonSearchRepository } from './search'
 export { neonTemplateSharesRepository } from './template-shares'
 export { neonSettingsRepository } from './settings'
+export { neonUserPurgeRepository } from './user-purge'
 export {
   buildTierRebasedUsageOverridePatch,
   neonSubscriptionsRepository,
