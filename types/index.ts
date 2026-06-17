@@ -690,6 +690,55 @@ export interface TemplateCopyResult {
   title: string
 }
 
+export type UserPurgeScope = 'workspace_data' | 'full_account'
+
+export type UserPurgeActor = 'user' | 'admin'
+
+export interface UserPurgeCounts {
+  conversations: number
+  projects: number
+  files: number
+  generatedImages: number
+  artifacts: number
+  prompts: number
+  playbooks: number
+  customAssistants: number
+  modelComparisons: number
+  integrations: number
+  usageAndPlanData: number
+  telemetry: number
+  sessions: number
+  objectRefs: number
+}
+
+export interface UserPurgePreview {
+  userId: string
+  scope: UserPurgeScope
+  requiresConfirmation: string
+  counts: UserPurgeCounts
+  generatedAt: string
+  warnings: string[]
+}
+
+export interface UserPurgeResult {
+  userId: string
+  scope: UserPurgeScope
+  deletedAt: string
+  counts: UserPurgeCounts
+  objectDeletion: {
+    attempted: number
+    deleted: number
+    failed: number
+  }
+  partialFailure: boolean
+  signedOut: boolean
+}
+
+export interface UserPurgeRequest {
+  scope?: UserPurgeScope
+  confirmation?: string
+}
+
 export type ArtifactActionType =
   | 'improve_writing'
   | 'make_shorter'
