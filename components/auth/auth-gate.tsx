@@ -71,26 +71,42 @@ export function AuthGate() {
         : 'neutral'
 
   return (
-    <div className="flex h-screen w-full items-center justify-center bg-background px-6">
-      <div className="w-full max-w-md rounded-[32px] border border-border/70 bg-card/70 p-8 shadow-2xl shadow-black/30 backdrop-blur-xl">
-        <div className="mb-8 flex items-center gap-4">
-          <ZenquantaLogo className="size-12" />
-          <div>
-            <p className="text-sm font-medium uppercase tracking-[0.24em] text-muted-foreground">
-              Zenquanta AI
-            </p>
-            <h1 className="text-3xl font-semibold tracking-tight text-foreground">
-              Sign in to your workspace
-            </h1>
-          </div>
+    <div className="flex min-h-screen w-full items-center justify-center overflow-y-auto bg-background px-6 py-10">
+      <div className="w-full max-w-md rounded-2xl border border-border/70 bg-card/70 p-8">
+        <div className="mb-8 flex items-center gap-3">
+          <ZenquantaLogo className="size-10" />
+          <p className="eyebrow">Zenquanta AI</p>
         </div>
 
-        <p className="mb-6 text-sm leading-7 text-muted-foreground">
+        <h1 className="text-3xl font-medium tracking-tight text-foreground">
+          Sign in to your workspace
+        </h1>
+
+        <p className="mb-6 mt-3 text-sm leading-7 text-muted-foreground">
           Keep your chats, projects, prompts, and uploads synced to your
           account. Use your Zenquanta ID and password to access the workspace.
         </p>
 
         <div className="space-y-4">
+          <div className="grid grid-cols-2 gap-1 rounded-full border border-border/60 bg-background/60 p-1">
+            <Button
+              type="button"
+              variant={passwordMode === 'sign-in' ? 'cta' : 'ghost'}
+              className="rounded-full"
+              onClick={() => setPasswordMode('sign-in')}
+            >
+              Sign in
+            </Button>
+            <Button
+              type="button"
+              variant={passwordMode === 'sign-up' ? 'cta' : 'ghost'}
+              className="rounded-full"
+              onClick={() => setPasswordMode('sign-up')}
+            >
+              Create account
+            </Button>
+          </div>
+
           <Input
             type="text"
             value={identifier}
@@ -98,34 +114,15 @@ export function AuthGate() {
             placeholder={
               passwordMode === 'sign-in' ? 'Enter your ID' : 'Choose your ID'
             }
-            className="h-12 rounded-2xl"
+            className="h-12 rounded-xl"
             disabled={status === 'submitting'}
             autoCapitalize="none"
             autoCorrect="off"
             spellCheck={false}
           />
-          <div className="rounded-2xl border border-border/60 bg-background/50 px-4 py-3 text-xs leading-6 text-muted-foreground">
-            <p className="font-medium text-foreground">ID guide</p>
+          <div className="border-t border-border/60 px-1 py-3 text-xs leading-6 text-muted-foreground">
+            <p className="eyebrow mb-1">ID guide</p>
             <p>{identifierHint}</p>
-          </div>
-
-          <div className="grid grid-cols-2 gap-2 rounded-2xl bg-background/60 p-1">
-            <Button
-              type="button"
-              variant={passwordMode === 'sign-in' ? 'default' : 'ghost'}
-              className="rounded-xl"
-              onClick={() => setPasswordMode('sign-in')}
-            >
-              Sign in
-            </Button>
-            <Button
-              type="button"
-              variant={passwordMode === 'sign-up' ? 'default' : 'ghost'}
-              className="rounded-xl"
-              onClick={() => setPasswordMode('sign-up')}
-            >
-              Create account
-            </Button>
           </div>
 
           <Input
@@ -135,7 +132,7 @@ export function AuthGate() {
             placeholder={
               passwordMode === 'sign-in' ? 'Enter your password' : 'Create a password'
             }
-            className="h-12 rounded-2xl"
+            className="h-12 rounded-xl"
             disabled={status === 'submitting'}
           />
 
@@ -145,7 +142,7 @@ export function AuthGate() {
               value={confirmPassword}
               onChange={(event) => setConfirmPassword(event.target.value)}
               placeholder="Confirm your password"
-              className="h-12 rounded-2xl"
+              className="h-12 rounded-xl"
               disabled={status === 'submitting'}
             />
           )}
@@ -171,7 +168,8 @@ export function AuthGate() {
           </div>
 
           <Button
-            className="h-12 w-full rounded-2xl"
+            variant="cta"
+            className="h-12 w-full text-base"
             disabled={!canSubmit}
             onClick={async () => {
               setStatus('submitting')
