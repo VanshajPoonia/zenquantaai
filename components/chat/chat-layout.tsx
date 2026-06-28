@@ -1,10 +1,8 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { ChatProvider, useChatContext } from '@/lib/chat-context'
 import { AuthGate } from '@/components/auth/auth-gate'
-import { Button } from '@/components/ui/button'
-import { MenuIcon } from '@/components/icons'
 import { Sidebar } from './sidebar'
 import { Header } from './header'
 import { ChatArea } from './chat-area'
@@ -42,6 +40,20 @@ function ChatShell({
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false)
   const { authState, isSidebarOpen, toggleSidebar, workspaceSearchRequest, openWorkspaceTool } =
     useChatContext()
+  const hasAppliedMobileSidebarDefault = useRef(false)
+
+  // Default the sidebar closed on phones so first load shows the chat, not a
+  // full-screen drawer. Reads window width directly (once, on mount) instead
+  // of useIsMobile's async-determined value, which starts at `false` either
+  // way and would race this one-time check.
+  useEffect(() => {
+    if (hasAppliedMobileSidebarDefault.current) return
+    hasAppliedMobileSidebarDefault.current = true
+    if (window.innerWidth < 768 && isSidebarOpen) {
+      toggleSidebar()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   useEffect(() => {
     if (!workspaceSearchRequest) return
@@ -70,18 +82,6 @@ function ChatShell({
   return (
     <div className="flex h-screen w-full overflow-hidden bg-background">
       <Sidebar onOpenSettings={() => setIsSettingsModalOpen(true)} />
-
-      {!isSidebarOpen && (
-        <Button
-          type="button"
-          variant="secondary"
-          size="icon"
-          className="absolute left-3 top-3 z-40 size-8 rounded-lg border border-border/70 bg-card/90 shadow-lg backdrop-blur-sm sm:left-4 sm:top-4 sm:size-10 sm:rounded-xl"
-          onClick={toggleSidebar}
-        >
-          <MenuIcon className="size-3.5 sm:size-4" />
-        </Button>
-      )}
 
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         <Header
