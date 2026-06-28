@@ -19,6 +19,8 @@ import {
   formatEstimatedCostUsd,
   sumUsageEstimates,
 } from '@/lib/utils/cost'
+import { useIsMobile } from '@/components/ui/use-mobile'
+import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -335,6 +337,11 @@ export function Sidebar({ onOpenSettings }: SidebarProps) {
   const [isCreatingProject, setIsCreatingProject] = useState(false)
   const [newProjectName, setNewProjectName] = useState('')
   const sidebarRef = useRef<HTMLElement | null>(null)
+  const isMobile = useIsMobile()
+
+  const closeOnMobile = () => {
+    if (isMobile) toggleSidebar()
+  }
 
   const projectLabelById = useMemo(
     () =>
@@ -402,7 +409,7 @@ export function Sidebar({ onOpenSettings }: SidebarProps) {
     [conversations]
   )
 
-  if (!isSidebarOpen) return null
+  if (!isSidebarOpen && !isMobile) return null
 
   const handleResizeStart = (event: React.MouseEvent<HTMLDivElement>) => {
     event.preventDefault()
@@ -421,18 +428,17 @@ export function Sidebar({ onOpenSettings }: SidebarProps) {
     window.addEventListener('mouseup', handlePointerUp)
   }
 
-  return (
-    <aside
-      ref={sidebarRef}
-      style={{ width: `min(${sidebarWidth}px, calc(100vw - 48px))` }}
-      className="relative flex h-full min-h-0 shrink-0 flex-col border-r border-sidebar-border bg-sidebar"
-    >
+  const sidebarBody = (
+    <>
       {/* Header with logo and new chat */}
       <div className="space-y-3 p-3 sm:space-y-4 sm:p-4">
         <div className="flex items-center justify-between gap-2">
           <button
             type="button"
-            onClick={goHome}
+            onClick={() => {
+              goHome()
+              closeOnMobile()
+            }}
             className="flex min-w-0 cursor-pointer items-center gap-2 rounded-xl p-1 text-left transition-colors hover:bg-sidebar-accent/40 sm:gap-3 sm:rounded-2xl"
           >
             <ZenquantaLogo className="size-7 sm:size-9" />
@@ -453,10 +459,10 @@ export function Sidebar({ onOpenSettings }: SidebarProps) {
                   type="button"
                   variant="ghost"
                   size="icon"
-                  className="size-8 rounded-lg text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground sm:size-9 sm:rounded-xl"
+                  className="size-9 rounded-lg text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground sm:size-9 sm:rounded-xl"
                   onClick={toggleSidebar}
                 >
-                  <PanelLeftClose className="size-3.5 sm:size-4" />
+                  <PanelLeftClose className="size-4" />
                 </Button>
               </TooltipTrigger>
               <TooltipContent side="bottom" className="text-xs">
@@ -467,12 +473,14 @@ export function Sidebar({ onOpenSettings }: SidebarProps) {
         </div>
 
         <Button
-          onClick={createNewChat}
+          onClick={() => {
+            createNewChat()
+            closeOnMobile()
+          }}
+          variant="cta"
           className={cn(
-            'w-full justify-center gap-2 h-10 rounded-xl font-semibold',
-            'bg-sidebar-primary hover:bg-sidebar-primary/90 text-sidebar-primary-foreground',
-            'shadow-lg shadow-sidebar-primary/20 transition-all duration-200',
-            'hover:shadow-xl hover:shadow-sidebar-primary/30 hover:scale-[1.02]'
+            'h-10 w-full justify-center gap-2 font-semibold',
+            'bg-sidebar-primary text-sidebar-primary-foreground hover:bg-sidebar-primary/90'
           )}
         >
           <PlusIcon className="size-4" />
@@ -611,7 +619,10 @@ export function Sidebar({ onOpenSettings }: SidebarProps) {
             title="Pinned"
             chats={pinnedChats}
             currentChatId={currentChat?.id}
-            onSelectChat={setCurrentChat}
+            onSelectChat={(chat) => {
+              setCurrentChat(chat)
+              closeOnMobile()
+            }}
             onPinChat={togglePinChat}
             onDeleteChat={deleteChat}
             onMoveChatToProject={moveChatToProject}
@@ -623,7 +634,10 @@ export function Sidebar({ onOpenSettings }: SidebarProps) {
             title="Chats"
             chats={recentChats}
             currentChatId={currentChat?.id}
-            onSelectChat={setCurrentChat}
+            onSelectChat={(chat) => {
+              setCurrentChat(chat)
+              closeOnMobile()
+            }}
             onPinChat={togglePinChat}
             onDeleteChat={deleteChat}
             onMoveChatToProject={moveChatToProject}
@@ -670,23 +684,19 @@ export function Sidebar({ onOpenSettings }: SidebarProps) {
             </TooltipProvider>
             <DropdownMenuContent align="end" className="w-60">
               <div className="px-3 py-2">
-                <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                  Signed in
-                </p>
+                <p className="eyebrow">Signed in</p>
                 <p className="mt-1 truncate text-sm text-foreground">
                   {authState.user?.loginId ?? authState.user?.email ?? 'Zenquanta user'}
                 </p>
                 {authState.user?.role === 'admin' ? (
-                  <p className="mt-1 text-[11px] font-medium uppercase tracking-[0.18em] text-sidebar-primary">
+                  <p className="eyebrow mt-1 text-sidebar-primary">
                     Admin access enabled
                   </p>
                 ) : null}
               </div>
               <div className="px-3 pb-2">
                 <div className="rounded-xl border border-border/70 bg-card/60 p-3">
-                  <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-                    Usage
-                  </p>
+                  <p className="eyebrow">Usage</p>
                   <div className="mt-3 grid grid-cols-2 gap-3 text-sm">
                     <div>
                       <p className="text-xs text-muted-foreground">Estimated spend</p>
@@ -740,6 +750,35 @@ export function Sidebar({ onOpenSettings }: SidebarProps) {
           </DropdownMenu>
         </div>
       </div>
+    </>
+  )
+
+  if (isMobile) {
+    return (
+      <Sheet
+        open={isSidebarOpen}
+        onOpenChange={(open) => {
+          if (!open) toggleSidebar()
+        }}
+      >
+        <SheetContent
+          side="left"
+          className="w-[86vw] max-w-sm gap-0 border-sidebar-border bg-sidebar p-0 sm:max-w-sm"
+        >
+          <SheetTitle className="sr-only">Navigation</SheetTitle>
+          <div className="flex h-full min-h-0 flex-col">{sidebarBody}</div>
+        </SheetContent>
+      </Sheet>
+    )
+  }
+
+  return (
+    <aside
+      ref={sidebarRef}
+      style={{ width: `min(${sidebarWidth}px, calc(100vw - 48px))` }}
+      className="relative flex h-full min-h-0 shrink-0 flex-col border-r border-sidebar-border bg-sidebar"
+    >
+      {sidebarBody}
 
       <div
         role="separator"
