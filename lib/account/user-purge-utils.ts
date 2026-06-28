@@ -165,28 +165,38 @@ export function sanitizeUserPurgePreviewPayload(value: unknown): unknown {
   const blockedKeys = new Set([
     'bucket',
     'key',
-    'storagePath',
-    'storage_path',
-    'storageBucket',
-    'storage_bucket',
-    'publicUrl',
-    'sourceUrl',
-    'source_url',
-    'token',
-    'tokenHash',
-    'encryptedTokenPayload',
-    'passwordHash',
-    'passwordSalt',
-    'rawCostUsd',
-    'marginUsd',
+    'storagepath',
+    'storagebucket',
+    'publicurl',
+    'sourceurl',
+    'privateurl',
+    'providerurl',
+    'connectionstring',
+    'apikey',
+    'rawcostusd',
+    'rawmodelcost',
+    'marginusd',
     'content',
     'snippet',
-    'outputUrls',
+    'outputurls',
   ])
+
+  function isBlockedKey(key: string): boolean {
+    const normalized = key.replaceAll('_', '').toLowerCase()
+    return (
+      blockedKeys.has(normalized) ||
+      normalized.includes('token') ||
+      normalized.includes('secret') ||
+      normalized.includes('password') ||
+      normalized.includes('endpoint') ||
+      normalized === 'dsn' ||
+      normalized.endsWith('url')
+    )
+  }
 
   return Object.fromEntries(
     Object.entries(value)
-      .filter(([key]) => !blockedKeys.has(key))
+      .filter(([key]) => !isBlockedKey(key))
       .map(([key, child]) => [key, sanitizeUserPurgePreviewPayload(child)])
   )
 }
