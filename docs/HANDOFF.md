@@ -36,7 +36,7 @@ running; current focus is **private beta readiness**.
 5. `AI_CHECKLIST.md` — setup, verification, migrations, failure points.
 6. `docs/BETA_LAUNCH_CHECKLIST.md` — the operational beta to-do list.
 
-## Current state (as of 2026-06-17)
+## Current state (as of 2026-06-20)
 
 Recently shipped (see `AI_TASK_LOG.md`):
 
@@ -48,6 +48,11 @@ Recently shipped (see `AI_TASK_LOG.md`):
   pages + copy-to-workspace. Backed by `zen_template_shares`.
 - **Beta Launch Checklist & Bug Bash Plan** — `docs/BETA_LAUNCH_CHECKLIST.md`
   (20 sections incl. tester task script and a bug report template).
+- **Self-serve data deletion / admin purge** — authenticated preview/delete routes,
+  Settings Danger Zone, admin target-user purge controls, Neon tombstoning for full
+  accounts, best-effort neutral object-storage cleanup, and manual SQL fallback.
+- **Deletion verification harness** — unit/route/orchestration coverage plus a
+  destructive Playwright fixture guarded by an explicit dedicated-Neon opt-in.
 
 Core platform already implemented: ID/password auth (Neon), six assistants,
 streamed chat, Prism images + Prism Studio, projects + Project Home, global/command-
@@ -73,20 +78,17 @@ admin activation, usage/billing enforcement.
 
 ## Open work (prioritized)
 
-1. **Self-serve data deletion (highest value).** There is no account/data-deletion
-   flow; `docs/BETA_LAUNCH_CHECKLIST.md` §19 is currently manual DB cleanup. Build a
-   user-owned deletion path (and/or admin-triggered per-user purge) that removes a
-   user's conversations/messages, projects, prompts, workflows + runs, custom
-   assistants, artifacts (+ versions + shares), model comparisons, files (+
-   `zen_file_chunks`), generated images, memory, usage records, plan requests,
-   recommendation/feedback telemetry, sessions, integrations — **and** their objects
-   in file storage. Confirm protected file/image URLs 404 afterward. Respect existing
-   ownership checks and FK/cascade behavior in `lib/db/schema.ts`.
-2. **Sync the migration list** in `AI_CHECKLIST.md` (Migration Order section) — it
-   lists 16 files; disk has 19. Add `20260616_zenquanta_artifact_shares.sql`,
-   `20260616_zenquanta_feedback_events.sql`, `20260617_zenquanta_template_shares.sql`.
-3. **Draft the exact per-user cleanup query set** referenced in §19 (useful even
-   after #1 ships, for support/edge cases).
+1. **Run destructive deletion E2E on a dedicated Neon branch.** Supply the
+   test-only variables documented in `AI_CHECKLIST.md`, run the guarded purge
+   Playwright spec, and record the actual storage provider/result. Never point it
+   at the ordinary `.env.local` database.
+2. **Repeat object cleanup against the beta storage provider.** The guarded fixture
+   defaults to local neutral storage under `/tmp`; S3/R2 behavior still needs a
+   non-production provider-specific smoke check if that is the beta configuration.
+3. **Resolve the authenticated browser restore baseline.** The 2026-06-20 smoke run
+   loaded all six public assistant pages, but unauthenticated workspace routes stayed
+   at “Restoring your Zenquanta workspace…” in the current environment. Treat this
+   separately from purge verification and inspect `/api/auth/session`/database access.
 
 Pick the task the operator points you at; default to #1 if unspecified.
 

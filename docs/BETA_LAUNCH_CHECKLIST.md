@@ -365,6 +365,14 @@ Self-serve deletion is implemented as foreground, authenticated routes:
 - Admin target-user preview/purge: `/api/admin/users/[id]/purge/preview` and
   `/api/admin/users/[id]/purge` with confirmation `<target user id> PURGE`.
 
+Verification status (2026-06-20): pure helper, service orchestration, route
+ownership/admin-gate, safe-response, and partial object-cleanup failure tests are
+automated. A guarded Playwright fixture now seeds every current purge category,
+but its destructive run remains intentionally pending until an empty/schema-only
+Neon branch is supplied with `PURGE_E2E_CONFIRM=dedicated-neon-branch` and
+`PURGE_E2E_DATABASE_URL`. Do not mark the environment checks below complete from
+unit tests or from the guard-only skipped run.
+
 Expected behavior:
 
 - [ ] User workspace-data deletion leaves sign-in working but removes chats,

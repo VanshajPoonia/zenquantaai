@@ -6,6 +6,58 @@ The repository contains a real Zenquanta AI platform backed by Neon for runtime 
 
 Current direction: plan upgrades remain manual/admin-driven, payment automation is out of scope unless explicitly requested, and Neon/storage start fresh without importing Supabase database rows or storage objects.
 
+## 2026-06-29 - UI/Flow Redesign and Mobile Responsiveness Pass
+
+**Goal**: Explicit user request to improve the app's UI/flow and make it mobile-friendly, using the `frontend-design` skill plus three fetched design references (`DESIGN.md` = runwayml, `together.ai/DESIGN.md`, `x.ai/DESIGN.md`) combined into one direction. This overrides the default "preserve current styling" rule in `AGENTS.md` for this task only.
+
+**Direction**: Kept the existing dark oklch token system, Geist/Geist Mono fonts, and the six per-assistant accent colors (signature device, not replaced). Added: a shared `.eyebrow` utility (uppercase Geist Mono label) in `app/globals.css`, a `cta` pill button variant and `eyebrow` badge variant in `components/ui/button.tsx`/`badge.tsx`. Removed dead `.glow-*` CSS (the real glow mechanism is `getModeGlow()` in `lib/mode-utils.tsx`, which never referenced those classes).
+
+**Mobile fixes (the actual product surface)**:
+- `components/chat/sidebar.tsx` + `chat-layout.tsx`: sidebar now renders as a `Sheet` overlay with backdrop below 768px instead of pushing/crushing the chat column; defaults closed on phones on first mount; auto-closes on navigation actions.
+- `components/chat/settings-panel.tsx`: was a hardcoded `w-80` `<aside>` with no responsive handling (would overflow on phones) — now a full-screen overlay below `md`, unchanged above it.
+- Audited `artifact-studio.tsx`, `playbook-studio.tsx`, `memory-vault.tsx`, `prism-studio.tsx`, `pulse-research-room.tsx`, `ask-files-panel.tsx`, `github-integration-panel.tsx` — all are Radix `Dialog`-based and already mobile-safe (`w-[calc(100vw-1rem)]` or base responsive max-width); no changes needed.
+- `components/chat/header.tsx`: added a mobile-only overflow menu folding help/session-settings/share/admin behind one trigger.
+- `components/chat/composer.tsx`: send/stop buttons bumped from `h-9` to `h-10` for touch target; safe-area bottom padding was already present.
+- Found and fixed a pre-existing bug while testing: a floating absolutely-positioned "reopen sidebar" button in `chat-layout.tsx` exactly overlapped the header's own identical hamburger button (both called `toggleSidebar`), making the header's button dead/unreachable. Removed the redundant floating one.
+
+**Visual redesign**: `components/assistants/assistant-brand-page.tsx` (replaced repeated `rounded-3xl` card grid with eyebrow+display-headline hero and hairline-divided rows), `components/auth/auth-gate.tsx` (pill sign-in/sign-up toggle, mono eyebrow labels, fixed `h-screen items-center` → `min-h-screen` + scroll so the form doesn't clip on short mobile viewports with the keyboard open), `app/pricing/page.tsx` (plan cards → hairline-divided slab, pill CTAs).
+
+**Verification**: `npm run typecheck`, `npm run lint` (same 10 pre-existing warnings, 0 errors), and `npm run build` all passed after every phase. Manually drove the app with Playwright + chromium at 375px/1280px: public assistant page and auth gate screenshots confirmed the new visual language; signed in with a temporary test account (`verifybot1782673032859` — not yet cleaned up, safe to purge) and confirmed the sidebar opens as a true overlay (not a push panel) on mobile, closes on backdrop click, and the settings panel renders as a usable full-screen overlay instead of the old crushed `w-80` panel.
+
+**Not changed**: Admin pages, dashboard data views, knowledge library internals, and all API/billing/auth logic — visual-only pass, per the user-approved plan.
+
+---
+
+## 2026-06-20 - Self-Serve Data Deletion Verification
+
+**Goal**: Audit the existing self-serve/admin purge implementation, add focused security and orchestration coverage, and run destructive end-to-end verification only against an explicitly approved dedicated Neon branch and non-production storage namespace.
+
+**Audit result**: The existing purge repository covers all current user-owned product tables directly or through verified foreign-key cascades. Self-service routes derive their target only from the authenticated session; admin routes re-check the admin role in the handler, block self-purge, and use the protected path target. Full-account deletion removes auth access and tombstones identity rows. Object refs are collected before the database transaction, and protected reads depend on metadata that the transaction removes before best-effort object cleanup.
+
+**Implemented**:
+- Expanded purge helper tests for confirmation edge cases, invalid scopes, normalized counts, exact preview keys, unsafe/deduplicated object refs, and tombstone fields.
+- Hardened preview sanitization so case/underscore variants and token/secret/password/private-provider URL fields cannot survive future sanitizer callers.
+- Added service tests proving ref collection precedes the database transaction, object deletion follows it, invalid confirmation performs no deletion, and partial provider failures return counts without leaking the caught error.
+- Added route tests proving guessed body IDs cannot change self-service scope, full-account responses clear cookies, non-admin access is rejected, admin self-purge is blocked, and admin audit payloads remain grouped/safe.
+- Added a guarded Playwright fixture that creates disposable accounts through real auth routes, seeds all current purge categories, uploads real local neutral-storage objects, and verifies workspace deletion, full-account sign-out/tombstoning, admin purge, protected 404s, object removal, safe responses/audits, and an unaffected control user.
+- Updated `AI_CHECKLIST.md`, `docs/BETA_LAUNCH_CHECKLIST.md`, `docs/HANDOFF.md`, and `tests/e2e/README.md` with the repeatable safety-gated workflow and current verification boundary.
+
+**Verification**:
+- Focused purge tests passed: 3 files, 15 tests.
+- `npm run test` passed: 20 files, 88 tests.
+- `npm run typecheck` passed.
+- `npm run lint` passed with the same 10 existing warnings and 0 errors.
+- `npm run build` passed and lists all four purge routes as dynamic handlers.
+- `git diff --check` plus explicit checks for the three new untracked test files passed.
+- `npm run test:e2e -- user-purge.spec.ts` started the app and safely skipped the destructive test because the dedicated opt-in/database variables were absent.
+- Browser fallback: the `agent-browser` CLI was unavailable. The existing Playwright smoke suite loaded all six public assistant pages, while six unauthenticated workspace/auth-gate checks timed out at `Restoring your Zenquanta workspace…`; this is outside the purge code path and remains a separate environment/runtime risk.
+
+**Remaining risks**: Seeded Neon/object deletion, protected 404s, actual sign-out, and real admin purge are not yet runtime-proven because no dedicated empty/schema-only branch was supplied. The harness currently forces local neutral storage under `/tmp`; if beta uses S3/R2, repeat object cleanup against a non-production bucket. Do not mark `docs/BETA_LAUNCH_CHECKLIST.md` §19 complete until that run passes.
+
+**Not changed**: No public route shape, tombstone decision, schema/migration, dependency, Supabase, Stripe, payment automation, or unrelated `pnpm-workspace.yaml` change was introduced.
+
+---
+
 ## 2026-06-17 - Manual Per-User Cleanup SQL Support Guide
 
 **Goal**: Replace vague beta manual cleanup fallback notes with an operator-safe SQL guide for one-user cleanup when self-serve/admin purge fails or needs manual follow-up.
