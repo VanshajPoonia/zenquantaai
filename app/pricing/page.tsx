@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import { cn } from '@/lib/utils'
 import {
   ASSISTANT_PUBLIC_PAGES,
   PLAN_CONFIGS,
@@ -18,7 +19,6 @@ import {
 import { requestPlanAction } from './actions'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 
@@ -59,12 +59,10 @@ export default async function PricingPage({
   return (
     <main className="min-h-screen bg-background px-4 py-8 sm:px-6 lg:px-10">
       <div className="mx-auto flex max-w-7xl flex-col gap-8">
-        <div className="flex flex-col gap-4 rounded-3xl border border-border/70 bg-card/60 p-6 backdrop-blur-sm sm:flex-row sm:items-end sm:justify-between">
+        <div className="flex flex-col gap-4 border-b border-border/60 pb-8 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-muted-foreground">
-              Plans
-            </p>
-            <h1 className="mt-3 text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
+            <p className="eyebrow">Plans</p>
+            <h1 className="mt-3 text-3xl font-medium tracking-tight text-foreground sm:text-4xl">
               Zenquanta plans and assistant tiers
             </h1>
             <p className="mt-3 max-w-3xl text-sm leading-6 text-muted-foreground sm:text-base">
@@ -73,15 +71,13 @@ export default async function PricingPage({
             </p>
           </div>
           <div className="flex flex-col items-start gap-3 sm:items-end">
-            <div className="rounded-2xl border border-border/70 bg-background/60 px-4 py-3 text-sm">
-              <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
-                Current plan
-              </p>
+            <div className="text-sm sm:text-right">
+              <p className="eyebrow">Current plan</p>
               <p className="mt-1 font-medium text-foreground">
                 {subscription.tier.toUpperCase()}
               </p>
             </div>
-            <Button asChild variant="secondary" className="rounded-xl">
+            <Button asChild variant="outline" className="rounded-full">
               <Link href="/">Back to home</Link>
             </Button>
           </div>
@@ -147,7 +143,7 @@ export default async function PricingPage({
           </div>
         ) : null}
 
-        <div className="grid gap-5 lg:grid-cols-5">
+        <div className="grid divide-y divide-border/60 border-y border-border/60 lg:grid-cols-5 lg:divide-x lg:divide-y-0">
           {Object.values(PLAN_CONFIGS).map((plan) => {
             const canRequest = plan.tier !== 'free' && isUpgradeTier(subscription.tier, plan.tier)
             const requestDisabled = Boolean(pendingRequest) || !canRequest
@@ -158,51 +154,51 @@ export default async function PricingPage({
                   ? 'Current plan'
                   : 'Included'
                 : 'Request Plan'
+            const isCurrent = subscription.tier === plan.tier
 
             return (
-              <Card
+              <div
                 key={plan.tier}
-                className="rounded-3xl border-border/70 bg-card/70 text-foreground"
+                className={cn(
+                  'flex flex-col gap-5 px-1 py-6 text-foreground lg:px-5',
+                  isCurrent && 'bg-accent/30'
+                )}
               >
-              <CardHeader className="space-y-4">
                 <div className="flex items-center justify-between gap-3">
-                  <CardTitle className="text-xl">
+                  <p className="eyebrow">
                     {plan.tier.charAt(0).toUpperCase() + plan.tier.slice(1)}
-                  </CardTitle>
-                  {subscription.tier === plan.tier ? (
-                    <Badge variant="secondary">Current</Badge>
-                  ) : null}
+                  </p>
+                  {isCurrent ? <Badge variant="secondary">Current</Badge> : null}
                 </div>
                 <div>
-                  <p className="text-3xl font-semibold tracking-tight">
+                  <p className="text-3xl font-medium tracking-tight">
                     ${plan.priceUsd}
                   </p>
-                  <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
-                    Monthly, manual activation
-                  </p>
+                  <p className="eyebrow mt-1">Monthly, manual activation</p>
                 </div>
-              </CardHeader>
-              <CardContent className="space-y-5">
-                <div className="space-y-2 text-sm text-muted-foreground">
+
+                <div className="space-y-1 text-sm text-muted-foreground">
                   <p>{plan.coreTokens.toLocaleString()} core tokens</p>
                   <p>{plan.tierTokens.toLocaleString()} tier tokens</p>
                   <p>{plan.imageCredits.toLocaleString()} image credits</p>
                   <p>{plan.dailyMessageLimit.toLocaleString()} messages/day</p>
                   <p>{plan.maxImagesPerDay.toLocaleString()} images/day</p>
                 </div>
-                <div className="space-y-2">
+
+                <div className="space-y-1 border-t border-border/60 pt-3">
                   {Object.entries(TIER_ASSISTANT_NAMES[plan.tier]).map(([family, name]) => (
                     <Link
                       key={name}
                       href={`/${ASSISTANT_PUBLIC_PAGES[family as AssistantFamily].slug}`}
-                      className="rounded-xl border border-border/50 bg-background/50 px-3 py-2 text-sm"
+                      className="block text-sm text-muted-foreground hover:text-foreground"
                     >
                       {name}
                     </Link>
                   ))}
                 </div>
+
                 {plan.tier === 'free' ? (
-                  <Button className="w-full rounded-xl" variant="secondary" asChild>
+                  <Button className="w-full rounded-full" variant="outline" asChild>
                     <Link href="/dashboard">View dashboard</Link>
                   </Button>
                 ) : (
@@ -215,15 +211,15 @@ export default async function PricingPage({
                       className="min-h-24"
                     />
                     <Button
-                      className="w-full rounded-xl"
+                      variant="cta"
+                      className="w-full"
                       disabled={requestDisabled}
                     >
                       {buttonLabel}
                     </Button>
                   </form>
                 )}
-              </CardContent>
-            </Card>
+              </div>
             )
           })}
         </div>
