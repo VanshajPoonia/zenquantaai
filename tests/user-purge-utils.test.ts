@@ -3,7 +3,9 @@ import {
   buildSafeUserPurgePreview,
   buildTombstoneUserPatch,
   expectedUserPurgeConfirmation,
+  normalizeUserPurgeCounts,
   normalizeUserPurgeObjectRefs,
+  parseUserPurgeScope,
   sanitizeUserPurgePreviewPayload,
   USER_PURGE_DELETION_ORDER,
   validateUserPurgeConfirmation,
@@ -45,6 +47,28 @@ describe('user purge helpers', () => {
         scope: 'workspace_data',
       })
     ).toBe(false)
+    expect(
+      validateUserPurgeConfirmation(' user-123 PURGE ', {
+        actor: 'admin',
+        scope: 'full_account',
+        targetUserId: 'user-123',
+      })
+    ).toBe(true)
+    expect(
+      validateUserPurgeConfirmation(null, {
+        actor: 'user',
+        scope: 'full_account',
+      })
+    ).toBe(false)
+    expect(
+      expectedUserPurgeConfirmation({
+        actor: 'user',
+        scope: 'full_account',
+        loginId: '   ',
+      })
+    ).toBe('DELETE ACCOUNT')
+    expect(parseUserPurgeScope('full_account')).toBe('full_account')
+    expect(parseUserPurgeScope('unexpected')).toBe('workspace_data')
   })
 
   it('deduplicates object refs and drops unsafe values', () => {
@@ -55,6 +79,8 @@ describe('user purge helpers', () => {
         { bucket: '../private', key: 'user/file.txt' },
         { bucket: 'zenquanta-files', key: '../file.txt' },
         { bucket: 'zenquanta-files', key: 'user//file.txt' },
+        { bucket: 'zenquanta-files', key: '/user/file.txt' },
+        { bucket: 'zenquanta-files', key: 'user\\file.txt' },
         { bucket: null, key: 'user/file.txt' },
       ])
     ).toEqual([{ bucket: 'zenquanta-files', key: 'user/file.txt' }])
@@ -83,6 +109,34 @@ describe('user purge helpers', () => {
         objectRefs: 3,
       },
     })
+    expect(Object.keys(preview).sort()).toEqual(
+      [
+        'counts',
+        'generatedAt',
+        'requiresConfirmation',
+        'scope',
+        'userId',
+        'warnings',
+      ].sort()
+    )
+    expect(Object.keys(preview.counts).sort()).toEqual(
+      [
+        'artifacts',
+        'conversations',
+        'customAssistants',
+        'files',
+        'generatedImages',
+        'integrations',
+        'modelComparisons',
+        'objectRefs',
+        'playbooks',
+        'projects',
+        'prompts',
+        'sessions',
+        'telemetry',
+        'usageAndPlanData',
+      ].sort()
+    )
     expect(JSON.stringify(preview)).not.toContain('storagePath')
 
     const sanitized = sanitizeUserPurgePreviewPayload({
@@ -90,8 +144,16 @@ describe('user purge helpers', () => {
       bucket: 'zenquanta-files',
       key: 'private/file.txt',
       rawCostUsd: 2,
+      raw_model_cost: 3,
+      apiKey: 'api-key',
+      providerToken: 'provider-token',
+      clientSecret: 'client-secret',
+      privateProviderUrl: 'https://private.example/provider',
+      providerEndpoint: 'https://private.example/endpoint',
+      connection_string: 'postgres://private',
       nested: {
         sourceUrl: 'https://private.example/file',
+        PASSWORD_HASH: 'hash',
         safe: 'ok',
       },
     })
@@ -99,6 +161,22 @@ describe('user purge helpers', () => {
     expect(sanitized).toEqual({
       counts: preview.counts,
       nested: { safe: 'ok' },
+    })
+  })
+
+  it('normalizes every preview count to a finite non-negative integer', () => {
+    expect(
+      normalizeUserPurgeCounts({
+        conversations: 2.9,
+        projects: -4,
+        files: Number.POSITIVE_INFINITY,
+      })
+    ).toMatchObject({
+      conversations: 2,
+      projects: 0,
+      files: 0,
+      generatedImages: 0,
+      telemetry: 0,
     })
   })
 
