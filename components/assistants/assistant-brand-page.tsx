@@ -8,16 +8,38 @@ import {
   TIER_ASSISTANT_NAMES,
 } from '@/lib/config'
 import { AssistantFamily } from '@/types'
-import {
-  ModeIcon,
-  getModeAccentClass,
-  getModeGlow,
-  getModeTintClass,
-} from '@/lib/mode-utils'
+import { ModeIcon, getModeAccentClass } from '@/lib/mode-utils'
 import { ZenquantaLogo } from '@/components/icons'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+
+function Section({
+  eyebrow,
+  title,
+  children,
+}: {
+  eyebrow: string
+  title: string
+  children: React.ReactNode
+}) {
+  return (
+    <section className="border-t border-border/60 py-10 sm:py-12">
+      <p className="eyebrow">{eyebrow}</p>
+      <h2 className="mt-3 text-2xl font-medium tracking-tight text-foreground sm:text-3xl">
+        {title}
+      </h2>
+      <div className="mt-6">{children}</div>
+    </section>
+  )
+}
+
+function Row({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="border-t border-border/60 py-4 text-sm leading-7 text-muted-foreground first:border-t-0">
+      {children}
+    </div>
+  )
+}
 
 export function AssistantBrandPage({
   family,
@@ -27,173 +49,106 @@ export function AssistantBrandPage({
   const config = ASSISTANT_PUBLIC_PAGES[family]
   const copy = ASSISTANT_FAMILY_COPY[family]
   const mode = config.mode
+  const accentText = getModeAccentClass(mode, 'text')
 
   return (
-    <main className="min-h-screen bg-background px-4 py-8 sm:px-6 lg:px-10">
-      <div className="mx-auto flex max-w-7xl flex-col gap-8">
-        <div className="flex items-center justify-start">
+    <main className="min-h-screen bg-background px-4 sm:px-6 lg:px-10">
+      <div className="mx-auto flex max-w-5xl flex-col">
+        <div className="flex items-center justify-between py-6">
           <Link
             href="/"
-            className="inline-flex cursor-pointer items-center gap-3 rounded-2xl border border-border/70 bg-card/60 px-4 py-2.5 text-left shadow-sm shadow-black/10 transition-colors hover:bg-card/90"
+            className="inline-flex cursor-pointer items-center gap-2 text-left transition-opacity hover:opacity-80"
           >
-            <ZenquantaLogo className="size-8" />
-            <div>
-              <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-muted-foreground">
-                Back to app
-              </p>
-              <p className="text-sm font-semibold text-foreground">Zenquanta AI</p>
-            </div>
+            <ZenquantaLogo className="size-7" />
+            <span className="text-sm font-semibold text-foreground">Zenquanta AI</span>
+          </Link>
+          <Link
+            href="/"
+            className="eyebrow transition-colors hover:text-foreground"
+          >
+            Back to app
           </Link>
         </div>
 
-        <section
-          className={`relative overflow-hidden rounded-[2rem] border border-border/70 bg-card/70 p-6 shadow-xl shadow-black/20 backdrop-blur-sm sm:p-8 ${getModeGlow(mode)}`}
-        >
-          <div className={`pointer-events-none absolute inset-0 opacity-80 ${getModeTintClass(mode, 'strong')}`} />
-          <div className="relative flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
-            <div className="max-w-3xl">
-              <Badge
-                variant="outline"
-                className={`rounded-full border-current/20 bg-background/50 px-3 py-1 text-[11px] uppercase tracking-[0.18em] ${getModeAccentClass(mode, 'text')}`}
-              >
-                {config.badge}
-              </Badge>
-              <div className="mt-5 flex items-center gap-4">
-                <div
-                  className={`flex size-14 items-center justify-center rounded-2xl border border-white/10 bg-background/70 ${getModeAccentClass(mode, 'text')}`}
-                >
-                  <ModeIcon mode={mode} size="lg" />
-                </div>
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.24em] text-muted-foreground">
-                    Zenquanta assistant
-                  </p>
-                  <h1 className="mt-1 text-4xl font-semibold tracking-tight text-foreground sm:text-5xl">
-                    {copy.shortName}
-                  </h1>
-                </div>
-              </div>
-              <p className="mt-6 text-xl font-medium leading-8 text-foreground">
-                {config.headline}
-              </p>
-              <p className="mt-4 max-w-2xl text-sm leading-7 text-muted-foreground sm:text-base">
-                {config.subheadline}
-              </p>
-            </div>
-
-            <div className="flex flex-wrap gap-3">
-              <Button asChild className="rounded-xl">
-                <Link href="/">Open Zenquanta</Link>
-              </Button>
-              <Button asChild variant="secondary" className="rounded-xl">
-                <Link href="/pricing">View plans</Link>
-              </Button>
-            </div>
+        {/* Hero — eyebrow + display headline lockup, one accent signal */}
+        <section className="border-t border-border/60 py-10 sm:py-14">
+          <div className={`flex items-center gap-2 ${accentText}`}>
+            <ModeIcon mode={mode} size="md" />
+            <Badge variant="eyebrow" className={accentText}>
+              {config.badge}
+            </Badge>
+          </div>
+          <h1 className="mt-5 max-w-3xl text-4xl font-medium leading-[1.05] tracking-tight text-foreground sm:text-5xl lg:text-6xl">
+            {config.headline}
+          </h1>
+          <p className="mt-5 max-w-2xl text-base leading-7 text-muted-foreground sm:text-lg">
+            {config.subheadline}
+          </p>
+          <div className="mt-8 flex flex-wrap gap-3">
+            <Button asChild variant="cta" className="h-11 px-6 text-base">
+              <Link href="/">Open {copy.shortName}</Link>
+            </Button>
+            <Button asChild variant="outline" className="h-11 rounded-full px-6 text-base">
+              <Link href="/pricing">View plans</Link>
+            </Button>
           </div>
         </section>
 
-        <section className="grid gap-5 lg:grid-cols-[1.05fr_0.95fr]">
-          <Card className="rounded-3xl border-border/70 bg-card/70">
-            <CardHeader>
-              <CardTitle>What {copy.shortName} is built for</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-5">
-              <p className="text-sm leading-7 text-muted-foreground">
-                {config.positioning}
-              </p>
-              <div className="grid gap-3 sm:grid-cols-3">
-                {config.bestFor.map((item) => (
-                  <div
-                    key={item}
-                    className="rounded-2xl border border-border/60 bg-background/40 px-4 py-4"
-                  >
-                    <p className="text-sm font-medium text-foreground">{item}</p>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
+        <Section eyebrow="Positioning" title={`What ${copy.shortName} is built for`}>
+          <p className="text-sm leading-7 text-muted-foreground sm:text-base">
+            {config.positioning}
+          </p>
+          <div className="mt-6 grid gap-x-8 sm:grid-cols-3">
+            {config.bestFor.map((item) => (
+              <Row key={item}>
+                <p className="text-foreground">{item}</p>
+              </Row>
+            ))}
+          </div>
+        </Section>
 
-          <Card className="rounded-3xl border-border/70 bg-card/70">
-            <CardHeader>
-              <CardTitle>Demo highlights</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {config.demoHighlights.map((item) => (
-                <div
-                  key={item}
-                  className="rounded-2xl border border-border/60 bg-background/40 px-4 py-4"
-                >
-                  <p className="text-sm leading-6 text-foreground">{item}</p>
-                </div>
-              ))}
-            </CardContent>
-          </Card>
-        </section>
+        <Section eyebrow="In practice" title="Demo highlights">
+          {config.demoHighlights.map((item) => (
+            <Row key={item}>{item}</Row>
+          ))}
+        </Section>
 
-        <section className="grid gap-5 lg:grid-cols-[1.1fr_0.9fr]">
-          <Card className="rounded-3xl border-border/70 bg-card/70">
-            <CardHeader>
-              <CardTitle>Starter prompts</CardTitle>
-            </CardHeader>
-            <CardContent className="grid gap-3 sm:grid-cols-2">
-              {copy.suggestedPrompts.map((prompt) => (
-                <div
-                  key={prompt}
-                  className="rounded-2xl border border-border/60 bg-background/40 px-4 py-4"
-                >
-                  <p className="text-sm leading-6 text-foreground">{prompt}</p>
-                </div>
-              ))}
-            </CardContent>
-          </Card>
+        <Section eyebrow="Try it" title="Starter prompts">
+          <div className="grid gap-x-8 sm:grid-cols-2">
+            {copy.suggestedPrompts.map((prompt) => (
+              <Row key={prompt}>{prompt}</Row>
+            ))}
+          </div>
+        </Section>
 
-          <Card className="rounded-3xl border-border/70 bg-card/70">
-            <CardHeader>
-              <CardTitle>Signature profile</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="rounded-2xl border border-border/60 bg-background/40 px-4 py-4">
-                <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
-                  Positioning
+        <Section eyebrow="Profile" title="Signature focus">
+          <Row>
+            <p className="eyebrow mb-2">Positioning</p>
+            <p className="text-foreground">{copy.description}</p>
+          </Row>
+          <Row>
+            <p className="eyebrow mb-2">In-product focus</p>
+            <p className="text-foreground">{copy.helperText}</p>
+          </Row>
+        </Section>
+
+        <Section eyebrow="Plans" title={`${copy.shortName} across every tier`}>
+          <div className="grid divide-y divide-border/60 sm:grid-cols-5 sm:divide-x sm:divide-y-0">
+            {Object.values(PLAN_CONFIGS).map((plan) => (
+              <div key={plan.tier} className="py-4 sm:px-4 sm:py-0 first:sm:pl-0">
+                <p className="eyebrow">{plan.tier}</p>
+                <p className="mt-2 text-lg font-medium text-foreground">
+                  {TIER_ASSISTANT_NAMES[plan.tier][family]}
                 </p>
-                <p className="mt-3 text-sm leading-6 text-foreground">{copy.description}</p>
-              </div>
-              <div className="rounded-2xl border border-border/60 bg-background/40 px-4 py-4">
-                <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
-                  In-product focus
+                <p className="mt-1 text-sm text-muted-foreground">
+                  ${plan.priceUsd}/month
                 </p>
-                <p className="mt-3 text-sm leading-6 text-foreground">{copy.helperText}</p>
               </div>
-            </CardContent>
-          </Card>
-        </section>
+            ))}
+          </div>
+        </Section>
 
-        <section>
-          <Card className="rounded-3xl border-border/70 bg-card/70">
-            <CardHeader>
-              <CardTitle>{copy.shortName} across every tier</CardTitle>
-            </CardHeader>
-            <CardContent className="grid gap-4 lg:grid-cols-5">
-              {Object.values(PLAN_CONFIGS).map((plan) => (
-                <div
-                  key={plan.tier}
-                  className="rounded-2xl border border-border/60 bg-background/40 px-4 py-4"
-                >
-                  <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
-                    {plan.tier}
-                  </p>
-                  <p className="mt-2 text-lg font-semibold text-foreground">
-                    {TIER_ASSISTANT_NAMES[plan.tier][family]}
-                  </p>
-                  <p className="mt-3 text-sm text-muted-foreground">
-                    ${plan.priceUsd}/month
-                  </p>
-                </div>
-              ))}
-            </CardContent>
-          </Card>
-        </section>
+        <div className="h-10" />
       </div>
     </main>
   )

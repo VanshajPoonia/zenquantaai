@@ -97,12 +97,42 @@ test.describe('Zenquanta smoke routes', () => {
   })
 
   const assistantPages = [
-    { path: '/nova', name: 'Nova' },
-    { path: '/velora', name: 'Velora' },
-    { path: '/axiom', name: 'Axiom' },
-    { path: '/forge', name: 'Forge' },
-    { path: '/pulse', name: 'Pulse' },
-    { path: '/prism', name: 'Prism' },
+    {
+      path: '/nova',
+      name: 'Nova',
+      badge: 'General intelligence',
+      headline: 'Nova keeps broad work clear, useful, and fast-moving.',
+    },
+    {
+      path: '/velora',
+      name: 'Velora',
+      badge: 'Creative engine',
+      headline: 'Velora is built for taste, tone, and original direction.',
+    },
+    {
+      path: '/axiom',
+      name: 'Axiom',
+      badge: 'Reasoning engine',
+      headline: 'Axiom is for decisions that need structure, not guesswork.',
+    },
+    {
+      path: '/forge',
+      name: 'Forge',
+      badge: 'Technical engine',
+      headline: 'Forge focuses on implementation, debugging, and shipping.',
+    },
+    {
+      path: '/pulse',
+      name: 'Pulse',
+      badge: 'Current-context engine',
+      headline: 'Pulse is tuned for fast-moving context and live-style synthesis.',
+    },
+    {
+      path: '/prism',
+      name: 'Prism',
+      badge: 'Visual engine',
+      headline: 'Prism turns creative direction into polished visual output.',
+    },
   ]
 
   for (const assistant of assistantPages) {
@@ -113,12 +143,12 @@ test.describe('Zenquanta smoke routes', () => {
 
       await gotoSmokeRoute(page, assistant.path)
 
+      await expect(page.getByText(assistant.badge)).toBeVisible()
       await expect(
-        page.getByRole('heading', { name: assistant.name })
+        page.getByRole('heading', { level: 1, name: assistant.headline })
       ).toBeVisible()
-      await expect(page.getByText('Zenquanta assistant')).toBeVisible()
       await expect(
-        page.getByRole('link', { name: /Open Zenquanta/i })
+        page.getByRole('link', { name: `Open ${assistant.name}` })
       ).toBeVisible()
       expect(pageErrors).toEqual([])
     })
