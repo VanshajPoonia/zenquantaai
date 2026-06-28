@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { CircleHelp, Search, Shield } from 'lucide-react'
+import { CircleHelp, MoreHorizontal, Search, Shield } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useChatContext } from '@/lib/chat-context'
 import { ModeIcon, getModeAccentClass, getModeTintClass } from '@/lib/mode-utils'
@@ -137,7 +137,7 @@ export function Header({
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="size-8 sm:size-9"
+                  className="size-9"
                   onClick={onOpenCommandPalette}
                 >
                   <Search className="size-4" />
@@ -170,7 +170,7 @@ export function Header({
                   variant="ghost"
                   size="icon"
                   className={cn(
-                    'size-8 sm:size-9',
+                    'hidden size-8 sm:inline-flex sm:size-9',
                     isSettingsPanelOpen && 'bg-accent text-accent-foreground'
                   )}
                   onClick={toggleSettingsPanel}
@@ -215,13 +215,60 @@ export function Header({
             </DropdownMenuContent>
           </DropdownMenu>
 
+          {/* Mobile-only overflow — folds help/session-settings/share/admin
+              behind one trigger so the header doesn't crowd on narrow phones. */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon" className="size-9 sm:hidden">
+                <MoreHorizontal className="size-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-52">
+              {isAdmin ? (
+                <DropdownMenuItem asChild>
+                  <Link href="/admin">
+                    <Shield className="mr-2 size-4" />
+                    Admin
+                  </Link>
+                </DropdownMenuItem>
+              ) : null}
+              <DropdownMenuItem onClick={onOpenAssistantHelp}>
+                <CircleHelp className="mr-2 size-4" />
+                Assistant guide
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={toggleSettingsPanel}>
+                <SlidersIcon className="mr-2 size-4" />
+                Session Settings
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem disabled={!currentChat}>
+                <ShareIcon className="mr-2 size-4" />
+                Share Chat
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                disabled={!currentChat}
+                onClick={() => exportCurrentChat('markdown')}
+              >
+                <DownloadIcon className="mr-2 size-4" />
+                Export as Markdown
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                disabled={!currentChat}
+                onClick={() => exportCurrentChat('json')}
+              >
+                <DownloadIcon className="mr-2 size-4" />
+                Export as JSON
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+
           <TooltipProvider delayDuration={300}>
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="size-8 sm:size-9"
+                  className="size-9"
                   onClick={onOpenSettings}
                 >
                   <SettingsIcon className="size-4" />
