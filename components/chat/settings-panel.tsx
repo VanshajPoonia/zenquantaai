@@ -152,12 +152,20 @@ export function SettingsPanel() {
   const modeConfig = MODE_CONFIGS[currentMode]
 
   return (
-    <aside
-      className={cn(
-        'w-80 bg-card border-l border-border h-full min-h-0 flex flex-col',
-        'animate-in slide-in-from-right-5 duration-200'
-      )}
-    >
+    <>
+      {/* Backdrop — mobile only, where the panel becomes a full-screen overlay */}
+      <div
+        className="fixed inset-0 z-40 bg-black/50 md:hidden"
+        onClick={toggleSettingsPanel}
+        aria-hidden
+      />
+      <aside
+        className={cn(
+          'fixed inset-y-0 right-0 z-50 flex w-full max-w-sm min-h-0 flex-col border-l border-border bg-card',
+          'md:static md:z-auto md:h-full md:w-80 md:max-w-none',
+          'animate-in slide-in-from-right-5 duration-200'
+        )}
+      >
       <div className="flex items-center justify-between p-4 border-b border-border">
         <div>
           <h2 className="font-semibold text-foreground">Session Settings</h2>
@@ -544,6 +552,7 @@ export function SettingsPanel() {
           Reset to mode defaults
         </Button>
       </div>
-    </aside>
+      </aside>
+    </>
   )
 }
