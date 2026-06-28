@@ -209,29 +209,11 @@
 .code-block .function { color: oklch(0.65 0.2 250); }
 .code-block .number { color: oklch(0.75 0.15 60); }
 
-/* Premium glow effects */
-.glow-creative {
-  box-shadow: 0 0 40px -10px oklch(0.7 0.18 330 / 0.4);
-}
-
-.glow-general {
-  box-shadow: 0 0 40px -10px oklch(0.76 0.14 190 / 0.4);
-}
-
-.glow-logic {
-  box-shadow: 0 0 40px -10px oklch(0.65 0.2 250 / 0.4);
-}
-
-.glow-code {
-  box-shadow: 0 0 40px -10px oklch(0.7 0.2 145 / 0.4);
-}
-
-.glow-live {
-  box-shadow: 0 0 40px -10px oklch(0.72 0.18 225 / 0.4);
-}
-
-.glow-image {
-  box-shadow: 0 0 40px -10px oklch(0.78 0.19 38 / 0.4);
+/* Uppercase tracked mono label — section/assistant eyebrows.
+   Consolidates the ad hoc text-[11px] uppercase tracking-[0.18em] pattern
+   repeated across marketing/auth/settings surfaces into one utility. */
+.eyebrow {
+  @apply font-mono text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground;
 }
 
 /* Subtle shimmer animation */
