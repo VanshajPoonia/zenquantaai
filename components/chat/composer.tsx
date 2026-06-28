@@ -437,7 +437,7 @@ export function Composer({ onSend, disabled, initialValue = '' }: ComposerProps)
                     onClick={() => void handleSubmit()}
                     disabled={(!value.trim() && pendingAttachments.length === 0) || disabled}
                     className={cn(
-                      'h-9 rounded-xl px-3 text-white transition-all duration-300 disabled:opacity-50 sm:px-4',
+                      'h-10 rounded-xl px-3 text-white transition-all duration-300 disabled:opacity-50 sm:px-4',
                       getModeAccentClass(currentMode, 'bg'),
                       'hover:opacity-90',
                       getModeGlow(currentMode)
@@ -450,7 +450,7 @@ export function Composer({ onSend, disabled, initialValue = '' }: ComposerProps)
                   </Button>
                   <Button
                     onClick={handleStop}
-                    className="h-9 rounded-xl bg-destructive px-3 text-destructive-foreground hover:bg-destructive/90 sm:px-4"
+                    className="h-10 rounded-xl bg-destructive px-3 text-destructive-foreground hover:bg-destructive/90 sm:px-4"
                   >
                     <StopIcon className="size-4 sm:mr-2" />
                     <span className="hidden sm:inline">Stop</span>
@@ -461,7 +461,7 @@ export function Composer({ onSend, disabled, initialValue = '' }: ComposerProps)
                   onClick={() => void handleSubmit()}
                   disabled={(!value.trim() && pendingAttachments.length === 0) || disabled}
                   className={cn(
-                    'h-9 rounded-xl px-3 text-white transition-all duration-300 disabled:opacity-50 sm:min-w-24 sm:px-4',
+                    'h-10 rounded-xl px-3 text-white transition-all duration-300 disabled:opacity-50 sm:min-w-24 sm:px-4',
                     getModeAccentClass(currentMode, 'bg'),
                     `hover:opacity-90`,
                     getModeGlow(currentMode)
