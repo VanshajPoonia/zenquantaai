@@ -281,6 +281,11 @@ State these up front so testers don't file them as bugs:
 
 - **Manual billing**: plans are activated by an admin after a request; there is no
   checkout, card entry, or instant upgrade.
+- **Password reset is admin-assisted, not self-serve email reset**: there is no
+  reset email/token flow. A locked-out tester should contact the admin with their
+  Zenquanta ID; the admin sets a new password from `/admin/users/[id]` (this signs
+  the user out of all existing sessions). Tell testers up front so a forgotten
+  password doesn't read as a bug.
 - **Self-serve deletion exists, but is irreversible** — users can delete workspace
   data or the full account from Settings; admins can purge another user from
   `/admin/users/[id]`. Manual operator cleanup remains the fallback if an object

@@ -92,12 +92,13 @@ Use this checklist for a full manual QA pass from first sign-up through advanced
 
 - Status: [ ] Pass [ ] Fail [ ] Blocked
 - Steps:
-  1. Request a password reset for a test account.
-  2. Open `/auth/reset-password` with valid reset/session state if available.
-  3. Open `/auth/reset-password?auth=unsupported`, `?auth=failed`, and `?auth=missing-token`.
-  4. Attempt a password update with no valid auth/reset session, a short password, and a valid password.
-- Expected result: Safe messages are shown for unsupported/failed/missing reset states, unauthenticated update returns a safe failure, short passwords are rejected, and a valid reset/session updates the password without exposing secrets.
-- Related route/API: `/api/auth/password/reset-request`, `/api/auth/password/update`, `/auth/reset-password`
+  1. Request a password reset for a test account via `/api/auth/password/reset-request`.
+  2. Confirm the response is the safe, generic "admin-assisted" message and never reveals whether the account exists.
+  3. As an admin, open `/admin/users/[id]` for the test account and use the "Reset password" card to set a new password.
+  4. Confirm the target user's existing sessions are signed out and they can sign in with the new password but not the old one.
+  5. Attempt a password update with a short password (< 8 characters) and confirm it is rejected.
+- Expected result: There is no self-serve email/token reset flow — reset is admin-assisted only. `/api/auth/password/reset-request` never leaks account existence. The admin-side password set works only for an authenticated admin, enforces the 8-character minimum, and revokes the target user's sessions.
+- Related route/API: `/api/auth/password/reset-request`, `/api/admin/users/[id]/password`, `/admin/users/[id]`
 - Notes:
 
 ### Authenticated password update
