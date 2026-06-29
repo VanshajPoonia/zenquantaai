@@ -313,8 +313,8 @@ export default async function DashboardPage({
           </CardContent>
         </Card>
 
-        <div className="grid gap-5 lg:grid-cols-2">
-          <Card className="rounded-3xl border-border/70 bg-card/70">
+        <div className="grid min-w-0 gap-5 lg:grid-cols-2">
+          <Card className="min-w-0 rounded-3xl border-border/70 bg-card/70">
             <CardHeader>
               <CardTitle>Recent conversations</CardTitle>
             </CardHeader>
@@ -325,10 +325,10 @@ export default async function DashboardPage({
                   className="rounded-2xl border border-border/60 bg-background/40 px-4 py-3"
                 >
                   <div className="flex items-center justify-between gap-3">
-                    <p className="truncate font-medium text-foreground">
+                    <p className="min-w-0 truncate font-medium text-foreground">
                       {conversation.title}
                     </p>
-                    <Badge variant="outline" className="capitalize">
+                    <Badge variant="outline" className="shrink-0 capitalize">
                       {conversation.mode}
                     </Badge>
                   </div>
@@ -337,7 +337,7 @@ export default async function DashboardPage({
             </CardContent>
           </Card>
 
-          <Card className="rounded-3xl border-border/70 bg-card/70">
+          <Card className="min-w-0 rounded-3xl border-border/70 bg-card/70">
             <CardHeader>
               <CardTitle>Recent image generations</CardTitle>
             </CardHeader>
@@ -348,10 +348,10 @@ export default async function DashboardPage({
                   className="rounded-2xl border border-border/60 bg-background/40 px-4 py-3"
                 >
                   <div className="flex items-center justify-between gap-3">
-                    <p className="truncate font-medium text-foreground">
+                    <p className="min-w-0 truncate font-medium text-foreground">
                       {event.prompt}
                     </p>
-                    <Badge variant="secondary">
+                    <Badge variant="secondary" className="shrink-0">
                       {event.imageCreditsConsumed} credits
                     </Badge>
                   </div>

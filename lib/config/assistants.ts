@@ -297,7 +297,7 @@ const MODELS_BY_TIER: TierModelMap = {
     velora: 'google/gemini-2.5-flash',
     axiom: 'deepseek/deepseek-chat-v3.1',
     forge: 'qwen/qwen3-coder',
-    pulse: 'x-ai/grok-4.1-fast',
+    pulse: 'x-ai/grok-4.20',
     prism: 'google/gemini-2.5-flash-image',
   },
   basic: {
@@ -305,7 +305,7 @@ const MODELS_BY_TIER: TierModelMap = {
     velora: 'google/gemini-2.5-flash',
     axiom: 'deepseek/deepseek-chat-v3.1',
     forge: 'qwen/qwen3-coder',
-    pulse: 'x-ai/grok-4.1-fast',
+    pulse: 'x-ai/grok-4.20',
     prism: 'google/gemini-2.5-flash-image',
   },
   pro: {

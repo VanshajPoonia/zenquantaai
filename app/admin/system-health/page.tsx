@@ -156,7 +156,7 @@ export default async function SystemHealthPage() {
   return (
     <main className="min-h-screen bg-background px-4 py-8 sm:px-6 lg:px-10">
       <div className="mx-auto flex max-w-4xl flex-col gap-8">
-        <div className="flex items-center justify-between rounded-3xl border border-border/70 bg-card/60 p-6 backdrop-blur-sm">
+        <div className="flex flex-col gap-4 rounded-3xl border border-border/70 bg-card/60 p-6 backdrop-blur-sm sm:flex-row sm:items-center sm:justify-between">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.24em] text-muted-foreground">
               Admin · System Health
@@ -168,7 +168,7 @@ export default async function SystemHealthPage() {
               Checked at {formatCheckedAt(report.checkedAt)}
             </p>
           </div>
-          <div className="flex flex-col items-end gap-3">
+          <div className="flex flex-col gap-3 sm:items-end">
             <div className="flex items-center gap-2">
               {statusIcon(overallStatus)}
               <span className="text-sm font-medium capitalize text-foreground">{overallStatus}</span>
