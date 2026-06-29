@@ -515,6 +515,18 @@ export async function updateLocalPassword(
   await revokeOtherSessions(session.user.id, sessionToken)
 }
 
+export async function setUserPasswordByAdmin(
+  userId: string,
+  password: string
+): Promise<void> {
+  await neonUsersRepository.updateLocalPassword({
+    userId,
+    ...(await hashPassword(password)),
+  })
+
+  await revokeAllSessions(userId)
+}
+
 async function readSessionToken(token: string): Promise<RequestAuthSession> {
   if (!token) {
     return { user: null }
@@ -630,4 +642,14 @@ async function revokeOtherSessions(
         isNull(zenAuthSessions.revokedAt)
       )
     )
+}
+
+async function revokeAllSessions(userId: string): Promise<void> {
+  await getDatabaseClient()
+    .update(zenAuthSessions)
+    .set({
+      revokedAt: new Date(),
+      updatedAt: new Date(),
+    })
+    .where(and(eq(zenAuthSessions.userId, userId), isNull(zenAuthSessions.revokedAt)))
 }
