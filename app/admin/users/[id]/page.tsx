@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { DetailedPlanLimitFields } from '@/components/admin/plan-limit-fields'
 import { UserPurgeCard } from '@/components/admin/user-purge-card'
+import { UserPasswordResetCard } from '@/components/admin/user-password-reset-card'
 
 export default async function AdminUserDetailPage({
   params,
@@ -134,6 +135,8 @@ export default async function AdminUserDetailPage({
                 ))}
               </CardContent>
             </Card>
+
+            <UserPasswordResetCard targetUserId={detail.subscription.userId} />
 
             <UserPurgeCard
               targetUserId={detail.subscription.userId}
