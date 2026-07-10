@@ -81,28 +81,6 @@ async function* streamText(text: string, delayMs = 24) {
   }
 }
 
-async function generateImageAttachment(
-  prompt: string,
-  mode: AIMode,
-  settings: SessionSettings
-): Promise<Attachment> {
-  if (!hasOpenRouterConfig()) {
-    return createGeneratedImageAttachment(prompt, mode)
-  }
-
-  const image = await createOpenRouterImage({
-    model: IMAGE_GENERATION_CONFIG.model,
-    prompt: buildImageGenerationPrompt(prompt, mode),
-    systemPrompt: `${buildSystemPrompt(
-      mode,
-      settings.systemPreset
-    )}\n\nGenerate a single premium image that matches the user's request with strong composition, clean subject focus, and minimal companion text.`,
-    modalities: [...IMAGE_GENERATION_CONFIG.modalities],
-  })
-
-  return createGeneratedImageAttachmentFromUrl(prompt, image.imageUrl)
-}
-
 export async function generateImageFromPrompt(input: {
   prompt: string
   mode: AIMode
