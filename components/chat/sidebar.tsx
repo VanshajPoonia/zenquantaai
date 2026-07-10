@@ -63,10 +63,6 @@ interface SidebarProps {
   onOpenSettings: () => void
 }
 
-function getSidebarChatTitle(title: string): string {
-  return title.trim()
-}
-
 function getFittedSidebarTitle(title: string, availableWidth: number): string {
   const trimmed = title.trim()
 
@@ -257,7 +253,6 @@ function ChatSection({
   onPinChat,
   onDeleteChat,
   onMoveChatToProject,
-  projectLabelById,
   projects,
 }: {
   title: string
@@ -267,7 +262,6 @@ function ChatSection({
   onPinChat: (id: string) => void
   onDeleteChat: (id: string) => void
   onMoveChatToProject: (chatId: string, projectId: string) => void
-  projectLabelById: Record<string, string>
   projects: Project[]
 }) {
   if (chats.length === 0) return null
@@ -626,7 +620,6 @@ export function Sidebar({ onOpenSettings }: SidebarProps) {
             onPinChat={togglePinChat}
             onDeleteChat={deleteChat}
             onMoveChatToProject={moveChatToProject}
-            projectLabelById={projectLabelById}
             projects={projects}
           />
 
@@ -641,7 +634,6 @@ export function Sidebar({ onOpenSettings }: SidebarProps) {
             onPinChat={togglePinChat}
             onDeleteChat={deleteChat}
             onMoveChatToProject={moveChatToProject}
-            projectLabelById={projectLabelById}
             projects={projects}
           />
 
