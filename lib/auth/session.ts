@@ -292,9 +292,18 @@ function getRequestMetadata(request: NextRequest): {
 } {
   return {
     userAgent: request.headers.get('user-agent'),
+    // The rightmost entry in x-forwarded-for is appended by our own trusted
+    // reverse proxy and reflects the real client IP. Earlier entries can be
+    // set by the client itself, so trusting the leftmost entry would let a
+    // caller spoof a fresh IP on every request and bypass the IP-scoped
+    // auth rate limit below.
     ipAddress:
-      request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ??
-      request.headers.get('x-real-ip'),
+      request.headers
+        .get('x-forwarded-for')
+        ?.split(',')
+        .map((part) => part.trim())
+        .filter(Boolean)
+        .pop() ?? request.headers.get('x-real-ip'),
   }
 }
 
