@@ -22,6 +22,7 @@ export function ChatImageMessage({
         className="block w-full cursor-pointer"
         onClick={() => onOpen(attachment)}
       >
+        {/* eslint-disable-next-line @next/next/no-img-element -- next/image is unoptimized project-wide; previewUrl has no known dimensions */}
         <img
           src={attachment.previewUrl}
           alt={attachment.name}

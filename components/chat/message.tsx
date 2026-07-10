@@ -664,6 +664,7 @@ function ImageViewerDialog({
         </DialogHeader>
         <div className="space-y-4 p-3 sm:p-4">
           <div className="overflow-hidden rounded-2xl border border-border/70 bg-background">
+            {/* eslint-disable-next-line @next/next/no-img-element -- next/image is unoptimized project-wide; previewUrl has no known dimensions */}
             <img
               src={attachment.previewUrl}
               alt={attachment.name}
