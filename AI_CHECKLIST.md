@@ -5,19 +5,15 @@
 Documented install command:
 
 ```bash
-npm install
+pnpm install
 ```
 
-Known ambiguity:
-
-- `pnpm-lock.yaml` exists and `node_modules/.pnpm` exists.
-- `README.md` says `npm install`.
-- Before changing dependencies, decide whether the repo standard is npm or pnpm.
+Package manager: pnpm (only `pnpm-lock.yaml` is committed, `node_modules/.pnpm` confirms pnpm-managed installs). `README.md` and `AGENTS.md` document `pnpm install`.
 
 ## Development
 
 ```bash
-npm run dev
+pnpm run dev
 ```
 
 Default local URL:
@@ -29,7 +25,7 @@ http://localhost:3000
 ## Build
 
 ```bash
-npm run build
+pnpm run build
 ```
 
 Current behavior:
@@ -39,7 +35,7 @@ Current behavior:
 ## Lint
 
 ```bash
-npm run lint
+pnpm run lint
 ```
 
 Known issue:
@@ -49,19 +45,19 @@ Known issue:
 ## Typecheck
 
 ```bash
-npm run typecheck
+pnpm run typecheck
 ```
 
 ## Unit Tests
 
 ```bash
-npm run test
+pnpm run test
 ```
 
 Watch mode for local test iteration:
 
 ```bash
-npm run test:watch
+pnpm run test:watch
 ```
 
 Current scope:
@@ -74,7 +70,7 @@ Current scope:
 ## E2E Smoke Tests
 
 ```bash
-npm run test:e2e
+pnpm run test:e2e
 ```
 
 Current scope:
@@ -220,13 +216,13 @@ Local storage writes to `.storage/zenquanta`, which is gitignored. Production st
 Run destructive deletion verification only against an empty/schema-only Neon branch and non-production object storage. Never fall back to the ordinary `.env.local` database.
 
 1. Set `PURGE_E2E_CONFIRM=dedicated-neon-branch` and provide `PURGE_E2E_DATABASE_URL` in the test process only. Optionally set `PURGE_E2E_STORAGE_DIR` to an absolute path under `/tmp`; the harness forces the local neutral-storage provider and a test-only bucket.
-2. Apply all 19 Neon migrations, then run `npm run test:e2e -- user-purge.spec.ts`. The test must skip unless the explicit opt-in, separate URL, and safe storage path are present.
+2. Apply all 19 Neon migrations, then run `pnpm run test:e2e -- user-purge.spec.ts`. The test must skip unless the explicit opt-in, separate URL, and safe storage path are present.
 3. Confirm workspace deletion removes every seeded product-data category while preserving credentials/session/subscription access, and that a guessed body user id cannot change the session-derived target.
 4. Confirm full-account deletion removes credentials, sessions, integrations, subscriptions/overrides, and PII; tombstones `zen_users`/`zen_profiles`; clears cookies; and prevents the deleted login from authenticating again.
 5. Confirm a non-admin receives 403 from admin purge routes, the current admin cannot purge itself, and target-user preview/purge writes grouped safe admin audit details.
 6. Confirm deleted file and generated-image metadata/chunks return 404 to authenticated protected reads, and their local test objects no longer exist after the database transaction succeeds.
 7. Confirm preview/result JSON contains grouped counts only, and simulate an object-store failure in unit tests to verify only attempted/deleted/failed counts are returned.
-8. Re-run `npm run test`, `npm run typecheck`, `npm run lint`, `npm run build`, and `git diff --check`. Record the storage provider actually tested and any provider-specific production follow-up.
+8. Re-run `pnpm run test`, `pnpm run typecheck`, `pnpm run lint`, `pnpm run build`, and `git diff --check`. Record the storage provider actually tested and any provider-specific production follow-up.
 
 ## Migration Order
 
@@ -285,7 +281,7 @@ Before changing persistence code again:
 3. Fill OpenRouter, Neon, file storage, Tavily, and embeddings values as needed.
 4. If testing GitHub repo context, configure a GitHub App with read-only Metadata and Contents permissions and set `GITHUB_APP_ID`, `GITHUB_APP_CLIENT_ID`, `GITHUB_APP_PRIVATE_KEY`, and `GITHUB_APP_CALLBACK_URL`.
 5. Apply the fresh Neon migrations for database/auth flows.
-6. Start dev server with `npm run dev`.
+6. Start dev server with `pnpm run dev`.
 7. Sign up or sign in.
 8. Send a text prompt and verify `/api/chat` streaming.
 9. With `TAVILY_API_KEY` configured, send a Pulse or `webSearch` prompt and verify sources appear.
@@ -312,7 +308,7 @@ Before changing persistence code again:
 ## Production Safety Checks
 
 - Keep the root ESLint flat config working.
-- Run `npm run typecheck`.
+- Run `pnpm run typecheck`.
 - Keep `next.config.mjs` from ignoring TypeScript build errors.
 - Confirm file storage credentials are server-only.
 - Confirm `OPENROUTER_API_KEY` is server-only.
@@ -353,7 +349,7 @@ Before changing persistence code again:
 - Missing Neon `DATABASE_URL` breaks auth, settings, prompt library, assistant recommendation, project, conversation, chat persistence, image persistence, billing/admin, usage, dashboard, plan request, image history, profile/role hydration, and local import app-data paths.
 - Missing S3-compatible/R2 env vars breaks attachment and generated-image storage when `FILE_STORAGE_PROVIDER` is `s3` or `r2`.
 - Existing lint warnings can obscure newer warnings if not cleaned up intentionally.
-- TypeScript errors should fail both `npm run typecheck` and `npm run build`.
+- TypeScript errors should fail both `pnpm run typecheck` and `pnpm run build`.
 - Package manager mismatch can cause lockfile churn.
 - Tavily request failures should degrade without claiming live verification.
 - OCR, scanned/image-only PDF extraction, and PDF layout reconstruction are not implemented in uploaded-file knowledge v1.

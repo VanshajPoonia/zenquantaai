@@ -396,10 +396,10 @@ Accepted aliases in code include:
 
 ## Known Risks
 
-- `npm run lint` now uses `eslint.config.mjs`; current lint status should be checked before releases because warnings may still exist.
-- `npm run typecheck` runs `tsc --noEmit`.
-- `npm run build` no longer ignores TypeScript build errors.
-- Package manager is ambiguous: `pnpm-lock.yaml` exists, while `README.md` documents `npm install`.
+- `pnpm run lint` now uses `eslint.config.mjs`; current lint status should be checked before releases because warnings may still exist.
+- `pnpm run typecheck` runs `tsc --noEmit`.
+- `pnpm run build` no longer ignores TypeScript build errors.
+- Package manager is pnpm (only `pnpm-lock.yaml` is committed); `README.md`/`AGENTS.md` now document `pnpm install`.
 - File storage access keys must remain server-only.
 - Conversation saves now upsert message rows and page large histories, but multi-tab concurrent sends still do not have a schema-backed send lease/version check.
 - Neon starts fresh and does not preserve old Supabase rows.

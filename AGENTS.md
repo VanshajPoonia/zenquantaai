@@ -102,18 +102,19 @@ Useful source files to inspect for most changes:
 
 Current commands from `package.json`:
 
-- Install: `npm install` is documented, but `pnpm-lock.yaml` exists. Confirm package manager before changing dependencies.
-- Dev: `npm run dev`
-- Build: `npm run build`
-- Start: `npm run start`
-- Lint: `npm run lint`
-- Typecheck: `npm run typecheck`
+- Package manager: pnpm. `node_modules` is pnpm-managed and only `pnpm-lock.yaml` is committed (no `package-lock.json`/`yarn.lock`). Use `pnpm`, not `npm`, for install and dependency changes.
+- Install: `pnpm install`
+- Dev: `pnpm run dev`
+- Build: `pnpm run build`
+- Start: `pnpm run start`
+- Lint: `pnpm run lint`
+- Typecheck: `pnpm run typecheck`
 
 Known command issues:
 
-- `npm run lint` uses the ESLint flat config in `eslint.config.mjs`.
-- `npm run typecheck` runs `tsc --noEmit`.
-- `npm run build` should remain meaningful for production because `next.config.mjs` no longer ignores TypeScript build errors.
+- `pnpm run lint` uses the ESLint flat config in `eslint.config.mjs`.
+- `pnpm run typecheck` runs `tsc --noEmit`.
+- `pnpm run build` should remain meaningful for production because `next.config.mjs` no longer ignores TypeScript build errors.
 
 ## Environment Files
 
