@@ -3,7 +3,7 @@
 import { useTransition } from 'react'
 import { cn } from '@/lib/utils'
 import { useChatContext } from '@/lib/chat-context'
-import { AIMode, MODE_CONFIGS, MODE_ORDER } from '@/lib/types'
+import { MODE_CONFIGS, MODE_ORDER } from '@/lib/types'
 import {
   ModeIcon,
   getModeAccentClass,
