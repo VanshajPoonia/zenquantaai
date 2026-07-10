@@ -17,7 +17,6 @@ import {
   toIsoString,
   toJsonArray,
   toJsonObject,
-  toNullableIsoString,
 } from './helpers'
 import { neonUsersRepository } from './users'
 
