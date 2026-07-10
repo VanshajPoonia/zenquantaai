@@ -6,6 +6,15 @@ export function encodeStreamEvent(event: StreamEvent): Uint8Array {
   return encoder.encode(`${JSON.stringify(event)}\n`)
 }
 
+function parseNdjsonLine<T>(line: string): T | undefined {
+  try {
+    return JSON.parse(line) as T
+  } catch (error) {
+    console.error('Skipping malformed NDJSON line.', error)
+    return undefined
+  }
+}
+
 export async function readNdjsonStream<T>(
   response: Response,
   onEvent: (event: T) => void
@@ -30,12 +39,14 @@ export async function readNdjsonStream<T>(
     for (const line of lines) {
       const trimmed = line.trim()
       if (!trimmed) continue
-      onEvent(JSON.parse(trimmed) as T)
+      const event = parseNdjsonLine<T>(trimmed)
+      if (event !== undefined) onEvent(event)
     }
   }
 
   const finalChunk = buffer.trim()
   if (finalChunk) {
-    onEvent(JSON.parse(finalChunk) as T)
+    const event = parseNdjsonLine<T>(finalChunk)
+    if (event !== undefined) onEvent(event)
   }
 }
