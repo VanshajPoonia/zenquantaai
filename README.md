@@ -242,7 +242,7 @@ When an admin changes a user tier:
 1. Install dependencies:
 
 ```bash
-npm install
+pnpm install
 ```
 
 2. Create your local env file:
@@ -277,7 +277,7 @@ FILE_STORAGE_LOCAL_DIR=.storage/zenquanta
 4. Start the app:
 
 ```bash
-npm run dev
+pnpm run dev
 ```
 
 5. Open:
@@ -474,6 +474,6 @@ types/
 The current app is expected to pass:
 
 ```bash
-npx tsc --noEmit
-npm run build
+pnpm exec tsc --noEmit
+pnpm run build
 ```
