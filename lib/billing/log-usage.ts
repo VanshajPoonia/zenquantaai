@@ -67,3 +67,56 @@ export async function logImageUsage(input: {
     subscriptionId: subscription.id,
   })
 }
+
+/**
+ * Records a usage event without incrementing wallet counters — for callers
+ * that already claimed usage atomically via reserveTextUsage/finalizeTextUsage
+ * before generation started (see app/api/chat/route.ts).
+ */
+export async function recordTextUsageEvent(input: {
+  subscriptionId: string
+  event: {
+    userId: string
+    conversationId?: string | null
+    messageId?: string | null
+    assistantFamily: UsageEvent['assistantFamily']
+    mode: UsageEvent['mode']
+    model: string
+    walletType: UsageEvent['walletType']
+    usage: UsageEstimate
+  }
+}): Promise<UsageEvent> {
+  return await neonUsageEventsRepository.create({
+    userId: input.event.userId,
+    subscriptionId: input.subscriptionId,
+    conversationId: input.event.conversationId,
+    messageId: input.event.messageId,
+    assistantFamily: input.event.assistantFamily,
+    mode: input.event.mode,
+    model: input.event.model,
+    walletType: input.event.walletType,
+    promptTokens: input.event.usage.promptTokens,
+    completionTokens: input.event.usage.completionTokens,
+    totalTokens: input.event.usage.totalTokens,
+    rawCostUsd: input.event.usage.rawCostUsd,
+    displayedCostUsd: input.event.usage.displayedCostUsd,
+    displayMultiplier: input.event.usage.displayMultiplier,
+    marginUsd: input.event.usage.marginUsd,
+    creditsConsumed: input.event.usage.creditsConsumed ?? 0,
+  })
+}
+
+/**
+ * Records an image usage event without incrementing wallet counters — for
+ * callers that already claimed usage atomically via reserveImageUsage
+ * before generation started (see app/api/images/generate/route.ts).
+ */
+export async function recordImageUsageEvent(input: {
+  subscriptionId: string
+  event: Omit<ImageGenerationEvent, 'id' | 'createdAt' | 'subscriptionId'>
+}): Promise<ImageGenerationEvent> {
+  return await neonImageGenerationEventsRepository.create({
+    ...input.event,
+    subscriptionId: input.subscriptionId,
+  })
+}

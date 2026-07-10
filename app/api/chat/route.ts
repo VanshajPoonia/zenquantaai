@@ -27,7 +27,7 @@ import {
 } from '@/lib/ai/chat'
 import { calculateTextUsageEstimate } from '@/lib/billing/costs'
 import { enforceTextUsage, getEffectiveSubscription } from '@/lib/billing/enforce'
-import { logTextUsage } from '@/lib/billing/log-usage'
+import { recordTextUsageEvent } from '@/lib/billing/log-usage'
 import { getAssistantFamilyFromMode } from '@/lib/config/assistants'
 import {
   buildWebSearchQuery,
@@ -251,6 +251,10 @@ export async function POST(request: NextRequest) {
     let messageId: string | undefined
     let accumulated = ''
     let persistedMessageSources: MessageSource[] = []
+    let textUsageReservation: {
+      walletType: 'core_tokens' | 'tier_tokens'
+      reservedTokens: number
+    } | null = null
 
     try {
       const preparedBase = await prepareConversationForChat(payload)
@@ -352,13 +356,43 @@ export async function POST(request: NextRequest) {
         customAssistantContext
       )
 
+      const estimatedPromptTokens = estimatePromptTokens(promptText)
+
+      // Fast, specific error messages for the common case (checked against a
+      // point-in-time snapshot). The atomic reservation below is the real
+      // gate: it re-checks the live row so concurrent requests from the same
+      // user can't all pass a stale check and blow past their limit.
       enforceTextUsage({
         subscription,
         override,
-        estimatedPromptTokens: estimatePromptTokens(promptText),
+        estimatedPromptTokens,
         requestedMaxOutputTokens: payload.settings.maxTokens,
         walletType: routeConfig.walletType,
       })
+
+      const reservationWalletType: 'core_tokens' | 'tier_tokens' =
+        routeConfig.walletType === 'tier_tokens' ? 'tier_tokens' : 'core_tokens'
+      const reservedTokens = estimatedPromptTokens + payload.settings.maxTokens
+
+      const reservedSubscription = await neonSubscriptionsRepository.reserveTextUsage({
+        userId: auth.user.id,
+        walletType: reservationWalletType,
+        estimatedTokens: reservedTokens,
+        effectiveIncluded:
+          reservationWalletType === 'tier_tokens'
+            ? effectiveSubscription.tierTokensIncluded
+            : effectiveSubscription.coreTokensIncluded,
+        effectiveDailyMessageLimit: effectiveSubscription.dailyMessageLimit,
+      })
+
+      if (!reservedSubscription) {
+        throw new Error('You have reached your usage limit for this plan. Please try again shortly.')
+      }
+
+      textUsageReservation = {
+        walletType: reservationWalletType,
+        reservedTokens,
+      }
 
       const placeholder = {
         ...prepared.assistantPlaceholder,
@@ -547,8 +581,16 @@ export async function POST(request: NextRequest) {
           placeholder
       )
 
-      await logTextUsage({
-        subscription,
+      const finalizedSubscription = await neonSubscriptionsRepository.finalizeTextUsage({
+        userId: auth.user.id,
+        walletType: textUsageReservation.walletType,
+        reservedTokens: textUsageReservation.reservedTokens,
+        actualTokens: usage.totalTokens,
+      })
+      textUsageReservation = null
+
+      await recordTextUsageEvent({
+        subscriptionId: finalizedSubscription.id,
         event: {
           userId: auth.user.id,
           conversationId: savedConversation.id,
@@ -589,6 +631,19 @@ export async function POST(request: NextRequest) {
         messageId: savedConversation.messages.at(-1)?.id,
       })
     } catch (error) {
+      if (textUsageReservation) {
+        await neonSubscriptionsRepository
+          .releaseTextUsage({
+            userId: auth.user.id,
+            walletType: textUsageReservation.walletType,
+            reservedTokens: textUsageReservation.reservedTokens,
+          })
+          .catch((releaseError) => {
+            console.error('Failed to release text usage reservation.', releaseError)
+          })
+        textUsageReservation = null
+      }
+
       const errorMessage = request.signal.aborted
         ? 'Generation stopped.'
         : toErrorMessage(error)

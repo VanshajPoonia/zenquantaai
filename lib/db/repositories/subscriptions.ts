@@ -1,6 +1,6 @@
 import 'server-only'
 
-import { desc, eq, sql } from 'drizzle-orm'
+import { and, desc, eq, lt, sql } from 'drizzle-orm'
 import {
   AuthUser,
   Subscription,
@@ -495,6 +495,153 @@ class NeonSubscriptionsRepository {
     }
 
     return rowToSubscription(rows[0])
+  }
+
+  /**
+   * Atomically claims worst-case token usage against the wallet/daily-message
+   * limit before generation starts. The WHERE clause re-checks the live row,
+   * so concurrent requests for the same user serialize on the row lock
+   * instead of both reading a stale pre-deduction snapshot. Returns null if
+   * the claim was rejected (limit reached), in which case nothing changed.
+   */
+  async reserveTextUsage(input: {
+    userId: string
+    walletType: 'core_tokens' | 'tier_tokens'
+    estimatedTokens: number
+    effectiveIncluded: number
+    effectiveDailyMessageLimit: number
+  }): Promise<Subscription | null> {
+    const usedColumn =
+      input.walletType === 'tier_tokens'
+        ? zenSubscriptions.tierTokensUsed
+        : zenSubscriptions.coreTokensUsed
+
+    const rows = await getDatabaseClient()
+      .update(zenSubscriptions)
+      .set({
+        ...(input.walletType === 'tier_tokens'
+          ? {
+              tierTokensUsed: sql`${zenSubscriptions.tierTokensUsed} + ${input.estimatedTokens}`,
+            }
+          : {
+              coreTokensUsed: sql`${zenSubscriptions.coreTokensUsed} + ${input.estimatedTokens}`,
+            }),
+        dailyMessageCount: sql`${zenSubscriptions.dailyMessageCount} + 1`,
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(zenSubscriptions.userId, input.userId),
+          eq(zenSubscriptions.status, 'active'),
+          lt(zenSubscriptions.dailyMessageCount, input.effectiveDailyMessageLimit),
+          sql`(${input.effectiveIncluded} - ${usedColumn}) >= ${input.estimatedTokens}`
+        )
+      )
+      .returning()
+
+    return rows[0] ? rowToSubscription(rows[0]) : null
+  }
+
+  /** Releases a reservation made by reserveTextUsage — used when a send fails or is aborted. */
+  async releaseTextUsage(input: {
+    userId: string
+    walletType: 'core_tokens' | 'tier_tokens'
+    reservedTokens: number
+  }): Promise<void> {
+    await getDatabaseClient()
+      .update(zenSubscriptions)
+      .set({
+        ...(input.walletType === 'tier_tokens'
+          ? {
+              tierTokensUsed: sql`greatest(${zenSubscriptions.tierTokensUsed} - ${input.reservedTokens}, 0)`,
+            }
+          : {
+              coreTokensUsed: sql`greatest(${zenSubscriptions.coreTokensUsed} - ${input.reservedTokens}, 0)`,
+            }),
+        dailyMessageCount: sql`greatest(${zenSubscriptions.dailyMessageCount} - 1, 0)`,
+        updatedAt: new Date(),
+      })
+      .where(eq(zenSubscriptions.userId, input.userId))
+  }
+
+  /** Adjusts a reservation to actual usage once generation completes successfully. */
+  async finalizeTextUsage(input: {
+    userId: string
+    walletType: 'core_tokens' | 'tier_tokens'
+    reservedTokens: number
+    actualTokens: number
+  }): Promise<Subscription> {
+    const delta = input.actualTokens - input.reservedTokens
+
+    const rows = await getDatabaseClient()
+      .update(zenSubscriptions)
+      .set({
+        ...(input.walletType === 'tier_tokens'
+          ? {
+              tierTokensUsed: sql`greatest(${zenSubscriptions.tierTokensUsed} + ${delta}, 0)`,
+            }
+          : {
+              coreTokensUsed: sql`greatest(${zenSubscriptions.coreTokensUsed} + ${delta}, 0)`,
+            }),
+        updatedAt: new Date(),
+      })
+      .where(eq(zenSubscriptions.userId, input.userId))
+      .returning()
+
+    if (!rows[0]) {
+      throw new Error('Unable to finalize text usage for subscription.')
+    }
+
+    return rowToSubscription(rows[0])
+  }
+
+  /**
+   * Atomically claims image credits and the daily image count before
+   * generation starts, for the same reason as reserveTextUsage. Image
+   * credit cost is deterministic per model, so no finalize step is needed —
+   * only release on failure.
+   */
+  async reserveImageUsage(input: {
+    userId: string
+    imageCreditsRequired: number
+    imageCount: number
+    effectiveImageCreditsIncluded: number
+    effectiveMaxImagesPerDay: number
+  }): Promise<Subscription | null> {
+    const rows = await getDatabaseClient()
+      .update(zenSubscriptions)
+      .set({
+        imageCreditsUsed: sql`${zenSubscriptions.imageCreditsUsed} + ${input.imageCreditsRequired}`,
+        dailyImageCount: sql`${zenSubscriptions.dailyImageCount} + ${input.imageCount}`,
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(zenSubscriptions.userId, input.userId),
+          eq(zenSubscriptions.status, 'active'),
+          sql`(${zenSubscriptions.dailyImageCount} + ${input.imageCount}) <= ${input.effectiveMaxImagesPerDay}`,
+          sql`(${input.effectiveImageCreditsIncluded} - ${zenSubscriptions.imageCreditsUsed}) >= ${input.imageCreditsRequired}`
+        )
+      )
+      .returning()
+
+    return rows[0] ? rowToSubscription(rows[0]) : null
+  }
+
+  /** Releases a reservation made by reserveImageUsage — used when generation fails or is aborted. */
+  async releaseImageUsage(input: {
+    userId: string
+    imageCreditsReserved: number
+    imageCount: number
+  }): Promise<void> {
+    await getDatabaseClient()
+      .update(zenSubscriptions)
+      .set({
+        imageCreditsUsed: sql`greatest(${zenSubscriptions.imageCreditsUsed} - ${input.imageCreditsReserved}, 0)`,
+        dailyImageCount: sql`greatest(${zenSubscriptions.dailyImageCount} - ${input.imageCount}, 0)`,
+        updatedAt: new Date(),
+      })
+      .where(eq(zenSubscriptions.userId, input.userId))
   }
 }
 

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { appendAuthCookies, requireAuthenticatedUser } from '@/lib/auth/session'
-import { createSessionSettings, resolveModelConfig } from '@/lib/config'
+import { MODEL_PRICING_CONFIG, createSessionSettings, resolveModelConfig } from '@/lib/config'
 import {
   clampSessionSettingsMaxTokens,
   completeConversationWithAssistant,
@@ -10,7 +10,7 @@ import {
 } from '@/lib/ai/chat'
 import { calculateImageUsageEstimate } from '@/lib/billing/costs'
 import { enforceImageUsage, getEffectiveSubscription } from '@/lib/billing/enforce'
-import { logImageUsage } from '@/lib/billing/log-usage'
+import { recordImageUsageEvent } from '@/lib/billing/log-usage'
 import {
   neonConversationRepository,
   neonGeneratedImagesRepository,
@@ -126,6 +126,10 @@ export async function POST(request: NextRequest) {
     model: string
     action: string
   } | null = null
+  let imageUsageReservation: {
+    imageCreditsRequired: number
+    imageCount: number
+  } | null = null
 
   try {
     const prepared = await prepareConversationForChat(payload)
@@ -143,6 +147,7 @@ export async function POST(request: NextRequest) {
 
     const imageCount = Math.max(1, Math.min(body?.imageCount ?? 1, 1))
     const routeConfig = resolveModelConfig('image', settings.modelOverride, subscription.tier)
+    const imagePricing = MODEL_PRICING_CONFIG.imageModels[routeConfig.model]
     const usage = calculateImageUsageEstimate({
       tier: subscription.tier,
       modelConfig: {
@@ -150,18 +155,39 @@ export async function POST(request: NextRequest) {
         tier: subscription.tier,
         displayName: routeConfig.label,
         model: routeConfig.model,
-        rawCostPerImageUsd: routeConfig.imageCostPerUnit ?? 0.035,
-        defaultImageCreditsPerImage: 10,
+        rawCostPerImageUsd: routeConfig.imageCostPerUnit ?? imagePricing?.rawCostPerImageUsd ?? 0.035,
+        defaultImageCreditsPerImage: imagePricing?.defaultImageCreditsPerImage ?? 10,
       },
       imageCount,
     })
 
+    // Fast, specific error messages for the common case. The atomic
+    // reservation below is the real gate: it re-checks the live row so
+    // concurrent requests from the same user can't all pass a stale check
+    // and blow past their limit.
     enforceImageUsage({
       subscription,
       override,
       imageCount,
       imageCreditsRequired: usage.creditsConsumed ?? 0,
     })
+
+    const reservedSubscription = await neonSubscriptionsRepository.reserveImageUsage({
+      userId: auth.user.id,
+      imageCreditsRequired: usage.creditsConsumed ?? 0,
+      imageCount,
+      effectiveImageCreditsIncluded: effectiveSubscription.imageCreditsIncluded,
+      effectiveMaxImagesPerDay: effectiveSubscription.maxImagesPerDay,
+    })
+
+    if (!reservedSubscription) {
+      throw new Error('You have reached your usage limit for this plan. Please try again shortly.')
+    }
+
+    imageUsageReservation = {
+      imageCreditsRequired: usage.creditsConsumed ?? 0,
+      imageCount,
+    }
 
     debugImageRoute('request-start', {
       action,
@@ -237,8 +263,10 @@ export async function POST(request: NextRequest) {
         placeholder
     )
 
-    await logImageUsage({
-      subscription,
+    imageUsageReservation = null
+
+    await recordImageUsageEvent({
+      subscriptionId: subscription.id,
       event: {
         userId: auth.user.id,
         conversationId: savedConversation.id,
@@ -283,6 +311,24 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(response, { headers })
   } catch (error) {
+    if (imageUsageReservation) {
+      await neonSubscriptionsRepository
+        .releaseImageUsage({
+          userId: auth.user.id,
+          imageCreditsReserved: imageUsageReservation.imageCreditsRequired,
+          imageCount: imageUsageReservation.imageCount,
+        })
+        .catch((releaseError) => {
+          debugImageRoute('image-usage-release-failed', {
+            error:
+              releaseError instanceof Error
+                ? releaseError.message
+                : 'Unknown release error',
+          })
+        })
+      imageUsageReservation = null
+    }
+
     const message =
       error instanceof Error ? error.message : 'Image generation failed.'
 
