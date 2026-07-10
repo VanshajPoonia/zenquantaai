@@ -10,6 +10,10 @@ const eslintConfig = [
       'react-hooks/preserve-manual-memoization': 'off',
       'react-hooks/purity': 'off',
       'react-hooks/set-state-in-effect': 'off',
+      '@typescript-eslint/no-unused-vars': [
+        'warn',
+        { argsIgnorePattern: '^_', varsIgnorePattern: '^_' },
+      ],
     },
   },
   globalIgnores([
