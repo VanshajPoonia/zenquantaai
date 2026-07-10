@@ -1,15 +1,68 @@
 import {
   AIMode,
+  AppSettings,
   Attachment,
   Conversation,
   ConversationSummary,
+  CustomAssistant,
   CustomAssistantReference,
   Message,
   MessageRole,
+  Project,
+  PromptLibraryItem,
   SessionSettings,
 } from '@/types'
-import { DEFAULT_PROJECT_ID } from '@/lib/config'
+import { createSessionSettings, DEFAULT_APP_SETTINGS, DEFAULT_PROJECT_ID } from '@/lib/config'
 import { sumConversationUsage } from './cost'
+
+export function normalizeAppSettingsState(input: AppSettings): AppSettings {
+  return {
+    ...DEFAULT_APP_SETTINGS,
+    ...input,
+    assistantRecommendations: {
+      ...DEFAULT_APP_SETTINGS.assistantRecommendations,
+      ...input.assistantRecommendations,
+    },
+    sessionDefaults: createSessionSettings(input.defaultMode, input.sessionDefaults),
+    onboarding: {
+      ...DEFAULT_APP_SETTINGS.onboarding,
+      ...input.onboarding,
+      installedPromptIds: Array.isArray(input.onboarding?.installedPromptIds)
+        ? input.onboarding.installedPromptIds
+        : [],
+    },
+  }
+}
+
+export function sortProjects(projects: Project[]): Project[] {
+  return [...projects].sort((a, b) => {
+    if (a.isDefault !== b.isDefault) {
+      return a.isDefault ? -1 : 1
+    }
+
+    return a.name.localeCompare(b.name)
+  })
+}
+
+export function sortPrompts(prompts: PromptLibraryItem[]): PromptLibraryItem[] {
+  return [...prompts].sort(
+    (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+  )
+}
+
+export function sortCustomAssistants(assistants: CustomAssistant[]): CustomAssistant[] {
+  return [...assistants].sort((a, b) => {
+    if (a.isEnabled !== b.isEnabled) {
+      return a.isEnabled ? -1 : 1
+    }
+
+    if (Boolean(a.metadata.isPinned) !== Boolean(b.metadata.isPinned)) {
+      return a.metadata.isPinned ? -1 : 1
+    }
+
+    return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+  })
+}
 
 export function createId(prefix = ''): string {
   const id =
