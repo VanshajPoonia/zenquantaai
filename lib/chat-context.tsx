@@ -23,9 +23,6 @@ import {
   ArtifactListFilters,
   ArtifactPatch,
   ArtifactVersion,
-  ArtifactVersionDuplicateResponse,
-  ArtifactVersionListResponse,
-  ArtifactVersionRestoreResponse,
   Attachment,
   AuthState,
   Chat,
@@ -94,7 +91,11 @@ import {
   createMessage,
   getLastAssistantMessage,
   getLastUserMessage,
+  normalizeAppSettingsState,
   sortConversationSummaries,
+  sortCustomAssistants,
+  sortProjects,
+  sortPrompts,
   updateConversationSnapshot,
   toConversationSummary,
 } from '@/lib/utils/chat'
@@ -106,6 +107,17 @@ import {
   resolveSend,
 } from '@/lib/chat/sendMessage'
 import { useSendMessage } from '@/hooks/useSendMessage'
+import { usePrismImages } from '@/hooks/usePrismImages'
+import { useMemoryVault } from '@/hooks/useMemoryVault'
+import { usePulseResearchRoom } from '@/hooks/usePulseResearchRoom'
+import {
+  RunModelComparisonInput,
+  useModelComparisons,
+} from '@/hooks/useModelComparisons'
+import { useArtifacts } from '@/hooks/useArtifacts'
+import { useOnboarding } from '@/hooks/useOnboarding'
+import { SavePromptInput, usePromptLibrary } from '@/hooks/usePromptLibrary'
+import { useCustomAssistants } from '@/hooks/useCustomAssistants'
 import {
   conversationToJson,
   conversationToMarkdown,
@@ -141,18 +153,7 @@ interface QueuedPrompt {
 
 type ProjectFilterId = 'all' | string
 
-interface SavePromptInput {
-  title: string
-  content: string
-  mode: AIMode | 'any'
-}
-
 type SavePromptWorkflowInput = PromptWorkflowInput & { id?: string }
-
-interface RunModelComparisonInput {
-  content: string
-  targetModes: AIMode[]
-}
 
 type WorkspaceTool =
   | 'prompt-library'
@@ -393,25 +394,6 @@ function normalizeModeSessionSettings(
   return createSessionSettings(mode, settings)
 }
 
-function normalizeAppSettingsState(input: AppSettings): AppSettings {
-  return {
-    ...DEFAULT_APP_SETTINGS,
-    ...input,
-    assistantRecommendations: {
-      ...DEFAULT_APP_SETTINGS.assistantRecommendations,
-      ...input.assistantRecommendations,
-    },
-    sessionDefaults: createSessionSettings(input.defaultMode, input.sessionDefaults),
-    onboarding: {
-      ...DEFAULT_APP_SETTINGS.onboarding,
-      ...input.onboarding,
-      installedPromptIds: Array.isArray(input.onboarding?.installedPromptIds)
-        ? input.onboarding.installedPromptIds
-        : [],
-    },
-  }
-}
-
 function sortConversationList(conversations: Conversation[]): Conversation[] {
   return [...conversations].sort((a, b) => {
     if (a.isPinned !== b.isPinned) {
@@ -426,40 +408,10 @@ function needsMessagePage(conversation: Conversation): boolean {
   return conversation.messageCount > 0 && conversation.messages.length === 0
 }
 
-function sortProjects(projects: Project[]): Project[] {
-  return [...projects].sort((a, b) => {
-    if (a.isDefault !== b.isDefault) {
-      return a.isDefault ? -1 : 1
-    }
-
-    return a.name.localeCompare(b.name)
-  })
-}
-
-function sortPrompts(prompts: PromptLibraryItem[]): PromptLibraryItem[] {
-  return [...prompts].sort(
-    (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
-  )
-}
-
 function sortPromptWorkflows(workflows: PromptWorkflow[]): PromptWorkflow[] {
   return [...workflows].sort(
     (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
   )
-}
-
-function sortCustomAssistants(assistants: CustomAssistant[]): CustomAssistant[] {
-  return [...assistants].sort((a, b) => {
-    if (a.isEnabled !== b.isEnabled) {
-      return a.isEnabled ? -1 : 1
-    }
-
-    if (Boolean(a.metadata.isPinned) !== Boolean(b.metadata.isPinned)) {
-      return a.metadata.isPinned ? -1 : 1
-    }
-
-    return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
-  })
 }
 
 function isPendingAttachment(
@@ -645,6 +597,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     [handleUnauthorized]
   )
 
+  const { listPrismImages, updatePrismImage } = usePrismImages({ requestJson })
+
   const commitState = useCallback(
     (nextConversations: Conversation[], nextCurrentChat: Conversation | null) => {
       const sorted = sortConversationList(nextConversations)
@@ -709,6 +663,10 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     },
     [commitState]
   )
+
+  const { listMemoryVault, setConversationMemoryEnabled, clearConversationMemory } =
+    useMemoryVault({ requestJson, applyConversationPatch })
+  const { listPulseResearchRoom } = usePulseResearchRoom({ requestJson })
 
   const persistConversationMutation = useCallback(
     async (conversationId: string, mutation: {
@@ -1504,67 +1462,15 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     [currentChat, requestJson]
   )
 
-  const openOnboarding = useCallback(() => {
-    setIsOnboardingOpen(true)
-  }, [])
-
-  const skipOnboarding = useCallback(async () => {
-    const result = await requestJson<OnboardingResponse>('/api/onboarding', {
-      method: 'POST',
-      body: JSON.stringify({ action: 'skip' } satisfies OnboardingRequest),
-    })
-    const normalized = normalizeAppSettingsState(result.settings)
-
-    setAppSettings(normalized)
-    setIsOnboardingOpen(false)
-  }, [requestJson])
-
-  const completeOnboarding = useCallback(
-    async (
-      input: Omit<Extract<OnboardingRequest, { action: 'complete' }>, 'action'>
-    ) => {
-      const result = await requestJson<OnboardingResponse>('/api/onboarding', {
-        method: 'POST',
-        body: JSON.stringify({
-          action: 'complete',
-          ...input,
-        } satisfies OnboardingRequest),
-      })
-      const normalized = normalizeAppSettingsState(result.settings)
-
-      setAppSettings(normalized)
-      setCurrentMode(normalized.defaultMode)
-
-      if (result.project) {
-        setProjects((previous) =>
-          sortProjects([
-            result.project as Project,
-            ...previous.filter((project) => project.id !== result.project?.id),
-          ])
-        )
-        setSelectedProjectId(result.project.id)
-      }
-
-      const createdPrompts = result.prompts ?? []
-      if (createdPrompts.length) {
-        const promptIds = new Set(createdPrompts.map((prompt) => prompt.id))
-        setPromptLibrary((previous) =>
-          sortPrompts([
-            ...createdPrompts,
-            ...previous.filter((prompt) => !promptIds.has(prompt.id)),
-          ])
-        )
-      }
-
-      setIsOnboardingOpen(false)
-
-      return {
-        ...result,
-        settings: normalized,
-      }
-    },
-    [requestJson, setCurrentMode, setSelectedProjectId]
-  )
+  const { openOnboarding, skipOnboarding, completeOnboarding } = useOnboarding({
+    requestJson,
+    setAppSettings,
+    setCurrentMode,
+    setProjects,
+    setSelectedProjectId,
+    setPromptLibrary,
+    setIsOnboardingOpen,
+  })
 
   const updateApiSettings = useCallback(
     async (settings: Partial<APISettings>) => {
@@ -1646,54 +1552,11 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     setQueuedPrompts((previous) => [...previous, prompt])
   }, [])
 
-  const savePrompt = useCallback(
-    async ({ title, content, mode }: SavePromptInput) => {
-      const trimmedTitle = title.trim()
-      const trimmedContent = content.trim()
-
-      if (!trimmedTitle || !trimmedContent) {
-        return null
-      }
-
-      try {
-        const prompt = await requestJson<PromptLibraryItem>('/api/prompts', {
-          method: 'POST',
-          body: JSON.stringify({
-            title: trimmedTitle,
-            content: trimmedContent,
-            mode,
-          }),
-        })
-
-        const nextPrompts = sortPrompts([
-          prompt,
-          ...promptLibrary.filter((item) => item.id !== prompt.id),
-        ])
-        setPromptLibrary(nextPrompts)
-        return prompt
-      } catch (error) {
-        console.error('Failed to save prompt.', error)
-        return null
-      }
-    },
-    [promptLibrary, requestJson]
-  )
-
-  const deletePrompt = useCallback(
-    async (promptId: string) => {
-      try {
-        await requestJson(`/api/prompts/${promptId}`, {
-          method: 'DELETE',
-        })
-      } catch (error) {
-        console.error('Failed to delete prompt.', error)
-      }
-
-      const nextPrompts = promptLibrary.filter((prompt) => prompt.id !== promptId)
-      setPromptLibrary(nextPrompts)
-    },
-    [promptLibrary, requestJson]
-  )
+  const { savePrompt, deletePrompt } = usePromptLibrary({
+    requestJson,
+    promptLibrary,
+    setPromptLibrary,
+  })
 
   const savePromptWorkflow = useCallback(
     async (input: SavePromptWorkflowInput) => {
@@ -1844,312 +1707,24 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     [applyConversationPatch, currentChat, customAssistants, draftSessionSettings]
   )
 
-  const saveCustomAssistant = useCallback(
-    async (input: CustomAssistantInput & { id?: string }) => {
-      try {
-        const assistant = await requestJson<CustomAssistant>(
-          input.id
-            ? `/api/custom-assistants/${input.id}`
-            : '/api/custom-assistants',
-          {
-            method: input.id ? 'PATCH' : 'POST',
-            body: JSON.stringify(input),
-          }
-        )
+  const { saveCustomAssistant, deleteCustomAssistant, testCustomAssistant } =
+    useCustomAssistants({
+      requestJson,
+      setCustomAssistants,
+      currentCustomAssistantId,
+      setCurrentCustomAssistantId,
+    })
 
-        setCustomAssistants((previous) =>
-          sortCustomAssistants([
-            assistant,
-            ...previous.filter((item) => item.id !== assistant.id),
-          ])
-        )
-        return assistant
-      } catch (error) {
-        console.error('Failed to save custom assistant.', error)
-        return null
-      }
-    },
-    [requestJson]
-  )
-
-  const deleteCustomAssistant = useCallback(
-    async (assistantId: string) => {
-      try {
-        await requestJson(`/api/custom-assistants/${assistantId}`, {
-          method: 'DELETE',
-        })
-      } catch (error) {
-        console.error('Failed to delete custom assistant.', error)
-      }
-
-      setCustomAssistants((previous) =>
-        previous.filter((assistant) => assistant.id !== assistantId)
-      )
-      if (currentCustomAssistantId === assistantId) {
-        setCurrentCustomAssistantId(null)
-      }
-    },
-    [currentCustomAssistantId, requestJson]
-  )
-
-  const testCustomAssistant = useCallback(
-    async (input: CustomAssistantTestRequest) => {
-      return await requestJson<CustomAssistantTestResponse>(
-        '/api/custom-assistants/test',
-        {
-          method: 'POST',
-          body: JSON.stringify(input),
-        }
-      )
-    },
-    [requestJson]
-  )
-
-  const listArtifacts = useCallback(
-    async (filters: ArtifactListFilters = {}) => {
-      const params = new URLSearchParams()
-
-      if (filters.projectId) params.set('projectId', filters.projectId)
-      if (filters.q) params.set('q', filters.q)
-      if (filters.artifactType) params.set('artifactType', filters.artifactType)
-      if (filters.sourceType) params.set('sourceType', filters.sourceType)
-      if (filters.limit) params.set('limit', String(filters.limit))
-      if (filters.beforeUpdatedAt) {
-        params.set('beforeUpdatedAt', filters.beforeUpdatedAt)
-      }
-
-      const query = params.toString()
-      return await requestJson<Artifact[]>(
-        query ? `/api/artifacts?${query}` : '/api/artifacts'
-      )
-    },
-    [requestJson]
-  )
-
-  const saveArtifact = useCallback(
-    async (input: ArtifactInput) => {
-      try {
-        const artifact = await requestJson<Artifact>('/api/artifacts', {
-          method: 'POST',
-          body: JSON.stringify(input),
-        })
-
-        openWorkspaceTool({
-          tool: 'artifacts',
-          artifactId: artifact.id,
-          projectId: artifact.projectId,
-        })
-        return artifact
-      } catch (error) {
-        console.error('Failed to save artifact.', error)
-        return null
-      }
-    },
-    [openWorkspaceTool, requestJson]
-  )
-
-  const updateArtifact = useCallback(
-    async (artifactId: string, patch: ArtifactPatch) => {
-      try {
-        return await requestJson<Artifact>(`/api/artifacts/${artifactId}`, {
-          method: 'PATCH',
-          body: JSON.stringify(patch),
-        })
-      } catch (error) {
-        console.error('Failed to update artifact.', error)
-        return null
-      }
-    },
-    [requestJson]
-  )
-
-  const deleteArtifact = useCallback(
-    async (artifactId: string) => {
-      try {
-        await requestJson(`/api/artifacts/${artifactId}`, {
-          method: 'DELETE',
-        })
-      } catch (error) {
-        console.error('Failed to delete artifact.', error)
-      }
-    },
-    [requestJson]
-  )
-
-  const runArtifactAction = useCallback(
-    async (artifactId: string, actionType: ArtifactActionType) => {
-      return await requestJson<ArtifactActionResponse>(
-        `/api/artifacts/${artifactId}/actions`,
-        {
-          method: 'POST',
-          body: JSON.stringify({ actionType }),
-        }
-      )
-    },
-    [requestJson]
-  )
-
-  const listArtifactVersions = useCallback(
-    async (artifactId: string) => {
-      const response = await requestJson<ArtifactVersionListResponse>(
-        `/api/artifacts/${artifactId}/versions`
-      )
-      return response.versions
-    },
-    [requestJson]
-  )
-
-  const restoreArtifactVersion = useCallback(
-    async (artifactId: string, versionId: string) => {
-      try {
-        const response = await requestJson<ArtifactVersionRestoreResponse>(
-          `/api/artifacts/${artifactId}/versions/${versionId}/restore`,
-          {
-            method: 'POST',
-          }
-        )
-        return response.artifact
-      } catch (error) {
-        console.error('Failed to restore artifact version.', error)
-        return null
-      }
-    },
-    [requestJson]
-  )
-
-  const duplicateArtifactVersion = useCallback(
-    async (artifactId: string, versionId: string) => {
-      try {
-        const response = await requestJson<ArtifactVersionDuplicateResponse>(
-          `/api/artifacts/${artifactId}/versions/${versionId}/duplicate`,
-          {
-            method: 'POST',
-          }
-        )
-
-        openWorkspaceTool({
-          tool: 'artifacts',
-          artifactId: response.artifact.id,
-          projectId: response.artifact.projectId,
-        })
-
-        return response.artifact
-      } catch (error) {
-        console.error('Failed to duplicate artifact version.', error)
-        return null
-      }
-    },
-    [openWorkspaceTool, requestJson]
-  )
-
-  const listPrismImages = useCallback(
-    async (filters: PrismStudioHistoryFilters = {}) => {
-      const params = new URLSearchParams()
-
-      if (filters.q) params.set('q', filters.q)
-      if (filters.projectId) params.set('projectId', filters.projectId)
-      if (typeof filters.favorite === 'boolean') {
-        params.set('favorite', String(filters.favorite))
-      }
-      if (filters.from) params.set('from', filters.from)
-      if (filters.to) params.set('to', filters.to)
-
-      const query = params.toString()
-      return await requestJson<PrismStudioHistoryResponse>(
-        query ? `/api/images/history?${query}` : '/api/images/history'
-      )
-    },
-    [requestJson]
-  )
-
-  const updatePrismImage = useCallback(
-    async (imageId: string, patch: PrismStudioImagePatch) => {
-      try {
-        return await requestJson<PrismStudioImage>(
-          `/api/images/history/${imageId}`,
-          {
-            method: 'PATCH',
-            body: JSON.stringify(patch),
-          }
-        )
-      } catch (error) {
-        console.error('Failed to update Prism image.', error)
-        return null
-      }
-    },
-    [requestJson]
-  )
-
-  const applyMemoryConversationSummary = useCallback(
-    (summary: MemoryVaultConversationSummary) => {
-      applyConversationPatch(summary.id, (conversation) => ({
-        ...conversation,
-        sessionSettings: {
-          ...conversation.sessionSettings,
-          memory: summary.memoryEnabled,
-        },
-        memorySummary: summary.memorySummary ?? undefined,
-        memoryUpdatedAt: summary.memoryUpdatedAt ?? undefined,
-        updatedAt: summary.updatedAt,
-      }))
-    },
-    [applyConversationPatch]
-  )
-
-  const listMemoryVault = useCallback(async () => {
-    return await requestJson<MemoryVaultResponse>('/api/memory-vault')
-  }, [requestJson])
-
-  const setConversationMemoryEnabled = useCallback(
-    async (conversationId: string, memoryEnabled: boolean) => {
-      const summary = await requestJson<MemoryVaultConversationSummary>(
-        `/api/conversations/${conversationId}/memory`,
-        {
-          method: 'PATCH',
-          body: JSON.stringify({ memoryEnabled }),
-        }
-      )
-
-      applyMemoryConversationSummary(summary)
-      return summary
-    },
-    [applyMemoryConversationSummary, requestJson]
-  )
-
-  const clearConversationMemory = useCallback(
-    async (conversationId: string) => {
-      const summary = await requestJson<MemoryVaultConversationSummary>(
-        `/api/conversations/${conversationId}/memory`,
-        {
-          method: 'DELETE',
-        }
-      )
-
-      applyMemoryConversationSummary(summary)
-      return summary
-    },
-    [applyMemoryConversationSummary, requestJson]
-  )
-
-  const listPulseResearchRoom = useCallback(
-    async (
-      filters: {
-        q?: string
-        projectId?: string | null
-      } = {}
-    ) => {
-      const params = new URLSearchParams()
-
-      if (filters.q) params.set('q', filters.q)
-      if (filters.projectId) params.set('projectId', filters.projectId)
-
-      const query = params.toString()
-      return await requestJson<PulseResearchRoomResponse>(
-        query ? `/api/pulse/research-room?${query}` : '/api/pulse/research-room'
-      )
-    },
-    [requestJson]
-  )
+  const {
+    listArtifacts,
+    saveArtifact,
+    updateArtifact,
+    deleteArtifact,
+    runArtifactAction,
+    listArtifactVersions,
+    restoreArtifactVersion,
+    duplicateArtifactVersion,
+  } = useArtifacts({ requestJson, openWorkspaceTool })
 
   const applyLocalError = useCallback(
     (conversationId: string | undefined, messageId: string | undefined, error: string) => {
@@ -3221,57 +2796,13 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     ]
   )
 
-  const runModelComparison = useCallback(
-    async ({ content, targetModes }: RunModelComparisonInput) => {
-      const trimmedContent = content.trim()
-      if (!trimmedContent || targetModes.length < 2) return null
-
-      try {
-        const result = await requestJson<{
-          comparison: ModelComparison
-          conversation: Conversation
-        }>('/api/model-comparisons', {
-          method: 'POST',
-          body: JSON.stringify({
-            content: trimmedContent,
-            mode: currentMode,
-            targetModes,
-            conversationId: currentChatRef.current?.id,
-            conversation: currentChatRef.current ?? undefined,
-            settings: sessionSettings,
-          }),
-        })
-
-        upsertConversation(result.conversation)
-        return result.comparison
-      } catch (error) {
-        console.error('Failed to compare models.', error)
-        throw error
-      }
-    },
-    [currentMode, requestJson, sessionSettings, upsertConversation]
-  )
-
-  const chooseModelComparisonResponse = useCallback(
-    async (comparisonId: string, candidateId: string) => {
-      try {
-        const result = await requestJson<{
-          comparison: ModelComparison | null
-          conversation: Conversation
-        }>(`/api/model-comparisons/${comparisonId}/choose`, {
-          method: 'POST',
-          body: JSON.stringify({ candidateId }),
-        })
-
-        upsertConversation(result.conversation)
-        return result.conversation
-      } catch (error) {
-        console.error('Failed to save comparison response.', error)
-        return null
-      }
-    },
-    [requestJson, upsertConversation]
-  )
+  const { runModelComparison, chooseModelComparisonResponse } = useModelComparisons({
+    requestJson,
+    upsertConversation,
+    currentMode,
+    sessionSettings,
+    currentChatRef,
+  })
 
   const regenerateLastResponse = useCallback(async () => {
     if (!currentChat) return
