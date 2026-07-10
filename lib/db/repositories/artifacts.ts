@@ -182,37 +182,34 @@ class NeonArtifactsRepository {
       conversationId: input.conversationId,
       sourceMessageId: input.sourceMessageId,
     })
+    // The neon-http driver used by getDatabaseClient() does not support
+    // db.transaction(); the artifact and its initial version are inserted
+    // sequentially instead. See AI_DECISIONS.md.
     const db = getDatabaseClient()
-    const rows = await db.transaction(async (tx) => {
-      const artifactRows = await tx
-        .insert(zenArtifacts)
-        .values({
-          userId,
-          projectId: references.projectId,
-          conversationId: references.conversationId,
-          sourceMessageId: references.sourceMessageId,
-          sourceType: input.sourceType,
-          title: input.title,
-          artifactType: input.artifactType,
-          content: input.content,
-          metadata: normalizeMetadata(input.metadata),
-        })
-        .returning()
+    const artifactRows = await db
+      .insert(zenArtifacts)
+      .values({
+        userId,
+        projectId: references.projectId,
+        conversationId: references.conversationId,
+        sourceMessageId: references.sourceMessageId,
+        sourceType: input.sourceType,
+        title: input.title,
+        artifactType: input.artifactType,
+        content: input.content,
+        metadata: normalizeMetadata(input.metadata),
+      })
+      .returning()
 
-      if (artifactRows[0]) {
-        await tx
-          .insert(zenArtifactVersions)
-          .values(buildVersionValues(artifactRows[0], null))
-      }
-
-      return artifactRows
-    })
-
-    if (!rows[0]) {
+    if (!artifactRows[0]) {
       throw new Error('Unable to create artifact.')
     }
 
-    return rowToArtifact(rows[0])
+    await db
+      .insert(zenArtifactVersions)
+      .values(buildVersionValues(artifactRows[0], null))
+
+    return rowToArtifact(artifactRows[0])
   }
 
   async update(
