@@ -424,3 +424,26 @@ Reason:
 - Existing prompt workflow data remains compatible.
 - Renaming backend tables/routes would add migration risk without changing product behavior.
 - Playbooks remain foreground, user-triggered runs through normal chat or Prism image transports; they are not a background automation engine, cron system, worker queue, or billing bypass.
+
+## Usage Enforcement Uses Atomic Reserve-Then-Reconcile, Not Check-Then-Act
+
+Decision: `/api/chat` and `/api/images/generate` claim usage against the wallet/daily-limit atomically, in a single conditional `UPDATE ... WHERE ... RETURNING` against the live subscription row, before generation starts — not by checking an in-memory snapshot and deducting afterward.
+
+Reason:
+
+- The prior design (`enforceTextUsage`/`enforceImageUsage` checking a subscription object fetched once, with the real deduction landing only after the full LLM stream/image call completed) was a check-then-act race: concurrent requests from the same user (e.g. multiple tabs) could all read the same pre-deduction snapshot and all pass, so daily-message and wallet limits provided no real ceiling under parallel load. Found during the 2026-07-10 bug review (see `AI_TASK_LOG.md`).
+- Text reservation claims a worst-case estimate (`estimatedPromptTokens + requestedMaxOutputTokens`) since actual completion length isn't known ahead of generation, then adjusts down to actual usage on success via `finalizeTextUsage`. Per-request output caps (800–8,000 tokens across plans) are tiny relative to wallet sizes (1M–8M tokens), so the worst-case claim doesn't meaningfully block legitimate concurrent usage.
+- Image reservation claims the exact credit cost, since it's deterministic per model/tier — no reconciliation step needed, only release-on-failure.
+- Any failure or client abort after a successful reservation calls `releaseTextUsage`/`releaseImageUsage` to fully refund the claim, preserving the existing "never charge for failed generations" behavior.
+- New repository methods live in `lib/db/repositories/subscriptions.ts` (`reserveTextUsage`, `releaseTextUsage`, `finalizeTextUsage`, `reserveImageUsage`, `releaseImageUsage`). The original `incrementTextUsage`/`incrementImageUsage` and `logTextUsage`/`logImageUsage` are unchanged and still used by `app/api/artifacts/[id]/actions/route.ts`, `app/api/model-comparisons/route.ts`, and `app/api/custom-assistants/test/route.ts`, which were out of scope for this fix and remain check-then-act. If those routes see meaningful concurrent traffic, they should be migrated to the same pattern.
+- `enforceTextUsage`/`enforceImageUsage` are still called first, purely for fast/specific error messages against the point-in-time snapshot; the atomic reservation is the authoritative gate and can still reject with a generic "usage limit reached" error even when the informative pre-check passed, if a concurrent request won the race.
+
+## Neon Repositories Must Not Use Drizzle's `db.transaction()`
+
+Decision: Database repository code must not call `db.transaction(...)` on the Drizzle client returned by `getDatabaseClient()`. Multi-statement atomicity, where actually needed, goes through the raw Neon client's own `sql.transaction([...])` batch API (`getNeonSql()`) instead, or is accepted as sequential non-atomic statements when the raw batch API doesn't fit.
+
+Reason:
+
+- `lib/db/client.ts` builds `getDatabaseClient()` with `drizzle-orm/neon-http`, whose driver is `@neondatabase/serverless`'s stateless HTTP client (`neon(databaseUrl)`). This driver has no persistent connection/session to hold an interactive transaction open across statements, so Drizzle's ORM-level `db.transaction(async (tx) => {...})` throws `Error: No transactions support in neon-http driver` on every call — it cannot ever work with this client, in any environment.
+- Found live on 2026-07-10: `lib/db/repositories/artifacts.ts`'s `create()` used `db.transaction(...)` to insert an artifact row and its initial version row together; every Save Artifact call failed with a 500. Fixed by making the two inserts sequential instead of transactional — if the second insert fails, an artifact exists without an initial version, which is a acceptable degraded outcome (not worse than the prior 100%-broken state) and versions are added on every subsequent edit anyway.
+- `lib/db/repositories/user-purge.ts` already does this correctly: its destructive multi-table delete uses `getNeonSql().transaction((tx) => [...])`, the raw Neon HTTP client's own batching API, which genuinely does support atomic multi-statement execution over HTTP. That is the right tool when atomicity across several statements is actually required against this driver — `db.transaction()` is not.
