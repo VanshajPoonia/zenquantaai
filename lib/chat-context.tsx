@@ -531,11 +531,17 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     [conversations]
   )
 
+  // A send can keep streaming in the background after the user navigates to
+  // a different conversation (see the shouldFollow* checks below). Scope the
+  // UI-facing streaming flag to the conversation actually being viewed so
+  // the Stop control doesn't affect a conversation the user isn't looking at.
   const isStreaming =
-    streamingState.status === 'streaming' ||
-    sendLifecycleStatus === 'dispatching_text' ||
-    sendLifecycleStatus === 'dispatching_image' ||
-    sendLifecycleStatus === 'streaming_text'
+    (streamingState.conversationId === undefined ||
+      streamingState.conversationId === currentChat?.id) &&
+    (streamingState.status === 'streaming' ||
+      sendLifecycleStatus === 'dispatching_text' ||
+      sendLifecycleStatus === 'dispatching_image' ||
+      sendLifecycleStatus === 'streaming_text')
 
   useEffect(() => {
     conversationsRef.current = conversations
@@ -2529,7 +2535,13 @@ export function ChatProvider({ children }: { children: ReactNode }) {
                 }
               )
 
-              upsertConversation(startedConversation)
+              // Only follow this conversation if the user hasn't already
+              // navigated elsewhere while the send was in flight — otherwise
+              // a background stream would yank the view back to it.
+              const shouldFollowStart =
+                !currentChatRef.current ||
+                currentChatRef.current.id === startedConversation.id
+              upsertConversation(startedConversation, shouldFollowStart)
               setStreamingState({
                 status: 'streaming',
                 conversationId: startedConversation.id,
@@ -2584,7 +2596,10 @@ export function ChatProvider({ children }: { children: ReactNode }) {
             case 'done': {
               terminalEvent = 'done'
               completedConversation = event.conversation
-              upsertConversation(event.conversation)
+              const shouldFollowDone =
+                !currentChatRef.current ||
+                currentChatRef.current.id === event.conversation.id
+              upsertConversation(event.conversation, shouldFollowDone)
               setStreamingState({ status: 'idle' })
               break
             }
@@ -2773,7 +2788,10 @@ export function ChatProvider({ children }: { children: ReactNode }) {
           sendId: payload.sendId,
         })
 
-        upsertConversation(data.conversation)
+        const shouldFollowImageDone =
+          !currentChatRef.current ||
+          currentChatRef.current.id === data.conversation.id
+        upsertConversation(data.conversation, shouldFollowImageDone)
         setStreamingState({ status: 'idle' })
         finalizeSendLifecycle(payload.sendId)
         return data.conversation
