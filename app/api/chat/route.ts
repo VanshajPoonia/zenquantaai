@@ -235,6 +235,7 @@ export async function POST(request: NextRequest) {
     attachments: body.attachments,
     attachmentContext: body.attachmentContext,
     customAssistantId: customAssistant?.id ?? null,
+    timeZone: body.timeZone,
   }
   const customAssistantSnapshot = customAssistant
     ? buildCustomAssistantSnapshot(customAssistant)
@@ -379,7 +380,8 @@ export async function POST(request: NextRequest) {
         fileKnowledgeContext,
         customAssistantContext,
         durableMemoryContext,
-        crossChatContext
+        crossChatContext,
+        payload.timeZone
       )
 
       const estimatedPromptTokens = estimatePromptTokens(promptText)
@@ -516,6 +518,7 @@ export async function POST(request: NextRequest) {
         customAssistantContext,
         durableMemoryContext,
         crossChatContext,
+        timeZone: payload.timeZone,
         signal: request.signal,
       })) {
         accumulated += chunk
@@ -600,6 +603,7 @@ export async function POST(request: NextRequest) {
           customAssistantContext,
           durableMemoryContext,
           crossChatContext,
+          timeZone: payload.timeZone,
           sources: messageSources,
         }
       )

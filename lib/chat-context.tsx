@@ -2072,6 +2072,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
             attachments: payload.attachments,
             attachmentContext: (payload.attachments ?? []).map(toAttachmentContext),
             customAssistantId: payload.customAssistantId ?? null,
+            timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
           } satisfies ChatRequest),
           signal: controller.signal,
         })

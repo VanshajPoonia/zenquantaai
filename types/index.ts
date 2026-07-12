@@ -1783,6 +1783,7 @@ export interface ChatRequest {
   attachments?: Attachment[]
   attachmentContext?: AttachmentContext[]
   customAssistantId?: string | null
+  timeZone?: string
 }
 
 export interface PendingSend {

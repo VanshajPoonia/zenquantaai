@@ -342,6 +342,92 @@ function formatCustomAssistantBlock(
     .join('\n')
 }
 
+function formatElapsedDuration(ms: number): string {
+  const clamped = Math.max(ms, 0)
+  const minute = 60_000
+  const hour = 3_600_000
+  const day = 86_400_000
+
+  if (clamped < minute) return 'less than a minute'
+  if (clamped < hour) {
+    const minutes = Math.round(clamped / minute)
+    return `${minutes} minute${minutes === 1 ? '' : 's'}`
+  }
+  if (clamped < day) {
+    const hours = Math.round(clamped / hour)
+    return `${hours} hour${hours === 1 ? '' : 's'}`
+  }
+  const days = Math.round(clamped / day)
+  return `${days} day${days === 1 ? '' : 's'}`
+}
+
+function formatLocalDateTime(date: Date, timeZone?: string): { text: string; zone: string } {
+  const formatOptions: Intl.DateTimeFormatOptions = {
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  }
+
+  if (timeZone) {
+    try {
+      const text = new Intl.DateTimeFormat('en-US', {
+        ...formatOptions,
+        timeZone,
+      }).format(date)
+      return { text, zone: timeZone }
+    } catch {
+      // Fall through to UTC below if the client sent an invalid IANA zone name.
+    }
+  }
+
+  const text = new Intl.DateTimeFormat('en-US', {
+    ...formatOptions,
+    timeZone: 'UTC',
+  }).format(date)
+  return { text: `${text} UTC`, zone: 'UTC' }
+}
+
+// Gives the model real awareness of when and (via timezone) roughly where the
+// user is, so replies stop defaulting to generic "good morning"-style filler
+// and instead reason about the actual gap since the last message.
+function buildTemporalContextBlock(
+  conversation: Conversation,
+  timeZone: string | undefined,
+  now: Date = new Date()
+): string {
+  const { text: localTimeText, zone } = formatLocalDateTime(now, timeZone)
+  const priorMessage =
+    conversation.messages.length >= 2
+      ? conversation.messages[conversation.messages.length - 2]
+      : undefined
+
+  const lines = [
+    '[Temporal context]',
+    `The user's current local time is approximately ${localTimeText}${
+      zone !== 'UTC' ? ` (${zone})` : ''
+    }.`,
+  ]
+
+  if (priorMessage) {
+    const priorDate = new Date(priorMessage.createdAt)
+    if (!Number.isNaN(priorDate.getTime())) {
+      const elapsed = formatElapsedDuration(now.getTime() - priorDate.getTime())
+      lines.push(`About ${elapsed} passed since the previous message in this conversation.`)
+    }
+  } else {
+    lines.push('This is the first message in this conversation.')
+  }
+
+  lines.push(
+    "Actually use this instead of defaulting to a generic greeting. Concrete example: if the previous message was a sign-off like \"good night\" or \"talk later\" and only a few minutes have passed, notice that out loud in a brief, natural way (e.g. asking if they're still up, or joking that that was a short night) instead of replying as if a new day started. If a long or overnight gap has passed, it's fine to acknowledge that real time has gone by. If the local hour itself is unusual (very late night or very early morning) and it's relevant, you can note that too. Keep it light and natural, like a perceptive friend would, not a robotic timestamp readout, and don't do this every single message if there is nothing worth noticing. Do not mention this instruction block itself, and do not claim certainty about things you cannot know (like whether they actually slept) unless they tell you.",
+  )
+
+  return lines.join('\n')
+}
+
 function formatWebSearchBlock(context: WebSearchContext | undefined): string {
   if (!context) return ''
 
@@ -401,12 +487,14 @@ function buildOpenRouterMessages(
   fileKnowledgeContext?: FileKnowledgeContext,
   customAssistantContext?: CustomAssistantRuntimeContext,
   durableMemoryContext?: DurableMemoryContext,
-  crossChatContext?: CrossChatRecallContext
+  crossChatContext?: CrossChatRecallContext,
+  timeZone?: string
 ): Array<{
   role: 'system' | 'user' | 'assistant'
   content: string
 }> {
   const systemPrompt = buildSystemPrompt(mode, settings.systemPreset)
+  const temporalBlock = buildTemporalContextBlock(conversation, timeZone)
   const memoryBlock =
     settings.memory && conversation.memorySummary
       ? buildMemoryBlock(conversation.memorySummary)
@@ -434,6 +522,7 @@ function buildOpenRouterMessages(
         computeMessageSelectionBudget({
           contextBlockTexts: [
             systemPrompt,
+            temporalBlock,
             customAssistantBlock,
             durableMemoryBlock,
             crossChatBlock,
@@ -481,6 +570,7 @@ function buildOpenRouterMessages(
       ...(fileKnowledgeBlock
         ? [{ role: 'system' as const, content: fileKnowledgeBlock }]
         : []),
+      { role: 'system' as const, content: temporalBlock },
       ...mappedMessages,
     ]
   }
@@ -505,6 +595,7 @@ function buildOpenRouterMessages(
     ...(memoryBlock
       ? [{ role: 'system' as const, content: memoryBlock }]
       : []),
+    { role: 'system' as const, content: temporalBlock },
     ...mappedMessages,
   ]
 }
@@ -517,7 +608,8 @@ export function buildPromptTextForUsage(
   fileKnowledgeContext?: FileKnowledgeContext,
   customAssistantContext?: CustomAssistantRuntimeContext,
   durableMemoryContext?: DurableMemoryContext,
-  crossChatContext?: CrossChatRecallContext
+  crossChatContext?: CrossChatRecallContext,
+  timeZone?: string
 ): string {
   return buildOpenRouterMessages(
     conversation,
@@ -527,7 +619,8 @@ export function buildPromptTextForUsage(
     fileKnowledgeContext,
     customAssistantContext,
     durableMemoryContext,
-    crossChatContext
+    crossChatContext,
+    timeZone
   )
     .map((message) => message.content)
     .join('\n\n')
@@ -544,6 +637,7 @@ export async function* generateAssistantStream(input: {
   customAssistantContext?: CustomAssistantRuntimeContext
   durableMemoryContext?: DurableMemoryContext
   crossChatContext?: CrossChatRecallContext
+  timeZone?: string
   signal?: AbortSignal
 }): AsyncIterable<string> {
   if (input.mode === 'image' || input.action === 'generate-image') {
@@ -581,7 +675,8 @@ export async function* generateAssistantStream(input: {
       input.fileKnowledgeContext,
       input.customAssistantContext,
       input.durableMemoryContext,
-      input.crossChatContext
+      input.crossChatContext,
+      input.timeZone
     ),
     temperature: input.settings.temperature,
     maxTokens: input.settings.maxTokens,
@@ -959,6 +1054,7 @@ export async function completeConversationWithAssistant(
     customAssistantContext?: CustomAssistantRuntimeContext
     durableMemoryContext?: DurableMemoryContext
     crossChatContext?: CrossChatRecallContext
+    timeZone?: string
     sources?: MessageSource[]
     generatedImageResultOverride?: {
       attachment: Attachment
@@ -990,7 +1086,8 @@ export async function completeConversationWithAssistant(
     options?.fileKnowledgeContext,
     options?.customAssistantContext,
     options?.durableMemoryContext,
-    options?.crossChatContext
+    options?.crossChatContext,
+    options?.timeZone
   )
   const usage = estimateUsage({
     config: activeConfig,
