@@ -47,8 +47,18 @@ import {
   WebSearchContext,
   WebSearchSource,
 } from '@/types'
-import { isContextBudgetEnabled, isMemoryV2Enabled } from '@/lib/context/flags'
+import {
+  isContextBudgetEnabled,
+  isMemoryV2Enabled,
+  isToonSerializationEnabled,
+} from '@/lib/context/flags'
 import { computeMessageSelectionBudget } from '@/lib/context/token-budget'
+import {
+  encodeToon,
+  isToonWorthwhile,
+  MIN_TOON_ROWS,
+  type ToonRow,
+} from '@/lib/context/toon'
 import { buildSystemPrompt } from './prompts'
 import {
   createOpenRouterImage,
@@ -243,8 +253,57 @@ function formatAttachmentBlock(
   ].join('\n\n')
 }
 
+// Phase 5: render a uniform list of sources as a TOON table when the flag is on
+// AND it is a measured token win over the readable rendering; otherwise return
+// the readable rendering unchanged. Flag-off and not-worthwhile are therefore
+// byte-identical to the legacy prompt. The TOON preamble is folded into the
+// candidate so the win check accounts for its cost.
+function maybeToonSourceList(input: {
+  readable: string
+  name: string
+  columns: string[]
+  rows: ToonRow[]
+  preamble: string
+}): string {
+  if (!isToonSerializationEnabled() || input.rows.length < MIN_TOON_ROWS) {
+    return input.readable
+  }
+
+  const candidate = `${input.preamble}\n${encodeToon(
+    input.name,
+    input.columns,
+    input.rows
+  )}`
+
+  return isToonWorthwhile(input.readable, candidate) ? candidate : input.readable
+}
+
 function formatFileKnowledgeBlock(context: FileKnowledgeContext | undefined): string {
   if (!context?.sources.length) return ''
+
+  const readableSources = context.sources
+    .map((source) =>
+      [
+        `[${source.id}] ${source.title}`,
+        `Source: ${source.domain}`,
+        `Excerpt: ${source.snippet}`,
+      ].join('\n')
+    )
+    .join('\n\n')
+
+  const sourcesSection = maybeToonSourceList({
+    readable: readableSources,
+    name: 'files',
+    columns: ['id', 'title', 'source', 'excerpt'],
+    rows: context.sources.map((source) => ({
+      id: source.id,
+      title: source.title,
+      source: source.domain,
+      excerpt: source.snippet,
+    })),
+    preamble:
+      'File excerpts (TOON table; the header lists the columns, each following line is one excerpt in column order). Cite inline with the id column like [F1] and [F2].',
+  })
 
   return [
     '[Uploaded file knowledge]',
@@ -253,13 +312,7 @@ function formatFileKnowledgeBlock(context: FileKnowledgeContext | undefined): st
     '',
     'Use these private uploaded-file excerpts only when relevant. Cite them inline with file source labels like [F1] and [F2]. Do not claim access to full raw files beyond these excerpts.',
     '',
-    ...context.sources.map((source) =>
-      [
-        `[${source.id}] ${source.title}`,
-        `Source: ${source.domain}`,
-        `Excerpt: ${source.snippet}`,
-      ].join('\n')
-    ),
+    sourcesSection,
   ].join('\n\n')
 }
 
@@ -301,14 +354,8 @@ function formatWebSearchBlock(context: WebSearchContext | undefined): string {
     ].join('\n')
   }
 
-  return [
-    '[Web search context]',
-    `Search time: ${context.searchedAt}`,
-    `Query: ${context.query}`,
-    '',
-    'Use these source snippets for current or research-style claims. Cite them inline with bracketed numbers like [1] and [2]. If the snippets are insufficient, say so plainly instead of inventing facts.',
-    '',
-    ...context.sources.map((source) =>
+  const readableSources = context.sources
+    .map((source) =>
       [
         `[${source.id}] ${source.title}`,
         `URL: ${source.url}`,
@@ -317,7 +364,32 @@ function formatWebSearchBlock(context: WebSearchContext | undefined): string {
       ]
         .filter(Boolean)
         .join('\n')
-    ),
+    )
+    .join('\n\n')
+
+  const sourcesSection = maybeToonSourceList({
+    readable: readableSources,
+    name: 'sources',
+    columns: ['id', 'title', 'url', 'published', 'snippet'],
+    rows: context.sources.map((source) => ({
+      id: source.id,
+      title: source.title,
+      url: source.url,
+      published: source.publishedAt ?? '',
+      snippet: source.snippet,
+    })),
+    preamble:
+      'Sources (TOON table; the header lists the columns, each following line is one source in column order). Cite inline with the id column like [1] and [2].',
+  })
+
+  return [
+    '[Web search context]',
+    `Search time: ${context.searchedAt}`,
+    `Query: ${context.query}`,
+    '',
+    'Use these source snippets for current or research-style claims. Cite them inline with bracketed numbers like [1] and [2]. If the snippets are insufficient, say so plainly instead of inventing facts.',
+    '',
+    sourcesSection,
   ].join('\n\n')
 }
 
