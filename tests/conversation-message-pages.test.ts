@@ -3,12 +3,18 @@ import {
   mergeConversationMessagePage,
   mergeMessagesByIdChronological,
 } from '@/lib/conversations/message-pages'
-import { Conversation, Message } from '@/types'
+import { Conversation, Message, MessageRole } from '@/types'
+import { nextMessageTimestamp } from '@/lib/utils/chat'
 
-function message(id: string, createdAt: string, content = id): Message {
+function message(
+  id: string,
+  createdAt: string,
+  content = id,
+  role: MessageRole = 'user'
+): Message {
   return {
     id,
-    role: 'user',
+    role,
     content,
     mode: 'general',
     createdAt,
@@ -79,5 +85,45 @@ describe('conversation message page helpers', () => {
       hasMoreBefore: true,
       nextBefore: '2026-06-03T00:02:00.000Z',
     })
+  })
+
+  it('keeps a user prompt above its assistant when timestamps collide', () => {
+    const createdAt = '2026-06-03T00:01:00.000Z'
+    const result = mergeMessagesByIdChronological(
+      [message('assistant', createdAt, 'Reply', 'assistant')],
+      [message('user', createdAt, 'Prompt', 'user')]
+    )
+
+    expect(result.map((item) => item.id)).toEqual(['user', 'assistant'])
+    expect(nextMessageTimestamp(createdAt)).toBe(
+      '2026-06-03T00:01:00.001Z'
+    )
+  })
+
+  it('orders multiple ask-another-mode branch replies to the same user turn', () => {
+    const userCreatedAt = '2026-06-03T00:01:00.000Z'
+    const firstBranchCreatedAt = nextMessageTimestamp(userCreatedAt)
+    const secondBranchCreatedAt = nextMessageTimestamp(
+      userCreatedAt,
+      firstBranchCreatedAt
+    )
+
+    expect(firstBranchCreatedAt).toBe('2026-06-03T00:01:00.001Z')
+    expect(secondBranchCreatedAt).toBe('2026-06-03T00:01:00.002Z')
+
+    const result = mergeMessagesByIdChronological(
+      [],
+      [
+        message('user', userCreatedAt, 'Prompt', 'user'),
+        message('branch-1', firstBranchCreatedAt, 'First reply', 'assistant'),
+        message('branch-2', secondBranchCreatedAt, 'Second reply', 'assistant'),
+      ]
+    )
+
+    expect(result.map((item) => item.id)).toEqual([
+      'user',
+      'branch-1',
+      'branch-2',
+    ])
   })
 })

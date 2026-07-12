@@ -7,6 +7,7 @@ import { getAssistantFamilyFromMode } from '@/lib/config/assistants'
 import { createPrivateFileUrl } from '@/lib/storage/object-store'
 import {
   createConversation,
+  compareMessagesChronologically,
   sortConversationSummaries,
   updateConversationSnapshot,
 } from '@/lib/utils/chat'
@@ -142,10 +143,7 @@ function vectorLiteral(embedding: number[]): string {
 async function rowToConversation(row: ConversationRow): Promise<Conversation> {
   const hydratedMessages = await Promise.all(
     [...(row.messages ?? [])]
-      .sort(
-        (a, b) =>
-          new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
-      )
+      .sort(compareMessagesChronologically)
       .map(rowToMessage)
   )
 
@@ -393,7 +391,9 @@ class NeonConversationsRepository {
       .limit(limit + 1)
     const hasMoreBefore = rows.length > limit
     const pageRows = rows.slice(0, limit).reverse()
-    const messages = await Promise.all(pageRows.map(rowToMessage))
+    const messages = (await Promise.all(pageRows.map(rowToMessage))).sort(
+      compareMessagesChronologically
+    )
     const oldest = messages[0]
 
     return {

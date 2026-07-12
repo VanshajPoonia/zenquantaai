@@ -1,4 +1,5 @@
 import { Conversation, ConversationMessagesPageResponse, Message } from '@/types'
+import { compareMessagesChronologically } from '@/lib/utils/chat'
 
 export function mergeMessagesByIdChronological(
   existing: Message[],
@@ -10,9 +11,7 @@ export function mergeMessagesByIdChronological(
     byId.set(message.id, message)
   }
 
-  return [...byId.values()].sort(
-    (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
-  )
+  return [...byId.values()].sort(compareMessagesChronologically)
 }
 
 export function mergeConversationMessagePage(
