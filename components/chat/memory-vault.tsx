@@ -10,12 +10,14 @@ import {
   MessageSquare,
   RefreshCcw,
   ShieldCheck,
+  Sparkles,
   Trash2,
 } from 'lucide-react'
 import { useChatContext } from '@/lib/chat-context'
 import { cn } from '@/lib/utils'
 import {
   MemoryVaultConversationSummary,
+  MemoryVaultDurableItem,
   MemoryVaultResponse,
 } from '@/types'
 import {
@@ -194,6 +196,70 @@ function MemorySummaryCard({
   )
 }
 
+const DURABLE_KIND_LABELS: Record<MemoryVaultDurableItem['kind'], string> = {
+  identity: 'Identity',
+  preference: 'Preference',
+  constraint: 'Constraint',
+  decision: 'Decision',
+  fact: 'Fact',
+  open_loop: 'Open loop',
+  project_status: 'Project status',
+}
+
+function DurableMemoryCard({
+  item,
+  isWorking,
+  onForget,
+  onOpenSource,
+}: {
+  item: MemoryVaultDurableItem
+  isWorking: boolean
+  onForget: () => void
+  onOpenSource?: () => void
+}) {
+  return (
+    <div className="flex flex-col gap-2 rounded-xl border border-border/60 bg-background/40 p-3">
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex flex-wrap items-center gap-1.5">
+          <Badge variant="secondary" className="rounded-full text-[11px]">
+            {DURABLE_KIND_LABELS[item.kind]}
+          </Badge>
+          <Badge variant="outline" className="rounded-full text-[11px]">
+            {item.projectName}
+          </Badge>
+        </div>
+        {isWorking ? (
+          <Loader2 className="size-4 shrink-0 animate-spin text-muted-foreground" />
+        ) : (
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="size-7 shrink-0 text-muted-foreground hover:text-destructive"
+            aria-label="Forget this memory"
+            onClick={onForget}
+          >
+            <Trash2 className="size-4" />
+          </Button>
+        )}
+      </div>
+      <p className="text-sm leading-5 text-foreground">{item.content}</p>
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
+        <span>Confirmed {formatDate(item.lastConfirmedAt)}</span>
+        {onOpenSource ? (
+          <button
+            type="button"
+            className="underline-offset-2 hover:text-foreground hover:underline"
+            onClick={onOpenSource}
+          >
+            Open source chat
+          </button>
+        ) : null}
+      </div>
+    </div>
+  )
+}
+
 export function MemoryVault() {
   const {
     workspaceToolRequest,
@@ -203,6 +269,7 @@ export function MemoryVault() {
     openConversation,
     setConversationMemoryEnabled,
     clearConversationMemory,
+    forgetDurableMemory,
   } = useChatContext()
   const [open, setOpen] = useState(false)
   const [vault, setVault] = useState<MemoryVaultResponse | null>(null)
@@ -212,6 +279,9 @@ export function MemoryVault() {
   const [workingConversationId, setWorkingConversationId] = useState<string | null>(null)
   const [pendingClear, setPendingClear] =
     useState<MemoryVaultConversationSummary | null>(null)
+  const [pendingForget, setPendingForget] =
+    useState<MemoryVaultDurableItem | null>(null)
+  const [workingItemId, setWorkingItemId] = useState<string | null>(null)
   const [isSavingGlobal, setIsSavingGlobal] = useState(false)
 
   const preferences = useMemo(
@@ -320,6 +390,27 @@ export function MemoryVault() {
     }
   }
 
+  const handleForgetMemory = async () => {
+    if (!pendingForget) return
+
+    setWorkingItemId(pendingForget.id)
+    setError(null)
+
+    try {
+      await forgetDurableMemory(pendingForget.id)
+      setPendingForget(null)
+      setVault(await listMemoryVault())
+    } catch (forgetError) {
+      setError(
+        forgetError instanceof Error
+          ? forgetError.message
+          : 'Unable to forget this memory.'
+      )
+    } finally {
+      setWorkingItemId(null)
+    }
+  }
+
   const handleCopy = async (conversation: MemoryVaultConversationSummary) => {
     if (!conversation.memorySummary?.trim()) return
 
@@ -413,6 +504,52 @@ export function MemoryVault() {
                       />
                     </div>
                   </div>
+                </section>
+
+                <section className="space-y-3 rounded-2xl border border-border/60 bg-card/45 p-4">
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                    <div>
+                      <h3 className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                        <Sparkles className="size-4 text-muted-foreground" />
+                        Durable memory
+                      </h3>
+                      <p className="mt-1 max-w-2xl text-xs leading-5 text-muted-foreground">
+                        Facts Zenquanta remembers about you across every chat and
+                        reuses automatically. Forgetting one removes it from future
+                        context; it does not change any conversation.
+                      </p>
+                    </div>
+                    <Badge variant="outline" className="w-fit shrink-0 rounded-full">
+                      {vault.totals.durableMemoryCount} saved
+                    </Badge>
+                  </div>
+
+                  {vault.durableMemories.length > 0 ? (
+                    <div className="grid gap-2 md:grid-cols-2">
+                      {vault.durableMemories.map((item) => (
+                        <DurableMemoryCard
+                          key={item.id}
+                          item={item}
+                          isWorking={workingItemId === item.id}
+                          onForget={() => setPendingForget(item)}
+                          onOpenSource={
+                            item.sourceConversationId
+                              ? () =>
+                                  void handleOpenConversation(
+                                    item.sourceConversationId as string
+                                  )
+                              : undefined
+                          }
+                        />
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="rounded-xl border border-dashed border-border/60 bg-background/30 px-3 py-4 text-sm text-muted-foreground">
+                      {vault.durableMemoryEnabled
+                        ? 'No durable facts saved yet. As you chat, Zenquanta stores stable facts — your name, preferences, project decisions — here so every assistant can reuse them.'
+                        : 'Durable cross-chat memory is turned off for this workspace, so no facts are being saved yet.'}
+                    </p>
+                  )}
                 </section>
 
                 <section className="rounded-2xl border border-border/60 bg-card/45 p-4">
@@ -579,6 +716,42 @@ export function MemoryVault() {
                 <Trash2 className="mr-2 size-4" />
               )}
               Clear summary
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog
+        open={Boolean(pendingForget)}
+        onOpenChange={(nextOpen) => {
+          if (!nextOpen) setPendingForget(null)
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Forget this memory?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Zenquanta will stop using &quot;{pendingForget?.content}&quot; in future
+              chats. This does not delete any conversation or its messages.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={Boolean(workingItemId)}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              disabled={Boolean(workingItemId)}
+              onClick={(event) => {
+                event.preventDefault()
+                void handleForgetMemory()
+              }}
+            >
+              {workingItemId ? (
+                <Loader2 className="mr-2 size-4 animate-spin" />
+              ) : (
+                <Trash2 className="mr-2 size-4" />
+              )}
+              Forget
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
