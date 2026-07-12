@@ -61,9 +61,22 @@ export function useMemoryVault(input: {
     [applyMemoryConversationSummary, input]
   )
 
+  // Durable cross-chat memory (Phase 3c) is not part of conversation state, so
+  // there is nothing to patch locally — the Vault refetches after a forget.
+  const forgetDurableMemory = useCallback(
+    async (itemId: string) => {
+      await input.requestJson<{ id: string; forgotten: boolean }>(
+        `/api/memory-vault/durable/${itemId}`,
+        { method: 'DELETE' }
+      )
+    },
+    [input]
+  )
+
   return {
     listMemoryVault,
     setConversationMemoryEnabled,
     clearConversationMemory,
+    forgetDurableMemory,
   }
 }

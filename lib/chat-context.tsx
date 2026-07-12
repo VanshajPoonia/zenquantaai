@@ -345,6 +345,7 @@ interface ChatContextType {
   clearConversationMemory: (
     conversationId: string
   ) => Promise<MemoryVaultConversationSummary | null>
+  forgetDurableMemory: (itemId: string) => Promise<void>
   listPulseResearchRoom: (filters?: {
     q?: string
     projectId?: string | null
@@ -664,8 +665,12 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     [commitState]
   )
 
-  const { listMemoryVault, setConversationMemoryEnabled, clearConversationMemory } =
-    useMemoryVault({ requestJson, applyConversationPatch })
+  const {
+    listMemoryVault,
+    setConversationMemoryEnabled,
+    clearConversationMemory,
+    forgetDurableMemory,
+  } = useMemoryVault({ requestJson, applyConversationPatch })
   const { listPulseResearchRoom } = usePulseResearchRoom({ requestJson })
 
   const persistConversationMutation = useCallback(
@@ -3281,6 +3286,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       listMemoryVault,
       setConversationMemoryEnabled,
       clearConversationMemory,
+      forgetDurableMemory,
       listPulseResearchRoom,
       runModelComparison,
       chooseModelComparisonResponse,
@@ -3313,6 +3319,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       clearWorkspaceSearchRequest,
       clearComposerDraftRequest,
       clearConversationMemory,
+      forgetDurableMemory,
       completeOnboarding,
       conversations,
       composerDraftRequest,
