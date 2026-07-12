@@ -7,6 +7,7 @@ import { useChatContext } from '@/lib/chat-context'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { ZenquantaLogo } from '@/components/icons'
+import { SpectrumArc } from '@/components/chat/spectrum-arc'
 
 const ADMIN_CONTACT_EMAIL = 'zqai@vanshajpoonia.com'
 
@@ -71,15 +72,17 @@ export function AuthGate() {
         : 'neutral'
 
   return (
-    <div className="flex min-h-screen w-full items-center justify-center overflow-y-auto bg-background px-6 py-10">
-      <div className="w-full max-w-md rounded-2xl border border-border/70 bg-card/70 p-8">
+    <div className="relative flex min-h-screen w-full items-center justify-center overflow-y-auto bg-background px-6 py-10">
+      <SpectrumArc className="pointer-events-none absolute top-4 left-1/2 h-[200px] w-[360px] -translate-x-1/2 opacity-60 sm:h-[240px] sm:w-[420px]" />
+
+      <div className="relative w-full max-w-md rounded-2xl border border-border/70 bg-card/70 p-8">
         <div className="mb-8 flex items-center gap-3">
           <ZenquantaLogo className="size-10" />
           <p className="eyebrow">Zenquanta AI</p>
         </div>
 
-        <h1 className="text-3xl font-medium tracking-tight text-foreground">
-          Sign in to your workspace
+        <h1 className="font-display text-4xl text-foreground">
+          Six assistants. One workspace.
         </h1>
 
         <p className="mb-6 mt-3 text-sm leading-7 text-muted-foreground">

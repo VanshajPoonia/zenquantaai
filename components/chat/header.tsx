@@ -76,7 +76,7 @@ export function Header({
                 className="flex cursor-pointer items-center gap-2 rounded-xl px-2 py-1 transition-colors hover:bg-accent/40"
               >
                 <ZenquantaLogo className="size-5 sm:size-6" />
-                <span className="hidden font-semibold text-foreground sm:inline">
+                <span className="font-display hidden text-lg text-foreground sm:inline">
                   Zenquanta AI
                 </span>
               </button>

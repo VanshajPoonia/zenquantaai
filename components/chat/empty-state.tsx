@@ -6,6 +6,7 @@ import { useChatContext } from '@/lib/chat-context'
 import { AIMode, MODE_CONFIGS } from '@/lib/types'
 import { ModeIcon, getModeAccentClass, getModeGradient, getModeGlow } from '@/lib/mode-utils'
 import { ModeSwitcher } from './mode-switcher'
+import { SpectrumArc } from './spectrum-arc'
 import { ChevronRightIcon } from '@/components/icons'
 import { Button } from '@/components/ui/button'
 
@@ -69,20 +70,11 @@ export function EmptyState({ onPromptSelect }: EmptyStateProps) {
   const modeConfig = MODE_CONFIGS[currentMode]
 
   return (
-    <div className="flex min-h-full flex-col items-center justify-center px-4 py-8 md:py-10">
-      {/* Animated background glow */}
-      <div
-        className={cn(
-          'absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2',
-          'w-[600px] h-[400px] rounded-full blur-[120px] opacity-20',
-          'transition-all duration-700 pointer-events-none',
-          currentMode === 'general' && 'bg-general',
-          currentMode === 'creative' && 'bg-creative',
-          currentMode === 'logic' && 'bg-logic',
-          currentMode === 'code' && 'bg-code',
-          currentMode === 'live' && 'bg-live',
-          currentMode === 'image' && 'bg-image'
-        )}
+    <div className="relative flex min-h-full flex-col items-center justify-center px-4 py-8 md:py-10">
+      {/* Spectrum arc — the six assistants, refracted. The current one lit. */}
+      <SpectrumArc
+        activeMode={currentMode}
+        className="absolute top-6 left-1/2 h-[180px] w-[300px] -translate-x-1/2 opacity-70 transition-opacity duration-500 sm:top-2 sm:h-[260px] sm:w-[440px] sm:opacity-80"
       />
 
       <div className="relative z-10 flex flex-col items-center max-w-3xl mx-auto">
@@ -117,7 +109,7 @@ export function EmptyState({ onPromptSelect }: EmptyStateProps) {
         </div>
 
         {/* Title & Description */}
-        <h1 className="text-4xl font-bold text-foreground mb-3 text-center text-balance animate-in fade-in slide-in-from-bottom-2 duration-500 delay-100 fill-mode-both">
+        <h1 className="font-display text-5xl text-foreground mb-3 text-center text-balance animate-in fade-in slide-in-from-bottom-2 duration-500 delay-100 fill-mode-both sm:text-6xl">
           {modeConfig.emptyStateTitle}
         </h1>
         <p className="text-lg text-muted-foreground text-center max-w-lg mb-10 text-balance animate-in fade-in slide-in-from-bottom-2 duration-500 delay-150 fill-mode-both">

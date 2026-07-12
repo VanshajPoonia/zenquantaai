@@ -75,7 +75,7 @@ export function ModeSwitcherCompact() {
   const [, startTransition] = useTransition()
 
   return (
-    <div className="flex flex-wrap items-center gap-0.5 rounded-xl border border-border/30 bg-secondary/50 p-1">
+    <div className="flex shrink-0 items-center gap-0.5 rounded-xl border border-border/30 bg-secondary/50 p-1">
       {MODE_ORDER.map((mode) => {
         const isActive = currentMode === mode
 
@@ -84,7 +84,7 @@ export function ModeSwitcherCompact() {
             key={mode}
             onClick={() => startTransition(() => setCurrentMode(mode))}
             className={cn(
-              'relative flex items-center justify-center p-2 rounded-lg transition-all duration-200',
+              'relative flex shrink-0 items-center justify-center p-2 rounded-lg transition-all duration-200',
               isActive
                 ? cn('text-white', getModeAccentClass(mode, 'bg'))
                 : cn(

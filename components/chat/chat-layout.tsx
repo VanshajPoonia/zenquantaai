@@ -22,8 +22,8 @@ import { GitHubIntegrationPanel } from './github-integration-panel'
 function LoadingScreen() {
   return (
     <div className="flex h-screen w-full items-center justify-center bg-background">
-      <div className="rounded-3xl border border-border/70 bg-card/60 px-6 py-4 text-sm text-muted-foreground shadow-xl shadow-black/20">
-        Restoring your Zenquanta workspace…
+      <div className="rounded-3xl border border-border/70 bg-card/60 px-6 py-4 shadow-xl shadow-black/20">
+        <p className="font-display text-lg text-foreground">Restoring your workspace…</p>
       </div>
     </div>
   )

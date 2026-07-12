@@ -437,7 +437,7 @@ export function Sidebar({ onOpenSettings }: SidebarProps) {
           >
             <ZenquantaLogo className="size-7 sm:size-9" />
             <div className="min-w-0">
-              <span className="text-base font-bold tracking-tight text-sidebar-foreground sm:text-lg">
+              <span className="font-display text-lg text-sidebar-foreground sm:text-xl">
                 Zenquanta
               </span>
               <span className="ml-1 text-[10px] font-medium rounded bg-sidebar-primary/20 px-1 py-0.5 text-sidebar-primary sm:ml-1.5 sm:px-1.5 sm:text-xs">
