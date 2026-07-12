@@ -6,6 +6,16 @@ The repository contains a real Zenquanta AI platform backed by Neon for runtime 
 
 Current direction: plan upgrades remain manual/admin-driven, payment automation is out of scope unless explicitly requested, and Neon/storage start fresh without importing Supabase database rows or storage objects.
 
+## 2026-07-12 - Full data reset and single admin re-seed
+
+**What happened**: At explicit user request, all rows were deleted from `zen_users` in the live Neon database. Every other table's `user_id` foreign key cascades from (`ON DELETE CASCADE`) or nullifies against (`ON DELETE SET NULL`) `zen_users` — confirmed via `pg_constraint` before running — so this cascaded to remove all app data: profiles, credentials/sessions, subscriptions/usage, projects/conversations/messages, prompts/workflows, model comparisons, custom assistants, integrations, files/file-chunks, generated images, artifacts, feedback events, admin audit logs, and context-engine memory items. 8 users were deleted. The local object storage directory (`.storage/zenquanta`, provider is `local` per `.env.local`) was also cleared, though it contained no actual file bytes at the time (empty per-user subdirectories only).
+
+**New state**: A single local-auth user was re-seeded directly via the same scrypt password scheme as `lib/auth/session.ts` (login_id `kayla.viehland`, role `admin` in both `zen_users` and `zen_profiles`). Verified the stored hash matches the given password before finishing. The database is otherwise empty.
+
+**How it was done**: No admin/reset script exists in the repo for this; it was done with an ad hoc Node script (using `@neondatabase/serverless` directly, deleted afterward, never committed) rather than through the app's API routes, since this was a one-off destructive maintenance action, not a feature.
+
+**Risk / open item**: There is no backup of the deleted data. If a reset script or admin bootstrap flow is wanted for repeatable use later, none currently exists in `lib/` or `scripts/`.
+
 ## 2026-07-11 - Context Engine Phase 1: Structured Rolling Summary (MEMORY_V2)
 
 **Goal**: Explicit user request to build a context/memory system that (a) reduces client input-token usage, (b) lets all chats refer to each other, and (c) uses a cheap model to decide what's worth remembering long-term — pitched as "holds context better than most frontier chatbots." Full reconciled architecture (compared against a competing 19-phase external brief and the actual codebase) is documented in the new **`AI_CONTEXT_ENGINE.md`**. This entry covers Phase 1 only; Phases 2–5 are scoped there and tracked but not yet built.
