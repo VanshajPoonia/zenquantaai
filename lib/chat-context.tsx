@@ -43,6 +43,7 @@ import {
   ImageGenerateResponse,
   MemoryVaultConversationSummary,
   MemoryVaultResponse,
+  ModelOverrideOption,
   PendingAttachment,
   PulseResearchRoomResponse,
   PrismStudioHistoryFilters,
@@ -64,11 +65,13 @@ import {
   SessionSettings,
   StreamEvent,
   StreamingState,
+  UsageOptimization,
 } from '@/types'
 import {
   createSessionSettings,
   DEFAULT_APP_SETTINGS,
   DEFAULT_PROJECT_ID,
+  getModelOverrideForUsageOptimization,
   PROJECT_COLOR_OPTIONS,
   resolveModelConfig,
 } from '@/lib/config'
@@ -243,7 +246,7 @@ interface ChatContextType {
   togglePinChat: (chatId: string) => Promise<void>
   queuedPromptCount: number
   sendMessage: (input: SendMessageInput) => Promise<void>
-  regenerateLastResponse: () => Promise<void>
+  regenerateLastResponse: (intelligenceLevel?: UsageOptimization) => Promise<void>
   retryLastMessage: () => Promise<void>
   editLastUserMessage: (content: string, targetMessageId?: string) => Promise<void>
   askAnotherMode: (mode: AIMode) => Promise<void>
@@ -2013,6 +2016,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       content?: string
       targetMessageId?: string
       targetMode?: AIMode
+      responseModelOverride?: ModelOverrideOption
       mode: AIMode
       settings: SessionSettings
       conversation: Conversation
@@ -2068,6 +2072,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
             targetMode: payload.targetMode,
             content: payload.content,
             settings: payload.settings,
+            responseModelOverride: payload.responseModelOverride,
             targetMessageId: payload.targetMessageId,
             attachments: payload.attachments,
             attachmentContext: (payload.attachments ?? []).map(toAttachmentContext),
@@ -2503,6 +2508,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
             mode: resolvedSend.resolvedMode,
             settings: options.settings,
             parentUserMessageId: userMessage.id,
+            precedingTimestamps: [userMessage.createdAt],
           }),
           customAssistantId: customAssistant?.id ?? null,
           customAssistant: customAssistantSnapshot,
@@ -2810,7 +2816,9 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     currentChatRef,
   })
 
-  const regenerateLastResponse = useCallback(async () => {
+  const regenerateLastResponse = useCallback(async (
+    intelligenceLevel?: UsageOptimization
+  ) => {
     if (!currentChat) return
 
     const trimmedMessages =
@@ -2819,12 +2827,18 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         : currentChat.messages
 
     const lastUser = getLastUserMessage(currentChat)
+    const responseModelOverride = intelligenceLevel
+      ? getModelOverrideForUsageOptimization(intelligenceLevel)
+      : undefined
+    const responseSettings = responseModelOverride
+      ? { ...sessionSettings, modelOverride: responseModelOverride }
+      : sessionSettings
     const placeholder = createMessage({
       role: 'assistant',
       content: '',
       mode: currentMode,
       status: 'streaming',
-      model: resolveModelConfig(currentMode, sessionSettings.modelOverride).model,
+      model: resolveModelConfig(currentMode, responseSettings.modelOverride).model,
       provider: 'openrouter',
       parentUserMessageId: lastUser?.id,
     })
@@ -2864,6 +2878,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       action: 'regenerate',
       mode: currentMode,
       settings: sessionSettings,
+      responseModelOverride,
       conversation: currentChat,
       optimisticConversation,
       customAssistantId: currentCustomAssistantId ?? currentChat.customAssistantId ?? null,
