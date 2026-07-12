@@ -22,7 +22,9 @@ import {
   MessageSource,
   MODE_CONFIGS,
   MODE_ORDER,
+  UsageOptimization,
 } from '@/lib/types'
+import { INTELLIGENCE_LEVEL_OPTIONS } from '@/lib/config'
 import { useChatContext } from '@/lib/chat-context'
 import {
   ASSISTANT_HANDOFF_TARGETS,
@@ -86,7 +88,7 @@ import { FileIntelligenceCard } from './file-intelligence-card'
 interface ChatMessageProps {
   message: Message
   conversationId?: string | null
-  onRegenerate?: () => void
+  onRegenerate?: (intelligenceLevel?: UsageOptimization) => void
   onRetry?: () => void
   onEdit?: (content: string, targetMessageId?: string) => void
   onAskAnotherMode?: (mode: AIMode) => void
@@ -1231,23 +1233,66 @@ export function ChatMessage({
                 </DropdownMenu>
               ) : null}
 
-              {isLastAssistant && (
-                <TooltipProvider delayDuration={300}>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
+              {isLastAssistant && onRegenerate ? (
+                message.mode === 'image' ? (
+                  <TooltipProvider delayDuration={300}>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          className="size-7"
+                          onClick={() => onRegenerate()}
+                        >
+                          <RefreshIcon className="size-3.5" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>Regenerate</TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                ) : (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
                       <Button
                         variant="ghost"
-                        size="icon-sm"
-                        className="size-7"
-                        onClick={onRegenerate}
+                        size="sm"
+                        className="h-7 gap-1 rounded-full px-2.5 text-xs"
                       >
                         <RefreshIcon className="size-3.5" />
+                        Regenerate
+                        <ChevronDown className="size-3" />
                       </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>Regenerate</TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
-              )}
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="start" className="w-64">
+                      <DropdownMenuItem onClick={() => onRegenerate()}>
+                        <RefreshIcon className="size-3.5" />
+                        Same intelligence
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuLabel className="text-xs text-muted-foreground">
+                        Generate with
+                      </DropdownMenuLabel>
+                      {INTELLIGENCE_LEVEL_OPTIONS.map((option) => (
+                        <DropdownMenuItem
+                          key={option.id}
+                          className="items-start gap-2 py-2"
+                          onClick={() => onRegenerate(option.id)}
+                        >
+                          <Sparkles className="mt-0.5 size-3.5" />
+                          <span className="min-w-0">
+                            <span className="block text-sm font-medium">
+                              {option.label}
+                            </span>
+                            <span className="block text-xs leading-5 text-muted-foreground">
+                              {option.hint}
+                            </span>
+                          </span>
+                        </DropdownMenuItem>
+                      ))}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                )
+              ) : null}
 
               {isLastAssistant && onAskAnotherMode ? (
                 <DropdownMenu>
