@@ -1779,6 +1779,7 @@ export interface ChatRequest {
   targetMode?: AIMode
   content?: string
   settings: SessionSettings
+  responseModelOverride?: ModelOverrideOption
   targetMessageId?: string
   attachments?: Attachment[]
   attachmentContext?: AttachmentContext[]

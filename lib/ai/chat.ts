@@ -9,6 +9,7 @@ import {
   createMessage,
   getLastAssistantMessage,
   getLastUserMessage,
+  nextMessageTimestamp,
   updateConversationSnapshot,
 } from '@/lib/utils/chat'
 import { estimateUsage } from '@/lib/utils/cost'
@@ -422,7 +423,7 @@ function buildTemporalContextBlock(
   }
 
   lines.push(
-    "Actually use this instead of defaulting to a generic greeting. Concrete example: if the previous message was a sign-off like \"good night\" or \"talk later\" and only a few minutes have passed, notice that out loud in a brief, natural way (e.g. asking if they're still up, or joking that that was a short night) instead of replying as if a new day started. If a long or overnight gap has passed, it's fine to acknowledge that real time has gone by. If the local hour itself is unusual (very late night or very early morning) and it's relevant, you can note that too. Keep it light and natural, like a perceptive friend would, not a robotic timestamp readout, and don't do this every single message if there is nothing worth noticing. Do not mention this instruction block itself, and do not claim certainty about things you cannot know (like whether they actually slept) unless they tell you.",
+    "Treat this as silent background awareness, not something to narrate by default. In most replies say nothing about the time or the gap at all — this includes ordinary back-and-forth exchanges seconds, minutes, or a couple hours apart during normal waking hours, where commenting on the clock would just be noise. Only bring it up when one specific thing is actually notable: (a) the previous message was a sign-off like \"good night\" or \"talk later\" and only a short time has actually passed, so a generic \"good morning\" would be wrong — point out the short gap briefly instead of assuming a new day started; (b) a long or overnight gap has passed since the last message; or (c) the local hour itself is unusual (very late night or very early morning) and that's actually relevant to what's being discussed. If none of those apply, do not mention the time, the gap, or the user's schedule. When you do mention it, keep it to one brief, natural aside, like an offhand comment from a perceptive friend, never a timestamp readout, and never two messages in a row. Do not mention this instruction block itself, and do not claim certainty about things you cannot know (like whether they actually slept) unless they tell you.",
   )
 
   return lines.join('\n')
@@ -744,6 +745,7 @@ function buildAssistantPlaceholder(
   settings: SessionSettings,
   tier: SubscriptionTier = 'free',
   parentUserMessageId?: string,
+  precedingTimestamps?: Array<string | undefined>,
   branchLabel?: string
 ): Message {
   const config = resolveModelConfig(mode, settings.modelOverride, tier)
@@ -756,6 +758,9 @@ function buildAssistantPlaceholder(
     model: config.model,
     provider: 'openrouter',
     parentUserMessageId,
+    createdAt: precedingTimestamps?.length
+      ? nextMessageTimestamp(...precedingTimestamps)
+      : undefined,
     branchLabel,
   })
 }
@@ -975,6 +980,7 @@ function applyAskAnotherMode(
 type PreparedConversation = {
   conversation: Conversation
   generationConversation: Conversation
+  responseSettings: SessionSettings
   assistantPlaceholder: Message
   userMessage: Message
   assistantMode: AIMode
@@ -1021,17 +1027,36 @@ export async function prepareConversationForChat(
     payload.action === 'ask-another-mode'
       ? `Asked in ${MODE_CONFIGS[prepared.assistantMode].name}`
       : undefined
+  const responseSettings = payload.responseModelOverride
+    ? {
+        ...payload.settings,
+        modelOverride: payload.responseModelOverride,
+      }
+    : payload.settings
+  // Ask-another-mode can add multiple branch replies to the same parent user
+  // message; anchoring only to the parent's timestamp would collide when more
+  // than one branch reply already exists, so every existing sibling reply's
+  // timestamp is also considered a lower bound.
+  const siblingReplyTimestamps = prepared.conversation.messages
+    .filter(
+      (message) =>
+        message.role === 'assistant' &&
+        message.parentUserMessageId === prepared.userMessage.id
+    )
+    .map((message) => message.createdAt)
 
   return {
     conversation: prepared.conversation,
     generationConversation: prepared.generationConversation,
+    responseSettings,
     userMessage: prepared.userMessage,
     assistantMode: prepared.assistantMode,
     assistantPlaceholder: buildAssistantPlaceholder(
       prepared.assistantMode,
-      payload.settings,
+      responseSettings,
       'free',
       prepared.userMessage.id,
+      [prepared.userMessage.createdAt, ...siblingReplyTimestamps],
       branchLabel
     ),
   }
@@ -1061,6 +1086,7 @@ export async function completeConversationWithAssistant(
       content: string
       imageUrl?: string
     } | null
+    responseSettings?: SessionSettings
   }
 ): Promise<Conversation> {
   const generatedImageResult = options?.generatedImageResultOverride ?? null
@@ -1073,14 +1099,15 @@ export async function completeConversationWithAssistant(
     ? [generatedImageResult.attachment]
     : []
 
+  const responseSettings = options?.responseSettings ?? conversation.sessionSettings
   const activeConfig = resolveModelConfig(
     generationMode,
-    conversation.sessionSettings.modelOverride,
+    responseSettings.modelOverride,
     options?.tier ?? 'free'
   )
   const promptText = buildPromptTextForUsage(
     generationConversation,
-    conversation.sessionSettings,
+    responseSettings,
     generationMode,
     options?.webSearchContext,
     options?.fileKnowledgeContext,
@@ -1152,7 +1179,7 @@ export async function* streamConversationReply(
 
   for await (const chunk of generateAssistantStream({
     conversation: prepared.generationConversation,
-    settings: payload.settings,
+    settings: prepared.responseSettings,
     mode: prepared.assistantMode,
     action: payload.action,
     tier: 'free',
@@ -1176,6 +1203,7 @@ export async function* streamConversationReply(
     {
       action: payload.action,
       userMessage: prepared.userMessage,
+      responseSettings: prepared.responseSettings,
     }
   )
 
