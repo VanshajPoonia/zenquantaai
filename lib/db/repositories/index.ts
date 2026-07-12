@@ -19,6 +19,7 @@ export { neonFilesRepository } from './files'
 export type { NeonFileMetadata } from './files'
 export { neonGeneratedImagesRepository } from './generated-images'
 export { neonIntegrationsRepository } from './integrations'
+export { neonMemoryItemsRepository } from './memory-items'
 export { neonMemoryVaultRepository } from './memory-vault'
 export { neonModelComparisonsRepository } from './model-comparisons'
 export {

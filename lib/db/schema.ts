@@ -525,6 +525,12 @@ export const zenConversations = pgTable(
     customAssistant: jsonb('custom_assistant'),
     usage: jsonb('usage'),
     memorySummary: text('memory_summary'),
+    memorySummaryStructured: jsonb('memory_summary_structured'),
+    summarizedThroughMessageId: text('summarized_through_message_id'),
+    // Context Engine Phase 4 (CROSS_CHAT_RECALL): embedding of the rolling
+    // summary, for pgvector recall from other conversations. HNSW index is
+    // declared in the migration SQL.
+    summaryEmbedding: vector('summary_embedding', { dimensions: 1536 }),
     memoryUpdatedAt: timestamp('memory_updated_at', { withTimezone: true }),
     ...timestamps,
   },
@@ -1485,6 +1491,63 @@ export const zenFeedbackEvents = pgTable(
         feedbackRatingCheck.map((rating) => sql`${rating}`),
         sql`, `
       )})`
+    ),
+  ]
+)
+
+export const zenMemoryItems = pgTable(
+  'zen_memory_items',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => zenUsers.id, { onDelete: 'cascade' }),
+    projectId: text('project_id'),
+    sourceConversationId: text('source_conversation_id').references(
+      () => zenConversations.id,
+      { onDelete: 'set null' }
+    ),
+    kind: text('kind').notNull(),
+    canonicalKey: text('canonical_key').notNull(),
+    content: text('content').notNull(),
+    contentJson: jsonb('content_json'),
+    mode: text('mode'),
+    importance: integer('importance').notNull().default(2),
+    confidence: numeric('confidence', { precision: 4, scale: 3 })
+      .notNull()
+      .default('0.7'),
+    status: text('status').notNull().default('active'),
+    // Self-referential FK is declared in the migration SQL (a Drizzle inline
+    // self-reference would be a forward reference to this same table).
+    supersedesId: uuid('supersedes_id'),
+    embedding: vector('embedding', { dimensions: 1536 }),
+    lastConfirmedAt: timestamp('last_confirmed_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    validUntil: timestamp('valid_until', { withTimezone: true }),
+    ...timestamps,
+  },
+  (table) => [
+    index('zen_memory_items_user_status_idx').on(table.userId, table.status),
+    index('zen_memory_items_user_project_status_idx').on(
+      table.userId,
+      table.projectId,
+      table.status
+    ),
+    index('zen_memory_items_user_canonical_idx').on(
+      table.userId,
+      table.canonicalKey
+    ),
+    index('zen_memory_items_source_conversation_idx').on(
+      table.sourceConversationId
+    ),
+    check(
+      'zen_memory_items_kind_check',
+      sql`${table.kind} in ('identity', 'preference', 'constraint', 'decision', 'fact', 'open_loop', 'project_status')`
+    ),
+    check(
+      'zen_memory_items_status_check',
+      sql`${table.status} in ('active', 'superseded', 'expired')`
     ),
   ]
 )

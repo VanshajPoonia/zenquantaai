@@ -1,6 +1,6 @@
 import 'server-only'
 
-import { SQL, and, asc, desc, eq, gt, inArray, lt, sql } from 'drizzle-orm'
+import { SQL, and, asc, desc, eq, gt, inArray, lt, ne, sql } from 'drizzle-orm'
 import { createSessionSettings, DEFAULT_PROJECT_ID } from '@/lib/config'
 import { conversationUsageAggregateToEstimate } from '@/lib/conversations/usage-aggregate'
 import { getAssistantFamilyFromMode } from '@/lib/config/assistants'
@@ -11,10 +11,13 @@ import {
   updateConversationSnapshot,
 } from '@/lib/utils/chat'
 import {
+  AIMode,
   Attachment,
   Conversation,
+  ConversationMemoryStructured,
   ConversationMutation,
   ConversationSummary,
+  CrossChatMatch,
   CustomAssistantReference,
   ConversationMessagesPageResponse,
   MessageSource,
@@ -132,6 +135,10 @@ async function rowToMessage(messageRow: MessageRow): Promise<Message> {
   })
 }
 
+function vectorLiteral(embedding: number[]): string {
+  return `[${embedding.map((value) => Number(value).toFixed(8)).join(',')}]`
+}
+
 async function rowToConversation(row: ConversationRow): Promise<Conversation> {
   const hydratedMessages = await Promise.all(
     [...(row.messages ?? [])]
@@ -164,6 +171,10 @@ async function rowToConversation(row: ConversationRow): Promise<Conversation> {
       ? toJsonObject<UsageEstimate>(row.usage, {} as UsageEstimate)
       : undefined,
     memorySummary: row.memorySummary ?? undefined,
+    memorySummaryStructured: row.memorySummaryStructured
+      ? toJsonObject<ConversationMemoryStructured>(row.memorySummaryStructured, {})
+      : null,
+    summarizedThroughMessageId: row.summarizedThroughMessageId ?? null,
     memoryUpdatedAt: toNullableIsoString(row.memoryUpdatedAt) ?? undefined,
     customAssistantId: row.customAssistantId,
     customAssistant: row.customAssistant
@@ -689,6 +700,89 @@ class NeonConversationsRepository {
       userId,
       updateConversationSnapshot(current, mutation)
     )
+  }
+
+  // Context Engine Phase 1 (MEMORY_V2): owned solely by the async summary job.
+  // Deliberately does NOT bump `updatedAt` — background memory maintenance must
+  // not reorder the conversation list. Regular turn saves never touch these
+  // columns (see upsertConversationHeader), so the two paths don't clobber.
+  async updateMemorySummary(
+    userId: string,
+    conversationId: string,
+    values: {
+      memorySummary: string
+      memorySummaryStructured: ConversationMemoryStructured
+      summarizedThroughMessageId: string | null
+      memoryUpdatedAt: string
+      // Phase 4: only written when CROSS_CHAT_RECALL is on. Omitting it (vs.
+      // passing null) leaves any existing embedding untouched.
+      summaryEmbedding?: number[] | null
+    }
+  ): Promise<void> {
+    await getDatabaseClient()
+      .update(zenConversations)
+      .set({
+        memorySummary: values.memorySummary,
+        memorySummaryStructured: values.memorySummaryStructured,
+        summarizedThroughMessageId: values.summarizedThroughMessageId,
+        memoryUpdatedAt: toNullableDate(values.memoryUpdatedAt),
+        ...(values.summaryEmbedding !== undefined
+          ? { summaryEmbedding: values.summaryEmbedding }
+          : {}),
+      })
+      .where(
+        and(
+          eq(zenConversations.userId, userId),
+          eq(zenConversations.id, conversationId)
+        )
+      )
+  }
+
+  // Phase 4 cross-chat recall: find the user's OTHER conversations whose rolling
+  // summary is most similar to the current query. User-scoped (a user's own
+  // threads can reference each other across projects) and filtered by user_id at
+  // the SQL level. Only exposes a short summary, never raw messages.
+  async searchConversationSummaries(input: {
+    userId: string
+    embedding: number[]
+    excludeConversationId?: string | null
+    limit?: number
+  }): Promise<CrossChatMatch[]> {
+    const distance = sql`${zenConversations.summaryEmbedding} <=> ${vectorLiteral(
+      input.embedding
+    )}::vector`
+
+    const conditions: SQL[] = [
+      eq(zenConversations.userId, input.userId),
+      sql`${zenConversations.summaryEmbedding} is not null`,
+      sql`${zenConversations.memorySummary} is not null`,
+    ]
+    if (input.excludeConversationId) {
+      conditions.push(ne(zenConversations.id, input.excludeConversationId))
+    }
+
+    const rows = await getDatabaseClient()
+      .select({
+        id: zenConversations.id,
+        title: zenConversations.title,
+        memorySummary: zenConversations.memorySummary,
+        mode: zenConversations.mode,
+      })
+      .from(zenConversations)
+      .where(and(...conditions))
+      .orderBy(distance)
+      .limit(input.limit ?? 3)
+
+    return rows
+      .filter((row): row is typeof row & { memorySummary: string } =>
+        Boolean(row.memorySummary)
+      )
+      .map((row) => ({
+        conversationId: row.id,
+        title: row.title,
+        summary: row.memorySummary,
+        mode: row.mode as AIMode,
+      }))
   }
 
   async delete(userId: string, id: string): Promise<void> {

@@ -425,9 +425,20 @@ export interface ConversationSummary {
   customAssistant?: CustomAssistantReference | null
 }
 
+export interface ConversationMemoryStructured {
+  objective?: string
+  decisions?: string[]
+  constraints?: string[]
+  facts?: string[]
+  openLoops?: string[]
+  preferences?: string[]
+}
+
 export interface Conversation extends ConversationSummary {
   messages: Message[]
   attachments?: Attachment[]
+  memorySummaryStructured?: ConversationMemoryStructured | null
+  summarizedThroughMessageId?: string | null
   usage?: UsageEstimate
   messagePageInfo?: {
     loadedCount: number
@@ -438,6 +449,71 @@ export interface Conversation extends ConversationSummary {
 }
 
 export type Chat = Conversation
+
+export type MemoryItemKind =
+  | 'identity'
+  | 'preference'
+  | 'constraint'
+  | 'decision'
+  | 'fact'
+  | 'open_loop'
+  | 'project_status'
+
+export type MemoryItemStatus = 'active' | 'superseded' | 'expired'
+
+/** A durable, cross-chat memory fact (Context Engine Phase 3). */
+export interface MemoryItem {
+  id: string
+  userId: string
+  projectId: string | null
+  sourceConversationId: string | null
+  kind: MemoryItemKind
+  canonicalKey: string
+  content: string
+  contentJson?: Record<string, unknown> | null
+  mode?: AIMode | null
+  importance: number
+  confidence: number
+  status: MemoryItemStatus
+  supersedesId?: string | null
+  createdAt: string
+  updatedAt: string
+  lastConfirmedAt: string
+  validUntil?: string | null
+}
+
+/** A candidate produced by the cheap-model write gate, before persistence. */
+export interface MemoryCandidate {
+  kind: MemoryItemKind
+  canonicalKey: string
+  content: string
+  importance: number
+  confidence: number
+  projectId?: string | null
+  sourceConversationId?: string | null
+  mode?: AIMode | null
+  embedding?: number[] | null
+}
+
+/** Read-path retrieval result for durable memory (Phase 3 read path). */
+export interface DurableMemoryContext {
+  retrievedAt: string
+  items: MemoryItem[]
+}
+
+/** One relevant past conversation surfaced by cross-chat recall (Phase 4). */
+export interface CrossChatMatch {
+  conversationId: string
+  title: string
+  summary: string
+  mode: AIMode
+}
+
+/** Read-path result for cross-chat summary recall (Phase 4 read path). */
+export interface CrossChatRecallContext {
+  retrievedAt: string
+  matches: CrossChatMatch[]
+}
 
 export interface ModelRouteConfig {
   mode: AIMode
