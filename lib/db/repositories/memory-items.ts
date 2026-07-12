@@ -214,6 +214,59 @@ class NeonMemoryItemsRepository {
 
     return rows.map(rowToMemoryItem)
   }
+
+  /**
+   * Every active durable item for a user across all scopes (global + each
+   * project), for the Memory Vault surface (Phase 3c). Ordered most-important
+   * and most-recently-confirmed first. User-scoped like every other query here.
+   */
+  async listAllActiveForUser(userId: string, limit = 200): Promise<MemoryItem[]> {
+    const rows = await getDatabaseClient()
+      .select()
+      .from(zenMemoryItems)
+      .where(
+        and(
+          eq(zenMemoryItems.userId, userId),
+          eq(zenMemoryItems.status, 'active')
+        )
+      )
+      .orderBy(desc(zenMemoryItems.importance), desc(zenMemoryItems.lastConfirmedAt))
+      .limit(limit)
+
+    return rows.map(rowToMemoryItem)
+  }
+
+  /**
+   * Forget a durable item the user asked to remove: flip it to `expired` so
+   * retrieval ignores it, while the row (and any supersession chain) is
+   * preserved rather than hard-deleted — consistent with "raw is truth, this
+   * layer is additive". Scoped to the user, so it can never expire another
+   * user's memory. Returns true when an active item was found and expired.
+   */
+  async expire(userId: string, id: string): Promise<boolean> {
+    const db = getDatabaseClient()
+
+    const existing = await db
+      .select({ id: zenMemoryItems.id })
+      .from(zenMemoryItems)
+      .where(
+        and(
+          eq(zenMemoryItems.userId, userId),
+          eq(zenMemoryItems.id, id),
+          eq(zenMemoryItems.status, 'active')
+        )
+      )
+      .limit(1)
+
+    if (existing.length === 0) return false
+
+    await db
+      .update(zenMemoryItems)
+      .set({ status: 'expired', updatedAt: new Date() })
+      .where(and(eq(zenMemoryItems.userId, userId), eq(zenMemoryItems.id, id)))
+
+    return true
+  }
 }
 
 export const neonMemoryItemsRepository = new NeonMemoryItemsRepository()

@@ -1727,19 +1727,43 @@ export interface MemoryVaultProjectGroup {
   conversations: MemoryVaultConversationSummary[]
 }
 
+/**
+ * A durable cross-chat memory fact projected for the Memory Vault UI (Phase 3c).
+ * Lean, client-safe view of a `MemoryItem`: no embedding, and the scope is
+ * resolved to a display name so the client never has to look projects up.
+ */
+export interface MemoryVaultDurableItem {
+  id: string
+  kind: MemoryItemKind
+  canonicalKey: string
+  content: string
+  scope: 'global' | 'project'
+  projectId: string | null
+  projectName: string
+  mode: AIMode | null
+  importance: number
+  confidence: number
+  sourceConversationId: string | null
+  createdAt: string
+  lastConfirmedAt: string
+}
+
 export interface MemoryVaultTotals {
   projectCount: number
   conversationCount: number
   memoryConversationCount: number
   memoryEnabledConversationCount: number
+  durableMemoryCount: number
   latestMemoryUpdatedAt: string | null
 }
 
 export interface MemoryVaultResponse {
   globalMemoryEnabled: boolean
+  durableMemoryEnabled: boolean
   totals: MemoryVaultTotals
   projects: MemoryVaultProjectGroup[]
   recentMemories: MemoryVaultConversationSummary[]
+  durableMemories: MemoryVaultDurableItem[]
   generatedAt: string
 }
 

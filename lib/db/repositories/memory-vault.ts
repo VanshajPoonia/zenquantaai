@@ -7,10 +7,13 @@ import {
   DEFAULT_PROJECT_NAME,
 } from '@/lib/config'
 import { getAssistantFamilyFromMode } from '@/lib/config/assistants'
+import { isMemoryExtractionEnabled } from '@/lib/context/flags'
 import {
   AIMode,
   AssistantFamily,
+  MemoryItem,
   MemoryVaultConversationSummary,
+  MemoryVaultDurableItem,
   MemoryVaultResponse,
   Project,
   SessionSettings,
@@ -22,6 +25,7 @@ import {
   toJsonObject,
   toNullableIsoString,
 } from './helpers'
+import { neonMemoryItemsRepository } from './memory-items'
 
 type ProjectRow = typeof zenProjects.$inferSelect
 type ConversationRow = typeof zenConversations.$inferSelect
@@ -50,6 +54,34 @@ function createFallbackProject(projectId: string, generatedAt: string): Project 
     createdAt: generatedAt,
     updatedAt: generatedAt,
     isDefault: projectId === DEFAULT_PROJECT_ID,
+  }
+}
+
+// Project the durable memory item onto a lean, client-safe view. A null
+// project id is the global bucket (the inbox maps here too); a real id resolves
+// to its project name, falling back gracefully if that project no longer exists.
+function durableItemToView(
+  item: MemoryItem,
+  projectsById: Map<string, Project>
+): MemoryVaultDurableItem {
+  const isGlobal = item.projectId === null
+
+  return {
+    id: item.id,
+    kind: item.kind,
+    canonicalKey: item.canonicalKey,
+    content: item.content,
+    scope: isGlobal ? 'global' : 'project',
+    projectId: item.projectId,
+    projectName: isGlobal
+      ? 'Global (all chats)'
+      : projectsById.get(item.projectId as string)?.name ?? 'Unknown project',
+    mode: item.mode ?? null,
+    importance: item.importance,
+    confidence: item.confidence,
+    sourceConversationId: item.sourceConversationId,
+    createdAt: item.createdAt,
+    lastConfirmedAt: item.lastConfirmedAt,
   }
 }
 
@@ -145,7 +177,10 @@ class NeonMemoryVaultRepository {
   ): Promise<MemoryVaultResponse> {
     const generatedAt = new Date().toISOString()
     const db = getDatabaseClient()
-    const [projectRows, conversationRows] = await Promise.all([
+    // Only query durable memory when the extraction feature is on. Off → no
+    // extra query and an empty section, so the Vault cost is unchanged.
+    const durableMemoryEnabled = isMemoryExtractionEnabled()
+    const [projectRows, conversationRows, durableItems] = await Promise.all([
       db
         .select()
         .from(zenProjects)
@@ -156,6 +191,9 @@ class NeonMemoryVaultRepository {
         .from(zenConversations)
         .where(eq(zenConversations.userId, userId))
         .orderBy(desc(zenConversations.updatedAt)),
+      durableMemoryEnabled
+        ? neonMemoryItemsRepository.listAllActiveForUser(userId)
+        : Promise.resolve<MemoryItem[]>([]),
     ])
 
     const projectsById = new Map(projectRows.map((row) => [row.id, rowToProject(row)]))
@@ -219,17 +257,26 @@ class NeonMemoryVaultRepository {
       })
       .slice(0, 12)
 
+    // projectsById is fully populated (including fallbacks) by now, so durable
+    // items can resolve their scope name.
+    const durableMemories = durableItems.map((item) =>
+      durableItemToView(item, projectsById)
+    )
+
     return {
       globalMemoryEnabled,
+      durableMemoryEnabled,
       totals: {
         projectCount: projects.length,
         conversationCount: conversations.length,
         memoryConversationCount: conversationRows.filter(hasMemorySummary).length,
         memoryEnabledConversationCount: conversationRows.filter(memoryEnabled).length,
+        durableMemoryCount: durableMemories.length,
         latestMemoryUpdatedAt: latestMemoryTimestamp(conversations),
       },
       projects,
       recentMemories,
+      durableMemories,
       generatedAt,
     }
   }
@@ -297,6 +344,15 @@ class NeonMemoryVaultRepository {
       )
 
     return await this.getConversationSummary(userId, conversationId)
+  }
+
+  /**
+   * Forget a durable memory item from the Vault (Phase 3c). Delegates to the
+   * memory-items repository, which expires (never hard-deletes) the row and
+   * enforces user scoping. Returns true when an active item was removed.
+   */
+  async forgetDurableMemory(userId: string, id: string): Promise<boolean> {
+    return neonMemoryItemsRepository.expire(userId, id)
   }
 }
 
