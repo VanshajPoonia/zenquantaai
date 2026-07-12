@@ -37,7 +37,8 @@ This is the current six-assistant platform, not the old four-mode version.
 - Prism Studio gallery for generated-image history, favorites, prompt reuse/remix, prompt Artifact saves, and campaign-style actions.
 - Conversation persistence.
 - Conversation-scoped memory summaries.
-- Memory Vault for visible conversation memory summaries, project-grouped memory status, and user controls.
+- Memory Vault for visible conversation memory summaries, project-grouped memory status, durable cross-chat memory surfacing with per-item "forget" (soft-expire, shown when `MEMORY_EXTRACTION` is on), and user controls.
+- Context Engine (behind env flags, default OFF; see `AI_CONTEXT_ENGINE.md`): structured rolling summary, token governor, durable cross-chat memory items with a cheap-model write gate, cross-chat summary recall, and opt-in TOON serialization.
 - File uploads through the neutral storage abstraction.
 - Text/code uploaded-file knowledge indexing and retrieval with Neon pgvector.
 - Generated image files stored through the neutral storage abstraction.
@@ -101,7 +102,8 @@ Mode mapping:
 - `/api/images/history`: user-scoped Prism Studio generated-image gallery.
 - `/api/images/history/[id]`: generated-image favorite/project metadata updates.
 - `/api/conversations` and `/api/conversations/[id]`: conversation persistence.
-- `/api/memory-vault`: user-scoped Memory Vault summary and controls surface data.
+- `/api/memory-vault`: user-scoped Memory Vault summary and controls surface data (includes durable memory items when `MEMORY_EXTRACTION` is on).
+- `/api/memory-vault/durable/[id]`: forget (soft-expire) one durable cross-chat memory item.
 - `/api/conversations/[id]/memory`: per-conversation memory enable/disable and summary clear controls.
 - `/api/projects` and `/api/projects/[id]`: project management.
 - `/api/projects/[id]/home`: user-scoped Project Home aggregate summary.
@@ -164,6 +166,7 @@ Active Neon runtime data paths are:
 - `/api/projects/[id]/home`
 - `/api/search`
 - `/api/memory-vault`
+- `/api/memory-vault/durable/[id]`
 - `/api/conversations/[id]/memory`
 - `/api/artifacts`
 - `/api/artifacts/[id]`

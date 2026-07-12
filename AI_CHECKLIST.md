@@ -109,9 +109,9 @@ FILE_STORAGE_LOCAL_DIR=.storage/zenquanta
 # Context Engine flags (all default OFF; see AI_CONTEXT_ENGINE.md)
 # MEMORY_V2=            # structured cheap-LLM rolling summary (needs OPENROUTER_API_KEY + migration #20)
 # CONTEXT_BUDGET=       # token governor + cache-friendly prompt ordering (Phase 2)
-# MEMORY_EXTRACTION=    # durable cross-chat memory items + write gate (needs OPENROUTER_API_KEY + migration #21; embeddings optional but recommended)
+# MEMORY_EXTRACTION=    # durable cross-chat memory items + write gate; also drives the Memory Vault "Durable memory" surfacing + forget (needs OPENROUTER_API_KEY + migration #21; embeddings optional but recommended)
 # CROSS_CHAT_RECALL=    # cross-chat summary recall (needs migration #22 + embeddings; write also needs MEMORY_V2)
-# TOON_SERIALIZATION=   # TOON encoding for uniform blocks (Phase 5+)
+# TOON_SERIALIZATION=   # Phase 5 (shipped): opt-in TOON swap on web/file source lists, applied only when it beats the readable rendering by >=10% tokens; no migration, no new deps
 # CONTEXT_DEBUG=        # dev-only structured context logging
 ```
 
@@ -170,6 +170,7 @@ Current Neon-backed runtime routes:
 - `/api/projects/[id]/home`
 - `/api/search`
 - `/api/memory-vault`
+- `/api/memory-vault/durable/[id]` (DELETE — forget one durable memory item; Phase 3c)
 - `/api/conversations/[id]/memory`
 - `/api/artifacts`
 - `/api/artifacts/[id]`
@@ -258,6 +259,8 @@ Fresh foundation migration available for Neon:
 21. `neon/migrations/20260711_zenquanta_context_engine_memory_items.sql`
 22. `neon/migrations/20260712_zenquanta_context_engine_cross_chat.sql`
 
+Context Engine Phase 5 (TOON) and Phase 3c (Memory Vault durable surfacing + forget) add **no** migration — they only read/soft-expire existing `zen_memory_items` and serialize existing blocks.
+
 Apply with a Postgres client or Neon SQL editor. CLI example:
 
 ```bash
@@ -302,7 +305,7 @@ Before changing persistence code again:
 14. Open Project Home from the workspace project selector and verify user-scoped conversations, files, generated images, playbooks, memory status, GitHub repo context, and quick actions.
 15. Use command palette search globally and with a selected Project Home scope, and verify project searches do not show other project data.
 16. Save an assistant message and a model comparison candidate into Artifact Studio, edit it, move it to a project, export it, and verify project search/Project Home can find it.
-17. Open Memory Vault from Settings, Command Palette, and Project Home; verify conversation summaries are user-scoped, copy works, clearing a summary does not delete messages, and per-conversation memory toggles persist.
+17. Open Memory Vault from Settings, Command Palette, and Project Home; verify conversation summaries are user-scoped, copy works, clearing a summary does not delete messages, and per-conversation memory toggles persist. With `MEMORY_EXTRACTION` on, verify the "Durable memory" section lists the user's own items (global + per-project scope labels), that forgetting one removes it from the list and from future retrieval (soft-expire, not a message delete), and that with the flag off the section shows the explained empty state. Cross-user isolation is blocking: a user must never see another user's durable items.
 18. Run an Artifact Studio AI action, review the preview, apply it to the draft, save explicitly, and confirm usage is logged without raw cost exposure.
 19. Open Private Assistants, create/edit/duplicate/pin a text-only assistant, attach prompt-library shortcuts, run a test prompt, and verify the test consumes normal text usage without saving the draft assistant.
 20. Run Model Duel, review candidates with and without Blind Mode, assign scoring labels, save one winner into the conversation, and verify Prism/image is not selectable.
@@ -355,7 +358,7 @@ Before changing persistence code again:
 - Missing Prism Studio metadata migration breaks generated-image project/favorite filters, while normal Prism generation can still run.
 - Missing GitHub integration migration breaks `/api/integrations/github/*`, Project Home GitHub summaries, and repo-context imports, while ordinary uploads/Ask Files remain separate.
 - Missing GitHub App env vars disables the GitHub repo context connection flow; the UI should show configuration-required state instead of claiming integration availability.
-- Memory Vault uses existing conversation memory fields; if conversations are absent or summaries have not been generated, the vault should show empty states rather than inventing memory.
+- Memory Vault uses existing conversation memory fields; if conversations are absent or summaries have not been generated, the vault should show empty states rather than inventing memory. The "Durable memory" section is only populated when `MEMORY_EXTRACTION` is on and `zen_memory_items` rows exist; otherwise it shows an explained empty/off state. Forget is a soft-expire (`status = expired`), never a hard delete, so raw messages and the supersession chain are preserved.
 - Missing Neon `DATABASE_URL` breaks auth, settings, prompt library, assistant recommendation, project, conversation, chat persistence, image persistence, billing/admin, usage, dashboard, plan request, image history, profile/role hydration, and local import app-data paths.
 - Missing S3-compatible/R2 env vars breaks attachment and generated-image storage when `FILE_STORAGE_PROVIDER` is `s3` or `r2`.
 - Existing lint warnings can obscure newer warnings if not cleaned up intentionally.

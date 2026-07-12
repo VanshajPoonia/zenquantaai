@@ -47,6 +47,26 @@ Decision: the Phase 4 **write depends on `MEMORY_V2`** — the summary embedding
 
 Rationale: cross-chat recall retrieves *summaries*, so it needs summaries to exist and to be embedded at the moment they're regenerated (embedding a stale, one-turn-old summary from the route would be wrong). Coupling the embed to the summary job keeps it fresh and cheap (one extra embedding call, off the critical path). The read side stays independent of `MEMORY_V2`.
 
+## TOON Is An Opt-In Swap Gated On A Measured Win Vs The Block's Current Rendering
+
+Decision (Phase 5, `TOON_SERIALIZATION`): TOON encoding (`lib/context/toon.ts`) is never applied unconditionally. `formatWebSearchBlock` / `formatFileKnowledgeBlock` build their normal readable rendering, and `maybeToonSourceList` swaps in the TOON table only when the flag is on, there are ≥ `MIN_TOON_ROWS` (4) rows, AND `isToonWorthwhile` confirms the TOON candidate (preamble included) is ≥10% fewer estimated tokens than that readable rendering. The comparison baseline is **the block's current rendering, not minified JSON.**
+
+Rationale:
+
+- Comparing against what we actually ship (the readable block) — rather than a hypothetical JSON baseline — is what *guarantees no regression*: TOON can only ever replace a block with something strictly smaller, so flag-on-but-not-worthwhile is byte-identical to flag-off, which is byte-identical to today. A JSON baseline could "win" on paper while still being larger than the readable form we'd otherwise emit.
+- The gate makes the honest ROI from `AI_CONTEXT_ENGINE.md` §8 self-enforcing: the source blocks are dominated by long free-text (snippets, titles), so the per-row structural saving rarely clears 10% and TOON usually stays inert. That is the correct outcome — the capability is present, correct, and unit-tested, and will engage automatically only on a genuinely uniform, short-field, high-cardinality block, without anyone having to predict where that is.
+- Deliberately **not** applied to the durable-memory block: its exact-evidence vs soft-context split (and the "reuse verbatim" instruction) is worth more than a few percent of tokens, and flattening it into a table would lose that. Neighbor retrieval and extractive compression remain deferred-with-trigger rather than built speculatively.
+
+## Durable Memory Is User-Visible And Forgettable, And Forget Is A Soft Expire
+
+Decision (Phase 3c): the Memory Vault surfaces the durable `zen_memory_items` a user has accumulated (kind, scope, content, source chat) and lets them **forget** any item. Forgetting flips `status` to `expired` (via `neonMemoryItemsRepository.expire`) rather than hard-deleting the row. The Vault only queries durable memory when `MEMORY_EXTRACTION` is on, so a flag-off deployment pays no extra query and shows an explained empty state.
+
+Rationale:
+
+- The Vault's stated purpose is to "review and **control**" the memory Zenquanta reuses; showing durable facts a user can't remove would be a trust/privacy gap. Forget mirrors the existing per-conversation "Clear summary" affordance exactly (same `AlertDialog` pattern), so it adds control without a new interaction model.
+- Soft-expire (not delete) keeps the system consistent with the engine's core invariant — raw is truth, this layer is additive — and preserves the supersession chain (`supersedes_id`) and any audit trail; expired rows are simply excluded from every retrieval `where status = 'active'`. `expire` is user-scoped, so it can never touch another user's memory.
+- Gating the Vault's durable fetch on `MEMORY_EXTRACTION` keeps the "flag off ⇒ inert, and identical cost" discipline that every other phase follows: no feature flag means no rows exist anyway, so the query would only ever return empty — better to skip it and explain the state.
+
 ## OpenRouter Is The Only AI Gateway
 
 Decision: Use OpenRouter as the only AI model gateway in current code.
