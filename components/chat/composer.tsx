@@ -5,6 +5,7 @@ import { BookOpen, FileText, Images, ImagePlus } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useChatContext } from '@/lib/chat-context'
 import { AIMode, Attachment, MODE_CONFIGS, PendingAttachment } from '@/lib/types'
+import { getModelOverrideForUsageOptimization } from '@/lib/config'
 import { usePromptPrecheck } from '@/hooks/usePromptPrecheck'
 import { createPendingAttachment } from '@/lib/utils/files'
 import { getModeAccentClass, getModeGlow } from '@/lib/mode-utils'
@@ -43,6 +44,7 @@ export function Composer({ onSend, disabled, initialValue = '' }: ComposerProps)
     stopStreaming,
     openWorkspaceTool,
     sessionSettings,
+    updateSessionSettings,
     composerDraftRequest,
     clearComposerDraftRequest,
   } = useChatContext()
@@ -244,6 +246,12 @@ export function Composer({ onSend, disabled, initialValue = '' }: ComposerProps)
           attachments={pendingAttachments}
           settings={sessionSettings}
           disabled={disabled}
+          onIntelligenceChange={(intelligenceLevel) =>
+            updateSessionSettings({
+              modelOverride:
+                getModelOverrideForUsageOptimization(intelligenceLevel),
+            })
+          }
         />
         <div
           className={cn(

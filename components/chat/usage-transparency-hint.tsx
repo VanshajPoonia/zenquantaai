@@ -7,6 +7,7 @@ import {
   BadgeCheck,
   Gauge,
   ImageIcon,
+  Lock,
   Search,
   Sparkles,
   WalletCards,
@@ -20,12 +21,20 @@ import {
   SessionSettings,
   SubscriptionStatus,
   SubscriptionTier,
+  UsageOptimization,
 } from '@/types'
+import {
+  getAllowedModelsForTier,
+  getUsageOptimizationFromModelOverride,
+  INTELLIGENCE_LEVEL_OPTIONS,
+  resolveModelConfig,
+} from '@/lib/config'
 import {
   DashboardLimitSnapshot,
   isNearLimit,
 } from '@/lib/billing/upgrade-nudges'
 import { cn } from '@/lib/utils'
+import { getModeAccentClass, getModeTintClass } from '@/lib/mode-utils'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
@@ -64,14 +73,8 @@ interface UsageTransparencyHintProps {
   attachments: Array<Attachment | PendingAttachment>
   settings: SessionSettings
   disabled?: boolean
+  onIntelligenceChange: (level: UsageOptimization) => void
 }
-
-const QUALITY_MODES = [
-  'Fast',
-  'Balanced',
-  'Best quality',
-  'Lowest usage',
-] as const
 
 const PLAN_LABELS: Record<SubscriptionTier, string> = {
   free: 'Free',
@@ -224,6 +227,7 @@ export function UsageTransparencyHint({
   attachments,
   settings,
   disabled,
+  onIntelligenceChange,
 }: UsageTransparencyHintProps) {
   const [dashboard, setDashboard] = useState<DashboardSnapshot | null>(null)
   const [dashboardUnavailable, setDashboardUnavailable] = useState(false)
@@ -269,6 +273,13 @@ export function UsageTransparencyHint({
     [attachments, content, dashboard?.plan.tier, kind, mode, settings]
   )
   const levelCopy = getUsageLevelCopy(level, kind)
+  const intelligenceLevel = getUsageOptimizationFromModelOverride(
+    settings.modelOverride
+  )
+  const allowedModelsForPlan = useMemo(
+    () => (dashboard ? getAllowedModelsForTier(dashboard.plan.tier) : null),
+    [dashboard]
+  )
   const usesWebSearch = kind === 'chat' && (mode === 'live' || settings.webSearch)
   const usesFileContext = kind === 'chat' && settings.fileContext
   const usesImageCredits = kind === 'image' || mode === 'image'
@@ -352,31 +363,66 @@ export function UsageTransparencyHint({
           </p>
         </div>
 
-        <TooltipProvider delayDuration={250}>
-          <div className="hidden shrink-0 flex-wrap gap-1.5 sm:flex">
-            {QUALITY_MODES.map((label) => (
-              <Tooltip key={label}>
-                <TooltipTrigger asChild>
-                  <Button
-                    type="button"
-                    variant={label === 'Balanced' ? 'secondary' : 'outline'}
-                    size="sm"
-                    disabled
-                    className="h-7 rounded-full px-2.5 text-[11px]"
-                  >
-                    {label === 'Balanced' ? (
-                      <WalletCards className="mr-1 size-3" />
-                    ) : null}
-                    {label}
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  Usage profile controls are coming soon; current routing is unchanged.
-                </TooltipContent>
-              </Tooltip>
-            ))}
-          </div>
-        </TooltipProvider>
+        {kind === 'chat' && mode !== 'image' ? (
+          <TooltipProvider delayDuration={250}>
+            <div className="min-w-0 md:max-w-[28rem]">
+              <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                Intelligence
+              </p>
+              <div
+                className="flex gap-1.5 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+                role="radiogroup"
+                aria-label="Response intelligence level"
+              >
+                {INTELLIGENCE_LEVEL_OPTIONS.map((option) => {
+                  const selected = option.id === intelligenceLevel
+                  const optionModel = resolveModelConfig(
+                    mode,
+                    option.modelOverride,
+                    dashboard?.plan.tier ?? 'free'
+                  ).model
+                  const likelyUnavailable =
+                    Boolean(allowedModelsForPlan) &&
+                    !allowedModelsForPlan!.includes(optionModel)
+
+                  return (
+                    <Tooltip key={option.id}>
+                      <TooltipTrigger asChild>
+                        <Button
+                          type="button"
+                          variant={selected ? 'secondary' : 'outline'}
+                          size="sm"
+                          role="radio"
+                          aria-checked={selected}
+                          disabled={disabled}
+                          onClick={() => onIntelligenceChange(option.id)}
+                          className={cn(
+                            'h-7 shrink-0 rounded-full px-2.5 text-[11px]',
+                            selected && getModeAccentClass(mode, 'border'),
+                            selected && getModeTintClass(mode, 'subtle'),
+                            likelyUnavailable && !selected && 'text-muted-foreground/70'
+                          )}
+                        >
+                          {selected ? (
+                            <WalletCards className="mr-1 size-3" />
+                          ) : likelyUnavailable ? (
+                            <Lock className="mr-1 size-3" />
+                          ) : null}
+                          {option.label}
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        {likelyUnavailable
+                          ? `${option.hint} May not be included in your current plan — you'll see an upgrade prompt if so.`
+                          : option.hint}
+                      </TooltipContent>
+                    </Tooltip>
+                  )
+                })}
+              </div>
+            </div>
+          </TooltipProvider>
+        ) : null}
       </div>
       {kind === 'image' ? (
         <p className="mt-2 flex items-center gap-1.5 text-[11px] leading-4 text-muted-foreground">
