@@ -4,18 +4,24 @@ import { requireAdmin } from '@/lib/auth/require-admin'
 import {
   neonAdminRepository,
   neonPlanRequestsRepository,
+  neonSubscriptionsRepository,
 } from '@/lib/db/repositories'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { CompactPlanLimitFields } from '@/components/admin/plan-limit-fields'
-import { updatePlanRequestStatusAction, updateUserAdminAction } from './actions'
+import {
+  switchAdminPlanAction,
+  updatePlanRequestStatusAction,
+  updateUserAdminAction,
+} from './actions'
+import { SubscriptionTier } from '@/types'
 
 const USER_GRID_COLUMNS =
   'grid-cols-[minmax(19rem,2.5fr)_minmax(7rem,0.8fr)_minmax(7rem,0.8fr)_minmax(7rem,0.8fr)_minmax(7rem,0.8fr)_minmax(7rem,0.8fr)_minmax(7rem,0.8fr)_minmax(8rem,0.9fr)_minmax(8rem,0.9fr)_minmax(8rem,0.9fr)_minmax(7rem,0.8fr)_minmax(7rem,0.8fr)_minmax(10rem,1fr)]'
 
-const PLAN_TIERS = ['free', 'basic', 'pro', 'ultra', 'prime']
+const PLAN_TIERS: SubscriptionTier[] = ['free', 'basic', 'pro', 'ultra', 'prime']
 const ASSISTANT_FAMILIES = ['nova', 'velora', 'axiom', 'forge', 'pulse', 'prism']
 
 function getParam(value: string | string[] | undefined): string | undefined {
@@ -27,7 +33,7 @@ export default async function AdminPage({
 }: {
   searchParams?: Promise<Record<string, string | string[] | undefined>>
 }) {
-  await requireAdmin()
+  const { user } = await requireAdmin()
   const params = searchParams ? await searchParams : {}
   const filterInput = {
     from: getParam(params.from),
@@ -38,10 +44,11 @@ export default async function AdminPage({
   }
   const normalizedFilters =
     neonAdminRepository.normalizeAnalyticsFilters(filterInput)
-  const [overview, userRows, requests] = await Promise.all([
+  const [overview, userRows, requests, adminSubscription] = await Promise.all([
     neonAdminRepository.getOverview(filterInput),
     neonAdminRepository.listUserRows(filterInput),
     neonPlanRequestsRepository.list(),
+    neonSubscriptionsRepository.getByUserId(user.id),
   ])
   const updated = getParam(params?.updated) === '1'
   const selectedPeriodLabel = formatPeriodLabel(normalizedFilters)
@@ -73,6 +80,49 @@ export default async function AdminPage({
             Admin changes were saved successfully.
           </div>
         ) : null}
+
+        <Card className="rounded-3xl border-border/70 bg-card/70">
+          <CardHeader>
+            <CardTitle>Plan sandbox</CardTitle>
+            <p className="max-w-3xl text-sm leading-6 text-muted-foreground">
+              Switch your own admin account between plans to test the customer
+              experience. This applies the selected plan limits immediately and
+              starts a fresh allowance period.
+            </p>
+          </CardHeader>
+          <CardContent>
+            {adminSubscription ? (
+              <form
+                action={switchAdminPlanAction}
+                className="flex flex-col gap-3 sm:flex-row sm:items-end"
+              >
+                <FilterField label="Test as plan">
+                  <select
+                    name="tier"
+                    defaultValue={adminSubscription.tier}
+                    className="flex h-10 min-w-52 rounded-xl border border-input bg-background px-3 text-sm capitalize text-foreground outline-none transition-colors focus:border-primary/40 focus:ring-2 focus:ring-primary/20"
+                  >
+                    {PLAN_TIERS.map((tier) => (
+                      <option key={tier} value={tier}>
+                        {tier}
+                      </option>
+                    ))}
+                  </select>
+                </FilterField>
+                <Button type="submit" className="rounded-xl">
+                  Switch my plan
+                </Button>
+                <Badge variant="outline" className="h-10 rounded-xl px-3 capitalize">
+                  Current: {adminSubscription.tier}
+                </Badge>
+              </form>
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                No subscription record is available for this admin account.
+              </p>
+            )}
+          </CardContent>
+        </Card>
 
         <Card className="rounded-3xl border-border/70 bg-card/70">
           <CardHeader>
@@ -373,7 +423,11 @@ export default async function AdminPage({
 
         <Card className="rounded-3xl border-border/70 bg-card/70">
           <CardHeader>
-            <CardTitle>Users</CardTitle>
+            <CardTitle>User plans and limits</CardTitle>
+            <p className="text-sm leading-6 text-muted-foreground">
+              Change any user&apos;s plan, status, role, and included limits. Open a
+              user for request-level limits and model overrides.
+            </p>
           </CardHeader>
           <CardContent className="px-0 pb-6">
             <div className="overflow-x-auto px-6">
