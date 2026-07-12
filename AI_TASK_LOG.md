@@ -6,6 +6,20 @@ The repository contains a real Zenquanta AI platform backed by Neon for runtime 
 
 Current direction: plan upgrades remain manual/admin-driven, payment automation is out of scope unless explicitly requested, and Neon/storage start fresh without importing Supabase database rows or storage objects.
 
+## 2026-07-12 - Deterministic chat order, intelligence controls, and admin plan sandbox
+
+**Goal**: Continue the user-requested chat/admin work after the prior Claude session stopped at research: keep a new user prompt above its assistant response, make intelligence selectable beside the composer, allow a response to be regenerated at another intelligence level, let an admin switch its own plan for testing, and keep any user's plan editable from admin.
+
+**Implemented**:
+- Message ordering now has an explicit tie-break: when a user message and assistant placeholder share a timestamp, the user is ordered first. New assistant placeholders also receive a timestamp 1ms after their parent user message. The same comparator is used for Neon hydration, paged-message merges, and client-side message-page merging, covering both fresh sends and persisted reloads without a schema migration.
+- The existing Fast/Balanced/Best quality/Lowest usage controls above the composer are now live. They map to the existing response profiles (`gemini`/`auto`/`claude`/`deepseek`) and update the current conversation's session settings; existing server-side plan/model checks remain authoritative.
+- The last text response now has a Regenerate menu with “Same intelligence” plus the four intelligence levels. A selected regeneration level is sent as a request-scoped `responseModelOverride`, so it changes that response's model route without silently changing the conversation default.
+- `/admin` now has an admin-only Plan sandbox for switching the current admin account between Free/Basic/Pro/Ultra/Prime. It resets the account to the exact selected plan limits, clears custom usage/model overrides, starts a fresh allowance period, and writes an admin audit event. The existing user table/detail controls remain the route for editing any user's plan, status, limits, role, and model overrides; their purpose is now labeled explicitly.
+
+**Verification**: Focused ordering/routing tests pass (15 tests). Full suite passes (24 files / 125 tests), `pnpm run typecheck` passes, `pnpm run lint` passes with zero errors/warnings, `pnpm run build` passes, and `git diff --check` passes. The first sandboxed build attempt could not reach Google Fonts; rerunning with approved network access compiled all 61 static pages and dynamic routes successfully. Browser automation was not claimed: the installed `agent-browser` skill's CLI is unavailable, and the read-only localhost fallback could not be approved because the tool-approval service reported its usage limit.
+
+**Risk / behavior boundary**: Best quality may be rejected on a plan that does not include the mapped premium model; this is intentional and produces the existing plan-availability error/upgrade path. No payment automation, user self-serve tier switching, database migration, or new AI gateway was added.
+
 ## 2026-07-12 - Temporal context awareness + critical migration-drift fix
 
 **Feature**: Explicit user request for chat replies to be time/gap-aware instead of defaulting to generic "good morning"-style greetings (e.g. "good night" followed 2 minutes later by "hi" should read as a short gap, not a new day). Implemented as a new always-on `[Temporal context]` system-prompt block, following the same pattern as the existing web-search/file-knowledge blocks:

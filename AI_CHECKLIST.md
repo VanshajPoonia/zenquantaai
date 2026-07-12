@@ -299,26 +299,30 @@ Before changing persistence code again:
 6. Start dev server with `pnpm run dev`.
 7. Sign up or sign in.
 8. Send a text prompt and verify `/api/chat` streaming.
-9. With `TAVILY_API_KEY` configured, send a Pulse or `webSearch` prompt and verify sources appear.
-10. With an embeddings key configured, upload a text/code file and a text-based PDF, enable `fileContext`, and verify chat cites uploaded-file sources.
-11. Open Ask Files, select one indexed file and then a concrete project scope, ask a question, and verify the request uses normal `/api/chat`, returns file source snippets only when RAG returns them, and does not expose private file URLs.
-12. Open GitHub repo context from Command Palette or Project Home, connect a read-only installation, import selected README/package/source files into a project, then verify Ask Files and Forge fileContext can retrieve imported snippets without exposing GitHub tokens or provider URLs.
-13. Open AI Playbooks, install a starter template only by user action, create/edit a playbook with category/output/suggested assistant fields, edit variable labels/defaults/required flags, preview expanded prompts, run at least two assistant-family steps, and verify run history records completed step outputs when message ids are available.
-14. Open Project Home from the workspace project selector and verify user-scoped conversations, files, generated images, playbooks, memory status, GitHub repo context, and quick actions.
-15. Use command palette search globally and with a selected Project Home scope, and verify project searches do not show other project data.
-16. Save an assistant message and a model comparison candidate into Artifact Studio, edit it, move it to a project, export it, and verify project search/Project Home can find it.
-17. Open Memory Vault from Settings, Command Palette, and Project Home; verify conversation summaries are user-scoped, copy works, clearing a summary does not delete messages, and per-conversation memory toggles persist. With `MEMORY_EXTRACTION` on, verify the "Durable memory" section lists the user's own items (global + per-project scope labels), that forgetting one removes it from the list and from future retrieval (soft-expire, not a message delete), and that with the flag off the section shows the explained empty state. Cross-user isolation is blocking: a user must never see another user's durable items.
-18. Run an Artifact Studio AI action, review the preview, apply it to the draft, save explicitly, and confirm usage is logged without raw cost exposure.
-19. Open Private Assistants, create/edit/duplicate/pin a text-only assistant, attach prompt-library shortcuts, run a test prompt, and verify the test consumes normal text usage without saving the draft assistant.
-20. Run Model Duel, review candidates with and without Blind Mode, assign scoring labels, save one winner into the conversation, and verify Prism/image is not selectable.
-21. Create/select a private custom text assistant and confirm it sends through normal `/api/chat` with usage limits intact.
-22. Generate an image with Prism and verify `/api/images/generate`.
-23. Open Prism Studio, verify protected gallery previews, project/search/date/favorite filters, favorite persistence, prompt copy/reuse/remix, Save prompt as Artifact, and explicit preview before four-image or Velora campaign actions.
-24. Check `/dashboard` for usage.
-25. If using admin flows, ensure the user has an admin role in `zen_profiles`.
-26. Check `/admin` with current-month defaults and optional date range, plan, assistant, and user filters.
-27. Confirm Admin Product Analytics shows activation funnel, feature adoption, file indexing outcomes, and operational signals without exposing raw cost outside admin pages/APIs.
-28. Confirm admin raw-cost views do not change user-facing `/dashboard` displayed-cost responses.
+9. On a fresh chat, verify the user prompt stays above the streaming assistant placeholder and remains in that order after reload.
+10. Switch Fast/Balanced/Best quality/Lowest usage above the composer, send a permitted profile, and confirm the selected model profile is used; confirm an unavailable premium profile is rejected by plan enforcement.
+11. Regenerate the last text response with a different intelligence level and confirm the response model changes while the conversation's selected default does not.
+12. With `TAVILY_API_KEY` configured, send a Pulse or `webSearch` prompt and verify sources appear.
+13. With an embeddings key configured, upload a text/code file and a text-based PDF, enable `fileContext`, and verify chat cites uploaded-file sources.
+14. Open Ask Files, select one indexed file and then a concrete project scope, ask a question, and verify the request uses normal `/api/chat`, returns file source snippets only when RAG returns them, and does not expose private file URLs.
+15. Open GitHub repo context from Command Palette or Project Home, connect a read-only installation, import selected README/package/source files into a project, then verify Ask Files and Forge fileContext can retrieve imported snippets without exposing GitHub tokens or provider URLs.
+16. Open AI Playbooks, install a starter template only by user action, create/edit a playbook with category/output/suggested assistant fields, edit variable labels/defaults/required flags, preview expanded prompts, run at least two assistant-family steps, and verify run history records completed step outputs when message ids are available.
+17. Open Project Home from the workspace project selector and verify user-scoped conversations, files, generated images, playbooks, memory status, GitHub repo context, and quick actions.
+18. Use command palette search globally and with a selected Project Home scope, and verify project searches do not show other project data.
+19. Save an assistant message and a model comparison candidate into Artifact Studio, edit it, move it to a project, export it, and verify project search/Project Home can find it.
+20. Open Memory Vault from Settings, Command Palette, and Project Home; verify conversation summaries are user-scoped, copy works, clearing a summary does not delete messages, and per-conversation memory toggles persist. With `MEMORY_EXTRACTION` on, verify the "Durable memory" section lists the user's own items (global + per-project scope labels), that forgetting one removes it from the list and from future retrieval (soft-expire, not a message delete), and that with the flag off the section shows the explained empty state. Cross-user isolation is blocking: a user must never see another user's durable items.
+21. Run an Artifact Studio AI action, review the preview, apply it to the draft, save explicitly, and confirm usage is logged without raw cost exposure.
+22. Open Private Assistants, create/edit/duplicate/pin a text-only assistant, attach prompt-library shortcuts, run a test prompt, and verify the test consumes normal text usage without saving the draft assistant.
+23. Run Model Duel, review candidates with and without Blind Mode, assign scoring labels, save one winner into the conversation, and verify Prism/image is not selectable.
+24. Create/select a private custom text assistant and confirm it sends through normal `/api/chat` with usage limits intact.
+25. Generate an image with Prism and verify `/api/images/generate`.
+26. Open Prism Studio, verify protected gallery previews, project/search/date/favorite filters, favorite persistence, prompt copy/reuse/remix, Save prompt as Artifact, and explicit preview before four-image or Velora campaign actions.
+27. Check `/dashboard` for usage.
+28. If using admin flows, ensure the user has an admin role in `zen_profiles`.
+29. Check `/admin` with current-month defaults and optional date range, plan, assistant, and user filters.
+30. Use Plan sandbox to switch the admin account to another tier, verify the selected tier's exact limits/model access in the app, then switch back as needed.
+31. Edit another user's plan and limits from the User plans and limits table or `/admin/users/[id]` and confirm the change is audit-logged.
+32. Confirm Admin Product Analytics and raw-cost views stay admin-only and do not change user-facing `/dashboard` displayed-cost responses.
 
 ## Production Safety Checks
 
