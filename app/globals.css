@@ -103,6 +103,7 @@
 @theme inline {
   --font-sans: var(--font-geist-sans), 'Geist', system-ui, sans-serif;
   --font-mono: var(--font-geist-mono), 'Geist Mono', monospace;
+  --font-display: var(--font-display), 'Instrument Serif', Georgia, serif;
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -214,6 +215,49 @@
    repeated across marketing/auth/settings surfaces into one utility. */
 .eyebrow {
   @apply font-mono text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground;
+}
+
+/* Display face — reserved for wordmark + hero moments (empty state, loading
+   screen, marketing-style headlines). Never used for dense UI chrome, body
+   copy, or anything that needs to stay narrow/legible at small sizes. */
+.font-display {
+  font-family: var(--font-display);
+  font-weight: 400;
+  letter-spacing: -0.01em;
+}
+
+/* The six assistant hues in sequence — the one signature motif of the
+   product (Nova/Velora/Axiom/Forge/Pulse/Prism, refracted from one
+   workspace). Used sparingly: empty-state hero and loading screen only. */
+:root {
+  --spectrum-gradient: linear-gradient(
+    90deg,
+    oklch(0.76 0.14 190) 0%,
+    oklch(0.7 0.18 330) 20%,
+    oklch(0.65 0.2 250) 40%,
+    oklch(0.7 0.2 145) 60%,
+    oklch(0.72 0.18 225) 80%,
+    oklch(0.78 0.19 38) 100%
+  );
+}
+
+.text-spectrum {
+  background: var(--spectrum-gradient);
+  background-clip: text;
+  -webkit-background-clip: text;
+  color: transparent;
+}
+
+/* Respect reduced-motion preferences across all animate-in/animate-float/etc. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
 
 /* Subtle shimmer animation */
