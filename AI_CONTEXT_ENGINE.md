@@ -1,7 +1,9 @@
 # Zenquanta Context Engine — Architecture & Implementation Plan
 
-Status: **in progress** (Phases 1–4 backend landed, behind flags; Phase 3 Memory Vault UI surfacing + Phase 5 pending).
-Owner: Claude Code (architecture + implementation). Last updated: 2026-07-11.
+Status: **feature-complete** (Phases 1–5 landed behind flags; Phase 3c Memory Vault UI
+surfacing landed). All flags default OFF, so `main` stays deployable. Remaining items
+(neighbor retrieval, tier-scaled budget) are deferred-with-trigger in §7, not gaps.
+Owner: Claude Code (architecture + implementation). Last updated: 2026-07-12.
 
 This document is the source of truth for Zenquanta's context/memory system. It reconciles
 two proposals (an internal tiered plan and an external 19-phase brief) against the **actual
@@ -185,9 +187,10 @@ Each phase ships behind a flag; the old path stays live until the new one is pro
 |---|---|---|---|
 | **1 ✅** | Structured LLM rolling summary (async, replaces regex) | `MEMORY_V2` | Shipped. Unit-tested parse/render; typecheck/build |
 | **2 ✅** | Token governor + cache-friendly prompt ordering | `CONTEXT_BUDGET` | Shipped. Allocator unit-tested; legacy path byte-identical when off |
-| **3 ✅ (backend)** | `zen_memory_items` + extraction gate + supersession + exact-evidence + read-path injection | `MEMORY_EXTRACTION` | Shipped. Parse/dedupe/scope/exact-evidence unit-tested; typecheck/build; off-path inert. Memory Vault UI surfacing = Phase 3c follow-up |
-| **4 ✅ (backend)** | Cross-chat recall via summary embeddings | `CROSS_CHAT_RECALL` | Shipped. `summary_embedding` on `zen_conversations`; user-scoped `searchConversationSummaries`; block unit-tested; off-path inert. Write depends on `MEMORY_V2` |
-| **5+** | Neighbor retrieval, extractive compression, TOON | `TOON_SERIALIZATION`, … | Token deltas; long-conversation fidelity |
+| **3 ✅** | `zen_memory_items` + extraction gate + supersession + exact-evidence + read-path injection | `MEMORY_EXTRACTION` | Shipped. Parse/dedupe/scope/exact-evidence unit-tested; typecheck/build; off-path inert |
+| **3c ✅** | Memory Vault surfaces durable items + user "forget" (soft expire) | `MEMORY_EXTRACTION` (gates the read) | Shipped. `listAllActiveForUser` + `expire`; `/api/memory-vault/durable/[id]` DELETE; vault query unchanged when flag off (no extra query) |
+| **4 ✅** | Cross-chat recall via summary embeddings | `CROSS_CHAT_RECALL` | Shipped. `summary_embedding` on `zen_conversations`; user-scoped `searchConversationSummaries`; block unit-tested; off-path inert. Write depends on `MEMORY_V2` |
+| **5 ✅** | TOON serialization for uniform source blocks (opt-in, self-limiting) | `TOON_SERIALIZATION` | Shipped. Encoder + `isToonWorthwhile` gate unit-tested; wired into web/file source lists; only swaps in on a measured ≥10% win, else byte-identical. Neighbor retrieval + extractive compression = deferred-with-trigger (§7) |
 
 ### Feature flags (env, default OFF)
 
@@ -220,10 +223,19 @@ deploy; the pre-existing regex/last-8 path runs whenever a flag is off.
 
 ## 8. On TOON and LLMLingua
 
-- **TOON**: helps only on *uniform arrays of objects* (memory lists, sources, table previews)
-  — ~30–50% on those blocks, but they're a small share of total prompt tokens, so net ≈ 3–8%.
-  Gate it: array, ≥8 rows, uniform schema, ≥10% token win vs minified JSON, never for
-  structured outputs. Do it **last** (Phase 5+).
+- **TOON** (shipped, Phase 5, `lib/context/toon.ts`): helps only on *uniform arrays of
+  objects* (sources, memory lists, table previews) — big % on the array's *structural*
+  overhead, but that overhead is a small share of total prompt tokens, so net ≈ 3–8%.
+  Implemented as a strict, opt-in swap: `encodeToon` produces the table, and
+  `isToonWorthwhile` only accepts it when it beats **the block's current rendering** (not
+  minified JSON — comparing against what we actually ship is what guarantees no regression)
+  by ≥10% tokens, with ≥`MIN_TOON_ROWS` (4) rows. Wired into the web-search and
+  file-knowledge source lists. Consequence, and it is the correct one: on those blocks the
+  values are long free-text, so the structural win rarely clears 10% and TOON stays inert —
+  exactly the ROI this section predicted. The capability is present, correct, and safe
+  (can never enlarge a block), and engages automatically if a future block is a
+  high-cardinality short-field array. Never applied to the durable-memory block, whose
+  exact-evidence split matters more than a few percent.
 - **LLMLingua**: requires hosting a Python encoder — wrong fit for the Vercel/Next stack. Our
   async cheap-LLM summarizer is the pragmatic equivalent (extractive compression via a model
   already routed through OpenRouter, run off the critical path).
