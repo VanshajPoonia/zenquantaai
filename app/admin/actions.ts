@@ -19,6 +19,51 @@ import {
   parseOptionalNote,
 } from '@/lib/admin/validation'
 
+export async function switchAdminPlanAction(formData: FormData) {
+  const { user } = await requireAdmin()
+  const tier = formData.get('tier')?.toString()
+
+  if (!tier || !isSubscriptionTier(tier)) {
+    redirect('/admin?error=invalid-plan-sandbox-tier')
+  }
+
+  const previousSubscription = await neonSubscriptionsRepository.getByUserId(user.id)
+  const previousOverride = await neonUsageLimitOverridesRepository.getByUserId(user.id)
+
+  await neonSubscriptionsRepository.updateTier(
+    user.id,
+    tier,
+    'Admin plan sandbox'
+  )
+  await neonUsageLimitOverridesRepository.upsert(user.id, {
+    coreTokensIncluded: null,
+    tierTokensIncluded: null,
+    imageCreditsIncluded: null,
+    dailyMessageLimit: null,
+    maxInputTokensPerRequest: null,
+    maxOutputTokensPerRequest: null,
+    maxImagesPerDay: null,
+    allowedModelOverrides: null,
+    notes: 'Admin plan sandbox',
+  })
+  await neonAdminAuditLogsRepository.create({
+    adminUserId: user.id,
+    targetUserId: user.id,
+    action: 'admin_plan_sandbox_switch',
+    // The switch intentionally clears this account's usage/model overrides so
+    // the sandbox reflects the selected tier's real limits. Recording what was
+    // cleared here is the only way to recover those values, since the upsert
+    // above overwrites them with no other backup.
+    details: {
+      tier,
+      previousTier: previousSubscription?.tier ?? null,
+      clearedOverride: previousOverride ?? null,
+    },
+  })
+
+  redirect('/admin?updated=1')
+}
+
 export async function updatePlanRequestStatusAction(formData: FormData) {
   const { user } = await requireAdmin()
   const requestId = formData.get('requestId')?.toString()
