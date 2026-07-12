@@ -20,8 +20,11 @@ import {
   createGeneratedImageAttachmentFromUrl,
 } from '@/lib/utils/generated-image'
 import {
+  buildCrossChatBlock,
+  buildDurableMemoryBlock,
   buildMemoryBlock,
   getRecentContextMessages,
+  selectBoundedContextMessages,
   updateConversationMemory,
 } from './memory'
 import {
@@ -31,7 +34,9 @@ import {
   ChatAction,
   ChatRequest,
   Conversation,
+  CrossChatRecallContext,
   CustomAssistantReference,
+  DurableMemoryContext,
   FileKnowledgeContext,
   MessageSource,
   Message,
@@ -42,6 +47,8 @@ import {
   WebSearchContext,
   WebSearchSource,
 } from '@/types'
+import { isContextBudgetEnabled, isMemoryV2Enabled } from '@/lib/context/flags'
+import { computeMessageSelectionBudget } from '@/lib/context/token-budget'
 import { buildSystemPrompt } from './prompts'
 import {
   createOpenRouterImage,
@@ -320,25 +327,102 @@ function buildOpenRouterMessages(
   mode: AIMode,
   webSearchContext?: WebSearchContext,
   fileKnowledgeContext?: FileKnowledgeContext,
-  customAssistantContext?: CustomAssistantRuntimeContext
+  customAssistantContext?: CustomAssistantRuntimeContext,
+  durableMemoryContext?: DurableMemoryContext,
+  crossChatContext?: CrossChatRecallContext
 ): Array<{
   role: 'system' | 'user' | 'assistant'
   content: string
 }> {
   const systemPrompt = buildSystemPrompt(mode, settings.systemPreset)
-  const contextMessages = getRecentContextMessages(conversation)
   const memoryBlock =
     settings.memory && conversation.memorySummary
       ? buildMemoryBlock(conversation.memorySummary)
       : ''
+  // Phase 3 durable memory. The retrieval layer only returns a context when the
+  // MEMORY_EXTRACTION flag is on, so this is '' otherwise and the block is never
+  // injected (legacy prompt stays byte-identical).
+  const durableMemoryBlock = settings.memory
+    ? buildDurableMemoryBlock(durableMemoryContext)
+    : ''
+  // Phase 4 cross-chat recall. Same discipline: '' unless CROSS_CHAT_RECALL is
+  // on and the retrieval layer returned matches.
+  const crossChatBlock = settings.memory ? buildCrossChatBlock(crossChatContext) : ''
   const webSearchBlock = formatWebSearchBlock(webSearchContext)
   const fileKnowledgeBlock = formatFileKnowledgeBlock(fileKnowledgeContext)
   const customAssistantBlock = formatCustomAssistantBlock(customAssistantContext)
+
+  const budgetEnabled = isContextBudgetEnabled()
+
+  // Phase 2 governor: size the recent-message window against what the fixed
+  // context blocks already consume. Legacy path keeps the fixed last-N window.
+  const contextMessages = budgetEnabled
+    ? selectBoundedContextMessages(
+        conversation.messages,
+        computeMessageSelectionBudget({
+          contextBlockTexts: [
+            systemPrompt,
+            customAssistantBlock,
+            durableMemoryBlock,
+            crossChatBlock,
+            memoryBlock,
+            webSearchBlock,
+            fileKnowledgeBlock,
+          ],
+        })
+      )
+    : getRecentContextMessages(conversation)
+
+  const mappedMessages = contextMessages
+    .filter((message) => message.role !== 'system')
+    .map((message) => ({
+      role: message.role,
+      content:
+        message.role === 'user' && settings.fileContext
+          ? `${message.content}${formatAttachmentBlock(
+              (message.attachments ?? []).map(toAttachmentContext)
+            )}`
+          : message.content,
+    }))
+
+  // Phase 2 reorders blocks stable-prefix-first (system → identity → memory →
+  // per-query retrieval → volatile recent turns) so a provider can cache the
+  // stable prefix. Legacy order is preserved byte-for-byte when the flag is off.
+  if (budgetEnabled) {
+    return [
+      { role: 'system', content: systemPrompt },
+      ...(customAssistantBlock
+        ? [{ role: 'system' as const, content: customAssistantBlock }]
+        : []),
+      ...(durableMemoryBlock
+        ? [{ role: 'system' as const, content: durableMemoryBlock }]
+        : []),
+      ...(crossChatBlock
+        ? [{ role: 'system' as const, content: crossChatBlock }]
+        : []),
+      ...(memoryBlock
+        ? [{ role: 'system' as const, content: memoryBlock }]
+        : []),
+      ...(webSearchBlock
+        ? [{ role: 'system' as const, content: webSearchBlock }]
+        : []),
+      ...(fileKnowledgeBlock
+        ? [{ role: 'system' as const, content: fileKnowledgeBlock }]
+        : []),
+      ...mappedMessages,
+    ]
+  }
 
   return [
     { role: 'system', content: systemPrompt },
     ...(customAssistantBlock
       ? [{ role: 'system' as const, content: customAssistantBlock }]
+      : []),
+    ...(durableMemoryBlock
+      ? [{ role: 'system' as const, content: durableMemoryBlock }]
+      : []),
+    ...(crossChatBlock
+      ? [{ role: 'system' as const, content: crossChatBlock }]
       : []),
     ...(webSearchBlock
       ? [{ role: 'system' as const, content: webSearchBlock }]
@@ -349,17 +433,7 @@ function buildOpenRouterMessages(
     ...(memoryBlock
       ? [{ role: 'system' as const, content: memoryBlock }]
       : []),
-    ...contextMessages
-      .filter((message) => message.role !== 'system')
-      .map((message) => ({
-        role: message.role,
-        content:
-          message.role === 'user' && settings.fileContext
-            ? `${message.content}${formatAttachmentBlock(
-                (message.attachments ?? []).map(toAttachmentContext)
-              )}`
-            : message.content,
-      })),
+    ...mappedMessages,
   ]
 }
 
@@ -369,7 +443,9 @@ export function buildPromptTextForUsage(
   mode: AIMode,
   webSearchContext?: WebSearchContext,
   fileKnowledgeContext?: FileKnowledgeContext,
-  customAssistantContext?: CustomAssistantRuntimeContext
+  customAssistantContext?: CustomAssistantRuntimeContext,
+  durableMemoryContext?: DurableMemoryContext,
+  crossChatContext?: CrossChatRecallContext
 ): string {
   return buildOpenRouterMessages(
     conversation,
@@ -377,7 +453,9 @@ export function buildPromptTextForUsage(
     mode,
     webSearchContext,
     fileKnowledgeContext,
-    customAssistantContext
+    customAssistantContext,
+    durableMemoryContext,
+    crossChatContext
   )
     .map((message) => message.content)
     .join('\n\n')
@@ -392,6 +470,8 @@ export async function* generateAssistantStream(input: {
   webSearchContext?: WebSearchContext
   fileKnowledgeContext?: FileKnowledgeContext
   customAssistantContext?: CustomAssistantRuntimeContext
+  durableMemoryContext?: DurableMemoryContext
+  crossChatContext?: CrossChatRecallContext
   signal?: AbortSignal
 }): AsyncIterable<string> {
   if (input.mode === 'image' || input.action === 'generate-image') {
@@ -427,7 +507,9 @@ export async function* generateAssistantStream(input: {
       input.mode,
       input.webSearchContext,
       input.fileKnowledgeContext,
-      input.customAssistantContext
+      input.customAssistantContext,
+      input.durableMemoryContext,
+      input.crossChatContext
     ),
     temperature: input.settings.temperature,
     maxTokens: input.settings.maxTokens,
@@ -803,6 +885,8 @@ export async function completeConversationWithAssistant(
     webSearchContext?: WebSearchContext
     fileKnowledgeContext?: FileKnowledgeContext
     customAssistantContext?: CustomAssistantRuntimeContext
+    durableMemoryContext?: DurableMemoryContext
+    crossChatContext?: CrossChatRecallContext
     sources?: MessageSource[]
     generatedImageResultOverride?: {
       attachment: Attachment
@@ -832,7 +916,9 @@ export async function completeConversationWithAssistant(
     generationMode,
     options?.webSearchContext,
     options?.fileKnowledgeContext,
-    options?.customAssistantContext
+    options?.customAssistantContext,
+    options?.durableMemoryContext,
+    options?.crossChatContext
   )
   const usage = estimateUsage({
     config: activeConfig,
@@ -864,10 +950,18 @@ export async function completeConversationWithAssistant(
   const completedConversation = updateConversationSnapshot(conversation, {
     messages: nextMessages,
   })
-  const memoryUpdate = updateConversationMemory(
-    completedConversation,
-    completedConversation.sessionSettings.memory
-  )
+  // When MEMORY_V2 is on, the async rolling-summary job (maybeUpdateRollingSummary)
+  // owns memorySummary, so skip the legacy regex pass and preserve whatever the
+  // job last wrote. Otherwise fall back to the deterministic summarizer.
+  const memoryUpdate = isMemoryV2Enabled()
+    ? {
+        memorySummary: completedConversation.memorySummary,
+        memoryUpdatedAt: completedConversation.memoryUpdatedAt,
+      }
+    : updateConversationMemory(
+        completedConversation,
+        completedConversation.sessionSettings.memory
+      )
 
   return updateConversationSnapshot(completedConversation, {
     ...memoryUpdate,
