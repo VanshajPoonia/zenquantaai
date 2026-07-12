@@ -1,5 +1,52 @@
 # AI Architecture Decisions
 
+## Context Engine Is Tiered Memory + Governed Budget, Not A 5-Table Rewrite
+
+Decision: Build the context/memory system as three additive tiers (rolling conversation summary → durable scoped memory items → cross-chat recall) plus a token governor, reusing the existing pgvector/embeddings/cheap-model plumbing — NOT the 5-table, 19-phase "context_memories + project_states + checkpoints + retrieval_logs + external_tool_results + dynamic tool selection" design from the external brief. Full plan and reconciliation live in `AI_CONTEXT_ENGINE.md`.
+
+Rationale:
+
+- Zenquanta has **no tool/function-calling surface** (text is streamed from OpenRouter), so the brief's dynamic-tool-selection and large-tool-result-externalization phases solve problems that don't exist here — cut.
+- There is **no workspace tier** — scope is `global → project → conversation` (+ `mode` as ranking metadata only). Memory is user-global by default and project-scoped inside projects, **never mode-scoped**, because mode-scoping would defeat the user's explicit "all chats refer to each other" goal.
+- pgvector @ 1536 dims (`zen_file_chunks`), `lib/rag/embeddings.ts`, cheap catalog models (`google/gemini-2.5-flash`, `deepseek/...`), and per-request token estimation already exist and are reused rather than rebuilt.
+- Deferred (with build-triggers documented in `AI_CONTEXT_ENGINE.md`): dedicated `project_states` / `checkpoints` / `retrieval_logs` tables. The rolling structured summary covers checkpointing; project status folds into a memory-item `kind` first.
+
+Invariants adopted from the external brief (its strongest ideas): **raw messages are the permanent source of truth** (summaries/memories are additive read-time optimizations, never destructive); **exact evidence** (IDs, code, routes, numbers) bypasses lossy compression; **supersession** (a correction beats stale memory via a canonical key); every phase ships **behind an env flag with the old path kept live**; prompt ordering keeps a **stable prefix first** for provider prompt caching.
+
+Phase 1 (shipped, behind `MEMORY_V2`): replaced the regex "memory summary" in `lib/ai/memory.ts` with an async cheap-model structured summary (`lib/ai/memory-summary.ts`), run off the critical path after the response streams. See the 2026-07-11 Context Engine entry in `AI_TASK_LOG.md`.
+
+## The Cheap-Model Summary Runs Async And Never Blocks Chat
+
+Decision: All context-engine write work (summary now; durable-memory extraction later) runs AFTER the response has fully streamed, is gated behind flags, and is wrapped so it can never throw into the chat path.
+
+Rationale: memory maintenance is a background optimization, not part of the user-visible turn. Adding an LLM call to the critical path would regress latency — the whole point is *cheaper and better context*, not slower responses. `maybeUpdateRollingSummary` no-ops when the flag or conversation memory is off, swallows all errors, and its DB write deliberately does not bump `updated_at` so it won't reorder the conversation list. If OpenRouter is unconfigured or returns unusable output, the existing summary is left untouched — degrading exactly like `fileContext`/`webSearch` already do.
+
+## Durable Memory Extraction Is Its Own Cheap Call, And The Inbox Is Global
+
+Decision (Phase 3, behind `MEMORY_EXTRACTION`): the durable-memory write gate (`lib/ai/memory-extraction.ts`) runs as a **separate** `google/gemini-2.5-flash` call, not merged into the Phase 1 rolling-summary call — even though `AI_CONTEXT_ENGINE.md` §4.1 originally sketched "one call, two jobs."
+
+Rationale: independent flags mean independent rollout and rollback. `MEMORY_EXTRACTION` and `MEMORY_V2` must be enable-able and revert-able separately; a shared call would couple them and force a combined prompt shape. A second flash call over a ~16k-char window is a fraction of a cent and runs off the critical path (after the `done` event), so the cost is immaterial next to the safety of independent flags and independently unit-testable modules. Merging into one call *when both flags are on* is a documented cost follow-up, not a v1 requirement.
+
+Decision: the **default inbox (`project-inbox`) and any no-project conversation map to the global memory bucket** (`project_id = null`); real projects keep their id. `resolveMemoryProjectScope` (`lib/context/memory-scope.ts`) is the single shared rule for both write and read.
+
+Rationale: this is what makes "all chats refer to each other" true for the common case — most chats live in the inbox, so a fact learned in one inbox chat surfaces in every other inbox chat. Real projects still get isolation (their memories don't leak across projects), and global memories additionally surface inside any project. Write uses an exact-scope match so a correction supersedes the right prior item; read unions globals with the current project. Every query filters by `user_id` at the SQL level — cross-user leakage is not possible.
+
+Related invariant: durable items store fragile tokens **verbatim** and the read path (`buildDurableMemoryBlock`) routes items flagged by `containsExactEvidence` into a "reuse verbatim — never paraphrase" section, realizing the brief's exact-evidence idea without a raw-history rescan.
+
+## Cross-Chat Recall Is User-Scoped, And Recalled Chats Are Context Not Commands
+
+Decision (Phase 4, behind `CROSS_CHAT_RECALL`): cross-chat *summary* recall (`searchConversationSummaries` + `retrieveCrossChatContext`) is **user-scoped, not project-scoped** — it can surface a summary of any of the user's other conversations, excluding only the current one.
+
+Rationale: the product goal is "all chats refer to each other." A user's own threads referencing each other across projects is the feature, not a leak — every query filters by `user_id`, and only a short *summary* is exposed, never raw messages. This intentionally differs from durable memory *items* (Phase 3), which respect project isolation, because items are atomic facts injected as authoritative memory whereas a recalled conversation summary is softer, lower-stakes background. Documented so the asymmetry is deliberate, not an oversight.
+
+Decision: the recalled-conversation block (`buildCrossChatBlock`) explicitly frames the summaries as **background context, not instructions from the user**.
+
+Rationale: a recalled past conversation is untrusted-ish relative to the current turn — the user is not re-issuing those requests now. Framing them as context (not commands) prevents a stale past instruction from being re-executed and keeps the current message authoritative.
+
+Decision: the Phase 4 **write depends on `MEMORY_V2`** — the summary embedding is produced inside `maybeUpdateRollingSummary`, embedding the fresh rendered summary.
+
+Rationale: cross-chat recall retrieves *summaries*, so it needs summaries to exist and to be embedded at the moment they're regenerated (embedding a stale, one-turn-old summary from the route would be wrong). Coupling the embed to the summary job keeps it fresh and cheap (one extra embedding call, off the critical path). The read side stays independent of `MEMORY_V2`.
+
 ## OpenRouter Is The Only AI Gateway
 
 Decision: Use OpenRouter as the only AI model gateway in current code.
@@ -437,6 +484,16 @@ Reason:
 - Any failure or client abort after a successful reservation calls `releaseTextUsage`/`releaseImageUsage` to fully refund the claim, preserving the existing "never charge for failed generations" behavior.
 - New repository methods live in `lib/db/repositories/subscriptions.ts` (`reserveTextUsage`, `releaseTextUsage`, `finalizeTextUsage`, `reserveImageUsage`, `releaseImageUsage`). The original `incrementTextUsage`/`incrementImageUsage` and `logTextUsage`/`logImageUsage` are unchanged and still used by `app/api/artifacts/[id]/actions/route.ts`, `app/api/model-comparisons/route.ts`, and `app/api/custom-assistants/test/route.ts`, which were out of scope for this fix and remain check-then-act. If those routes see meaningful concurrent traffic, they should be migrated to the same pattern.
 - `enforceTextUsage`/`enforceImageUsage` are still called first, purely for fast/specific error messages against the point-in-time snapshot; the atomic reservation is the authoritative gate and can still reject with a generic "usage limit reached" error even when the informative pre-check passed, if a concurrent request won the race.
+
+## The Six Assistant Hues Are The Product's Signature, Not A Color Scheme
+
+Decision: The per-mode accent colors (`--general`/`--creative`/`--logic`/`--code`/`--live`/`--image` in `app/globals.css`, consumed via `lib/mode-utils.tsx`) are the one thing agents should reach for when a surface needs a distinctive visual identity, instead of introducing a new generic gradient/glow. The 2026-07-11 design pass built `components/chat/spectrum-arc.tsx` (`SpectrumArc`) directly on top of these six existing tokens rather than inventing new brand colors.
+
+Reason:
+
+- The 2026-06-29 redesign pass already decided to keep these six colors as "the signature device, not replaced" rather than adopting one of the generic AI-app palette defaults (warm-cream+serif, near-black+single-accent, broadsheet). This pass reaffirms that and extends it: the six hues are unusually strong, non-generic brand material because they map 1:1 to real product concepts (Nova/Velora/Axiom/Forge/Pulse/Prism) that don't exist anywhere else, and the product name itself ("Zenquanta") plus a literal "Prism" assistant make a spectrum/refraction motif directly grounded in the subject rather than arbitrary decoration.
+- `SpectrumArc` is intentionally used sparingly — `EmptyState` and `AuthGate` only — per the design skill's restraint principle ("spend your boldness in one place"). It should not be copy-pasted onto every page; if a new hero surface wants the same treatment, extend the existing component rather than duplicating its geometry.
+- A serif display face (`Instrument_Serif`, `--font-display` / `.font-display` in `app/globals.css` and `app/layout.tsx`) was added as the one other deliberate identity risk this pass took, reserved for hero/wordmark text only — never dense UI chrome — so it stays legible and doesn't fight the existing Geist-based UI density.
 
 ## Neon Repositories Must Not Use Drizzle's `db.transaction()`
 

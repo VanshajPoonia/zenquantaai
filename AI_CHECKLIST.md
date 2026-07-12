@@ -106,6 +106,13 @@ FILE_STORAGE_LOCAL_DIR=.storage/zenquanta
 # FILE_STORAGE_REGION=auto
 # FILE_STORAGE_ACCESS_KEY_ID=
 # FILE_STORAGE_SECRET_ACCESS_KEY=
+# Context Engine flags (all default OFF; see AI_CONTEXT_ENGINE.md)
+# MEMORY_V2=            # structured cheap-LLM rolling summary (needs OPENROUTER_API_KEY + migration #20)
+# CONTEXT_BUDGET=       # token governor + cache-friendly prompt ordering (Phase 2)
+# MEMORY_EXTRACTION=    # durable cross-chat memory items + write gate (needs OPENROUTER_API_KEY + migration #21; embeddings optional but recommended)
+# CROSS_CHAT_RECALL=    # cross-chat summary recall (needs migration #22 + embeddings; write also needs MEMORY_V2)
+# TOON_SERIALIZATION=   # TOON encoding for uniform blocks (Phase 5+)
+# CONTEXT_DEBUG=        # dev-only structured context logging
 ```
 
 Accepted aliases in code include:
@@ -247,6 +254,9 @@ Fresh foundation migration available for Neon:
 17. `neon/migrations/20260616_zenquanta_feedback_events.sql`
 18. `neon/migrations/20260616_zenquanta_incremental_performance_indexes.sql`
 19. `neon/migrations/20260617_zenquanta_template_shares.sql`
+20. `neon/migrations/20260711_zenquanta_context_engine_summary.sql`
+21. `neon/migrations/20260711_zenquanta_context_engine_memory_items.sql`
+22. `neon/migrations/20260712_zenquanta_context_engine_cross_chat.sql`
 
 Apply with a Postgres client or Neon SQL editor. CLI example:
 
