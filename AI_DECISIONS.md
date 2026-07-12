@@ -77,6 +77,12 @@ Evidence:
 - Runtime client lives in `lib/ai/openrouter.ts`.
 - `OPENROUTER_API_KEY` and `OPENROUTER_BASE_URL` are the AI gateway env vars.
 
+## Intelligence Levels Reuse Response Profiles
+
+Decision: Fast, Balanced, Best quality, and Lowest usage are user-facing intelligence levels over the existing model-override profiles, not a second routing system. They map to `gemini`, `auto`, `claude`, and `deepseek` respectively. Composer selection updates the current session default; regeneration uses an optional request-scoped `responseModelOverride` so one response can use another level without changing that default.
+
+Rationale: The current response profiles already centralize model IDs, pricing, wallet selection, and plan enforcement. Reusing them keeps OpenRouter as the only gateway and ensures the server's active-plan/model check remains authoritative. Admin plan testing is intentionally admin-only and clears custom overrides so the selected tier matches the real customer plan experience.
+
 ## Tavily Powers Pulse Web Search
 
 Decision: Use Tavily as the first server-side web search provider for Pulse and the existing `webSearch` setting.

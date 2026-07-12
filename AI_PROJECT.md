@@ -33,6 +33,8 @@ This is the current six-assistant platform, not the old four-mode version.
 - ID/password auth backed by fresh Neon credentials.
 - Six assistant families.
 - Streamed text chat.
+- Composer-level intelligence selection (Fast, Balanced, Best quality, Lowest usage) backed by existing response-profile routing.
+- Per-response regeneration with a request-scoped intelligence override that preserves the conversation default.
 - Prism image generation.
 - Prism Studio gallery for generated-image history, favorites, prompt reuse/remix, prompt Artifact saves, and campaign-style actions.
 - Conversation persistence.
@@ -59,6 +61,7 @@ This is the current six-assistant platform, not the old four-mode version.
 - Admin cost and margin analytics with period, plan, assistant, and user filters.
 - Admin Product Analytics for activation funnel, feature adoption, file indexing outcomes, and operational signals.
 - Per-user admin controls.
+- Admin plan sandbox for switching the admin account across plan experiences, plus per-user plan/limit editing.
 - Manual plan request flow.
 - Usage tracking for text and image requests.
 - Public assistant pages.
@@ -292,6 +295,8 @@ Key files:
 - `lib/ai/chat.ts`
 
 Text assistant routing and response profile overrides are centralized in config. Prism image routing is separate from text chat.
+
+Composer intelligence levels are product labels over the existing model-override profiles. The chat default writes to `SessionSettings.modelOverride`; regeneration can pass `ChatRequest.responseModelOverride` for one response only. The server still validates the resolved model against the user's active plan and admin model overrides before generation.
 
 ## Neon Postgres Migration Status
 
