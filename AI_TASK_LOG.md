@@ -86,6 +86,30 @@ Current direction: plan upgrades remain manual/admin-driven, payment automation 
 
 ---
 
+## 2026-07-12 - Context Engine Phase 5 (TOON) + Phase 3c (Vault Surfacing) — Engine Feature-Complete
+
+**Goal**: Explicit user instruction to "complete the whole project, any phase that is left." The two remaining items in `AI_CONTEXT_ENGINE.md` were Phase 5 (TOON serialization) and Phase 3c (surface durable memory items in the Memory Vault UI). Both shipped this session, behind existing flags, default OFF. No new migrations — neither phase changes the schema.
+
+**Phase 5 — TOON serialization (`TOON_SERIALIZATION`)**:
+- **`lib/context/toon.ts`** (new, pure): `encodeToon(name, columns, rows)` emits the canonical header-once table (`name[N]{cols}:` + indented CSV rows, CSV-style quoting/escaping for commas/quotes/newlines/edge-whitespace). `isToonWorthwhile(baseline, candidate, ratio=0.1)` compares estimated prompt tokens and returns true only on a ≥10% win. `MIN_TOON_ROWS = 4`.
+- **`lib/ai/chat.ts`**: new private `maybeToonSourceList(...)` helper; `formatWebSearchBlock` and `formatFileKnowledgeBlock` now build the readable rendering as before, then — only when the flag is on AND rows ≥ 4 AND TOON beats the readable rendering by ≥10% — swap in the TOON form (preamble folded into the compared candidate so its cost counts). Flag-off and not-worthwhile are byte-identical to the legacy prompt. The token governor already sees the (possibly shrunk) block because the choice happens inside the block formatter.
+- **Honest ROI**: the source blocks are long free-text, so the structural win rarely clears 10% and TOON usually stays inert — exactly what `AI_CONTEXT_ENGINE.md` §8 predicted. The capability is correct, tested, and safe (the gate means it can never enlarge a block), and engages automatically if a future block is a high-cardinality short-field array. Deliberately NOT applied to the durable-memory block (its exact-evidence split matters more than a few percent). Neighbor retrieval + extractive compression stay deferred-with-trigger (§7), not built speculatively.
+- **Tests** `tests/context-engine-toon.test.ts` (7 cases): header/row format, number/boolean/nullish cells, quoting/escaping, empty array/columns, a real win on short multi-column rows vs JSON, no-win on free-text snippets, empty-baseline + custom-ratio gating.
+
+**Phase 3c — Memory Vault surfaces durable items + "forget"** (read gated by `MEMORY_EXTRACTION`):
+- **`lib/db/repositories/memory-items.ts`**: `listAllActiveForUser(userId, limit=200)` (all active items across every scope, importance/last-confirmed order) + `expire(userId, id)` (soft-delete: flip `status` to `expired`, user-scoped; returns whether an active row matched).
+- **`lib/db/repositories/memory-vault.ts`**: `getVault` now also fetches durable items **only when `MEMORY_EXTRACTION` is on** (off → no extra query, empty section, unchanged cost), resolves each item's scope to a display name (`Global (all chats)` / project name / `Unknown project`), and returns `durableMemories` + `durableMemoryEnabled` + `totals.durableMemoryCount`. New `forgetDurableMemory(userId, id)` delegates to `expire`.
+- **Types** `types/index.ts`: `MemoryVaultDurableItem` (lean client view, no embedding) + the three new response fields.
+- **API** `app/api/memory-vault/durable/[id]/route.ts` (new): `DELETE` forgets one item (404 when nothing active matched), same auth/cookie-refresh pattern as `conversations/[id]/memory`.
+- **Client** `hooks/useMemoryVault.ts` gains `forgetDurableMemory`; threaded through `lib/chat-context.tsx` (type + hook destructure + value + deps).
+- **UI** `components/chat/memory-vault.tsx`: new "Durable memory" section (kind badge, scope, content, confirmed date, "open source chat" link, per-item Forget with an `AlertDialog` confirm mirroring Clear-summary), plus an empty/off state that explains whether the feature is on. `Sparkles` icon added.
+
+**Verification**: `tsc --noEmit` clean; `eslint` clean on every touched file; full `next build` succeeds and registers `.next/server/app/api/memory-vault/durable/[id]/route.js`; full vitest suite **123 passed (24 files)** (was 116/23 — +7 TOON cases, nothing regressed). **Not** live-exercised: the Vault dialog is auth-gated (can't sign in here, and entering credentials is prohibited) and the durable section only populates with `MEMORY_EXTRACTION=1` + seeded `zen_memory_items`; there is no jsdom/testing-library setup, so the component isn't render-tested — its correctness rests on tsc + the successful build. The pure TOON logic (the only fragile new logic) is unit-tested.
+
+**Not changed**: no schema/migration changes; durable-memory block rendering unchanged (TOON intentionally not applied there); no new dependencies; all five flags still default OFF, so `main` stays deployable.
+
+---
+
 ## 2026-07-11 - Spectrum Identity Design Pass + Mobile Fix
 
 **Goal**: Explicit user request ("implement that, and make it a better design, easy to use on mobile phones and all the devices") using the `frontend-design` skill guidance, after the 2026-07-10 cleanup/modularization pass. Scope was kept to the highest-traffic surfaces rather than a full app-wide visual rewrite, given session time constraints — see "Not changed" below.
