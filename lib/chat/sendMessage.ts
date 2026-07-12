@@ -8,7 +8,7 @@ import {
   SessionSettings,
 } from '@/types'
 import { resolveModelConfig } from '@/lib/config'
-import { createId, createMessage } from '@/lib/utils/chat'
+import { createId, createMessage, nextMessageTimestamp } from '@/lib/utils/chat'
 
 const SEND_DEBUG_ENABLED = process.env.NODE_ENV !== 'production'
 
@@ -67,6 +67,7 @@ export function createAssistantPlaceholder(input: {
   mode: AIMode
   settings: SessionSettings
   parentUserMessageId?: string
+  precedingTimestamps?: Array<string | undefined>
   branchLabel?: string
 }) {
   return createMessage({
@@ -77,6 +78,9 @@ export function createAssistantPlaceholder(input: {
     model: resolveModelConfig(input.mode, input.settings.modelOverride).model,
     provider: 'openrouter',
     parentUserMessageId: input.parentUserMessageId,
+    createdAt: input.precedingTimestamps?.length
+      ? nextMessageTimestamp(...input.precedingTimestamps)
+      : undefined,
     branchLabel: input.branchLabel,
   })
 }

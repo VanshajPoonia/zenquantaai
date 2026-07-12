@@ -77,6 +77,34 @@ export function nowIso(): string {
   return new Date().toISOString()
 }
 
+export function nextMessageTimestamp(
+  ...precedingTimestamps: Array<string | undefined>
+): string {
+  const parsed = precedingTimestamps
+    .filter((value): value is string => Boolean(value))
+    .map((value) => new Date(value).getTime())
+    .filter((value) => Number.isFinite(value))
+
+  const latest = parsed.length > 0 ? Math.max(...parsed) : Date.now()
+
+  return new Date(latest + 1).toISOString()
+}
+
+export function compareMessagesChronologically(
+  a: { createdAt: string | Date; role: string },
+  b: { createdAt: string | Date; role: string }
+): number {
+  const timeDifference =
+    new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+
+  if (timeDifference !== 0) return timeDifference
+
+  if (a.role === 'user' && b.role === 'assistant') return -1
+  if (a.role === 'assistant' && b.role === 'user') return 1
+
+  return 0
+}
+
 export function getMessagePreview(content: string): string {
   const normalized = content.replace(/\s+/g, ' ').trim()
   return normalized.slice(0, 120)
