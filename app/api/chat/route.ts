@@ -3,7 +3,12 @@ import {
   appendAuthCookies,
   requireAuthenticatedUser,
 } from '@/lib/auth/session'
-import { createSessionSettings, getAllowedModelsForTier, resolveModelConfig } from '@/lib/config'
+import {
+  createSessionSettings,
+  getAllowedModelsForTier,
+  isModelOverrideOption,
+  resolveModelConfig,
+} from '@/lib/config'
 import {
   neonConversationRepository,
   neonCustomAssistantsRepository,
@@ -146,6 +151,25 @@ export async function POST(request: NextRequest) {
     )
   }
 
+  if (typeof body.responseModelOverride !== 'undefined') {
+    if (body.action !== 'regenerate') {
+      return NextResponse.json(
+        {
+          error:
+            'A response intelligence override is only supported when regenerating a response.',
+        },
+        { status: 400 }
+      )
+    }
+
+    if (!isModelOverrideOption(body.responseModelOverride)) {
+      return NextResponse.json(
+        { error: 'Invalid intelligence level.' },
+        { status: 400 }
+      )
+    }
+  }
+
   const customAssistant = body.customAssistantId
     ? await neonCustomAssistantsRepository.get(auth.user.id, body.customAssistantId)
     : null
@@ -231,6 +255,7 @@ export async function POST(request: NextRequest) {
     targetMode: body.targetMode,
     content: body.content,
     settings,
+    responseModelOverride: body.responseModelOverride,
     targetMessageId: body.targetMessageId,
     attachments: body.attachments,
     attachmentContext: body.attachmentContext,
@@ -312,7 +337,7 @@ export async function POST(request: NextRequest) {
       const billingMode = prepared.assistantMode
       const routeConfig = resolveModelConfig(
         billingMode,
-        payload.settings.modelOverride,
+        prepared.responseSettings.modelOverride,
         subscription.tier
       )
       const allowedModels = getAllowedModelsForTier(subscription.tier)
@@ -374,7 +399,7 @@ export async function POST(request: NextRequest) {
       persistedMessageSources = messageSources
       const promptText = buildPromptTextForUsage(
         prepared.generationConversation,
-        payload.settings,
+        prepared.responseSettings,
         billingMode,
         webSearchContext,
         fileKnowledgeContext,
@@ -394,13 +419,14 @@ export async function POST(request: NextRequest) {
         subscription,
         override,
         estimatedPromptTokens,
-        requestedMaxOutputTokens: payload.settings.maxTokens,
+        requestedMaxOutputTokens: prepared.responseSettings.maxTokens,
         walletType: routeConfig.walletType,
       })
 
       const reservationWalletType: 'core_tokens' | 'tier_tokens' =
         routeConfig.walletType === 'tier_tokens' ? 'tier_tokens' : 'core_tokens'
-      const reservedTokens = estimatedPromptTokens + payload.settings.maxTokens
+      const reservedTokens =
+        estimatedPromptTokens + prepared.responseSettings.maxTokens
 
       const reservedSubscription = await neonSubscriptionsRepository.reserveTextUsage({
         userId: auth.user.id,
@@ -509,7 +535,7 @@ export async function POST(request: NextRequest) {
 
       for await (const chunk of generateAssistantStream({
         conversation: prepared.generationConversation,
-        settings: payload.settings,
+        settings: prepared.responseSettings,
         mode: prepared.assistantMode,
         action: payload.action,
         tier: subscription.tier,
@@ -605,6 +631,7 @@ export async function POST(request: NextRequest) {
           crossChatContext,
           timeZone: payload.timeZone,
           sources: messageSources,
+          responseSettings: prepared.responseSettings,
         }
       )
 
