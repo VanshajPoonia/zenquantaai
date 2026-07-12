@@ -3,11 +3,44 @@ import { AssistantRecommendationResult } from '@/types'
 import { FAMILY_TO_MODE, MODE_TO_FAMILY } from '@/lib/config/assistants'
 import { getAssistantRecommendation } from '@/lib/router/assistantRecommendation'
 import {
+  getModelOverrideForUsageOptimization,
+  getUsageOptimizationFromModelOverride,
+  INTELLIGENCE_LEVEL_OPTIONS,
+  isModelOverrideOption,
+} from '@/lib/config/models'
+import {
   buildAssistantRecommendationPersonalizationSummary,
   personalizeAssistantRecommendation,
 } from '@/lib/router/personalization'
 
 describe('assistant routing and config helpers', () => {
+  it('maps every composer intelligence level to a real response profile', () => {
+    expect(INTELLIGENCE_LEVEL_OPTIONS.map((option) => option.id)).toEqual([
+      'fast',
+      'balanced',
+      'best_quality',
+      'lowest_usage',
+    ])
+
+    for (const option of INTELLIGENCE_LEVEL_OPTIONS) {
+      expect(getModelOverrideForUsageOptimization(option.id)).toBe(
+        option.modelOverride
+      )
+      expect(getUsageOptimizationFromModelOverride(option.modelOverride)).toBe(
+        option.id
+      )
+    }
+  })
+
+  it('rejects inherited Object.prototype keys as model override options', () => {
+    expect(isModelOverrideOption('auto')).toBe(true)
+    expect(isModelOverrideOption('claude')).toBe(true)
+    expect(isModelOverrideOption('constructor')).toBe(false)
+    expect(isModelOverrideOption('toString')).toBe(false)
+    expect(isModelOverrideOption('hasOwnProperty')).toBe(false)
+    expect(isModelOverrideOption('not-a-real-option')).toBe(false)
+  })
+
   it('keeps assistant family and mode mappings in sync', () => {
     expect(MODE_TO_FAMILY.general).toBe('nova')
     expect(MODE_TO_FAMILY.creative).toBe('velora')

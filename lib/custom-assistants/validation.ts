@@ -6,7 +6,7 @@ import {
   ResponseStyle,
   TextAIMode,
 } from '@/types'
-import { PROJECT_COLOR_OPTIONS } from '@/lib/config'
+import { isModelOverrideOption, PROJECT_COLOR_OPTIONS } from '@/lib/config'
 
 export const CUSTOM_ASSISTANT_TEXT_MODES: TextAIMode[] = [
   'general',
@@ -37,7 +37,7 @@ function isTextMode(value: unknown): value is TextAIMode {
 }
 
 function isModelOverride(value: unknown): value is ModelOverrideOption {
-  return CUSTOM_ASSISTANT_MODEL_OVERRIDES.includes(value as ModelOverrideOption)
+  return isModelOverrideOption(value)
 }
 
 function isColor(value: unknown): value is (typeof PROJECT_COLOR_OPTIONS)[number] {

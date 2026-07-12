@@ -55,6 +55,45 @@ export const RESPONSE_PROFILE_DESCRIPTIONS: Record<ModelOverrideOption, string> 
   qwen: 'Builder-focused output for implementation work and technical execution.',
 }
 
+const USAGE_OPTIMIZATION_TO_MODEL_OVERRIDE: Record<UsageOptimization, ModelOverrideOption> = {
+  balanced: 'auto',
+  fast: 'gemini',
+  best_quality: 'claude',
+  lowest_usage: 'deepseek',
+}
+
+export const INTELLIGENCE_LEVEL_OPTIONS: ReadonlyArray<{
+  id: UsageOptimization
+  label: string
+  hint: string
+  modelOverride: ModelOverrideOption
+}> = [
+  {
+    id: 'fast',
+    label: 'Fast',
+    hint: 'Quicker responses through an efficient model.',
+    modelOverride: USAGE_OPTIMIZATION_TO_MODEL_OVERRIDE.fast,
+  },
+  {
+    id: 'balanced',
+    label: 'Balanced',
+    hint: 'Uses the model tuned for the selected assistant and plan.',
+    modelOverride: USAGE_OPTIMIZATION_TO_MODEL_OVERRIDE.balanced,
+  },
+  {
+    id: 'best_quality',
+    label: 'Best quality',
+    hint: 'Uses the premium quality profile when your plan allows it.',
+    modelOverride: USAGE_OPTIMIZATION_TO_MODEL_OVERRIDE.best_quality,
+  },
+  {
+    id: 'lowest_usage',
+    label: 'Lowest usage',
+    hint: 'Conserves usage with an efficient analytical model.',
+    modelOverride: USAGE_OPTIMIZATION_TO_MODEL_OVERRIDE.lowest_usage,
+  },
+]
+
 export const MODEL_OVERRIDE_CONFIGS: Record<
   Exclude<ModelOverrideOption, 'auto'>,
   ModelOverrideConfig
@@ -222,11 +261,13 @@ export function createSessionSettings(
   }
 }
 
-const USAGE_OPTIMIZATION_TO_MODEL_OVERRIDE: Record<UsageOptimization, ModelOverrideOption> = {
-  balanced: 'auto',
-  fast: 'gemini',
-  best_quality: 'claude',
-  lowest_usage: 'deepseek',
+const MODEL_OVERRIDE_OPTION_KEYS = new Set<string>([
+  'auto',
+  ...Object.keys(MODEL_OVERRIDE_CONFIGS),
+])
+
+export function isModelOverrideOption(input: unknown): input is ModelOverrideOption {
+  return typeof input === 'string' && MODEL_OVERRIDE_OPTION_KEYS.has(input)
 }
 
 export function getModelOverrideForUsageOptimization(
