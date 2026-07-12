@@ -25,6 +25,10 @@ import {
   prepareConversationForChat,
   resolveSessionSettings,
 } from '@/lib/ai/chat'
+import { maybeUpdateRollingSummary } from '@/lib/ai/memory-summary'
+import { maybeExtractDurableMemories } from '@/lib/ai/memory-extraction'
+import { retrieveDurableMemoryContext } from '@/lib/ai/memory-retrieval'
+import { retrieveCrossChatContext } from '@/lib/ai/cross-chat-recall'
 import { calculateTextUsageEstimate } from '@/lib/billing/costs'
 import { enforceTextUsage, getEffectiveSubscription } from '@/lib/billing/enforce'
 import { recordTextUsageEvent } from '@/lib/billing/log-usage'
@@ -342,6 +346,26 @@ export async function POST(request: NextRequest) {
             fileIds: attachmentFileIds,
           })
         : undefined
+      // Context Engine Phase 3 read path: pull durable cross-chat memory for
+      // this turn. No-ops (returns undefined) unless MEMORY_EXTRACTION is on and
+      // the conversation has memory enabled; never throws.
+      const durableMemoryContext = payload.settings.memory
+        ? await retrieveDurableMemoryContext({
+            userId: auth.user.id,
+            query: prepared.userMessage.content,
+            projectId: prepared.conversation.projectId,
+          })
+        : undefined
+      // Context Engine Phase 4 read path: recall the user's other conversations
+      // relevant to this turn. No-ops (undefined) unless CROSS_CHAT_RECALL is on,
+      // embeddings are configured, and this conversation has memory enabled.
+      const crossChatContext = payload.settings.memory
+        ? await retrieveCrossChatContext({
+            userId: auth.user.id,
+            query: prepared.userMessage.content,
+            currentConversationId: prepared.conversation.id,
+          })
+        : undefined
       const messageSources = [
         ...(webSearchContext?.sources ?? []),
         ...(fileKnowledgeContext?.sources ?? []),
@@ -353,7 +377,9 @@ export async function POST(request: NextRequest) {
         billingMode,
         webSearchContext,
         fileKnowledgeContext,
-        customAssistantContext
+        customAssistantContext,
+        durableMemoryContext,
+        crossChatContext
       )
 
       const estimatedPromptTokens = estimatePromptTokens(promptText)
@@ -488,6 +514,8 @@ export async function POST(request: NextRequest) {
         webSearchContext,
         fileKnowledgeContext,
         customAssistantContext,
+        durableMemoryContext,
+        crossChatContext,
         signal: request.signal,
       })) {
         accumulated += chunk
@@ -570,6 +598,8 @@ export async function POST(request: NextRequest) {
           webSearchContext,
           fileKnowledgeContext,
           customAssistantContext,
+          durableMemoryContext,
+          crossChatContext,
           sources: messageSources,
         }
       )
@@ -629,6 +659,21 @@ export async function POST(request: NextRequest) {
         action: payload.action,
         conversationId: savedConversation.id,
         messageId: savedConversation.messages.at(-1)?.id,
+      })
+
+      // Context Engine Phases 1 & 3: refresh the rolling summary and run the
+      // durable-memory write gate off the critical path — the response has
+      // already fully streamed. Both never throw and no-op unless their flag and
+      // the conversation's memory setting are enabled.
+      await maybeUpdateRollingSummary({
+        userId: auth.user.id,
+        conversation: savedConversation,
+        settings: payload.settings,
+      })
+      await maybeExtractDurableMemories({
+        userId: auth.user.id,
+        conversation: savedConversation,
+        settings: payload.settings,
       })
     } catch (error) {
       if (textUsageReservation) {
