@@ -314,8 +314,8 @@ export function AskFilesPanel() {
             Ask Files
           </DialogTitle>
           <DialogDescription>
-            Ask questions against indexed text and code-like uploads using the
-            existing private file knowledge system.
+            Ask a question and get an answer drawn from your uploaded text and
+            code files.
           </DialogDescription>
         </DialogHeader>
 

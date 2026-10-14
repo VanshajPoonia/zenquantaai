@@ -1,10 +1,10 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { useRouter } from 'next/navigation'
 import {
   AlertCircle,
   CheckCircle2,
+  Database,
   FileText,
   Filter,
   FolderInput,
@@ -15,6 +15,7 @@ import {
   Upload,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { useChatContext } from '@/lib/chat-context'
 import { FileIntelligence, FileIntelligenceMutationResponse, Project } from '@/types'
 import {
   AlertDialog,
@@ -118,7 +119,7 @@ async function apiFetch<T>(url: string, options?: RequestInit): Promise<T> {
 }
 
 export function KnowledgeLibraryClient({ projects }: { projects: Project[] }) {
-  const router = useRouter()
+  const { openWorkspaceTool } = useChatContext()
   const [files, setFiles] = useState<FileIntelligence[]>([])
   const [embeddingsAvailable, setEmbeddingsAvailable] = useState(true)
   const [isLoading, setIsLoading] = useState(false)
@@ -239,11 +240,12 @@ export function KnowledgeLibraryClient({ projects }: { projects: Project[] }) {
     }
   }, [assignTarget, assignProjectId])
 
+  // Ask Files opens over this page, so the list stays where it was.
   const handleAsk = useCallback(
     (file: FileIntelligence) => {
-      router.push(`/?openAskFiles=${encodeURIComponent(file.id)}`)
+      openWorkspaceTool({ tool: 'ask-files', fileId: file.id, projectId: file.projectId })
     },
-    [router]
+    [openWorkspaceTool]
   )
 
   return (
@@ -294,6 +296,20 @@ export function KnowledgeLibraryClient({ projects }: { projects: Project[] }) {
               <RefreshCcw className="mr-2 size-4" />
             )}
             Refresh
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            className="h-10 rounded-xl"
+            onClick={() =>
+              openWorkspaceTool({
+                tool: 'ask-files',
+                projectId: projectFilter === PROJECT_ALL ? null : projectFilter,
+              })
+            }
+          >
+            <Database className="mr-2 size-4" />
+            Ask your files
           </Button>
         </div>
 
