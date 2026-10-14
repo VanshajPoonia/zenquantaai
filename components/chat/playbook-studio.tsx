@@ -115,6 +115,22 @@ function variablesFromSteps(
   )
 }
 
+function blankDraft(projectId: string | null): PlaybookDraft {
+  return {
+    title: '',
+    description: '',
+    projectId,
+    metadata: {
+      category: 'custom',
+      expectedOutputType: 'document',
+      suggestedAssistant: 'nova',
+      visibility: 'private',
+    },
+    variables: [],
+    steps: [createBlankStep(1)],
+  }
+}
+
 function workflowToDraft(workflow: PromptWorkflow): PlaybookDraft {
   return {
     id: workflow.id,
@@ -267,8 +283,22 @@ export function PlaybookStudio() {
     if (workspaceToolRequest.projectId) {
       setProjectFilter(workspaceToolRequest.projectId)
     }
+    // The composer's prompt library sends New and Edit here, so playbooks
+    // have one editor.
+    const requestedWorkflow = workspaceToolRequest.workflowId
+      ? promptWorkflows.find((workflow) => workflow.id === workspaceToolRequest.workflowId)
+      : null
+    if (requestedWorkflow) {
+      setProjectFilter(PROJECT_FILTER_ALL)
+      setSelectedWorkflowId(requestedWorkflow.id)
+      if (workspaceToolRequest.playbookAction === 'edit') {
+        setDraft(workflowToDraft(requestedWorkflow))
+      }
+    } else if (workspaceToolRequest.playbookAction === 'create') {
+      setDraft(blankDraft(selectedProjectId === 'all' ? null : selectedProjectId))
+    }
     clearWorkspaceToolRequest(workspaceToolRequest.requestId)
-  }, [clearWorkspaceToolRequest, workspaceToolRequest])
+  }, [clearWorkspaceToolRequest, promptWorkflows, selectedProjectId, workspaceToolRequest])
 
   useEffect(() => {
     if (!open) return
@@ -371,19 +401,7 @@ export function PlaybookStudio() {
   }, [listPromptWorkflowRuns, open, selectedWorkflow])
 
   const startNewDraft = () => {
-    setDraft({
-      title: '',
-      description: '',
-      projectId: projectFilter === PROJECT_FILTER_ALL ? null : projectFilter,
-      metadata: {
-        category: 'custom',
-        expectedOutputType: 'document',
-        suggestedAssistant: 'nova',
-        visibility: 'private',
-      },
-      variables: [],
-      steps: [createBlankStep(1)],
-    })
+    setDraft(blankDraft(projectFilter === PROJECT_FILTER_ALL ? null : projectFilter))
   }
 
   const updateDraftStep = (

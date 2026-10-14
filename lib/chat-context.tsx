@@ -194,6 +194,8 @@ type WorkspaceToolRequestInput =
       imageId?: string | null
       fileId?: string | null
       projectId?: string | null
+      workflowId?: string | null
+      playbookAction?: 'create' | 'edit' | null
     }
 
 interface WorkspaceToolRequest {
@@ -203,6 +205,9 @@ interface WorkspaceToolRequest {
   imageId?: string | null
   fileId?: string | null
   projectId?: string | null
+  // Playbooks only: select a playbook, and optionally open the editor.
+  workflowId?: string | null
+  playbookAction?: 'create' | 'edit' | null
 }
 
 interface ComposerDraftRequest {
@@ -1294,6 +1299,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       imageId: payload.imageId ?? null,
       fileId: payload.fileId ?? null,
       projectId: payload.projectId ?? null,
+      workflowId: payload.workflowId ?? null,
+      playbookAction: payload.playbookAction ?? null,
     })
   }, [])
 

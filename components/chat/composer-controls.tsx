@@ -2,7 +2,6 @@
 
 import { ReactNode, useRef, useTransition } from 'react'
 import {
-  BookOpen,
   BookText,
   Bot,
   Check,
@@ -289,11 +288,7 @@ export function ComposerToolsMenu({
           }}
         >
           <BookText className="size-4" />
-          Prompt library
-        </DropdownMenuItem>
-        <DropdownMenuItem onSelect={() => openWorkspaceTool('playbooks')}>
-          <BookOpen className="size-4" />
-          Playbooks
+          Prompts & playbooks
         </DropdownMenuItem>
         <DropdownMenuItem
           disabled={!hasDraftText || textOnlyOptionsDisabled}

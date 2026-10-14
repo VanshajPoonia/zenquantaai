@@ -1,9 +1,7 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import {
-  ArrowDown,
-  ArrowUp,
   BookText,
   BookmarkPlus,
   Check,
@@ -20,16 +18,8 @@ import { ASSISTANT_FAMILY_COPY } from '@/lib/config/assistants'
 import { useChatContext } from '@/lib/chat-context'
 import { cn } from '@/lib/utils'
 import {
-  extractWorkflowVariableNames,
-  mergeWorkflowVariables,
-  WORKFLOW_FAMILY_TO_MODE,
-} from '@/lib/utils/prompt-workflows'
-import {
   AIMode,
-  AssistantFamily,
   PromptWorkflow,
-  PromptWorkflowStepInput,
-  PromptWorkflowVariable,
   TemplateShareCreated,
   TemplateShareInfo,
   TemplateShareType,
@@ -59,24 +49,12 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Textarea } from '@/components/ui/textarea'
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
-
-const ASSISTANT_FAMILIES = Object.keys(WORKFLOW_FAMILY_TO_MODE) as AssistantFamily[]
-
-interface WorkflowDraft {
-  id?: string
-  title: string
-  description: string
-  projectId: string | null
-  variables: PromptWorkflowVariable[]
-  steps: PromptWorkflowStepInput[]
-}
 
 interface PromptLibraryButtonProps {
   value: string
@@ -85,59 +63,6 @@ interface PromptLibraryButtonProps {
   onUsePrompt: (content: string) => void
   // The composer opens this from its + menu and only needs an anchor.
   hideTrigger?: boolean
-}
-
-function createBlankStep(order: number): PromptWorkflowStepInput {
-  return {
-    assistantFamily: 'nova',
-    mode: 'general',
-    order,
-    title: '',
-    template: '',
-    variableNames: [],
-  }
-}
-
-function workflowToDraft(
-  workflow: PromptWorkflow | null,
-  selectedProjectId: 'all' | string
-): WorkflowDraft {
-  if (!workflow) {
-    return {
-      title: '',
-      description: '',
-      projectId: selectedProjectId === 'all' ? null : selectedProjectId,
-      variables: [],
-      steps: [createBlankStep(1)],
-    }
-  }
-
-  return {
-    id: workflow.id,
-    title: workflow.title,
-    description: workflow.description ?? '',
-    projectId: workflow.projectId ?? null,
-    variables: workflow.variables,
-    steps: workflow.steps.map((step) => ({
-      id: step.id,
-      title: step.title ?? '',
-      order: step.order,
-      assistantFamily: step.assistantFamily,
-      mode: step.mode,
-      template: step.template,
-      variableNames: step.variableNames,
-    })),
-  }
-}
-
-function workflowVariablesFromSteps(
-  steps: PromptWorkflowStepInput[],
-  existing: PromptWorkflowVariable[]
-): PromptWorkflowVariable[] {
-  return mergeWorkflowVariables(
-    existing,
-    steps.flatMap((step) => extractWorkflowVariableNames(step.template))
-  )
 }
 
 export function PromptLibraryButton({
@@ -152,16 +77,14 @@ export function PromptLibraryButton({
     savePrompt,
     deletePrompt,
     promptWorkflows,
-    savePromptWorkflow,
     deletePromptWorkflow,
     runPromptWorkflow,
-    selectedProjectId,
     workspaceToolRequest,
     clearWorkspaceToolRequest,
+    openWorkspaceTool,
   } = useChatContext()
   const [promptTitle, setPromptTitle] = useState('')
   const [isPopoverOpen, setIsPopoverOpen] = useState(false)
-  const [workflowDraft, setWorkflowDraft] = useState<WorkflowDraft | null>(null)
   const [runWorkflow, setRunWorkflow] = useState<PromptWorkflow | null>(null)
   const [runValues, setRunValues] = useState<Record<string, string>>({})
   const [isRunningWorkflow, setIsRunningWorkflow] = useState(false)
@@ -185,97 +108,12 @@ export function PromptLibraryButton({
     (prompt) => prompt.mode === 'any' || prompt.mode === currentMode
   )
 
-  const draftVariables = useMemo(
-    () =>
-      workflowDraft
-        ? workflowVariablesFromSteps(workflowDraft.steps, workflowDraft.variables)
-        : [],
-    [workflowDraft]
-  )
-
   useEffect(() => {
     if (workspaceToolRequest?.tool !== 'prompt-library') return
 
     setIsPopoverOpen(true)
     clearWorkspaceToolRequest(workspaceToolRequest.requestId)
   }, [clearWorkspaceToolRequest, workspaceToolRequest])
-
-  const openWorkflowEditor = (workflow: PromptWorkflow | null) => {
-    setWorkflowDraft(workflowToDraft(workflow, selectedProjectId))
-  }
-
-  const updateDraftStep = (
-    index: number,
-    patch: Partial<PromptWorkflowStepInput>
-  ) => {
-    setWorkflowDraft((previous) => {
-      if (!previous) return previous
-
-      const steps = previous.steps.map((step, stepIndex) => {
-        if (stepIndex !== index) return step
-        const assistantFamily = patch.assistantFamily ?? step.assistantFamily
-
-        return {
-          ...step,
-          ...patch,
-          assistantFamily,
-          mode: WORKFLOW_FAMILY_TO_MODE[assistantFamily],
-        }
-      })
-
-      return {
-        ...previous,
-        steps,
-      }
-    })
-  }
-
-  const moveDraftStep = (index: number, direction: -1 | 1) => {
-    setWorkflowDraft((previous) => {
-      if (!previous) return previous
-      const nextIndex = index + direction
-      if (nextIndex < 0 || nextIndex >= previous.steps.length) return previous
-
-      const steps = [...previous.steps]
-      const [step] = steps.splice(index, 1)
-      if (!step) return previous
-      steps.splice(nextIndex, 0, step)
-
-      return {
-        ...previous,
-        steps: steps.map((item, itemIndex) => ({
-          ...item,
-          order: itemIndex + 1,
-        })),
-      }
-    })
-  }
-
-  const saveWorkflowDraft = async () => {
-    if (!workflowDraft) return
-    const steps = workflowDraft.steps
-      .map((step, index) => ({
-        ...step,
-        order: index + 1,
-        title: step.title?.trim() || null,
-        template: step.template.trim(),
-        variableNames: extractWorkflowVariableNames(step.template),
-      }))
-      .filter((step) => step.template)
-
-    const workflow = await savePromptWorkflow({
-      id: workflowDraft.id,
-      title: workflowDraft.title,
-      description: workflowDraft.description,
-      projectId: workflowDraft.projectId,
-      variables: workflowVariablesFromSteps(steps, workflowDraft.variables),
-      steps,
-    })
-
-    if (workflow) {
-      setWorkflowDraft(null)
-    }
-  }
 
   const prepareWorkflowRun = (workflow: PromptWorkflow) => {
     const values = Object.fromEntries(
@@ -412,7 +250,7 @@ export function PromptLibraryButton({
                   </Button>
                 </PopoverTrigger>
               </TooltipTrigger>
-              <TooltipContent>Prompt Library</TooltipContent>
+              <TooltipContent>Prompts & playbooks</TooltipContent>
             </Tooltip>
           </TooltipProvider>
         )}
@@ -425,15 +263,15 @@ export function PromptLibraryButton({
             <div className="space-y-3">
               <div>
                 <h3 className="text-sm font-semibold text-foreground">
-                  Prompt Library
+                  Prompts & playbooks
                 </h3>
                 <p className="text-xs text-muted-foreground">
-                  Save prompts or open reusable AI Playbooks.
+                  Reuse a saved prompt or run a playbook.
                 </p>
               </div>
               <TabsList className="grid w-full grid-cols-2">
                 <TabsTrigger value="prompts">Prompts</TabsTrigger>
-                <TabsTrigger value="workflows">AI Playbooks</TabsTrigger>
+                <TabsTrigger value="workflows">Playbooks</TabsTrigger>
               </TabsList>
             </div>
 
@@ -530,7 +368,10 @@ export function PromptLibraryButton({
                 variant="outline"
                 size="sm"
                 className="w-full rounded-xl"
-                onClick={() => openWorkflowEditor(null)}
+                onClick={() => {
+                  setIsPopoverOpen(false)
+                  openWorkspaceTool({ tool: 'playbooks', playbookAction: 'create' })
+                }}
               >
                 <Plus className="mr-2 size-4" />
                 New AI Playbook
@@ -563,7 +404,15 @@ export function PromptLibraryButton({
                             variant="ghost"
                             size="icon-sm"
                             className="size-7"
-                            onClick={() => openWorkflowEditor(workflow)}
+                            aria-label={`Edit ${workflow.title}`}
+                            onClick={() => {
+                              setIsPopoverOpen(false)
+                              openWorkspaceTool({
+                                tool: 'playbooks',
+                                workflowId: workflow.id,
+                                playbookAction: 'edit',
+                              })
+                            }}
                           >
                             <Pencil className="size-3.5" />
                           </Button>
@@ -608,215 +457,6 @@ export function PromptLibraryButton({
           </Tabs>
         </PopoverContent>
       </Popover>
-
-      <Dialog open={Boolean(workflowDraft)} onOpenChange={(open) => !open && setWorkflowDraft(null)}>
-        <DialogContent className="max-h-[90vh] w-[calc(100vw-1rem)] max-w-3xl overflow-y-auto rounded-2xl border-border/70 bg-background/95">
-          <DialogHeader>
-            <DialogTitle>
-              {workflowDraft?.id ? 'Edit AI Playbook' : 'Create AI Playbook'}
-            </DialogTitle>
-            <DialogDescription>
-              Build a short ordered sequence. Use variables like {'{{topic}}'} in
-              step prompts.
-            </DialogDescription>
-          </DialogHeader>
-          {workflowDraft ? (
-            <div className="space-y-4">
-              <div className="grid gap-3 sm:grid-cols-[1fr_1.2fr]">
-                <Input
-                  value={workflowDraft.title}
-                  onChange={(event) =>
-                    setWorkflowDraft((previous) =>
-                      previous ? { ...previous, title: event.target.value } : previous
-                    )
-                  }
-                  placeholder="AI Playbook title"
-                />
-                <Input
-                  value={workflowDraft.description}
-                  onChange={(event) =>
-                    setWorkflowDraft((previous) =>
-                      previous
-                        ? { ...previous, description: event.target.value }
-                        : previous
-                    )
-                  }
-                  placeholder="Short description"
-                />
-              </div>
-
-              <div className="space-y-3">
-                {workflowDraft.steps.map((step, index) => {
-                  const variableNames = extractWorkflowVariableNames(step.template)
-                  return (
-                    <div
-                      key={`${step.id ?? 'new'}-${index}`}
-                      className="space-y-3 rounded-2xl border border-border/60 bg-card/50 p-3"
-                    >
-                      <div className="flex items-center justify-between gap-3">
-                        <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                          Step {index + 1}
-                        </p>
-                        <div className="flex items-center gap-1">
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon-sm"
-                            className="size-7"
-                            disabled={index === 0}
-                            onClick={() => moveDraftStep(index, -1)}
-                          >
-                            <ArrowUp className="size-3.5" />
-                          </Button>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon-sm"
-                            className="size-7"
-                            disabled={index === workflowDraft.steps.length - 1}
-                            onClick={() => moveDraftStep(index, 1)}
-                          >
-                            <ArrowDown className="size-3.5" />
-                          </Button>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon-sm"
-                            className="size-7"
-                            disabled={workflowDraft.steps.length === 1}
-                            onClick={() =>
-                              setWorkflowDraft((previous) =>
-                                previous
-                                  ? {
-                                      ...previous,
-                                      steps: previous.steps.filter(
-                                        (_, stepIndex) => stepIndex !== index
-                                      ),
-                                    }
-                                  : previous
-                              )
-                            }
-                          >
-                            <Trash2 className="size-3.5" />
-                          </Button>
-                        </div>
-                      </div>
-                      <div className="grid gap-3 sm:grid-cols-[180px_1fr]">
-                        <Select
-                          value={step.assistantFamily}
-                          onValueChange={(family) =>
-                            updateDraftStep(index, {
-                              assistantFamily: family as AssistantFamily,
-                            })
-                          }
-                        >
-                          <SelectTrigger>
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {ASSISTANT_FAMILIES.map((family) => (
-                              <SelectItem key={family} value={family}>
-                                {ASSISTANT_FAMILY_COPY[family].shortName}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <Input
-                          value={step.title ?? ''}
-                          onChange={(event) =>
-                            updateDraftStep(index, { title: event.target.value })
-                          }
-                          placeholder="Optional step title"
-                        />
-                      </div>
-                      <Textarea
-                        value={step.template}
-                        onChange={(event) =>
-                          updateDraftStep(index, { template: event.target.value })
-                        }
-                        placeholder="Write this step prompt. Example: Research {{topic}} and summarize the most important findings."
-                        className="min-h-28"
-                      />
-                      {variableNames.length > 0 ? (
-                        <div className="flex flex-wrap gap-1.5">
-                          {variableNames.map((name) => (
-                            <span
-                              key={name}
-                              className="rounded-full border border-border/60 px-2 py-0.5 text-xs text-muted-foreground"
-                            >
-                              {name}
-                            </span>
-                          ))}
-                        </div>
-                      ) : null}
-                    </div>
-                  )
-                })}
-              </div>
-
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="w-full rounded-xl"
-                onClick={() =>
-                  setWorkflowDraft((previous) =>
-                    previous
-                      ? {
-                          ...previous,
-                          steps: [
-                            ...previous.steps,
-                            createBlankStep(previous.steps.length + 1),
-                          ],
-                        }
-                      : previous
-                  )
-                }
-              >
-                <Plus className="mr-2 size-4" />
-                Add step
-              </Button>
-
-              {draftVariables.length > 0 ? (
-                <div className="rounded-2xl border border-border/60 bg-card/40 p-3">
-                  <p className="text-xs font-medium text-muted-foreground">
-                    Variables collected from steps
-                  </p>
-                  <div className="mt-2 flex flex-wrap gap-1.5">
-                    {draftVariables.map((variable) => (
-                      <span
-                        key={variable.name}
-                        className="rounded-full border border-border/60 px-2 py-0.5 text-xs text-muted-foreground"
-                      >
-                        {variable.name}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              ) : null}
-            </div>
-          ) : null}
-          <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => setWorkflowDraft(null)}
-            >
-              Cancel
-            </Button>
-            <Button
-              type="button"
-              disabled={
-                !workflowDraft?.title.trim() ||
-                !workflowDraft.steps.some((step) => step.template.trim())
-              }
-              onClick={() => void saveWorkflowDraft()}
-            >
-              Save AI Playbook
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
       {/* Share Dialog */}
       <Dialog
