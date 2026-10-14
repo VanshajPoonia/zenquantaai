@@ -84,35 +84,35 @@ export function FeedbackButtons({
   }
 
   return (
-    <div className={cn('flex min-w-0 flex-wrap items-center gap-1.5', className)}>
+    <div className={cn('flex min-w-0 flex-wrap items-center gap-0.5', className)}>
       <Button
         type="button"
         variant={selectedRating === 'up' ? 'secondary' : 'ghost'}
         size="icon-sm"
-        className="size-7"
+        className="size-8 text-muted-foreground hover:text-foreground"
         disabled={isSubmitting}
         onClick={() => void submitFeedback('up')}
         aria-label="Rate helpful"
       >
         {isSubmitting && selectedRating === 'up' ? (
-          <Loader2 className="size-3.5 animate-spin" />
+          <Loader2 className="size-4 animate-spin" />
         ) : (
-          <ThumbsUp className="size-3.5" />
+          <ThumbsUp className="size-4" />
         )}
       </Button>
       <Button
         type="button"
         variant={selectedRating === 'down' ? 'secondary' : 'ghost'}
         size="icon-sm"
-        className="size-7"
+        className="size-8 text-muted-foreground hover:text-foreground"
         disabled={isSubmitting}
         onClick={handleDownvote}
         aria-label="Rate not helpful"
       >
         {isSubmitting && showReason ? (
-          <Loader2 className="size-3.5 animate-spin" />
+          <Loader2 className="size-4 animate-spin" />
         ) : (
-          <ThumbsDown className="size-3.5" />
+          <ThumbsDown className="size-4" />
         )}
       </Button>
       {allowNeutral ? (

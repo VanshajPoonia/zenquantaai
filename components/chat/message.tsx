@@ -7,6 +7,7 @@ import {
   ExternalLink,
   FileText,
   ImageIcon,
+  MoreHorizontal,
   PencilLine,
   Play,
   SendHorizontal,
@@ -55,8 +56,6 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
   DropdownMenuSub,
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
@@ -707,6 +706,35 @@ function getFirstImageAttachment(message: Message): Attachment | null {
   )
 }
 
+function ActionIconButton({
+  label,
+  onClick,
+  children,
+}: {
+  label: string
+  onClick: () => void
+  children: React.ReactNode
+}) {
+  return (
+    <TooltipProvider delayDuration={300}>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-label={label}
+            className="size-8 text-muted-foreground hover:text-foreground"
+            onClick={onClick}
+          >
+            {children}
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent>{label}</TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  )
+}
+
 export function ChatMessage({
   message,
   conversationId,
@@ -847,6 +875,12 @@ export function ChatMessage({
     message.role === 'assistant' &&
     effectiveStatus === 'complete' &&
     Boolean(message.content.trim())
+  const canSaveArtifact =
+    Boolean(onSaveArtifact) &&
+    effectiveStatus === 'complete' &&
+    Boolean(message.content.trim())
+  const hasMoreActions =
+    canSaveArtifact || canRunQualityAction || canHandoff || Boolean(firstImageAttachment)
   const qualityGroups = useMemo(
     () => getQualityActionGroupsForMessage(message),
     [message]
@@ -908,23 +942,15 @@ export function ChatMessage({
             <div className="mt-2 flex flex-wrap items-center justify-end gap-2 text-xs text-muted-foreground">
               <span>{formatMessageTime(message.createdAt)}</span>
               {isLastUser && !isEditing && (
-                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <Button
-                    variant="ghost"
-                    size="icon-sm"
-                    className="size-7 text-muted-foreground hover:text-foreground"
-                    onClick={() => setIsEditing(true)}
-                  >
-                    <PencilLine className="size-3.5" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon-sm"
-                    className="size-7 text-muted-foreground hover:text-foreground"
-                    onClick={onRetry}
-                  >
-                    <RefreshIcon className="size-3.5" />
-                  </Button>
+                <div className="flex items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100 [@media(hover:none)]:opacity-100">
+                  <ActionIconButton label="Edit message" onClick={() => setIsEditing(true)}>
+                    <PencilLine className="size-4" />
+                  </ActionIconButton>
+                  {onRetry ? (
+                    <ActionIconButton label="Send again" onClick={onRetry}>
+                      <RefreshIcon className="size-4" />
+                    </ActionIconButton>
+                  ) : null}
                 </div>
               )}
             </div>
@@ -1007,345 +1033,288 @@ export function ChatMessage({
               ) : null}
             </div>
 
-            <div
-              className={cn(
-                'flex flex-wrap items-center gap-1 mt-2 transition-opacity',
-                isLastAssistant || effectiveStatus === 'error'
-                  ? 'opacity-100'
-                  : 'opacity-0 group-hover:opacity-100'
-              )}
-            >
-              <TooltipProvider delayDuration={300}>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="icon-sm"
-                      className="size-7"
-                      onClick={handleCopy}
-                    >
-                      {copied ? (
-                        <CheckIcon className="size-3.5 text-code" />
-                      ) : (
-                        <CopyIcon className="size-3.5" />
-                      )}
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>{copied ? 'Copied!' : 'Copy'}</TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
+            {effectiveStatus !== 'streaming' ? (
+              <div
+                className={cn(
+                  'mt-1.5 flex flex-wrap items-center gap-0.5 transition-opacity',
+                  isLastAssistant || effectiveStatus === 'error'
+                    ? 'opacity-100'
+                    : 'opacity-0 group-hover:opacity-100 focus-within:opacity-100 [@media(hover:none)]:opacity-100'
+                )}
+              >
+                {effectiveStatus === 'error' && onRetry ? (
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    className="mr-1 h-8 gap-1.5 rounded-full px-3 text-xs"
+                    onClick={onRetry}
+                  >
+                    <RefreshIcon className="size-3.5" />
+                    Retry
+                  </Button>
+                ) : null}
 
-              {previewDocument ? (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-7 gap-1 rounded-full px-2.5 text-xs"
-                  onClick={() => setIsPreviewOpen(true)}
-                >
-                  <Play className="size-3.5" />
-                  Preview app
-                </Button>
-              ) : null}
+                {message.content.trim() ? (
+                  <ActionIconButton
+                    label={copied ? 'Copied' : 'Copy'}
+                    onClick={() => void handleCopy()}
+                  >
+                    {copied ? (
+                      <CheckIcon className="size-4 text-code" />
+                    ) : (
+                      <CopyIcon className="size-4" />
+                    )}
+                  </ActionIconButton>
+                ) : null}
 
-              {onSaveArtifact && message.content.trim() ? (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-7 gap-1 rounded-full px-2.5 text-xs"
-                  disabled={isSavingArtifact || effectiveStatus === 'streaming'}
-                  onClick={() => void handleSaveArtifact()}
-                >
-                  {isSavingArtifact ? (
-                    <span className="size-3.5 animate-spin rounded-full border border-current border-t-transparent" />
+                {canSendFeedback ? (
+                  <FeedbackButtons
+                    entityType="message"
+                    entityId={message.id}
+                    metadata={{
+                      assistantFamily: message.assistantFamily,
+                      mode: message.mode,
+                      model: message.model,
+                      conversationId,
+                      sourceCount: message.sources?.length ?? 0,
+                      customAssistantId: message.customAssistantId,
+                    }}
+                  />
+                ) : null}
+
+                {firstImageAttachment ? (
+                  <ActionIconButton
+                    label="Download image"
+                    onClick={() => void handleDownloadImage(firstImageAttachment)}
+                  >
+                    <Download className="size-4" />
+                  </ActionIconButton>
+                ) : null}
+
+                {isLastAssistant && onRegenerate && effectiveStatus !== 'error' ? (
+                  message.mode === 'image' ? (
+                    <ActionIconButton label="Regenerate" onClick={() => onRegenerate()}>
+                      <RefreshIcon className="size-4" />
+                    </ActionIconButton>
                   ) : (
-                    <FileText className="size-3.5" />
-                  )}
-                  Save artifact
-                </Button>
-              ) : null}
-
-              {canRunQualityAction ? (
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-7 gap-1 rounded-full px-2.5 text-xs"
-                    >
-                      <Sparkles className="size-3.5" />
-                      Quality
-                      <ChevronDown className="size-3" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="start" className="w-72">
-                    {onSaveArtifact ? (
-                      <>
-                        <DropdownMenuItem
-                          className="gap-2"
-                          disabled={isSavingArtifact}
-                          onClick={() => void handleSaveArtifact()}
-                        >
-                          <FileText className="size-3.5" />
-                          Save as Artifact
+                    <DropdownMenu>
+                      <TooltipProvider delayDuration={300}>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <DropdownMenuTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="icon-sm"
+                                aria-label="Regenerate"
+                                className="size-8 text-muted-foreground hover:text-foreground"
+                              >
+                                <RefreshIcon className="size-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                          </TooltipTrigger>
+                          <TooltipContent>Regenerate</TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                      <DropdownMenuContent align="start" className="w-64">
+                        <DropdownMenuItem onSelect={() => onRegenerate()}>
+                          <RefreshIcon className="size-4" />
+                          Regenerate
                         </DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                      </>
-                    ) : null}
-                    {qualityGroups.map((group) => (
-                      <DropdownMenuSub key={group.id}>
-                        <DropdownMenuSubTrigger>
-                          {group.family ? (
-                            <span
-                              className={cn(
-                                'inline-flex',
-                                getModeAccentClass(
-                                  resolveQualityActionMode(group.actions[0], message),
-                                  'text'
-                                )
-                              )}
-                            >
-                              <ModeIcon
-                                mode={resolveQualityActionMode(group.actions[0], message)}
-                                size="sm"
-                              />
-                            </span>
-                          ) : (
-                            <Sparkles className="size-3.5" />
-                          )}
-                          {group.label}
-                        </DropdownMenuSubTrigger>
-                        <DropdownMenuSubContent className="w-72">
-                          <DropdownMenuLabel className="text-xs text-muted-foreground">
-                            {group.label} actions
-                          </DropdownMenuLabel>
-                          {group.actions.map((action) => {
-                            const targetMode = resolveQualityActionMode(action, message)
-
-                            return (
+                        <DropdownMenuSub>
+                          <DropdownMenuSubTrigger>
+                            <Sparkles className="size-4" />
+                            Use different intelligence
+                          </DropdownMenuSubTrigger>
+                          <DropdownMenuSubContent className="w-64">
+                            {INTELLIGENCE_LEVEL_OPTIONS.map((option) => (
                               <DropdownMenuItem
-                                key={action.id}
+                                key={option.id}
+                                className="items-start py-2"
+                                onSelect={() => onRegenerate(option.id)}
+                              >
+                                <span className="min-w-0">
+                                  <span className="block text-sm font-medium">
+                                    {option.label}
+                                  </span>
+                                  <span className="block text-xs leading-5 text-muted-foreground">
+                                    {option.hint}
+                                  </span>
+                                </span>
+                              </DropdownMenuItem>
+                            ))}
+                          </DropdownMenuSubContent>
+                        </DropdownMenuSub>
+                        {onAskAnotherMode ? (
+                          <DropdownMenuSub>
+                            <DropdownMenuSubTrigger>
+                              <ModeIcon mode={message.mode} size="sm" />
+                              Ask another assistant
+                            </DropdownMenuSubTrigger>
+                            <DropdownMenuSubContent className="w-48">
+                              {MODE_ORDER.filter((mode) => mode !== message.mode).map((mode) => (
+                                <DropdownMenuItem
+                                  key={mode}
+                                  onSelect={() => onAskAnotherMode(mode)}
+                                >
+                                  <span className={cn('inline-flex', getModeAccentClass(mode, 'text'))}>
+                                    <ModeIcon mode={mode} size="sm" />
+                                  </span>
+                                  {MODE_CONFIGS[mode].name}
+                                </DropdownMenuItem>
+                              ))}
+                            </DropdownMenuSubContent>
+                          </DropdownMenuSub>
+                        ) : null}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  )
+                ) : null}
+
+                {previewDocument ? (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 gap-1.5 rounded-full px-2.5 text-xs text-muted-foreground hover:text-foreground"
+                    onClick={() => setIsPreviewOpen(true)}
+                  >
+                    <Play className="size-3.5" />
+                    Preview app
+                  </Button>
+                ) : null}
+
+                {hasMoreActions ? (
+                  <DropdownMenu>
+                    <TooltipProvider delayDuration={300}>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <DropdownMenuTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon-sm"
+                              aria-label="More actions"
+                              className="size-8 text-muted-foreground hover:text-foreground"
+                            >
+                              <MoreHorizontal className="size-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                        </TooltipTrigger>
+                        <TooltipContent>More</TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                    <DropdownMenuContent align="start" className="w-64">
+                      {canSaveArtifact ? (
+                        <DropdownMenuItem
+                          disabled={isSavingArtifact}
+                          onSelect={() => void handleSaveArtifact()}
+                        >
+                          <FileText className="size-4" />
+                          {isSavingArtifact ? 'Saving…' : 'Save as artifact'}
+                        </DropdownMenuItem>
+                      ) : null}
+                      {firstImageAttachment ? (
+                        <DropdownMenuItem onSelect={() => handleOpenImage(firstImageAttachment)}>
+                          <ImageIcon className="size-4" />
+                          Open image
+                        </DropdownMenuItem>
+                      ) : null}
+                      {canRunQualityAction ? (
+                        <DropdownMenuSub>
+                          <DropdownMenuSubTrigger>
+                            <Sparkles className="size-4" />
+                            Improve this reply
+                          </DropdownMenuSubTrigger>
+                          <DropdownMenuSubContent className="w-56">
+                            {qualityGroups.map((group) => (
+                              <DropdownMenuSub key={group.id}>
+                                <DropdownMenuSubTrigger>
+                                  {group.family ? (
+                                    <span
+                                      className={cn(
+                                        'inline-flex',
+                                        getModeAccentClass(
+                                          resolveQualityActionMode(group.actions[0], message),
+                                          'text'
+                                        )
+                                      )}
+                                    >
+                                      <ModeIcon
+                                        mode={resolveQualityActionMode(group.actions[0], message)}
+                                        size="sm"
+                                      />
+                                    </span>
+                                  ) : (
+                                    <Sparkles className="size-4" />
+                                  )}
+                                  {group.label}
+                                </DropdownMenuSubTrigger>
+                                <DropdownMenuSubContent className="w-72">
+                                  {group.actions.map((action) => (
+                                    <DropdownMenuItem
+                                      key={action.id}
+                                      className="items-start py-2"
+                                      onSelect={() => handleOpenQualityAction(action)}
+                                    >
+                                      <span className="min-w-0">
+                                        <span className="block text-sm font-medium">
+                                          {action.label}
+                                        </span>
+                                        <span className="block text-xs leading-5 text-muted-foreground">
+                                          {action.description}
+                                        </span>
+                                      </span>
+                                    </DropdownMenuItem>
+                                  ))}
+                                </DropdownMenuSubContent>
+                              </DropdownMenuSub>
+                            ))}
+                          </DropdownMenuSubContent>
+                        </DropdownMenuSub>
+                      ) : null}
+                      {canHandoff ? (
+                        <DropdownMenuSub>
+                          <DropdownMenuSubTrigger>
+                            <SendHorizontal className="size-4" />
+                            Send to another assistant
+                          </DropdownMenuSubTrigger>
+                          <DropdownMenuSubContent className="w-72">
+                            {ASSISTANT_HANDOFF_TARGETS.map((target) => (
+                              <DropdownMenuItem
+                                key={target.family}
                                 className="items-start gap-2 py-2"
-                                onClick={() => handleOpenQualityAction(action)}
+                                onSelect={() => handleOpenHandoff(target)}
                               >
                                 <span
                                   className={cn(
                                     'mt-0.5 inline-flex',
-                                    getModeAccentClass(targetMode, 'text')
+                                    getModeAccentClass(target.mode, 'text')
                                   )}
                                 >
-                                  <ModeIcon mode={targetMode} size="sm" />
+                                  <ModeIcon mode={target.mode} size="sm" />
                                 </span>
                                 <span className="min-w-0">
                                   <span className="block text-sm font-medium">
-                                    {action.label}
+                                    {target.label}
                                   </span>
                                   <span className="block text-xs leading-5 text-muted-foreground">
-                                    {action.description}
+                                    {target.actionLabel}
                                   </span>
                                 </span>
                               </DropdownMenuItem>
-                            )
-                          })}
-                        </DropdownMenuSubContent>
-                      </DropdownMenuSub>
-                    ))}
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              ) : null}
-
-              {canSendFeedback ? (
-                <FeedbackButtons
-                  entityType="message"
-                  entityId={message.id}
-                  metadata={{
-                    assistantFamily: message.assistantFamily,
-                    mode: message.mode,
-                    model: message.model,
-                    conversationId,
-                    sourceCount: message.sources?.length ?? 0,
-                    customAssistantId: message.customAssistantId,
-                  }}
-                />
-              ) : null}
-
-              {firstImageAttachment ? (
-                <>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-7 gap-1 rounded-full px-2.5 text-xs"
-                    onClick={() => handleOpenImage(firstImageAttachment)}
-                  >
-                    <ImageIcon className="size-3.5" />
-                    Open image
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-7 gap-1 rounded-full px-2.5 text-xs"
-                    onClick={() => void handleDownloadImage(firstImageAttachment)}
-                  >
-                    <Download className="size-3.5" />
-                    Download
-                  </Button>
-                </>
-              ) : null}
-
-              {canHandoff ? (
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-7 gap-1 rounded-full px-2.5 text-xs"
-                    >
-                      <SendHorizontal className="size-3.5" />
-                      Send to
-                      <ChevronDown className="size-3" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="start" className="w-72">
-                    {ASSISTANT_HANDOFF_TARGETS.map((target) => (
-                      <DropdownMenuItem
-                        key={target.family}
-                        className="items-start gap-2 py-2"
-                        onClick={() => handleOpenHandoff(target)}
-                      >
-                        <span
-                          className={cn(
-                            'mt-0.5 inline-flex',
-                            getModeAccentClass(target.mode, 'text')
-                          )}
-                        >
-                          <ModeIcon mode={target.mode} size="sm" />
-                        </span>
-                        <span className="min-w-0">
-                          <span className="block text-sm font-medium">
-                            {target.label}
-                          </span>
-                          <span className="block text-xs leading-5 text-muted-foreground">
-                            {target.actionLabel}
-                          </span>
-                        </span>
-                      </DropdownMenuItem>
-                    ))}
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              ) : null}
-
-              {isLastAssistant && onRegenerate ? (
-                message.mode === 'image' ? (
-                  <TooltipProvider delayDuration={300}>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="icon-sm"
-                          className="size-7"
-                          onClick={() => onRegenerate()}
-                        >
-                          <RefreshIcon className="size-3.5" />
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent>Regenerate</TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-                ) : (
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-7 gap-1 rounded-full px-2.5 text-xs"
-                      >
-                        <RefreshIcon className="size-3.5" />
-                        Regenerate
-                        <ChevronDown className="size-3" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="start" className="w-64">
-                      <DropdownMenuItem onClick={() => onRegenerate()}>
-                        <RefreshIcon className="size-3.5" />
-                        Same intelligence
-                      </DropdownMenuItem>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuLabel className="text-xs text-muted-foreground">
-                        Generate with
-                      </DropdownMenuLabel>
-                      {INTELLIGENCE_LEVEL_OPTIONS.map((option) => (
-                        <DropdownMenuItem
-                          key={option.id}
-                          className="items-start gap-2 py-2"
-                          onClick={() => onRegenerate(option.id)}
-                        >
-                          <Sparkles className="mt-0.5 size-3.5" />
-                          <span className="min-w-0">
-                            <span className="block text-sm font-medium">
-                              {option.label}
-                            </span>
-                            <span className="block text-xs leading-5 text-muted-foreground">
-                              {option.hint}
-                            </span>
-                          </span>
-                        </DropdownMenuItem>
-                      ))}
+                            ))}
+                          </DropdownMenuSubContent>
+                        </DropdownMenuSub>
+                      ) : null}
                     </DropdownMenuContent>
                   </DropdownMenu>
-                )
-              ) : null}
+                ) : null}
 
-              {isLastAssistant && onAskAnotherMode ? (
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="sm" className="h-7 gap-1 rounded-full px-2.5 text-xs">
-                      Another mode
-                      <ChevronDown className="size-3" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="start" className="w-44">
-                    {MODE_ORDER.filter((mode) => mode !== message.mode).map((mode) => (
-                      <DropdownMenuItem
-                        key={mode}
-                        onClick={() => onAskAnotherMode(mode)}
-                      >
-                        <span className={cn('mr-2 inline-flex', getModeAccentClass(mode, 'text'))}>
-                          <ModeIcon mode={mode} size="sm" />
-                        </span>
-                        {MODE_CONFIGS[mode].name}
-                      </DropdownMenuItem>
-                    ))}
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              ) : null}
-
-              {(isLastAssistant || effectiveStatus === 'error') && (
-                <TooltipProvider delayDuration={300}>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="icon-sm"
-                        className="size-7"
-                        onClick={onRetry}
-                      >
-                        <RefreshIcon className="size-3.5" />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>Retry</TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
-              )}
-
-              <span className="ml-1 text-xs text-muted-foreground">
-                {effectiveStatus === 'streaming'
-                  ? message.mode === 'image'
-                    ? 'Generating image'
-                    : 'Streaming'
-                  : effectiveStatus === 'error'
-                    ? 'Needs retry'
+                <span className="ml-1.5 text-xs text-muted-foreground">
+                  {effectiveStatus === 'error'
+                    ? 'Did not finish'
                     : formatMessageTime(message.createdAt)}
-              </span>
-            </div>
+                </span>
+              </div>
+            ) : null}
 
             {effectiveError && (
               <p className="mt-2 text-xs text-destructive">{effectiveError}</p>
