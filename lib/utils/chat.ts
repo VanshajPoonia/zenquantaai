@@ -169,7 +169,7 @@ export function toConversationSummary(
   }
 }
 
-function isPlaceholderTitle(title: string | null | undefined) {
+export function isPlaceholderTitle(title: string | null | undefined) {
   return !title?.trim() || /^new \w+ chat$/i.test(title.trim())
 }
 

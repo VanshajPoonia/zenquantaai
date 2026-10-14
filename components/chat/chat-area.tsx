@@ -1,8 +1,10 @@
 'use client'
 
 import Link from 'next/link'
+import { usePathname } from 'next/navigation'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useChatContext } from '@/lib/chat-context'
+import { getChatIdFromPath } from '@/lib/utils/chat-path'
 import { getUpgradeNudgeForError } from '@/lib/billing/upgrade-nudges'
 import { AssistantHandoffTarget } from '@/lib/config/assistant-handoffs'
 import {
@@ -27,6 +29,7 @@ export function ChatArea({
     currentChat,
     activeProjectHomeId,
     isNewChatDraft,
+    hasLoadedWorkspaceData,
     sendMessage,
     regenerateLastResponse,
     retryLastMessage,
@@ -279,8 +282,14 @@ export function ChatArea({
     })
   }
 
+  const pathname = usePathname()
+  // While a linked chat loads, show a quiet placeholder rather than mounting
+  // Workspace Home, which would fetch its own data for nothing.
+  const isOpeningLinkedChat =
+    !hasLoadedWorkspaceData && !currentChat && getChatIdFromPath(pathname) !== null
   const showProjectHome = !currentChat && Boolean(activeProjectHomeId)
-  const showWorkspaceHome = !currentChat && !activeProjectHomeId && !isNewChatDraft
+  const showWorkspaceHome =
+    !currentChat && !activeProjectHomeId && !isNewChatDraft && !isOpeningLinkedChat
   const showEmptyState = (currentChat?.messages.length ?? 0) === 0
   const upgradeErrorNudge = getUpgradeNudgeForError(streamingState.error)
 
@@ -289,6 +298,19 @@ export function ChatArea({
       {showProjectHome && activeProjectHomeId ? (
         <div className="flex-1 min-h-0 overflow-y-auto">
           <ProjectHome projectId={activeProjectHomeId} />
+        </div>
+      ) : isOpeningLinkedChat ? (
+        <div
+          className="mx-auto w-full max-w-4xl flex-1 space-y-6 px-3 py-6 sm:px-4"
+          role="status"
+          aria-label="Loading chat"
+        >
+          <div className="ml-auto h-10 w-2/5 animate-pulse rounded-2xl bg-card/70" />
+          <div className="space-y-2.5">
+            <div className="h-3.5 w-4/5 animate-pulse rounded-full bg-card/70" />
+            <div className="h-3.5 w-3/5 animate-pulse rounded-full bg-card/70" />
+            <div className="h-3.5 w-2/3 animate-pulse rounded-full bg-card/70" />
+          </div>
         </div>
       ) : showWorkspaceHome ? (
         <div className="flex-1 min-h-0 overflow-y-auto">

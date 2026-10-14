@@ -79,7 +79,6 @@ import {
   hasLocalImportMarker,
   readBrowserAppSettings,
   readBrowserConversations,
-  readBrowserCurrentChatId,
   readBrowserProjects,
   readBrowserPromptLibrary,
   readBrowserSelectedProjectId,
@@ -94,6 +93,7 @@ import {
   createMessage,
   getLastAssistantMessage,
   getLastUserMessage,
+  isPlaceholderTitle,
   normalizeAppSettingsState,
   sortConversationSummaries,
   sortCustomAssistants,
@@ -103,6 +103,8 @@ import {
   toConversationSummary,
 } from '@/lib/utils/chat'
 import { readNdjsonStream } from '@/lib/utils/stream'
+import { getChatIdFromPath, getChatPath } from '@/lib/utils/chat-path'
+import { toast } from 'sonner'
 import {
   createAssistantPlaceholder,
   createPendingSend,
@@ -240,6 +242,7 @@ interface ChatContextType {
   loadOlderMessages: (conversationId: string) => Promise<void>
   activeProjectHomeId: string | null
   isNewChatDraft: boolean
+  hasLoadedWorkspaceData: boolean
   openProjectHome: (projectId: string) => void
   goHome: () => void
   createNewChat: () => Promise<void>
@@ -482,6 +485,9 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const queuedPromptsRef = useRef<QueuedPrompt[]>([])
   const isProcessingQueueRef = useRef(false)
   const workspaceToolRequestIdRef = useRef(0)
+  // Bumped whenever the user moves to another chat or view. A slow message
+  // fetch only makes its chat current if nothing has moved since it started.
+  const chatNavigationIdRef = useRef(0)
   const workspaceSearchRequestIdRef = useRef(0)
   const composerDraftRequestIdRef = useRef(0)
   const hasAutoOpenedOnboardingRef = useRef(false)
@@ -791,6 +797,16 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       setHasLoadedWorkspaceData(false)
       await runLocalImport(user.id)
 
+      // The address decides which chat opens: /c/<id> opens that chat and "/"
+      // opens Workspace Home. The linked chat loads alongside everything else
+      // instead of after the chat list.
+      const routeChatId = getChatIdFromPath(window.location.pathname)
+      const routeChatRequest = routeChatId
+        ? requestJson<Conversation>(
+            `/api/conversations/${encodeURIComponent(routeChatId)}?messageLimit=80`
+          ).catch(() => null)
+        : Promise.resolve(null)
+
       const [
         settings,
         nextProjects,
@@ -820,12 +836,25 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       const normalizedPrompts = sortPrompts(nextPrompts)
       const normalizedWorkflows = sortPromptWorkflows(nextWorkflows)
       const normalizedCustomAssistants = sortCustomAssistants(nextCustomAssistants)
-      const normalizedConversations = sortConversationList(nextConversations)
-      const currentChatId = readBrowserCurrentChatId()
+      let normalizedConversations = sortConversationList(nextConversations)
+      const routeChat = await routeChatRequest
       const activeConversation =
+        routeChat ??
         normalizedConversations.find(
-          (conversation) => conversation.id === currentChatId
-        ) ?? null
+          (conversation) => conversation.id === routeChatId
+        ) ??
+        null
+
+      if (routeChat) {
+        normalizedConversations = sortConversationList([
+          routeChat,
+          ...normalizedConversations.filter(
+            (conversation) => conversation.id !== routeChat.id
+          ),
+        ])
+      } else if (routeChatId && !activeConversation) {
+        toast.error('That chat could not be found. It may have been deleted.')
+      }
       const storedProjectId =
         normalizedSettings.defaultProjectBehavior !== 'inbox'
           ? readBrowserSelectedProjectId()
@@ -846,6 +875,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       )
       commitState(normalizedConversations, activeConversation)
       if (activeConversation && needsMessagePage(activeConversation)) {
+        const navigationId = chatNavigationIdRef.current
         void requestJson<Conversation>(
           `/api/conversations/${activeConversation.id}?messageLimit=80`
         )
@@ -856,7 +886,12 @@ export function ChatProvider({ children }: { children: ReactNode }) {
                 (item) => item.id !== conversation.id
               ),
             ]
-            commitState(nextConversations, conversation)
+            commitState(
+              nextConversations,
+              chatNavigationIdRef.current === navigationId
+                ? conversation
+                : currentChatRef.current
+            )
           })
           .catch((error) => {
             console.error('Failed to load conversation messages.', error)
@@ -1116,6 +1151,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
   const setCurrentChat = useCallback(
     (chat: ConversationSummary | Conversation | null) => {
+      const navigationId = ++chatNavigationIdRef.current
+
       if (!chat) {
         setCurrentChatState(null)
         setActiveProjectHomeId(null)
@@ -1144,7 +1181,12 @@ export function ChatProvider({ children }: { children: ReactNode }) {
                 (item) => item.id !== conversation.id
               ),
             ]
-            commitState(nextConversations, conversation)
+            commitState(
+              nextConversations,
+              chatNavigationIdRef.current === navigationId
+                ? conversation
+                : currentChatRef.current
+            )
           })
           .catch((error) => {
             console.error('Failed to load conversation messages.', error)
@@ -1156,6 +1198,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
   const openConversation = useCallback(
     async (conversationId: string) => {
+      const navigationId = ++chatNavigationIdRef.current
       const existing =
         conversationsRef.current.find(
           (conversation) => conversation.id === conversationId
@@ -1178,6 +1221,11 @@ export function ChatProvider({ children }: { children: ReactNode }) {
             (item) => item.id !== conversation.id
           ),
         ]
+
+        if (chatNavigationIdRef.current !== navigationId) {
+          commitState(nextConversations, currentChatRef.current)
+          return conversation
+        }
 
         commitState(nextConversations, conversation)
         setCurrentCustomAssistantId(conversation.customAssistantId ?? null)
@@ -1323,6 +1371,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const goHome = useCallback(() => {
+    chatNavigationIdRef.current += 1
     streamAbortRef.current?.abort()
     streamAbortRef.current = null
     activeSendIdRef.current = null
@@ -1436,6 +1485,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   ])
 
   const createNewChat = useCallback(async () => {
+    chatNavigationIdRef.current += 1
     streamAbortRef.current?.abort()
     streamAbortRef.current = null
     activeSendIdRef.current = null
@@ -1454,6 +1504,72 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (currentChat?.id) setIsNewChatDraft(false)
   }, [currentChat?.id])
+
+  // Keep the address bar on the open chat: /c/<id> for a chat, "/" otherwise.
+  // The first sync after loading, and leaving a chat that no longer exists,
+  // replace the entry instead of adding one.
+  const openChatId = currentChat?.id ?? null
+  const hasSyncedChatUrlRef = useRef(false)
+  useEffect(() => {
+    if (authState.status !== 'authenticated') {
+      hasSyncedChatUrlRef.current = false
+      return
+    }
+    if (!hasLoadedWorkspaceData) return
+
+    const nextPath = openChatId ? getChatPath(openChatId) : '/'
+    const { pathname } = window.location
+    const isFirstSync = !hasSyncedChatUrlRef.current
+    hasSyncedChatUrlRef.current = true
+    if (pathname === nextPath) return
+
+    const previousChatId = getChatIdFromPath(pathname)
+    const previousChatIsGone =
+      previousChatId !== null &&
+      !conversationsRef.current.some((conversation) => conversation.id === previousChatId)
+
+    if (isFirstSync || previousChatIsGone) {
+      window.history.replaceState(null, '', nextPath)
+    } else {
+      window.history.pushState(null, '', nextPath)
+    }
+  }, [authState.status, hasLoadedWorkspaceData, openChatId])
+
+  // Back and Forward reopen whatever the address names.
+  useEffect(() => {
+    if (authState.status !== 'authenticated' || !hasLoadedWorkspaceData) return
+
+    const handlePopState = () => {
+      const chatId = getChatIdFromPath(window.location.pathname)
+
+      if (!chatId) {
+        goHome()
+        return
+      }
+      if (currentChatRef.current?.id === chatId) return
+
+      void openConversation(chatId).then((conversation) => {
+        if (conversation) return
+        toast.error('That chat could not be found. It may have been deleted.')
+        window.history.replaceState(null, '', '/')
+        goHome()
+      })
+    }
+
+    window.addEventListener('popstate', handlePopState)
+    return () => window.removeEventListener('popstate', handlePopState)
+  }, [authState.status, hasLoadedWorkspaceData, goHome, openConversation])
+
+  // Name the tab (and its history entries) after the open chat.
+  const openChatTitle = currentChat?.title ?? null
+  const defaultDocumentTitleRef = useRef<string | null>(null)
+  useEffect(() => {
+    defaultDocumentTitleRef.current ??= document.title
+    document.title =
+      openChatTitle && !isPlaceholderTitle(openChatTitle)
+        ? `${openChatTitle} · Zenquanta AI`
+        : defaultDocumentTitleRef.current
+  }, [openChatTitle])
 
   const deleteChat = useCallback(
     async (chatId: string) => {
@@ -3314,6 +3430,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       loadOlderMessages,
       activeProjectHomeId,
       isNewChatDraft,
+      hasLoadedWorkspaceData,
       openProjectHome,
       goHome,
       createNewChat,
@@ -3413,6 +3530,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       awaitRecommendationDecision,
       activeProjectHomeId,
       isNewChatDraft,
+      hasLoadedWorkspaceData,
       beginPromptPrecheck,
       chats,
       chooseModelComparisonResponse,

@@ -16,6 +16,7 @@ import { cn } from '@/lib/utils'
 import { useChatContext } from '@/lib/chat-context'
 import { ConversationSummary, Project } from '@/lib/types'
 import { ModeIcon, getModeAccentClass } from '@/lib/mode-utils'
+import { getChatPath } from '@/lib/utils/chat-path'
 import { useIsMobile } from '@/components/ui/use-mobile'
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet'
 import {
@@ -131,13 +132,35 @@ function ChatItem({
   return (
     <div
       className={cn(
-        'group relative flex items-start gap-3 rounded-xl border border-transparent px-3 py-3 cursor-pointer transition-all duration-200',
+        'group relative flex items-start gap-3 rounded-xl border border-transparent px-3 py-3 cursor-pointer transition-all duration-200 has-[a:focus-visible]:ring-2 has-[a:focus-visible]:ring-sidebar-ring',
         isActive
           ? 'border-sidebar-border/70 bg-sidebar-accent text-sidebar-accent-foreground shadow-sm'
           : 'border-sidebar-border/40 hover:border-sidebar-border/70 hover:bg-sidebar-accent/50 text-sidebar-foreground/70 hover:text-sidebar-foreground'
       )}
-      onClick={onSelect}
     >
+      {/* A real link, stretched over the row, so the chat can be opened in a
+          new tab or copied. A plain click opens it in place. */}
+      <a
+        href={getChatPath(chat.id)}
+        aria-current={isActive ? 'page' : undefined}
+        aria-label={chat.title}
+        title={chat.title}
+        className="absolute inset-0 z-[1] rounded-xl outline-none"
+        onClick={(event) => {
+          if (
+            event.button !== 0 ||
+            event.metaKey ||
+            event.ctrlKey ||
+            event.shiftKey ||
+            event.altKey
+          ) {
+            return
+          }
+          event.preventDefault()
+          onSelect()
+        }}
+      />
+
       {/* Mode indicator */}
       <div
         className={cn(
@@ -153,31 +176,21 @@ function ChatItem({
         <div className="flex items-start gap-2">
           <div ref={titleLaneRef} className="min-w-0 flex-1">
             {fittedTitle && (
-              <TooltipProvider delayDuration={300}>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <p
-                      className="cursor-pointer truncate pr-2 text-[13px] font-medium leading-5"
-                      title={chat.title}
-                      style={{
-                        WebkitMaskImage:
-                          'linear-gradient(to right, black 84%, transparent 100%)',
-                        maskImage:
-                          'linear-gradient(to right, black 84%, transparent 100%)',
-                      }}
-                    >
-                      {fittedTitle}
-                    </p>
-                  </TooltipTrigger>
-                  <TooltipContent side="top" className="max-w-xs text-xs">
-                    {chat.title}
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
+              <p
+                className="truncate pr-2 text-[13px] font-medium leading-5"
+                style={{
+                  WebkitMaskImage:
+                    'linear-gradient(to right, black 84%, transparent 100%)',
+                  maskImage:
+                    'linear-gradient(to right, black 84%, transparent 100%)',
+                }}
+              >
+                {fittedTitle}
+              </p>
             )}
           </div>
 
-          <div className="flex h-8 w-8 shrink-0 items-start justify-end">
+          <div className="relative z-10 flex h-8 w-8 shrink-0 items-start justify-end">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button
