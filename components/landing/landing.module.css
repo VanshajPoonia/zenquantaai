@@ -1,0 +1,345 @@
+/* The landing page is a game table: green baize, a lacquered die, a score
+   pad and a player card. Tokens are scoped here so the app theme is untouched. */
+
+.root {
+  --felt: #155240;
+  --felt-deep: #0b3527;
+  --felt-shadow: #04170f;
+  --felt-text: #cfe3d6;
+  --ink: #0c1f18;
+  --bone: #f5f2e5;
+  --signal: #f9db38;
+  --signal-press: #e9c51c;
+  --paper: #f7f8f2;
+  --rule: #a9cdb9;
+  --rule-strong: #155240;
+
+  color: var(--bone);
+  background-color: var(--felt-deep);
+  font-family: var(--font-geist-sans), system-ui, sans-serif;
+  overflow-x: clip;
+}
+
+.root ::selection {
+  background: var(--signal);
+  color: var(--ink);
+}
+
+.root :focus-visible {
+  outline: 3px solid var(--signal);
+  outline-offset: 3px;
+  border-radius: 10px;
+}
+
+/* Baize: a lamp over the middle of the table, darker at the rails, and a
+   fine fibre texture over everything. */
+.felt {
+  background-color: var(--felt);
+  background-image:
+    radial-gradient(110% 70% at 50% 18%, rgb(255 250 220 / 0.13), transparent 62%),
+    radial-gradient(140% 120% at 50% 50%, transparent 55%, rgb(0 0 0 / 0.35)),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0.06 0 0 0 0 0.03 0 0 0 .32 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+.feltDeep {
+  background-color: var(--felt-deep);
+  background-image:
+    radial-gradient(90% 60% at 50% 0%, rgb(255 250 220 / 0.08), transparent 70%),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0.06 0 0 0 0 0.03 0 0 0 .3 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+.display {
+  font-family: var(--font-toy), system-ui, sans-serif;
+  font-weight: 400;
+  letter-spacing: -0.01em;
+  text-wrap: balance;
+}
+
+.muted {
+  color: var(--felt-text);
+}
+
+/* Buttons are game pieces: a chunky token that presses into the table. */
+.token {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  min-height: 3.25rem;
+  padding: 0 1.6rem;
+  border-radius: 999px;
+  font-weight: 650;
+  font-size: 1.05rem;
+  background: var(--signal);
+  color: var(--ink);
+  box-shadow:
+    0 5px 0 var(--signal-press),
+    0 12px 22px -8px rgb(0 0 0 / 0.55);
+  transition:
+    transform 160ms cubic-bezier(0.16, 1, 0.3, 1),
+    box-shadow 160ms ease-out,
+    background-color 160ms ease-out;
+}
+
+.token:hover {
+  transform: translateY(-2px);
+  box-shadow:
+    0 7px 0 var(--signal-press),
+    0 16px 26px -8px rgb(0 0 0 / 0.55);
+}
+
+.token:active {
+  transform: translateY(4px);
+  box-shadow:
+    0 1px 0 var(--signal-press),
+    0 6px 12px -6px rgb(0 0 0 / 0.5);
+}
+
+.token:disabled {
+  cursor: not-allowed;
+  background: #d9d3a8;
+  box-shadow: 0 3px 0 #bdb68a;
+  transform: none;
+  color: rgb(12 31 24 / 0.6);
+}
+
+.tokenGhost {
+  composes: token;
+  background: transparent;
+  color: var(--bone);
+  box-shadow: inset 0 0 0 2px rgb(245 242 229 / 0.55);
+}
+
+.tokenGhost:hover {
+  background: rgb(245 242 229 / 0.08);
+  box-shadow: inset 0 0 0 2px var(--bone);
+}
+
+.tokenGhost:active {
+  transform: translateY(2px);
+  box-shadow: inset 0 0 0 2px var(--bone);
+}
+
+.navBar {
+  transition:
+    background-color 240ms ease-out,
+    box-shadow 240ms ease-out;
+}
+
+.navBarSolid {
+  background-color: rgb(11 53 39 / 0.92);
+  box-shadow: 0 1px 0 rgb(245 242 229 / 0.08), 0 10px 30px -18px rgb(0 0 0 / 0.8);
+}
+
+@supports (backdrop-filter: blur(8px)) {
+  .navBarSolid {
+    background-color: rgb(11 53 39 / 0.78);
+    backdrop-filter: blur(10px) saturate(1.2);
+  }
+}
+
+/* Pip picker: small dice on the table. */
+.pipButton {
+  border-radius: 12px;
+  transition: transform 220ms cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 4px 0 rgb(0 0 0 / 0.28), 0 10px 18px -10px rgb(0 0 0 / 0.7);
+}
+
+.pipButton:hover {
+  transform: translateY(-3px) rotate(-6deg);
+}
+
+.pipButton[aria-pressed='true'] {
+  transform: translateY(-5px);
+  box-shadow: 0 0 0 3px var(--bone), 0 6px 0 rgb(0 0 0 / 0.28);
+}
+
+/* Assistant cards are dealt onto the table, then straightened when their
+   face comes up on the die. */
+.card {
+  --tilt: -2.5deg;
+  background: var(--face);
+  color: var(--ink);
+  border-radius: 28px;
+  transform: perspective(1200px) rotateX(10deg) rotate(var(--tilt)) translateY(18px);
+  box-shadow:
+    0 2px 0 rgb(255 255 255 / 0.35) inset,
+    0 -6px 0 rgb(0 0 0 / 0.12) inset,
+    0 30px 50px -24px rgb(0 0 0 / 0.75);
+  transition:
+    transform 700ms cubic-bezier(0.16, 1, 0.3, 1),
+    box-shadow 700ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.card:nth-child(even) {
+  --tilt: 2deg;
+}
+
+.cardActive {
+  transform: perspective(1200px) rotateX(0deg) rotate(0deg) translateY(0);
+  box-shadow:
+    0 2px 0 rgb(255 255 255 / 0.35) inset,
+    0 -6px 0 rgb(0 0 0 / 0.12) inset,
+    0 40px 60px -26px rgb(0 0 0 / 0.85);
+}
+
+.bubble {
+  background: rgb(255 255 255 / 0.42);
+  border-radius: 18px 18px 18px 6px;
+  clip-path: inset(0 100% 0 0 round 18px 18px 18px 6px);
+  transition: clip-path 900ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.cardActive .bubble {
+  clip-path: inset(0 0 0 0 round 18px 18px 18px 6px);
+}
+
+.cardActive .bubble + .bubble {
+  transition-delay: 260ms;
+}
+
+.cardLink {
+  text-decoration: underline;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 4px;
+}
+
+.cardLink:hover {
+  text-decoration-thickness: 3px;
+}
+
+/* The score pad: printed rules, numbers in a tabular face. */
+.pad {
+  background: var(--paper);
+  color: var(--ink);
+  border-radius: 6px;
+  transform: perspective(1400px) rotateX(14deg) rotate(-1.2deg);
+  transform-origin: 50% 0%;
+  box-shadow:
+    0 1px 0 #fff inset,
+    0 2px 0 #dfe2d6,
+    0 4px 0 #f1f2ec,
+    0 6px 0 #d6d9cc,
+    0 40px 60px -30px rgb(0 0 0 / 0.85);
+  transition: transform 900ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.padFlat {
+  transform: perspective(1400px) rotateX(0deg) rotate(-0.6deg);
+}
+
+.pad table {
+  font-variant-numeric: tabular-nums;
+}
+
+.pad th,
+.pad td {
+  border-bottom: 1px solid var(--rule);
+}
+
+.pad tr > * + * {
+  border-left: 1px solid var(--rule);
+}
+
+.pad thead th {
+  border-bottom: 2px solid var(--rule-strong);
+}
+
+.padFree td,
+.padFree th {
+  background: rgb(249 219 56 / 0.35);
+}
+
+.numbers {
+  font-family: var(--font-geist-mono), ui-monospace, monospace;
+}
+
+/* Player card */
+.player {
+  background: var(--bone);
+  color: var(--ink);
+  border-radius: 28px;
+  box-shadow:
+    0 2px 0 #fff inset,
+    0 8px 0 #d8d2bb,
+    0 40px 60px -28px rgb(0 0 0 / 0.85);
+}
+
+.field {
+  width: 100%;
+  height: 3.25rem;
+  padding: 0 1rem;
+  border-radius: 14px;
+  background: #fffdf5;
+  color: var(--ink);
+  border: 2px solid rgb(12 31 24 / 0.22);
+  font-size: 1rem;
+  transition: border-color 160ms ease-out, box-shadow 160ms ease-out;
+}
+
+.field::placeholder {
+  color: rgb(12 31 24 / 0.58);
+}
+
+.field:hover {
+  border-color: rgb(12 31 24 / 0.45);
+}
+
+.field:focus-visible {
+  outline: none;
+  border-color: var(--ink);
+  box-shadow: 0 0 0 4px var(--signal);
+}
+
+.field:disabled {
+  opacity: 0.6;
+}
+
+.switch {
+  border-radius: 999px;
+  background: rgb(12 31 24 / 0.08);
+}
+
+.switch button {
+  border-radius: 999px;
+  transition: background-color 200ms ease-out, color 200ms ease-out;
+}
+
+.switch button[aria-pressed='true'] {
+  background: var(--ink);
+  color: var(--bone);
+}
+
+.footerLink {
+  color: var(--felt-text);
+  text-underline-offset: 4px;
+}
+
+.footerLink:hover {
+  color: var(--bone);
+  text-decoration: underline;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card,
+  .cardActive,
+  .pad,
+  .padFlat,
+  .bubble,
+  .token,
+  .pipButton {
+    transition: none;
+  }
+
+  .card {
+    transform: none;
+  }
+
+  .bubble {
+    clip-path: none;
+  }
+
+  .pad {
+    transform: rotate(-0.6deg);
+  }
+}

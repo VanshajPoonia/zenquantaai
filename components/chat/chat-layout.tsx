@@ -1,6 +1,7 @@
 'use client'
 
 import { Suspense, useEffect, useRef, useState } from 'react'
+import dynamic from 'next/dynamic'
 import { usePathname, useSearchParams } from 'next/navigation'
 import { ChatProvider, useChatContext } from '@/lib/chat-context'
 import { isWorkspacePath } from '@/lib/utils/chat-path'
@@ -21,6 +22,12 @@ import { PrismStudio } from './prism-studio'
 import { PulseResearchRoom } from './pulse-research-room'
 import { AskFilesPanel } from './ask-files-panel'
 import { GitHubIntegrationPanel } from './github-integration-panel'
+
+// Signed-out visitors at "/" get the landing page. It carries three.js, so it
+// loads in its own chunk and never reaches signed-in users.
+const LandingPage = dynamic(() => import('@/components/landing/landing-page'), {
+  loading: () => <div className="min-h-screen bg-[#155240]" />,
+})
 
 function LoadingScreen() {
   return (
@@ -126,7 +133,7 @@ function ChatShell({
   }
 
   if (authState.status !== 'authenticated') {
-    return <AuthGate />
+    return pathname === '/' ? <LandingPage /> : <AuthGate />
   }
 
   return (
