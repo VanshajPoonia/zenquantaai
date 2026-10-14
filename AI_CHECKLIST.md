@@ -350,6 +350,9 @@ Before changing persistence code again:
 
 ## Common Failure Points
 
+- The landing page (`components/landing/*`) loads three.js on demand. Keep `die-scene.ts` behind its dynamic import and keep `LandingPage` behind `next/dynamic` in `chat-layout.tsx`, or three.js lands in the workspace bundle. If WebGL is unavailable the page falls back to a flat SVG die; check that path still renders after scene changes.
+- `zq_signed_in` (`lib/utils/session-hint.ts`) is only a display hint, readable by scripts on purpose. Never use it for access decisions; the httpOnly session cookie and `/api/auth/session` stay the source of truth.
+
 - Missing OpenRouter key causes fallback/mock text and image behavior.
 - Missing Tavily key causes Pulse/webSearch to answer without live source context and without source claims.
 - Pulse Research Room uses persisted message `sources` and Pulse artifacts; if no source-backed messages exist, it should show empty states rather than live/source claims.

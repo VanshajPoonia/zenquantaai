@@ -90,7 +90,7 @@ Mode mapping:
 
 ## Main Routes
 
-- `/`: main chat workspace (Workspace Home). The workspace is rendered by `app/(workspace)/layout.tsx`.
+- `/`: main chat workspace (Workspace Home) for signed-in users. Signed-out visitors get the landing page (`components/landing/*`) with sign-up and sign-in built in. The workspace is rendered by `app/(workspace)/layout.tsx`.
 - `/c/[id]`: the workspace with that chat open; the address follows the open chat (`lib/utils/chat-path.ts`).
 - `/dashboard`: user usage dashboard, shown inside the workspace layout (`app/(workspace)/dashboard`).
 - `/knowledge`: Files, the user's uploaded and imported files, shown inside the workspace layout; Ask Files opens over it.
@@ -343,7 +343,9 @@ The main workspace is composed from:
 - `components/chat/settings-panel.tsx`
 - `components/chat/settings-modal.tsx`
 
-The auth gate is `components/auth/auth-gate.tsx`.
+The auth gate is `components/auth/auth-gate.tsx`; it is still shown to signed-out visitors on `/c/<id>`.
+
+The signed-out landing page lives in `components/landing/`: `landing-page.tsx` (sections, scroll direction for the die), `die-scene.ts` (three.js die built as a hinged cube net), `landing-auth-form.tsx` (sign-up/sign-in using the chat context's password auth), `pip-face.tsx` and `landing.module.css` (scoped game-table tokens). `chat-layout.tsx` loads it with `next/dynamic`, and the scene module is imported on demand, so three.js never reaches signed-in users.
 
 ## Backend Structure
 

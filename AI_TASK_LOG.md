@@ -6,6 +6,24 @@ The repository contains a real Zenquanta AI platform backed by Neon for runtime 
 
 Current direction: plan upgrades remain manual/admin-driven, payment automation is out of scope unless explicitly requested, and Neon/storage start fresh without importing Supabase database rows or storage objects.
 
+## 2026-10-14 - Landing page for signed-out visitors (Claude Code, user-requested implementation)
+
+**Goal**: A distinctive, playful landing page with 3D elements and animation that explains the product and lets visitors sign up.
+
+**Implemented**:
+- Signed-out visitors at `/` now see `components/landing/landing-page.tsx` instead of the bare sign-in card (`chat-layout.tsx`, loaded with `next/dynamic`). Signed-in visitors still go straight to the workspace; `/c/<id>` signed out still shows `AuthGate`.
+- A three.js die (`components/landing/die-scene.ts`, new dependency `three` plus `@types/three`): each face is an assistant in its accent hue. It drops in on load, rolls on click, drag or the "Roll the die" button, and the six small dice under it pick a face directly. While the assistant cards scroll by, it turns to that assistant's face; in the next section it unfolds into its cube net, showing the shared workspace printed inside.
+- Sections: hero, six assistant cards (real suggested prompts from `ASSISTANT_FAMILY_COPY`), the unfold, a score-pad plan table from `PLAN_CONFIGS`, and a sign-up/sign-in "player card" (`landing-auth-form.tsx`) using the existing `requestPasswordSignUp`/`requestPasswordSignIn`. Nav "Start free" and "Sign in" jump to the form and focus the ID field.
+- Fallbacks: reduced motion makes face changes instant and skips the drop; no WebGL shows a flat SVG die; the canvas only draws while the stage is visible.
+- `PRODUCT.md` added at the repo root (audience, positioning, evidence on hand) for design work.
+- No restore screen for new visitors: `lib/utils/session-hint.ts` defines a non-secret `zq_signed_in=1` cookie that the chat context sets once a session is confirmed and clears when the visitor is signed out. At `/`, a browser without it gets the landing page immediately while the session check runs; with it, the usual "Restoring your workspace…" screen. Until the cookie is read after hydration, the prerendered `/` shows a blank screen instead of the restore message. The hint grants nothing; a wrong hint only costs one restore screen or one landing flash before the check corrects it (and the cookie). Tests in `tests/session-hint.test.ts`.
+
+**Verification**: `pnpm run typecheck`, `pnpm run lint`, `pnpm run test` (132) and `pnpm run build` pass; `/` is still static and three.js is in its own chunk (about 135 KB gzipped) loaded only by the landing page. Playwright at 1440x900 and 390x844: no horizontal overflow, no console errors apart from the existing signed-out 401; roll, pick a side, drag, Start free (scrolls and focuses the ID field), Sign in mode switch, client validation, and a wrong-password sign-in (server error shown) all work; a signed-in session at `/` still opens the workspace; reduced motion works on the production build. No account was created during testing.
+
+Hint cookie (Playwright, dev server): a new visitor never sees the restore text and gets the landing page; a signed-in session gets the hint set and, on reload, sees the restore screen with no landing flash; a stale hint with no session shows the restore screen once, then the landing page, and the hint is cleared. Tests now 26 files / 135.
+
+**Known limits / next steps**: signed-in users from before this change see the landing page once on their first visit until the session check sets the hint. Pulse's "searches the web" copy assumes `TAVILY_API_KEY` is set in production. The root `DESIGN.md` is a Runwai reference file, not this app's system, so the design detector's palette advisories against it were ignored.
+
 ## 2026-10-14 - UX structure, phase 3 part 2: Library, pages in the app, merged tools (Claude Code, user-requested implementation)
 
 **Goal**: Finish the phase 3 product items from the UX audit, following the audit's own recommendations: a sidebar Library, Dashboard/Pricing/Knowledge inside the app layout, and merging Ask Files with Knowledge and the prompt library with Playbooks.
