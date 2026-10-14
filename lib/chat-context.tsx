@@ -2301,106 +2301,149 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
         setSendLifecycleStatus('streaming_text')
 
-        await readNdjsonStream<StreamEvent>(response, (event) => {
-          if (payload.sendId && activeSendIdRef.current !== payload.sendId) {
-            return
+        // Streamed text is applied at most once per frame. Applying every
+        // delta re-rendered the workspace for each token and could block the
+        // main thread for most of a reply.
+        let pendingDelta: {
+          conversationId: string
+          messageId: string
+          text: string
+        } | null = null
+        let deltaFrame: number | null = null
+        const flushPendingDelta = () => {
+          if (deltaFrame !== null) {
+            cancelAnimationFrame(deltaFrame)
+            deltaFrame = null
           }
+          const pending = pendingDelta
+          if (!pending) return
+          pendingDelta = null
 
-          switch (event.type) {
-            case 'start': {
-              const startMessages = event.conversation.messages.some(
-                (message) => message.id === event.message.id
-              )
-                ? event.conversation.messages
-                : [...event.conversation.messages, event.message]
-              const startedConversation = updateConversationSnapshot(
-                event.conversation,
-                {
-                  messages: startMessages,
+          applyConversationPatch(pending.conversationId, (conversation) =>
+            updateConversationSnapshot(conversation, {
+              messages: conversation.messages.map((message) =>
+                message.id === pending.messageId
+                  ? {
+                      ...message,
+                      content: `${message.content}${pending.text}`,
+                      status: 'streaming',
+                    }
+                  : message
+              ),
+            })
+          )
+        }
+
+        try {
+          await readNdjsonStream<StreamEvent>(response, (event) => {
+            if (payload.sendId && activeSendIdRef.current !== payload.sendId) {
+              return
+            }
+
+            // Anything other than more text must see the text received so far.
+            if (event.type !== 'delta') flushPendingDelta()
+
+            switch (event.type) {
+              case 'start': {
+                const startMessages = event.conversation.messages.some(
+                  (message) => message.id === event.message.id
+                )
+                  ? event.conversation.messages
+                  : [...event.conversation.messages, event.message]
+                const startedConversation = updateConversationSnapshot(
+                  event.conversation,
+                  {
+                    messages: startMessages,
+                  }
+                )
+
+                // Only follow this conversation if the user hasn't already
+                // navigated elsewhere while the send was in flight — otherwise
+                // a background stream would yank the view back to it.
+                const shouldFollowStart =
+                  !currentChatRef.current ||
+                  currentChatRef.current.id === startedConversation.id
+                upsertConversation(startedConversation, shouldFollowStart)
+                setStreamingState({
+                  status: 'streaming',
+                  conversationId: startedConversation.id,
+                  messageId: event.message.id,
+                  workingTitle: 'Working notes',
+                  workingNotes: [],
+                })
+                break
+              }
+              case 'delta': {
+                if (
+                  pendingDelta &&
+                  (pendingDelta.messageId !== event.messageId ||
+                    pendingDelta.conversationId !== event.conversationId)
+                ) {
+                  flushPendingDelta()
                 }
-              )
-
-              // Only follow this conversation if the user hasn't already
-              // navigated elsewhere while the send was in flight — otherwise
-              // a background stream would yank the view back to it.
-              const shouldFollowStart =
-                !currentChatRef.current ||
-                currentChatRef.current.id === startedConversation.id
-              upsertConversation(startedConversation, shouldFollowStart)
-              setStreamingState({
-                status: 'streaming',
-                conversationId: startedConversation.id,
-                messageId: event.message.id,
-                workingTitle: 'Working notes',
-                workingNotes: [],
-              })
-              break
-            }
-            case 'delta': {
-              applyConversationPatch(event.conversationId, (conversation) =>
-                updateConversationSnapshot(conversation, {
-                  messages: conversation.messages.map((message) =>
-                    message.id === event.messageId
-                      ? {
-                          ...message,
-                          content: `${message.content}${event.delta}`,
-                          status: 'streaming',
-                        }
-                      : message
-                  ),
+                pendingDelta = pendingDelta
+                  ? { ...pendingDelta, text: pendingDelta.text + event.delta }
+                  : {
+                      conversationId: event.conversationId,
+                      messageId: event.messageId,
+                      text: event.delta,
+                    }
+                deltaFrame ??= requestAnimationFrame(flushPendingDelta)
+                break
+              }
+              case 'working': {
+                setStreamingState((previous) => ({
+                  ...previous,
+                  status: 'streaming',
+                  conversationId: event.conversationId,
+                  messageId: event.messageId,
+                  workingTitle: event.title ?? previous.workingTitle ?? 'Working notes',
+                  workingNotes: event.notes,
+                }))
+                break
+              }
+              case 'sources': {
+                applyConversationPatch(event.conversationId, (conversation) =>
+                  updateConversationSnapshot(conversation, {
+                    messages: conversation.messages.map((message) =>
+                      message.id === event.messageId
+                        ? {
+                            ...message,
+                            sources: event.sources,
+                          }
+                        : message
+                    ),
+                  })
+                )
+                break
+              }
+              case 'done': {
+                terminalEvent = 'done'
+                completedConversation = event.conversation
+                const shouldFollowDone =
+                  !currentChatRef.current ||
+                  currentChatRef.current.id === event.conversation.id
+                upsertConversation(event.conversation, shouldFollowDone)
+                setStreamingState({ status: 'idle' })
+                break
+              }
+              case 'error': {
+                terminalEvent = 'error'
+                applyLocalError(event.conversationId, event.messageId, event.error)
+                setStreamingState({
+                  status: 'error',
+                  conversationId: event.conversationId,
+                  messageId: event.messageId,
+                  error: event.error,
                 })
-              )
-              break
+                break
+              }
             }
-            case 'working': {
-              setStreamingState((previous) => ({
-                ...previous,
-                status: 'streaming',
-                conversationId: event.conversationId,
-                messageId: event.messageId,
-                workingTitle: event.title ?? previous.workingTitle ?? 'Working notes',
-                workingNotes: event.notes,
-              }))
-              break
-            }
-            case 'sources': {
-              applyConversationPatch(event.conversationId, (conversation) =>
-                updateConversationSnapshot(conversation, {
-                  messages: conversation.messages.map((message) =>
-                    message.id === event.messageId
-                      ? {
-                          ...message,
-                          sources: event.sources,
-                        }
-                      : message
-                  ),
-                })
-              )
-              break
-            }
-            case 'done': {
-              terminalEvent = 'done'
-              completedConversation = event.conversation
-              const shouldFollowDone =
-                !currentChatRef.current ||
-                currentChatRef.current.id === event.conversation.id
-              upsertConversation(event.conversation, shouldFollowDone)
-              setStreamingState({ status: 'idle' })
-              break
-            }
-            case 'error': {
-              terminalEvent = 'error'
-              applyLocalError(event.conversationId, event.messageId, event.error)
-              setStreamingState({
-                status: 'error',
-                conversationId: event.conversationId,
-                messageId: event.messageId,
-                error: event.error,
-              })
-              break
-            }
-          }
-        })
+          })
+        } finally {
+          // Keep text that arrived before a stop, error or early end.
+          flushPendingDelta()
+        }
 
         if (payload.sendId && activeSendIdRef.current !== payload.sendId) {
           markSendAsSuperseded(

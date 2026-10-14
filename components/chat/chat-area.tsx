@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useChatContext } from '@/lib/chat-context'
+import { useStableCallback } from '@/hooks/useStableCallback'
 import { getChatIdFromPath } from '@/lib/utils/chat-path'
 import { getUpgradeNudgeForError } from '@/lib/billing/upgrade-nudges'
 import { AssistantHandoffTarget } from '@/lib/config/assistant-handoffs'
@@ -282,6 +283,16 @@ export function ChatArea({
     })
   }
 
+  // Stable identities let ChatMessage (memoized) skip re-rendering every
+  // finished message while a reply streams in.
+  const onRegenerate = useStableCallback(regenerateLastResponse)
+  const onRetry = useStableCallback(retryLastMessage)
+  const onEdit = useStableCallback(editLastUserMessage)
+  const onAskAnotherMode = useStableCallback(askAnotherMode)
+  const onSaveArtifact = useStableCallback(handleSaveMessageArtifact)
+  const onHandoff = useStableCallback(handleHandoffMessage)
+  const onQualityAction = useStableCallback(handleQualityActionMessage)
+
   const pathname = usePathname()
   // While a linked chat loads, show a quiet placeholder rather than mounting
   // Workspace Home, which would fetch its own data for nothing.
@@ -368,13 +379,13 @@ export function ChatArea({
                   }
                   isLastAssistant={message.id === lastAssistantId}
                   isLastUser={message.id === lastUserId}
-                  onRegenerate={regenerateLastResponse}
-                  onRetry={retryLastMessage}
-                  onEdit={editLastUserMessage}
-                  onAskAnotherMode={askAnotherMode}
-                  onSaveArtifact={handleSaveMessageArtifact}
-                  onHandoff={handleHandoffMessage}
-                  onQualityAction={handleQualityActionMessage}
+                  onRegenerate={onRegenerate}
+                  onRetry={onRetry}
+                  onEdit={onEdit}
+                  onAskAnotherMode={onAskAnotherMode}
+                  onSaveArtifact={onSaveArtifact}
+                  onHandoff={onHandoff}
+                  onQualityAction={onQualityAction}
                 />
               </div>
             ))}

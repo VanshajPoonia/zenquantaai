@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { memo, useEffect, useMemo, useState } from 'react'
 import {
   ChevronDown,
   Download,
@@ -735,7 +735,8 @@ function ActionIconButton({
   )
 }
 
-export function ChatMessage({
+// Memoized: while a reply streams, only the streaming message should re-render.
+export const ChatMessage = memo(function ChatMessage({
   message,
   conversationId,
   onRegenerate,
@@ -1546,4 +1547,4 @@ export function ChatMessage({
       />
     </>
   )
-}
+})
