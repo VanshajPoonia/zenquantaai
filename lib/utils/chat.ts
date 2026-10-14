@@ -169,6 +169,10 @@ export function toConversationSummary(
   }
 }
 
+function isPlaceholderTitle(title: string | null | undefined) {
+  return !title?.trim() || /^new \w+ chat$/i.test(title.trim())
+}
+
 export function updateConversationSnapshot(
   conversation: Conversation,
   next: Partial<Conversation> = {}
@@ -204,10 +208,20 @@ export function updateConversationSnapshot(
 
   const firstUserMessage = merged.messages.find((message) => message.role === 'user')
   const fallbackTitle = `New ${merged.mode} chat`
+  const explicitTitle = isPlaceholderTitle(next.title) ? null : next.title!.trim()
+  const existingTitle = isPlaceholderTitle(conversation.title)
+    ? null
+    : conversation.title.trim()
 
-  merged.title = firstUserMessage
-    ? deriveConversationTitle(firstUserMessage.content, fallbackTitle)
-    : next.title ?? merged.title ?? fallbackTitle
+  // A real title (user rename, or one already derived) wins. Deriving again on
+  // every save would undo renames, and with paged history the first loaded
+  // message is not always the first message of the chat.
+  merged.title =
+    explicitTitle ??
+    existingTitle ??
+    (firstUserMessage
+      ? deriveConversationTitle(firstUserMessage.content, fallbackTitle)
+      : fallbackTitle)
 
   const summary = toConversationSummary(merged)
 

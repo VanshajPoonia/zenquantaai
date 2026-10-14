@@ -245,6 +245,7 @@ interface ChatContextType {
   createNewChat: () => Promise<void>
   deleteChat: (chatId: string) => Promise<void>
   togglePinChat: (chatId: string) => Promise<void>
+  renameChat: (chatId: string, title: string) => Promise<void>
   queuedPromptCount: number
   sendMessage: (input: SendMessageInput) => Promise<void>
   regenerateLastResponse: (intelligenceLevel?: UsageOptimization) => Promise<void>
@@ -1487,6 +1488,35 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       }
     },
     [persistConversationMutation, upsertConversation]
+  )
+
+  const renameChat = useCallback(
+    async (chatId: string, title: string) => {
+      const nextTitle = title.trim().slice(0, 120)
+      if (!nextTitle) return
+
+      const previousTitle = conversationsRef.current.find(
+        (conversation) => conversation.id === chatId
+      )?.title
+      // Show the new name immediately; the save can take a few seconds.
+      applyConversationPatch(chatId, (conversation) => ({
+        ...conversation,
+        title: nextTitle,
+      }))
+
+      try {
+        await persistConversationMutation(chatId, { title: nextTitle })
+      } catch (error) {
+        if (previousTitle) {
+          applyConversationPatch(chatId, (conversation) => ({
+            ...conversation,
+            title: previousTitle,
+          }))
+        }
+        throw error
+      }
+    },
+    [applyConversationPatch, persistConversationMutation]
   )
 
   const saveAppSettings = useCallback(
@@ -3289,6 +3319,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       createNewChat,
       deleteChat,
       togglePinChat,
+      renameChat,
       queuedPromptCount: queuedPrompts.length,
       sendMessage,
       regenerateLastResponse,
@@ -3467,6 +3498,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       restoreArtifactVersion,
       testCustomAssistant,
       togglePinChat,
+      renameChat,
       updateArtifact,
       updatePrismImage,
       updateApiSettings,
