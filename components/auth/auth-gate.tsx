@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { useEffect, useState } from 'react'
+import { FormEvent, useEffect, useState } from 'react'
 import { Eye, EyeOff, LifeBuoy } from 'lucide-react'
 import { useChatContext } from '@/lib/chat-context'
 import { Button } from '@/components/ui/button'
@@ -64,12 +64,43 @@ export function AuthGate() {
     status !== 'submitting' &&
     (!validationMessage || passwordMode === 'sign-in') &&
     (passwordMode === 'sign-in' || Boolean(confirmPassword.trim()))
+  // A stale session error should not linger while a new attempt is running.
+  const visibleAuthError = status === 'submitting' ? null : authError
   const feedbackTone =
-    validationMessage || status === 'error' || authError
+    validationMessage || status === 'error' || visibleAuthError
       ? 'error'
       : message
         ? 'success'
         : 'neutral'
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (!canSubmit) return
+
+    setStatus('submitting')
+    setMessage('')
+
+    try {
+      if (passwordMode === 'sign-in') {
+        await requestPasswordSignIn(identifier.trim(), password)
+        setStatus('signed-in')
+      } else {
+        const nextMessage = await requestPasswordSignUp(identifier.trim(), password)
+        setStatus('signed-in')
+        setMessage(nextMessage)
+      }
+    } catch (error) {
+      setStatus('error')
+      setMessage(
+        toAuthErrorMessage(
+          error,
+          passwordMode === 'sign-in'
+            ? 'Unable to sign in right now.'
+            : 'Unable to create the account right now.'
+        )
+      )
+    }
+  }
 
   return (
     <div className="relative flex min-h-screen w-full items-center justify-center overflow-y-auto bg-background px-6 py-10">
@@ -90,7 +121,7 @@ export function AuthGate() {
           account. Use your Zenquanta ID and password to access the workspace.
         </p>
 
-        <div className="space-y-4">
+        <form className="space-y-4" onSubmit={handleSubmit} noValidate>
           <div className="grid grid-cols-2 gap-1 rounded-full border border-border/60 bg-background/60 p-1">
             <Button
               type="button"
@@ -110,8 +141,14 @@ export function AuthGate() {
             </Button>
           </div>
 
+          <label htmlFor="auth-identifier" className="sr-only">
+            Zenquanta ID
+          </label>
           <Input
+            id="auth-identifier"
+            name="username"
             type="text"
+            autoComplete="username"
             value={identifier}
             onChange={(event) => setIdentifier(event.target.value)}
             placeholder={
@@ -128,8 +165,14 @@ export function AuthGate() {
             <p>{identifierHint}</p>
           </div>
 
+          <label htmlFor="auth-password" className="sr-only">
+            Password
+          </label>
           <Input
+            id="auth-password"
+            name="password"
             type={showPassword ? 'text' : 'password'}
+            autoComplete={passwordMode === 'sign-in' ? 'current-password' : 'new-password'}
             value={password}
             onChange={(event) => setPassword(event.target.value)}
             placeholder={
@@ -140,14 +183,22 @@ export function AuthGate() {
           />
 
           {passwordMode === 'sign-up' && (
-            <Input
-              type={showPassword ? 'text' : 'password'}
-              value={confirmPassword}
-              onChange={(event) => setConfirmPassword(event.target.value)}
-              placeholder="Confirm your password"
-              className="h-12 rounded-xl"
-              disabled={status === 'submitting'}
-            />
+            <>
+              <label htmlFor="auth-confirm-password" className="sr-only">
+                Confirm password
+              </label>
+              <Input
+                id="auth-confirm-password"
+                name="confirm-password"
+                type={showPassword ? 'text' : 'password'}
+                autoComplete="new-password"
+                value={confirmPassword}
+                onChange={(event) => setConfirmPassword(event.target.value)}
+                placeholder="Confirm your password"
+                className="h-12 rounded-xl"
+                disabled={status === 'submitting'}
+              />
+            </>
           )}
 
           <div className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
@@ -171,37 +222,10 @@ export function AuthGate() {
           </div>
 
           <Button
+            type="submit"
             variant="cta"
             className="h-12 w-full text-base"
             disabled={!canSubmit}
-            onClick={async () => {
-              setStatus('submitting')
-              setMessage('')
-
-              try {
-                if (passwordMode === 'sign-in') {
-                  await requestPasswordSignIn(identifier.trim(), password)
-                  setStatus('signed-in')
-                } else {
-                  const nextMessage = await requestPasswordSignUp(
-                    identifier.trim(),
-                    password
-                  )
-                  setStatus('signed-in')
-                  setMessage(nextMessage)
-                }
-              } catch (error) {
-                setStatus('error')
-                setMessage(
-                  toAuthErrorMessage(
-                    error,
-                    passwordMode === 'sign-in'
-                      ? 'Unable to sign in right now.'
-                      : 'Unable to create the account right now.'
-                  )
-                )
-              }
-            }}
           >
             {status === 'submitting'
               ? passwordMode === 'sign-in'
@@ -211,10 +235,11 @@ export function AuthGate() {
                 ? 'Sign in'
                 : 'Create account'}
           </Button>
-        </div>
+        </form>
 
-        {(validationMessage || message || authError) && (
+        {(validationMessage || message || visibleAuthError) && (
           <div
+            role={feedbackTone === 'error' ? 'alert' : 'status'}
             className={
               feedbackTone === 'error'
                 ? 'mt-4 rounded-2xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive'
@@ -223,7 +248,7 @@ export function AuthGate() {
                   : 'mt-4 rounded-2xl border border-border/70 bg-background/60 px-4 py-3 text-sm text-muted-foreground'
             }
           >
-            {validationMessage || message || authError}
+            {validationMessage || message || visibleAuthError}
           </div>
         )}
       </div>

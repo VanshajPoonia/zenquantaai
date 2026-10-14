@@ -557,14 +557,38 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     writeBrowserCurrentChatId(null)
   }, [])
 
-  const handleUnauthorized = useCallback((message?: string) => {
+  // Pass null to sign out quietly (e.g. a first visit with no session yet).
+  const handleUnauthorized = useCallback((message?: string | null) => {
     clearAuthedState()
     setAuthState({
       status: 'unauthenticated',
       user: null,
     })
-    setAuthError(message ?? 'Please sign in again to continue.')
+    setAuthError(message === undefined ? 'Please sign in again to continue.' : message)
   }, [clearAuthedState])
+
+  // Auth endpoints answer bad credentials with 401, so they bypass requestJson's
+  // session-expired handling and surface the server's own error message.
+  const requestAuthJson = useCallback(
+    async <T,>(input: string, body: unknown, fallbackError: string): Promise<T> => {
+      const response = await fetch(input, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+        cache: 'no-store',
+      })
+      const payload = (await response.json().catch(() => null)) as
+        | (T & { error?: string })
+        | null
+
+      if (!response.ok) {
+        throw new Error(payload?.error ?? fallbackError)
+      }
+
+      return payload as T
+    },
+    []
+  )
 
   const requestJson = useCallback(
     async <T,>(input: string, init: RequestInit = {}): Promise<T> => {
@@ -844,39 +868,58 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     [commitState, requestJson, runLocalImport]
   )
 
-  const restoreSession = useCallback(async () => {
+  const restoreSession = useCallback(async (options: { afterSignIn?: boolean } = {}) => {
+    const authParam =
+      typeof window !== 'undefined'
+        ? new URLSearchParams(window.location.search).get('auth')
+        : null
+    const linkError =
+      authParam === 'failed'
+        ? 'That magic link could not be verified. Please request a new one.'
+        : authParam === 'missing-token'
+          ? 'The sign-in link was incomplete. Please request a new one.'
+          : null
+
+    let session: AuthSessionResponse | null = null
+
     try {
-      const session = await requestJson<AuthSessionResponse>('/api/auth/session')
+      const response = await fetch('/api/auth/session', { cache: 'no-store' })
+      session = response.ok
+        ? ((await response.json().catch(() => null)) as AuthSessionResponse | null)
+        : null
+    } catch {
+      handleUnauthorized(
+        linkError ?? 'Could not reach Zenquanta. Check your connection and try again.'
+      )
+      return
+    }
 
-      if (!session.authenticated || !session.user) {
-        handleUnauthorized()
-        return
-      }
+    // No session is the normal signed-out state, not an error, unless the
+    // user just signed in or arrived from a failed sign-in link.
+    if (!session?.authenticated || !session.user) {
+      handleUnauthorized(
+        linkError ??
+          (options.afterSignIn
+            ? 'Your session could not be started. Please try signing in again.'
+            : null)
+      )
+      return
+    }
 
-      setAuthState({
-        status: 'authenticated',
-        user: session.user,
-      })
-      setAuthError(null)
+    setAuthState({
+      status: 'authenticated',
+      user: session.user,
+    })
+    setAuthError(null)
+
+    try {
       await loadAuthedData(session.user)
     } catch (error) {
-      const searchParams =
-        typeof window !== 'undefined'
-          ? new URLSearchParams(window.location.search)
-          : null
-      const authParam = searchParams?.get('auth')
-      const nextError =
-        authParam === 'failed'
-          ? 'That magic link could not be verified. Please request a new one.'
-          : authParam === 'missing-token'
-            ? 'The sign-in link was incomplete. Please request a new one.'
-            : error instanceof Error
-              ? error.message
-              : 'Please sign in to continue.'
-
-      handleUnauthorized(nextError)
+      handleUnauthorized(
+        error instanceof Error ? error.message : 'Please sign in to continue.'
+      )
     }
-  }, [handleUnauthorized, loadAuthedData, requestJson])
+  }, [handleUnauthorized, loadAuthedData])
 
   const refreshAuthSessionRole = useCallback(async () => {
     try {
@@ -998,32 +1041,31 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
   const requestPasswordSignIn = useCallback(
     async (identifier: string, password: string) => {
-      await requestJson('/api/auth/password/sign-in', {
-        method: 'POST',
-        body: JSON.stringify({ identifier, password }),
-      })
+      await requestAuthJson(
+        '/api/auth/password/sign-in',
+        { identifier, password },
+        'Unable to sign in right now.'
+      )
       setAuthError(null)
-      await restoreSession()
+      await restoreSession({ afterSignIn: true })
     },
-    [requestJson, restoreSession]
+    [requestAuthJson, restoreSession]
   )
 
   const requestPasswordSignUp = useCallback(
     async (identifier: string, password: string) => {
-      const response = await requestJson<{ message?: string }>(
+      const response = await requestAuthJson<{ message?: string }>(
         '/api/auth/password/sign-up',
-        {
-          method: 'POST',
-          body: JSON.stringify({ identifier, password }),
-        }
+        { identifier, password },
+        'Unable to create the account right now.'
       )
 
       setAuthError(null)
-      await restoreSession()
+      await restoreSession({ afterSignIn: true })
 
       return response.message ?? 'Account created. You are now signed in.'
     },
-    [requestJson, restoreSession]
+    [requestAuthJson, restoreSession]
   )
 
   const requestPasswordReset = useCallback(
