@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { toast } from 'sonner'
 import {
   FolderInput,
   FolderPlus,
@@ -21,6 +22,16 @@ import {
 } from '@/lib/utils/cost'
 import { useIsMobile } from '@/components/ui/use-mobile'
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -330,11 +341,38 @@ export function Sidebar({ onOpenSettings }: SidebarProps) {
   } = useChatContext()
   const [isCreatingProject, setIsCreatingProject] = useState(false)
   const [newProjectName, setNewProjectName] = useState('')
+  const [pendingDeleteChat, setPendingDeleteChat] =
+    useState<ConversationSummary | null>(null)
+  const [isDeletingChat, setIsDeletingChat] = useState(false)
   const sidebarRef = useRef<HTMLElement | null>(null)
   const isMobile = useIsMobile()
 
   const closeOnMobile = () => {
     if (isMobile) toggleSidebar()
+  }
+
+  const runChatAction = async (action: () => Promise<void>, failureMessage: string) => {
+    try {
+      await action()
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : failureMessage)
+    }
+  }
+
+  const handleConfirmDeleteChat = async () => {
+    if (!pendingDeleteChat) return
+    setIsDeletingChat(true)
+    try {
+      await deleteChat(pendingDeleteChat.id)
+      toast.success('Chat deleted')
+      setPendingDeleteChat(null)
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : 'Could not delete the chat. Please try again.'
+      )
+    } finally {
+      setIsDeletingChat(false)
+    }
   }
 
   const projectLabelById = useMemo(
@@ -446,24 +484,28 @@ export function Sidebar({ onOpenSettings }: SidebarProps) {
             </div>
           </button>
 
-          <TooltipProvider delayDuration={300}>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className="size-9 rounded-lg text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground sm:size-9 sm:rounded-xl"
-                  onClick={toggleSidebar}
-                >
-                  <PanelLeftClose className="size-4" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="bottom" className="text-xs">
-                Collapse sidebar
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
+          {/* The mobile drawer has its own close button, so only show this on desktop. */}
+          {!isMobile ? (
+            <TooltipProvider delayDuration={300}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    aria-label="Collapse sidebar"
+                    className="size-9 rounded-lg text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground sm:size-9 sm:rounded-xl"
+                    onClick={toggleSidebar}
+                  >
+                    <PanelLeftClose className="size-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" className="text-xs">
+                  Collapse sidebar
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          ) : null}
         </div>
 
         <Button
@@ -529,6 +571,8 @@ export function Sidebar({ onOpenSettings }: SidebarProps) {
             type="button"
             variant="ghost"
             size="icon"
+            title="New project"
+            aria-label="New project"
             className="size-9 rounded-xl bg-sidebar-accent/40 text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground"
             onClick={() => setIsCreatingProject((previous) => !previous)}
           >
@@ -597,6 +641,7 @@ export function Sidebar({ onOpenSettings }: SidebarProps) {
             <Button
               variant="ghost"
               size="icon"
+              aria-label="Clear search"
               className="absolute right-1 top-1/2 -translate-y-1/2 size-7 hover:bg-sidebar-accent"
               onClick={() => setSearchQuery('')}
             >
@@ -617,9 +662,18 @@ export function Sidebar({ onOpenSettings }: SidebarProps) {
               setCurrentChat(chat)
               closeOnMobile()
             }}
-            onPinChat={togglePinChat}
-            onDeleteChat={deleteChat}
-            onMoveChatToProject={moveChatToProject}
+            onPinChat={(id) =>
+              void runChatAction(() => togglePinChat(id), 'Could not update the pin.')
+            }
+            onDeleteChat={(id) =>
+              setPendingDeleteChat(filteredChats.find((chat) => chat.id === id) ?? null)
+            }
+            onMoveChatToProject={(chatId, projectId) =>
+              void runChatAction(
+                () => moveChatToProject(chatId, projectId),
+                'Could not move the chat.'
+              )
+            }
             projects={projects}
           />
 
@@ -631,9 +685,18 @@ export function Sidebar({ onOpenSettings }: SidebarProps) {
               setCurrentChat(chat)
               closeOnMobile()
             }}
-            onPinChat={togglePinChat}
-            onDeleteChat={deleteChat}
-            onMoveChatToProject={moveChatToProject}
+            onPinChat={(id) =>
+              void runChatAction(() => togglePinChat(id), 'Could not update the pin.')
+            }
+            onDeleteChat={(id) =>
+              setPendingDeleteChat(filteredChats.find((chat) => chat.id === id) ?? null)
+            }
+            onMoveChatToProject={(chatId, projectId) =>
+              void runChatAction(
+                () => moveChatToProject(chatId, projectId),
+                'Could not move the chat.'
+              )
+            }
             projects={projects}
           />
 
@@ -663,6 +726,7 @@ export function Sidebar({ onOpenSettings }: SidebarProps) {
                     <Button
                       variant="ghost"
                       size="icon"
+                      aria-label="Account"
                       className="size-9 rounded-xl text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground"
                     >
                       <UserIcon className="size-4" />
@@ -745,44 +809,83 @@ export function Sidebar({ onOpenSettings }: SidebarProps) {
     </>
   )
 
+  const deleteChatDialog = (
+    <AlertDialog
+      open={Boolean(pendingDeleteChat)}
+      onOpenChange={(nextOpen) => {
+        if (!nextOpen && !isDeletingChat) setPendingDeleteChat(null)
+      }}
+    >
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Delete this chat?</AlertDialogTitle>
+          <AlertDialogDescription>
+            &quot;{pendingDeleteChat?.title}&quot; and all of its messages will be
+            permanently deleted. This cannot be undone.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel disabled={isDeletingChat}>Cancel</AlertDialogCancel>
+          <AlertDialogAction
+            disabled={isDeletingChat}
+            className="bg-destructive text-white hover:bg-destructive/90"
+            onClick={(event) => {
+              event.preventDefault()
+              void handleConfirmDeleteChat()
+            }}
+          >
+            <TrashIcon className="mr-2 size-4" />
+            {isDeletingChat ? 'Deleting…' : 'Delete chat'}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  )
+
   if (isMobile) {
     return (
-      <Sheet
-        open={isSidebarOpen}
-        onOpenChange={(open) => {
-          if (!open) toggleSidebar()
-        }}
-      >
-        <SheetContent
-          side="left"
-          className="w-[86vw] max-w-sm gap-0 border-sidebar-border bg-sidebar p-0 sm:max-w-sm"
+      <>
+        <Sheet
+          open={isSidebarOpen}
+          onOpenChange={(open) => {
+            if (!open) toggleSidebar()
+          }}
         >
-          <SheetTitle className="sr-only">Navigation</SheetTitle>
-          <div className="flex h-full min-h-0 flex-col">{sidebarBody}</div>
-        </SheetContent>
-      </Sheet>
+          <SheetContent
+            side="left"
+            className="w-[86vw] max-w-sm gap-0 border-sidebar-border bg-sidebar p-0 sm:max-w-sm"
+          >
+            <SheetTitle className="sr-only">Navigation</SheetTitle>
+            <div className="flex h-full min-h-0 flex-col">{sidebarBody}</div>
+          </SheetContent>
+        </Sheet>
+        {deleteChatDialog}
+      </>
     )
   }
 
   return (
-    <aside
-      ref={sidebarRef}
-      style={{ width: `min(${sidebarWidth}px, calc(100vw - 48px))` }}
-      className="relative flex h-full min-h-0 shrink-0 flex-col border-r border-sidebar-border bg-sidebar"
-    >
-      {sidebarBody}
-
-      <div
-        role="separator"
-        aria-orientation="vertical"
-        aria-label="Resize sidebar"
-        className="absolute inset-y-0 right-0 z-20 flex w-3 translate-x-1/2 cursor-col-resize items-center justify-center"
-        onMouseDown={handleResizeStart}
+    <>
+      <aside
+        ref={sidebarRef}
+        style={{ width: `min(${sidebarWidth}px, calc(100vw - 48px))` }}
+        className="relative flex h-full min-h-0 shrink-0 flex-col border-r border-sidebar-border bg-sidebar"
       >
-        <div className="flex h-16 w-1.5 items-center justify-center rounded-full bg-sidebar-border/70 text-sidebar-foreground/30 transition-colors hover:bg-sidebar-primary/40 hover:text-sidebar-foreground/60">
-          <GripVertical className="size-3.5" />
+        {sidebarBody}
+
+        <div
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="Resize sidebar"
+          className="absolute inset-y-0 right-0 z-20 flex w-3 translate-x-1/2 cursor-col-resize items-center justify-center"
+          onMouseDown={handleResizeStart}
+        >
+          <div className="flex h-16 w-1.5 items-center justify-center rounded-full bg-sidebar-border/70 text-sidebar-foreground/30 transition-colors hover:bg-sidebar-primary/40 hover:text-sidebar-foreground/60">
+            <GripVertical className="size-3.5" />
+          </div>
         </div>
-      </div>
-    </aside>
+      </aside>
+      {deleteChatDialog}
+    </>
   )
 }
