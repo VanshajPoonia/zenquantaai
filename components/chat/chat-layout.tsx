@@ -86,12 +86,11 @@ function ChatShell({
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         <Header
           onOpenSettings={() => setIsSettingsModalOpen(true)}
-          onOpenAssistantHelp={() => setIsAssistantHelpOpen(true)}
           onOpenCommandPalette={() => setIsCommandPaletteOpen(true)}
         />
 
         <div className="flex min-h-0 flex-1 overflow-hidden">
-          <ChatArea />
+          <ChatArea onOpenAssistantHelp={() => setIsAssistantHelpOpen(true)} />
           <SettingsPanel />
         </div>
       </div>

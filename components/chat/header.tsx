@@ -1,12 +1,20 @@
 'use client'
 
 import Link from 'next/link'
-import { CircleHelp, MoreHorizontal, Search, Shield } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { useEffect, useRef, useState } from 'react'
+import { toast } from 'sonner'
+import {
+  ChevronDown,
+  Pencil,
+  Pin,
+  PinOff,
+  Search,
+  Shield,
+  SlidersHorizontal,
+  Trash2,
+} from 'lucide-react'
 import { useChatContext } from '@/lib/chat-context'
-import { ModeIcon, getModeAccentClass, getModeTintClass } from '@/lib/mode-utils'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
 import {
   Tooltip,
   TooltipContent,
@@ -21,108 +29,270 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
+import {
   ZenquantaLogo,
   MenuIcon,
-  ShareIcon,
   DownloadIcon,
   SettingsIcon,
-  SlidersIcon,
 } from '@/components/icons'
 
 interface HeaderProps {
   onOpenSettings: () => void
-  onOpenAssistantHelp: () => void
   onOpenCommandPalette: () => void
 }
 
-export function Header({
-  onOpenSettings,
-  onOpenAssistantHelp,
-  onOpenCommandPalette,
-}: HeaderProps) {
-  const {
-    currentMode,
-    authState,
-    currentChat,
-    exportCurrentChat,
-    goHome,
-    toggleSidebar,
-    isSidebarOpen,
-    isSettingsPanelOpen,
-    toggleSettingsPanel,
-    statusLabel,
-  } = useChatContext()
+function HeaderIconButton({
+  label,
+  onClick,
+  children,
+}: {
+  label: string
+  onClick: () => void
+  children: React.ReactNode
+}) {
+  return (
+    <TooltipProvider delayDuration={300}>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="size-9 rounded-xl text-muted-foreground hover:text-foreground"
+            aria-label={label}
+            onClick={onClick}
+          >
+            {children}
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent>{label}</TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  )
+}
 
+function ChatTitle() {
+  const {
+    currentChat,
+    isNewChatDraft,
+    renameChat,
+    togglePinChat,
+    deleteChat,
+    exportCurrentChat,
+    toggleSettingsPanel,
+  } = useChatContext()
+  const [isRenaming, setIsRenaming] = useState(false)
+  const [draftTitle, setDraftTitle] = useState('')
+  const [confirmDelete, setConfirmDelete] = useState(false)
+  const [isDeleting, setIsDeleting] = useState(false)
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    if (isRenaming) inputRef.current?.select()
+  }, [isRenaming])
+
+  // Leaving a chat mid-rename should not carry the edit over.
+  useEffect(() => {
+    setIsRenaming(false)
+  }, [currentChat?.id])
+
+  if (!currentChat) {
+    return isNewChatDraft ? (
+      <span className="truncate px-2 text-sm text-muted-foreground">New chat</span>
+    ) : null
+  }
+
+  const chatId = currentChat.id
+  const title = currentChat.title || 'Untitled chat'
+
+  const commitRename = async () => {
+    setIsRenaming(false)
+    const nextTitle = draftTitle.trim()
+    if (!nextTitle || nextTitle === currentChat.title) return
+
+    try {
+      await renameChat(chatId, nextTitle)
+    } catch {
+      toast.error('Could not rename the chat. Please try again.')
+    }
+  }
+
+  const handleDelete = async () => {
+    setIsDeleting(true)
+    try {
+      await deleteChat(chatId)
+      setConfirmDelete(false)
+      toast.success('Chat deleted')
+    } catch {
+      toast.error('Could not delete the chat. Please try again.')
+    } finally {
+      setIsDeleting(false)
+    }
+  }
+
+  if (isRenaming) {
+    return (
+      <input
+        ref={inputRef}
+        value={draftTitle}
+        aria-label="Chat name"
+        maxLength={120}
+        onChange={(event) => setDraftTitle(event.target.value)}
+        onBlur={() => void commitRename()}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter') {
+            event.preventDefault()
+            void commitRename()
+          }
+          if (event.key === 'Escape') {
+            event.preventDefault()
+            setIsRenaming(false)
+          }
+        }}
+        className="h-9 w-full min-w-0 max-w-md rounded-lg border border-border bg-background px-2.5 text-sm text-foreground outline-none focus:border-foreground/30"
+      />
+    )
+  }
+
+  return (
+    <>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button
+            variant="ghost"
+            className="h-9 min-w-0 max-w-full gap-1 rounded-lg px-2.5 text-sm font-medium text-foreground"
+            aria-label={`Chat options for ${title}`}
+          >
+            {currentChat.isPinned ? (
+              <Pin className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
+            ) : null}
+            <span className="truncate">{title}</span>
+            <ChevronDown className="size-3.5 shrink-0 text-muted-foreground" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="start" className="w-56">
+          <DropdownMenuItem
+            onSelect={() => {
+              setDraftTitle(currentChat.title)
+              setIsRenaming(true)
+            }}
+          >
+            <Pencil className="size-4" />
+            Rename
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            onSelect={() => {
+              void togglePinChat(chatId).catch(() =>
+                toast.error('Could not update the pin. Please try again.')
+              )
+            }}
+          >
+            {currentChat.isPinned ? <PinOff className="size-4" /> : <Pin className="size-4" />}
+            {currentChat.isPinned ? 'Unpin' : 'Pin to top'}
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={toggleSettingsPanel}>
+            <SlidersHorizontal className="size-4" />
+            Chat settings
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem onSelect={() => exportCurrentChat('markdown')}>
+            <DownloadIcon className="size-4" />
+            Export as Markdown
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => exportCurrentChat('json')}>
+            <DownloadIcon className="size-4" />
+            Export as JSON
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem variant="destructive" onSelect={() => setConfirmDelete(true)}>
+            <Trash2 className="size-4" />
+            Delete chat
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+
+      <AlertDialog
+        open={confirmDelete}
+        onOpenChange={(open) => {
+          if (!isDeleting) setConfirmDelete(open)
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete this chat?</AlertDialogTitle>
+            <AlertDialogDescription>
+              &ldquo;{title}&rdquo; and its messages will be removed. This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={isDeleting}
+              className="bg-destructive text-white hover:bg-destructive/90"
+              onClick={(event) => {
+                event.preventDefault()
+                void handleDelete()
+              }}
+            >
+              {isDeleting ? 'Deleting…' : 'Delete chat'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
+  )
+}
+
+export function Header({ onOpenSettings, onOpenCommandPalette }: HeaderProps) {
+  const { authState, goHome, toggleSidebar, isSidebarOpen } = useChatContext()
   const isAdmin = authState.user?.role === 'admin'
 
   return (
     <div className="px-2 pt-2 sm:px-3 sm:pt-3">
-      <header className="flex h-12 items-center justify-between rounded-xl border border-border/70 bg-card/60 px-2 shadow-sm backdrop-blur-sm sm:h-14 sm:rounded-2xl sm:px-4">
-        {/* Left Section */}
-        <div className="flex min-w-0 items-center gap-1.5 sm:gap-3">
-          {!isSidebarOpen && (
-            <>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="size-8 rounded-lg sm:size-9 sm:rounded-xl"
-                onClick={toggleSidebar}
-              >
-                <MenuIcon className="size-4 sm:size-5" />
-              </Button>
-              <button
-                type="button"
-                onClick={goHome}
-                className="flex cursor-pointer items-center gap-2 rounded-xl px-2 py-1 transition-colors hover:bg-accent/40"
-              >
-                <ZenquantaLogo className="size-5 sm:size-6" />
-                <span className="font-display hidden text-lg text-foreground sm:inline">
-                  Zenquanta AI
-                </span>
-              </button>
-            </>
-          )}
-          {isSidebarOpen && (
-            <Button
-              variant="ghost"
-              size="icon"
-              className="size-8 rounded-lg sm:size-9 sm:rounded-xl"
-              onClick={toggleSidebar}
+      <header className="flex h-12 items-center gap-2 rounded-xl border border-border/70 bg-card/60 px-1.5 shadow-sm backdrop-blur-sm sm:h-14 sm:rounded-2xl sm:px-3">
+        <div className="flex min-w-0 flex-1 items-center gap-1">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="size-9 shrink-0 rounded-xl"
+            aria-label={isSidebarOpen ? 'Close sidebar' : 'Open sidebar'}
+            onClick={toggleSidebar}
+          >
+            <MenuIcon className="size-4 sm:size-5" />
+          </Button>
+          {!isSidebarOpen ? (
+            <button
+              type="button"
+              onClick={goHome}
+              aria-label="Zenquanta AI home"
+              className="hidden shrink-0 items-center gap-2 rounded-xl px-2 py-1 transition-colors hover:bg-accent/40 sm:flex"
             >
-              <MenuIcon className="size-4 sm:size-5" />
-            </Button>
-          )}
-        </div>
-
-        {/* Center Section - Mode & Status Info */}
-        <div className="flex items-center gap-1.5 sm:gap-3">
-          <div
-            className={cn(
-              'flex items-center gap-2 rounded-full border px-2 py-1 transition-all duration-300 sm:px-3 sm:py-1.5',
-              getModeAccentClass(currentMode, 'text'),
-              `${getModeAccentClass(currentMode, 'border')}/30`,
-              getModeTintClass(currentMode, 'subtle')
-            )}
-            title="Current assistant"
-          >
-            <ModeIcon mode={currentMode} size="sm" />
+              <ZenquantaLogo className="size-6" />
+              <span className="font-display hidden text-lg text-foreground lg:inline">
+                Zenquanta AI
+              </span>
+            </button>
+          ) : null}
+          <div className="flex min-w-0 flex-1 items-center">
+            <ChatTitle />
           </div>
-          <Badge
-            variant={statusLabel === 'Streaming' ? 'default' : 'secondary'}
-            className="hidden px-2.5 text-[11px] sm:inline-flex"
-          >
-            {statusLabel}
-          </Badge>
         </div>
 
-        {/* Right Section */}
-        <div className="flex items-center gap-1 sm:gap-2">
+        <div className="flex shrink-0 items-center gap-0.5 sm:gap-1">
           {isAdmin ? (
             <Button
               asChild
-              variant="secondary"
+              variant="ghost"
               size="sm"
-              className="hidden gap-2 rounded-xl px-3 sm:inline-flex"
+              className="hidden gap-2 rounded-xl px-3 text-muted-foreground hover:text-foreground sm:inline-flex"
             >
               <Link href="/admin">
                 <Shield className="size-3.5" />
@@ -130,153 +300,15 @@ export function Header({
               </Link>
             </Button>
           ) : null}
-
-          <TooltipProvider delayDuration={300}>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="size-9"
-                  onClick={onOpenCommandPalette}
-                >
-                  <Search className="size-4" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>Search workspace</TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
-
-          <TooltipProvider delayDuration={300}>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="hidden size-8 sm:inline-flex sm:size-9"
-                  onClick={onOpenAssistantHelp}
-                >
-                  <CircleHelp className="size-4" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>Assistant guide</TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
-
-          <TooltipProvider delayDuration={300}>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className={cn(
-                    'hidden size-8 sm:inline-flex sm:size-9',
-                    isSettingsPanelOpen && 'bg-accent text-accent-foreground'
-                  )}
-                  onClick={toggleSettingsPanel}
-                >
-                  <SlidersIcon className="size-4" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>Session Settings</TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
-
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="hidden size-8 sm:inline-flex sm:size-9"
-              >
-                <ShareIcon className="size-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-48">
-              <DropdownMenuItem disabled={!currentChat}>
-                <ShareIcon className="mr-2 size-4" />
-                Share Chat
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                disabled={!currentChat}
-                onClick={() => exportCurrentChat('markdown')}
-              >
-                <DownloadIcon className="mr-2 size-4" />
-                Export as Markdown
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                disabled={!currentChat}
-                onClick={() => exportCurrentChat('json')}
-              >
-                <DownloadIcon className="mr-2 size-4" />
-                Export as JSON
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-
-          {/* Mobile-only overflow — folds help/session-settings/share/admin
-              behind one trigger so the header doesn't crowd on narrow phones. */}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="size-9 sm:hidden">
-                <MoreHorizontal className="size-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-52">
-              {isAdmin ? (
-                <DropdownMenuItem asChild>
-                  <Link href="/admin">
-                    <Shield className="mr-2 size-4" />
-                    Admin
-                  </Link>
-                </DropdownMenuItem>
-              ) : null}
-              <DropdownMenuItem onClick={onOpenAssistantHelp}>
-                <CircleHelp className="mr-2 size-4" />
-                Assistant guide
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={toggleSettingsPanel}>
-                <SlidersIcon className="mr-2 size-4" />
-                Session Settings
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem disabled={!currentChat}>
-                <ShareIcon className="mr-2 size-4" />
-                Share Chat
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                disabled={!currentChat}
-                onClick={() => exportCurrentChat('markdown')}
-              >
-                <DownloadIcon className="mr-2 size-4" />
-                Export as Markdown
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                disabled={!currentChat}
-                onClick={() => exportCurrentChat('json')}
-              >
-                <DownloadIcon className="mr-2 size-4" />
-                Export as JSON
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-
-          <TooltipProvider delayDuration={300}>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="size-9"
-                  onClick={onOpenSettings}
-                >
-                  <SettingsIcon className="size-4" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>Settings</TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
+          <HeaderIconButton label="Search" onClick={onOpenCommandPalette}>
+            <Search className="size-4" />
+          </HeaderIconButton>
+          {/* The open sidebar already has Settings in its footer. */}
+          {!isSidebarOpen ? (
+            <HeaderIconButton label="Settings" onClick={onOpenSettings}>
+              <SettingsIcon className="size-4" />
+            </HeaderIconButton>
+          ) : null}
         </div>
       </header>
     </div>
