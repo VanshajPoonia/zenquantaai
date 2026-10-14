@@ -15,11 +15,14 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { ChatMessage } from './message'
 import { EmptyState } from './empty-state'
 import { Composer } from './composer'
-import { ModeSwitcherCompact } from './mode-switcher'
 import { ProjectHome } from './project-home'
 import { WorkspaceHome } from './workspace-home'
 
-export function ChatArea() {
+export function ChatArea({
+  onOpenAssistantHelp,
+}: {
+  onOpenAssistantHelp?: () => void
+}) {
   const {
     currentChat,
     activeProjectHomeId,
@@ -298,33 +301,6 @@ export function ChatArea() {
       ) : (
         <ScrollArea ref={scrollAreaRef} className="min-h-0 flex-1 overscroll-contain">
           <div className="mx-auto max-w-4xl px-3 py-4 sm:px-4 sm:py-6">
-            <div className="mb-4 flex justify-center sm:mb-6">
-              <ModeSwitcherCompact />
-            </div>
-
-            {streamingState.status === 'error' && (
-              <Alert className="mb-6 border-destructive/40 bg-destructive/10 text-destructive">
-                <AlertTitle>
-                  {upgradeErrorNudge?.title ?? 'Last response needs attention'}
-                </AlertTitle>
-                <AlertDescription>
-                  <span>
-                    {upgradeErrorNudge?.description ??
-                      streamingState.error ??
-                      'The last generation did not finish cleanly.'}
-                  </span>
-                  {upgradeErrorNudge ? (
-                    <Link
-                      href="/pricing"
-                      className="ml-2 inline-flex rounded-full border border-destructive/40 px-2 py-0.5 text-xs font-medium text-destructive transition-colors hover:bg-destructive/10"
-                    >
-                      View plans
-                    </Link>
-                  ) : null}
-                </AlertDescription>
-              </Alert>
-            )}
-
             {currentChat?.messagePageInfo?.hasMoreBefore &&
             currentChat.messagePageInfo.nextBefore ? (
               <div className="flex justify-center py-2">
@@ -381,12 +357,33 @@ export function ChatArea() {
               </div>
             ))}
 
+            {/* The failed reply already shows its own error and Retry. A plan
+                limit also needs a way forward, so it gets a card right below. */}
+            {streamingState.status === 'error' && upgradeErrorNudge ? (
+              <Alert className="mb-6 border-amber-500/30 bg-amber-500/10 text-amber-100">
+                <AlertTitle>{upgradeErrorNudge.title}</AlertTitle>
+                <AlertDescription className="text-amber-100/85">
+                  <span>{upgradeErrorNudge.description}</span>
+                  <Link
+                    href="/pricing"
+                    className="mt-2 inline-flex font-medium text-amber-100 underline-offset-4 hover:underline"
+                  >
+                    See plans
+                  </Link>
+                </AlertDescription>
+              </Alert>
+            ) : null}
+
             <div ref={messagesEndRef} />
           </div>
         </ScrollArea>
       )}
 
-      <Composer onSend={handleSendMessage} initialValue={selectedPrompt} />
+      <Composer
+        onSend={handleSendMessage}
+        initialValue={selectedPrompt}
+        onOpenAssistantHelp={onOpenAssistantHelp}
+      />
     </div>
   )
 }

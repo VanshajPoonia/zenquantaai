@@ -79,6 +79,7 @@ interface ModelComparisonButtonProps {
   value: string
   disabled?: boolean
   onSaved?: () => void
+  hideTrigger?: boolean
 }
 
 interface ModelDuelDashboardSnapshot {
@@ -127,6 +128,7 @@ export function ModelComparisonButton({
   value,
   disabled,
   onSaved,
+  hideTrigger = false,
 }: ModelComparisonButtonProps) {
   const {
     currentMode,
@@ -332,23 +334,26 @@ export function ModelComparisonButton({
 
   return (
     <>
-      <TooltipProvider delayDuration={300}>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-sm"
-              className="text-muted-foreground hover:text-foreground"
-              disabled={disabled || !prompt}
-              onClick={() => setOpen(true)}
-            >
-              <GitCompareArrows className="size-4" />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>Model Duel</TooltipContent>
-        </Tooltip>
-      </TooltipProvider>
+      {hideTrigger ? null : (
+        <TooltipProvider delayDuration={300}>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                className="text-muted-foreground hover:text-foreground"
+                aria-label="Model Duel"
+                disabled={disabled || !prompt}
+                onClick={() => setOpen(true)}
+              >
+                <GitCompareArrows className="size-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Model Duel</TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+      )}
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-h-[92vh] w-[calc(100vw-1rem)] max-w-7xl overflow-y-auto rounded-[28px] border-border/70 bg-background/95 p-0 shadow-2xl shadow-black/40">

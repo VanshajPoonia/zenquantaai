@@ -1,29 +1,24 @@
 'use client'
 
-import { useCallback, useState, useRef, useEffect, useMemo } from 'react'
-import { BookOpen, FileText, Images, ImagePlus } from 'lucide-react'
+import { ReactNode, useCallback, useState, useRef, useEffect, useMemo } from 'react'
+import { ArrowUp, Globe, ImagePlus } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useChatContext } from '@/lib/chat-context'
 import { AIMode, Attachment, MODE_CONFIGS, PendingAttachment } from '@/lib/types'
 import { getModelOverrideForUsageOptimization } from '@/lib/config'
 import { usePromptPrecheck } from '@/hooks/usePromptPrecheck'
 import { createPendingAttachment } from '@/lib/utils/files'
-import { getModeAccentClass, getModeGlow } from '@/lib/mode-utils'
+import { getModeAccentClass } from '@/lib/mode-utils'
 import { Button } from '@/components/ui/button'
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@/components/ui/tooltip'
-import { SendIcon, StopIcon, PaperclipIcon, XIcon } from '@/components/icons'
+import { StopIcon, XIcon } from '@/components/icons'
 import { AssistantRecommendationDialog } from './assistant-recommendation-dialog'
 import { AssistantRecommendationChip } from './assistant-recommendation-chip'
+import { AssistantPicker, ComposerToolsMenu } from './composer-controls'
+import { ComposerUsageNotice, IntelligencePicker, useComposerPlan } from './composer-usage'
 import { CustomAssistantButton } from './custom-assistant-button'
 import { ModelComparisonButton } from './model-comparison-button'
-import { ModeSwitcherCompact } from './mode-switcher'
 import { PromptLibraryButton } from './prompt-library-button'
-import { UsageTransparencyHint } from './usage-transparency-hint'
+
 interface ComposerProps {
   onSend: (input: {
     content: string
@@ -33,9 +28,42 @@ interface ComposerProps {
   }) => Promise<void>
   disabled?: boolean
   initialValue?: string
+  onOpenAssistantHelp?: () => void
 }
 
-export function Composer({ onSend, disabled, initialValue = '' }: ComposerProps) {
+function ActiveToolChip({
+  icon,
+  label,
+  removeLabel,
+  onRemove,
+}: {
+  icon: ReactNode
+  label: string
+  removeLabel: string
+  onRemove: () => void
+}) {
+  return (
+    <span className="inline-flex h-8 shrink-0 items-center gap-1 rounded-full bg-secondary pl-2.5 pr-1 text-xs font-medium text-foreground">
+      {icon}
+      <span className="hidden sm:inline">{label}</span>
+      <button
+        type="button"
+        aria-label={removeLabel}
+        className="rounded-full p-1 text-muted-foreground transition-colors hover:bg-background/60 hover:text-foreground"
+        onClick={onRemove}
+      >
+        <XIcon className="size-3" />
+      </button>
+    </span>
+  )
+}
+
+export function Composer({
+  onSend,
+  disabled,
+  initialValue = '',
+  onOpenAssistantHelp,
+}: ComposerProps) {
   const {
     currentMode,
     currentChat,
@@ -59,6 +87,8 @@ export function Composer({ onSend, disabled, initialValue = '' }: ComposerProps)
     attachmentIds: string[]
     composerKind: 'chat' | 'image'
   } | null>(null)
+  const [isDraggingFiles, setIsDraggingFiles] = useState(false)
+  const plan = useComposerPlan()
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const clearDraft = useCallback(() => {
@@ -129,7 +159,7 @@ export function Composer({ onSend, disabled, initialValue = '' }: ComposerProps)
     const textarea = textareaRef.current
     if (textarea) {
       textarea.style.height = 'auto'
-      textarea.style.height = `${Math.min(textarea.scrollHeight, 168)}px`
+      textarea.style.height = `${Math.min(textarea.scrollHeight, 200)}px`
     }
   }, [value])
 
@@ -219,17 +249,39 @@ export function Composer({ onSend, disabled, initialValue = '' }: ComposerProps)
     fileInputRef.current?.click()
   }
 
-  const handleFilesSelected = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(event.target.files ?? [])
+  const addFiles = async (files: File[]) => {
     if (files.length === 0) return
-
     const nextAttachments = await Promise.all(files.map(createPendingAttachment))
     setPendingAttachments((previous) => [...previous, ...nextAttachments])
+  }
+
+  const handleFilesSelected = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    await addFiles(Array.from(event.target.files ?? []))
     event.target.value = ''
   }
 
+  const handlePaste = (event: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const files = Array.from(event.clipboardData.files)
+    if (files.length === 0) return
+    event.preventDefault()
+    void addFiles(files)
+  }
+
+  const handleDrop = (event: React.DragEvent<HTMLDivElement>) => {
+    event.preventDefault()
+    setIsDraggingFiles(false)
+    if (disabled) return
+    void addFiles(Array.from(event.dataTransfer.files))
+  }
+
+  const hasDraft = Boolean(value.trim()) || pendingAttachments.length > 0
+  const canSend = hasDraft && !disabled
+  const isImageDraft = composerKind === 'image'
+  const showSearchChip =
+    !isImageDraft && sessionSettings.webSearch && currentMode !== 'live' && currentMode !== 'image'
+
   return (
-    <div className="sticky bottom-0 z-20 border-t border-border bg-gradient-to-t from-background via-background/95 to-background/70 px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 backdrop-blur-xl sm:px-4 sm:pb-4 sm:pt-5">
+    <div className="sticky bottom-0 z-20 bg-gradient-to-t from-background via-background to-background/0 px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-2 sm:px-4 sm:pb-4">
       <div className="mx-auto max-w-4xl">
         {draftRecommendation ? (
           <AssistantRecommendationChip
@@ -239,28 +291,30 @@ export function Composer({ onSend, disabled, initialValue = '' }: ComposerProps)
             onIgnore={() => void handleIgnoreDraftRecommendation()}
           />
         ) : null}
-        <UsageTransparencyHint
+        <ComposerUsageNotice
+          plan={plan}
           mode={currentMode}
           kind={composerKind}
           content={value}
           attachments={pendingAttachments}
           settings={sessionSettings}
-          disabled={disabled}
-          onIntelligenceChange={(intelligenceLevel) =>
-            updateSessionSettings({
-              modelOverride:
-                getModelOverrideForUsageOptimization(intelligenceLevel),
-            })
-          }
         />
         <div
           className={cn(
-            'rounded-2xl border bg-card/80 backdrop-blur-sm transition-all duration-300',
-            'focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-offset-background',
-            'focus-within:border-opacity-50',
-            getModeAccentClass(currentMode, 'ring').replace('ring-', 'focus-within:ring-') + '/50',
-            getModeAccentClass(currentMode, 'border').replace('border-', 'focus-within:border-') + '/50'
+            'rounded-3xl border border-border/80 bg-card shadow-lg shadow-black/20 transition-colors duration-150',
+            'focus-within:border-foreground/25',
+            isDraggingFiles && 'border-foreground/40 bg-card/80'
           )}
+          onDragOver={(event) => {
+            if (!event.dataTransfer.types.includes('Files')) return
+            event.preventDefault()
+            setIsDraggingFiles(true)
+          }}
+          onDragLeave={(event) => {
+            if (event.currentTarget.contains(event.relatedTarget as Node | null)) return
+            setIsDraggingFiles(false)
+          }}
+          onDrop={handleDrop}
         >
           <input
             ref={fileInputRef}
@@ -272,31 +326,32 @@ export function Composer({ onSend, disabled, initialValue = '' }: ComposerProps)
           />
 
           {pendingAttachments.length > 0 && (
-            <div className="flex flex-wrap gap-2 px-3 pt-3 sm:px-4 sm:pt-4">
+            <div className="flex flex-wrap gap-2 px-3 pt-3">
               {pendingAttachments.map((attachment) => (
                 <div
                   key={attachment.id}
-                  className="group flex max-w-full items-center gap-2 rounded-xl border border-border/60 bg-background/70 px-3 py-2 text-sm"
+                  className="flex max-w-full items-center gap-2 rounded-xl border border-border/60 bg-background/70 py-1.5 pl-3 pr-1.5 text-sm"
                 >
                   <div className="min-w-0">
                     <p className="truncate text-foreground">{attachment.name}</p>
                     <p className="text-xs text-muted-foreground">
                       {attachment.kind}
-                      {attachment.isExtracted ? ' • text ready' : ''}
+                      {attachment.isExtracted ? ' · text ready' : ''}
                     </p>
                   </div>
                   <Button
                     type="button"
                     variant="ghost"
                     size="icon-sm"
-                    className="size-6 shrink-0"
+                    className="size-7 shrink-0"
+                    aria-label={`Remove ${attachment.name}`}
                     onClick={() =>
                       setPendingAttachments((previous) =>
                         previous.filter((item) => item.id !== attachment.id)
                       )
                     }
                   >
-                    <XIcon className="size-3" />
+                    <XIcon className="size-3.5" />
                   </Button>
                 </div>
               ))}
@@ -308,25 +363,37 @@ export function Composer({ onSend, disabled, initialValue = '' }: ComposerProps)
             value={value}
             onChange={(e) => setValue(e.target.value)}
             onKeyDown={handleKeyDown}
+            onPaste={handlePaste}
+            aria-label={isImageDraft ? 'Describe the image' : 'Message'}
+            enterKeyHint="send"
             placeholder={
-              composerKind === 'image'
-                ? 'Describe the image you want to create...'
+              isImageDraft
+                ? 'Describe the image you want to create'
                 : modeConfig.placeholder
             }
             disabled={disabled}
             rows={1}
             className={cn(
-              'w-full resize-none bg-transparent px-3 pb-3 pt-3 text-sm leading-6 text-foreground placeholder:text-muted-foreground sm:px-4 sm:pt-4 sm:text-base',
-              'focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed',
-              'min-h-[76px] max-h-[168px]'
+              'block w-full resize-none bg-transparent px-4 pt-4 pb-2 text-base leading-6 text-foreground placeholder:text-muted-foreground',
+              'focus:outline-none disabled:cursor-not-allowed disabled:opacity-50',
+              'min-h-[56px] max-h-[200px]'
             )}
           />
 
-          <div className="flex flex-col gap-2 border-t border-border/60 px-2 pb-2 pt-2 sm:flex-row sm:items-center sm:justify-between">
-            <div className="-mx-1 flex min-w-0 items-center gap-1 overflow-x-auto px-1 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:pb-0">
-              <ModeSwitcherCompact />
-              <CustomAssistantButton />
+          <div className="flex items-center gap-1 px-2 pb-2">
+            <div className="relative shrink-0">
+              <ComposerToolsMenu
+                disabled={disabled}
+                hasDraftText={Boolean(value.trim())}
+                isImageMode={isImageDraft}
+                onAttachFiles={handleOpenFilePicker}
+                onToggleImageMode={() =>
+                  setComposerKind((previous) => (previous === 'image' ? 'chat' : 'image'))
+                }
+                onOpenPromptLibrary={() => openWorkspaceTool('prompt-library')}
+              />
               <PromptLibraryButton
+                hideTrigger
                 value={value}
                 currentMode={currentMode}
                 disabled={disabled}
@@ -335,168 +402,96 @@ export function Composer({ onSend, disabled, initialValue = '' }: ComposerProps)
                   requestAnimationFrame(() => textareaRef.current?.focus())
                 }}
               />
-              <TooltipProvider delayDuration={300}>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon-sm"
-                      className="text-muted-foreground hover:text-foreground"
-                      disabled={disabled}
-                      onClick={() => openWorkspaceTool('playbooks')}
-                    >
-                      <BookOpen className="size-4" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>AI Playbooks</TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-              <TooltipProvider delayDuration={300}>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon-sm"
-                      className="text-muted-foreground hover:text-foreground"
-                      disabled={disabled}
-                      onClick={() => openWorkspaceTool('artifacts')}
-                    >
-                      <FileText className="size-4" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>Artifact Studio</TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-              <ModelComparisonButton
-                value={value}
-                disabled={disabled || composerKind === 'image'}
-                onSaved={clearDraft}
-              />
-              <TooltipProvider delayDuration={300}>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon-sm"
-                      className="text-muted-foreground hover:text-foreground"
-                      disabled={disabled}
-                      onClick={() => openWorkspaceTool('prism-studio')}
-                    >
-                      <Images className="size-4" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>Prism Studio</TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-              <TooltipProvider delayDuration={300}>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="icon-sm"
-                      className="text-muted-foreground hover:text-foreground"
-                      disabled={disabled}
-                      onClick={handleOpenFilePicker}
-                    >
-                      <PaperclipIcon className="size-4" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>Attach files, PDFs, or images</TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-              <TooltipProvider delayDuration={300}>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      type="button"
-                      variant={composerKind === 'image' ? 'secondary' : 'ghost'}
-                      size="icon-sm"
-                      className={cn(
-                        'text-muted-foreground hover:text-foreground',
-                        composerKind === 'image' &&
-                          `${getModeAccentClass(currentMode, 'text')} ${getModeGlow(currentMode)}`
-                      )}
-                      disabled={disabled}
-                      onClick={() =>
-                        setComposerKind((previous) =>
-                          previous === 'image' ? 'chat' : 'image'
-                        )
-                      }
-                    >
-                      <ImagePlus className="size-4" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    {composerKind === 'image'
-                      ? 'Switch back to chat'
-                      : 'Create an image from your prompt'}
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
             </div>
+            <AssistantPicker
+              disabled={disabled}
+              onOpenAssistantHelp={onOpenAssistantHelp}
+            />
+            {isImageDraft ? (
+              <ActiveToolChip
+                icon={<ImagePlus className="size-3.5" />}
+                label="Image"
+                removeLabel="Turn off image creation"
+                onRemove={() => setComposerKind('chat')}
+              />
+            ) : null}
+            {showSearchChip ? (
+              <ActiveToolChip
+                icon={<Globe className="size-3.5" />}
+                label="Search"
+                removeLabel="Turn off web search"
+                onRemove={() => updateSessionSettings({ webSearch: false })}
+              />
+            ) : null}
 
-            <div className="flex shrink-0 items-center justify-end gap-2">
+            <div className="ml-auto flex shrink-0 items-center gap-1">
+              {!isImageDraft && currentMode !== 'image' ? (
+                <IntelligencePicker
+                  plan={plan}
+                  mode={currentMode}
+                  settings={sessionSettings}
+                  disabled={disabled}
+                  onChange={(intelligenceLevel) =>
+                    updateSessionSettings({
+                      modelOverride: getModelOverrideForUsageOptimization(intelligenceLevel),
+                    })
+                  }
+                />
+              ) : null}
               {isStreaming ? (
                 <>
-                  <Button
-                    onClick={() => void handleSubmit()}
-                    disabled={(!value.trim() && pendingAttachments.length === 0) || disabled}
-                    className={cn(
-                      'h-10 rounded-xl px-3 text-white transition-all duration-300 disabled:opacity-50 sm:px-4',
-                      getModeAccentClass(currentMode, 'bg'),
-                      'hover:opacity-90',
-                      getModeGlow(currentMode)
-                    )}
-                  >
-                    <SendIcon className="size-4 sm:mr-2" />
-                    <span className="hidden sm:inline">
+                  {hasDraft ? (
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      className="h-9 rounded-full px-3"
+                      disabled={!canSend}
+                      onClick={() => void handleSubmit()}
+                    >
                       Queue{queuedPromptCount > 0 ? ` (${queuedPromptCount + 1})` : ''}
+                    </Button>
+                  ) : queuedPromptCount > 0 ? (
+                    <span className="px-2 text-xs text-muted-foreground">
+                      {queuedPromptCount} queued
                     </span>
-                  </Button>
+                  ) : null}
                   <Button
+                    type="button"
+                    size="icon"
+                    aria-label="Stop generating"
+                    className="size-9 rounded-full bg-foreground text-background hover:bg-foreground/90"
                     onClick={handleStop}
-                    className="h-10 rounded-xl bg-destructive px-3 text-destructive-foreground hover:bg-destructive/90 sm:px-4"
                   >
-                    <StopIcon className="size-4 sm:mr-2" />
-                    <span className="hidden sm:inline">Stop</span>
+                    <StopIcon className="size-3.5" />
                   </Button>
                 </>
               ) : (
                 <Button
+                  type="button"
+                  size="icon"
+                  aria-label={isImageDraft ? 'Create image' : 'Send message'}
+                  disabled={!canSend}
                   onClick={() => void handleSubmit()}
-                  disabled={(!value.trim() && pendingAttachments.length === 0) || disabled}
                   className={cn(
-                    'h-10 rounded-xl px-3 text-white transition-all duration-300 disabled:opacity-50 sm:min-w-24 sm:px-4',
-                    getModeAccentClass(currentMode, 'bg'),
-                    `hover:opacity-90`,
-                    getModeGlow(currentMode)
+                    'size-9 rounded-full text-white transition-opacity hover:opacity-90 disabled:bg-muted disabled:text-muted-foreground disabled:opacity-100',
+                    getModeAccentClass(currentMode, 'bg')
                   )}
                 >
-                  <SendIcon className="size-4 sm:mr-2" />
-                  <span className="hidden sm:inline">
-                    {composerKind === 'image' ? 'Create' : 'Send'}
-                  </span>
+                  <ArrowUp className="size-4" />
                 </Button>
               )}
             </div>
           </div>
         </div>
 
-        <p className="mt-2 hidden text-center text-xs text-muted-foreground sm:block">
-          {composerKind === 'image' ? (
-            <>
-              Image mode generates a richer, more production-ready visual from your prompt.
-            </>
-          ) : null}
-          {composerKind === 'image' ? ' ' : null}
-          Press <kbd className="px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-mono text-xs">Enter</kbd> to send,{' '}
-          <kbd className="px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-mono text-xs">Shift + Enter</kbd> for new line,{' '}
-          <kbd className="px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-mono text-xs">Ctrl/Cmd + Enter</kbd> to send from anywhere in the draft
-          {queuedPromptCount > 0 ? ` • ${queuedPromptCount} queued` : ''}
-        </p>
+        <ModelComparisonButton
+          hideTrigger
+          value={value}
+          disabled={disabled || isImageDraft}
+          onSaved={clearDraft}
+        />
+        <CustomAssistantButton hideTrigger />
       </div>
 
       <AssistantRecommendationDialog

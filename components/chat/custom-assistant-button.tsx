@@ -151,7 +151,11 @@ function copyAssistantInput(
   }
 }
 
-export function CustomAssistantButton() {
+export function CustomAssistantButton({
+  hideTrigger = false,
+}: {
+  hideTrigger?: boolean
+} = {}) {
   const {
     customAssistants,
     currentCustomAssistantId,
@@ -303,21 +307,23 @@ export function CustomAssistantButton() {
 
   return (
     <>
-      <Button
-        type="button"
-        variant={activeAssistant ? 'secondary' : 'ghost'}
-        size="icon"
-        className={cn('size-9 rounded-lg', activeAssistant && 'border border-border/60')}
-        onClick={() => setOpen(true)}
-        title={formLabel(activeAssistant)}
-      >
-        {activeAssistant ? (
-          <span className="text-sm leading-none">{activeAssistant.iconEmoji}</span>
-        ) : (
-          <BotIcon className="size-4" />
-        )}
-        <span className="sr-only">{formLabel(activeAssistant)}</span>
-      </Button>
+      {hideTrigger ? null : (
+        <Button
+          type="button"
+          variant={activeAssistant ? 'secondary' : 'ghost'}
+          size="icon"
+          className={cn('size-9 rounded-lg', activeAssistant && 'border border-border/60')}
+          onClick={() => setOpen(true)}
+          title={formLabel(activeAssistant)}
+        >
+          {activeAssistant ? (
+            <span className="text-sm leading-none">{activeAssistant.iconEmoji}</span>
+          ) : (
+            <BotIcon className="size-4" />
+          )}
+          <span className="sr-only">{formLabel(activeAssistant)}</span>
+        </Button>
+      )}
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-5xl">

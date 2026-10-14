@@ -47,6 +47,7 @@ import {
 import { Input } from '@/components/ui/input'
 import {
   Popover,
+  PopoverAnchor,
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover'
@@ -82,6 +83,8 @@ interface PromptLibraryButtonProps {
   currentMode: AIMode
   disabled?: boolean
   onUsePrompt: (content: string) => void
+  // The composer opens this from its + menu and only needs an anchor.
+  hideTrigger?: boolean
 }
 
 function createBlankStep(order: number): PromptWorkflowStepInput {
@@ -142,6 +145,7 @@ export function PromptLibraryButton({
   currentMode,
   disabled,
   onUsePrompt,
+  hideTrigger = false,
 }: PromptLibraryButtonProps) {
   const {
     promptLibrary,
@@ -388,25 +392,33 @@ export function PromptLibraryButton({
   return (
     <>
       <Popover open={isPopoverOpen} onOpenChange={setIsPopoverOpen}>
-        <TooltipProvider delayDuration={300}>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <PopoverTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  className="text-muted-foreground hover:text-foreground"
-                  disabled={disabled}
-                >
-                  <BookText className="size-4" />
-                </Button>
-              </PopoverTrigger>
-            </TooltipTrigger>
-            <TooltipContent>Prompt Library</TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
+        {hideTrigger ? (
+          <PopoverAnchor asChild>
+            <span aria-hidden className="pointer-events-none absolute inset-0" />
+          </PopoverAnchor>
+        ) : (
+          <TooltipProvider delayDuration={300}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    className="text-muted-foreground hover:text-foreground"
+                    aria-label="Prompt library"
+                    disabled={disabled}
+                  >
+                    <BookText className="size-4" />
+                  </Button>
+                </PopoverTrigger>
+              </TooltipTrigger>
+              <TooltipContent>Prompt Library</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        )}
         <PopoverContent
           align="start"
+          side={hideTrigger ? 'top' : undefined}
           className="w-[380px] rounded-2xl border-border/70 bg-background/95 p-4"
         >
           <Tabs defaultValue="prompts" className="space-y-4">
