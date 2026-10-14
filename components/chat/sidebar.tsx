@@ -1,16 +1,24 @@
 'use client'
 
 import Link from 'next/link'
+import { usePathname } from 'next/navigation'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import {
+  BookOpen,
+  Brain,
+  ChevronDown,
   FolderInput,
+  FolderOpen,
   FolderPlus,
   FolderTree,
   GripVertical,
+  Images,
+  Layers,
   LayoutDashboard,
   MoreHorizontal,
   PanelLeftClose,
+  Zap,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useChatContext } from '@/lib/chat-context'
@@ -147,15 +155,7 @@ function ChatItem({
         title={chat.title}
         className="absolute inset-0 z-[1] rounded-xl outline-none"
         onClick={(event) => {
-          if (
-            event.button !== 0 ||
-            event.metaKey ||
-            event.ctrlKey ||
-            event.shiftKey ||
-            event.altKey
-          ) {
-            return
-          }
+          if (!isPlainClick(event)) return
           event.preventDefault()
           onSelect()
         }}
@@ -307,6 +307,133 @@ function ChatSection({
   )
 }
 
+type LibraryTool = 'artifacts' | 'prism-studio' | 'playbooks' | 'memory-vault' | 'pulse-research-room'
+
+// Everything you make or keep in the workspace, one click from the sidebar.
+// Tools open over the current view; Files is its own page.
+const LIBRARY_ITEMS: Array<
+  { label: string; icon: typeof Layers } & ({ tool: LibraryTool } | { href: string })
+> = [
+  { label: 'Artifacts', icon: Layers, tool: 'artifacts' },
+  { label: 'Images', icon: Images, tool: 'prism-studio' },
+  { label: 'Playbooks', icon: BookOpen, tool: 'playbooks' },
+  { label: 'Files', icon: FolderOpen, href: '/knowledge' },
+  { label: 'Memory', icon: Brain, tool: 'memory-vault' },
+  { label: 'Research', icon: Zap, tool: 'pulse-research-room' },
+]
+
+const LIBRARY_OPEN_STORAGE_KEY = 'zenquanta-sidebar-library-open'
+
+function isPlainClick(event: React.MouseEvent) {
+  return (
+    event.button === 0 &&
+    !event.metaKey &&
+    !event.ctrlKey &&
+    !event.shiftKey &&
+    !event.altKey
+  )
+}
+
+function LibrarySection({
+  onOpenTool,
+  onNavigate,
+}: {
+  onOpenTool: (tool: LibraryTool) => void
+  onNavigate: () => void
+}) {
+  const pathname = usePathname()
+  const [isOpen, setIsOpen] = useState(() => {
+    try {
+      return window.localStorage.getItem(LIBRARY_OPEN_STORAGE_KEY) !== 'false'
+    } catch {
+      return true
+    }
+  })
+
+  const toggle = () => {
+    setIsOpen((previous) => {
+      try {
+        window.localStorage.setItem(LIBRARY_OPEN_STORAGE_KEY, String(!previous))
+      } catch {
+        // Remembering the choice is a convenience only.
+      }
+      return !previous
+    })
+  }
+
+  const rowClassName =
+    'flex h-8 items-center gap-2.5 rounded-lg px-3 text-[13px] text-sidebar-foreground/75 outline-none transition-colors hover:bg-sidebar-accent/60 hover:text-sidebar-foreground focus-visible:ring-2 focus-visible:ring-sidebar-ring'
+
+  return (
+    <nav aria-label="Library" className="px-2 pb-3">
+      <button
+        type="button"
+        aria-expanded={isOpen}
+        onClick={toggle}
+        className="flex w-full items-center gap-1 rounded-md px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-sidebar-foreground/40 outline-none transition-colors hover:text-sidebar-foreground/70 focus-visible:ring-2 focus-visible:ring-sidebar-ring"
+      >
+        Library
+        <ChevronDown
+          className={cn('size-3 transition-transform', !isOpen && '-rotate-90')}
+        />
+      </button>
+      {isOpen ? (
+        <ul className="mt-1 space-y-0.5">
+          {LIBRARY_ITEMS.map((item) => {
+            const Icon = item.icon
+            const content = (
+              <>
+                <Icon className="size-4 shrink-0 text-sidebar-foreground/50" />
+                <span className="truncate">{item.label}</span>
+              </>
+            )
+
+            if ('href' in item) {
+              const isActive = pathname === item.href
+              return (
+                <li key={item.label}>
+                  <Link
+                    href={item.href}
+                    aria-current={isActive ? 'page' : undefined}
+                    className={cn(
+                      rowClassName,
+                      isActive && 'bg-sidebar-accent text-sidebar-accent-foreground'
+                    )}
+                    onClick={(event) => {
+                      if (isPlainClick(event)) onNavigate()
+                    }}
+                  >
+                    {content}
+                  </Link>
+                </li>
+              )
+            }
+
+            const tool = item.tool
+            return (
+              <li key={item.label}>
+                {/* A link so the tool can be opened in a new tab; a plain
+                    click opens it over the current view. */}
+                <a
+                  href={`/?tool=${tool}`}
+                  className={rowClassName}
+                  onClick={(event) => {
+                    if (!isPlainClick(event)) return
+                    event.preventDefault()
+                    onOpenTool(tool)
+                  }}
+                >
+                  {content}
+                </a>
+              </li>
+            )
+          })}
+        </ul>
+      ) : null}
+    </nav>
+  )
+}
+
 function EmptyChatState({ hasSearch }: { hasSearch: boolean }) {
   return (
     <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
@@ -347,6 +474,7 @@ export function Sidebar({ onOpenSettings }: SidebarProps) {
     toggleSidebar,
     authState,
     signOut,
+    openWorkspaceTool,
   } = useChatContext()
   const [isCreatingProject, setIsCreatingProject] = useState(false)
   const [newProjectName, setNewProjectName] = useState('')
@@ -526,6 +654,14 @@ export function Sidebar({ onOpenSettings }: SidebarProps) {
           New Chat
         </Button>
       </div>
+
+      <LibrarySection
+        onOpenTool={(tool) => {
+          closeOnMobile()
+          openWorkspaceTool(tool)
+        }}
+        onNavigate={closeOnMobile}
+      />
 
       {/* Search */}
       <div className="px-4 pb-3 space-y-3">
@@ -758,13 +894,10 @@ export function Sidebar({ onOpenSettings }: SidebarProps) {
                 {totalMessageCount.toLocaleString()} messages
               </p>
               <DropdownMenuSeparator />
-              <DropdownMenuItem asChild>
+              <DropdownMenuItem asChild onSelect={closeOnMobile}>
                 <Link href="/dashboard">Usage & plan</Link>
               </DropdownMenuItem>
-              <DropdownMenuItem asChild>
-                <Link href="/knowledge">Knowledge Library</Link>
-              </DropdownMenuItem>
-              <DropdownMenuItem asChild>
+              <DropdownMenuItem asChild onSelect={closeOnMobile}>
                 <Link href="/pricing">Plans</Link>
               </DropdownMenuItem>
               {authState.user?.role === 'admin' ? (
