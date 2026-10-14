@@ -16,10 +16,6 @@ import { cn } from '@/lib/utils'
 import { useChatContext } from '@/lib/chat-context'
 import { ConversationSummary, Project } from '@/lib/types'
 import { ModeIcon, getModeAccentClass } from '@/lib/mode-utils'
-import {
-  formatEstimatedCostUsd,
-  sumUsageEstimates,
-} from '@/lib/utils/cost'
 import { useIsMobile } from '@/components/ui/use-mobile'
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet'
 import {
@@ -430,12 +426,6 @@ export function Sidebar({ onOpenSettings }: SidebarProps) {
     [filteredChats]
   )
 
-  const usageSummary = useMemo(
-    () => sumUsageEstimates(conversations.map((conversation) => conversation.usage)),
-    [conversations]
-  )
-
-  const currentChatUsage = currentChat?.usage
   const totalMessageCount = useMemo(
     () => conversations.reduce((count, conversation) => count + conversation.messageCount, 0),
     [conversations]
@@ -750,42 +740,13 @@ export function Sidebar({ onOpenSettings }: SidebarProps) {
                   </p>
                 ) : null}
               </div>
-              <div className="px-3 pb-2">
-                <div className="rounded-xl border border-border/70 bg-card/60 p-3">
-                  <p className="eyebrow">Usage</p>
-                  <div className="mt-3 grid grid-cols-2 gap-3 text-sm">
-                    <div>
-                      <p className="text-xs text-muted-foreground">Estimated spend</p>
-                      <p className="mt-1 font-medium text-foreground">
-                        {formatEstimatedCostUsd(usageSummary.estimatedCostUsd)}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-muted-foreground">Chats</p>
-                      <p className="mt-1 font-medium text-foreground">
-                        {conversations.length}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-muted-foreground">Messages</p>
-                      <p className="mt-1 font-medium text-foreground">
-                        {totalMessageCount}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-muted-foreground">Current chat</p>
-                      <p className="mt-1 font-medium text-foreground">
-                        {currentChatUsage
-                          ? formatEstimatedCostUsd(currentChatUsage.estimatedCostUsd)
-                          : 'No active chat'}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </div>
+              <p className="px-3 pb-2 text-xs text-muted-foreground">
+                {conversations.length.toLocaleString()} chats ·{' '}
+                {totalMessageCount.toLocaleString()} messages
+              </p>
               <DropdownMenuSeparator />
               <DropdownMenuItem asChild>
-                <Link href="/dashboard">Dashboard</Link>
+                <Link href="/dashboard">Usage & plan</Link>
               </DropdownMenuItem>
               <DropdownMenuItem asChild>
                 <Link href="/knowledge">Knowledge Library</Link>

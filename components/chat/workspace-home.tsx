@@ -629,7 +629,11 @@ export function WorkspaceHome() {
                   {home.usageSnapshot.planTier.toUpperCase()} plan
                 </p>
                 <p className="text-xs text-muted-foreground">
-                  {home.usageSnapshot.displayedCreditsRemaining.toLocaleString()} displayed credits left
+                  {home.usageSnapshot.displayedCredits.limit > 0
+                    ? `${home.usageSnapshot.displayedCreditsRemaining.toLocaleString()} usage credits left this cycle`
+                    : home.usageSnapshot.dailyMessages.limit > 0
+                      ? `${home.usageSnapshot.dailyMessages.remaining.toLocaleString()} messages left today`
+                      : 'No daily message cap'}
                 </p>
               </div>
               <Badge variant="secondary">
@@ -638,7 +642,9 @@ export function WorkspaceHome() {
             </div>
             <UsageMeter label="Messages today" snapshot={home.usageSnapshot.dailyMessages} />
             <UsageMeter label="Images today" snapshot={home.usageSnapshot.dailyImages} />
-            <UsageMeter label="Displayed credits" snapshot={home.usageSnapshot.displayedCredits} />
+            {home.usageSnapshot.displayedCredits.limit > 0 ? (
+              <UsageMeter label="Usage credits" snapshot={home.usageSnapshot.displayedCredits} />
+            ) : null}
             {home.usageSnapshot.pendingPlanRequest ? (
               <Button asChild variant="secondary" className="w-full rounded-xl">
                 <Link href="/pricing">

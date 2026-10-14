@@ -13,12 +13,15 @@ import {
   neonProjectsRepository,
   neonSubscriptionsRepository,
   neonUsageEventsRepository,
+  neonUsageLimitOverridesRepository,
 } from '@/lib/db/repositories'
 import {
   filterEventsForSubscriptionPeriod,
   getAssistantUsageBreakdown,
   getDisplayedCreditsSnapshot,
+  getRemainingWallets,
 } from '@/lib/billing/costs'
+import { getEffectiveSubscription } from '@/lib/billing/enforce'
 import {
   getPlanRequestStatusLabel,
   sanitizePlanRequestAdminNote,
@@ -49,7 +52,11 @@ export default async function DashboardPage({
   const activityType = isWorkspaceActivityType(requestedActivityType)
     ? requestedActivityType
     : null
-  const subscription = await neonSubscriptionsRepository.ensureForUser(user)
+  const [subscription, override] = await Promise.all([
+    neonSubscriptionsRepository.ensureForUser(user),
+    neonUsageLimitOverridesRepository.getByUserId(user.id),
+  ])
+  const effectiveSubscription = getEffectiveSubscription(subscription, override)
   const periodStart = new Date(subscription.currentPeriodStartedAt)
   const periodEnd = new Date(subscription.currentPeriodEndsAt)
   const projects = await neonProjectsRepository.list(user.id, { limit: 100 })
@@ -103,6 +110,28 @@ export default async function DashboardPage({
   const pendingRequest =
     requests.find((request) => request.status === 'pending') ?? null
   const latestRequest = requests[0] ?? null
+  // Displayed credits are price-derived, so plans without a credit budget
+  // (Free) would show a misleading "0 remaining". Show the enforced limits.
+  const remainingCredits = Math.max(
+    0,
+    displayedBudget.totalDisplayedCredits - usedDisplayedCredits
+  )
+  const messagesLeftToday =
+    effectiveSubscription.dailyMessageLimit > 0
+      ? Math.max(
+          0,
+          effectiveSubscription.dailyMessageLimit -
+            effectiveSubscription.dailyMessageCount
+        ).toLocaleString()
+      : 'No cap'
+  const imagesLeftToday =
+    effectiveSubscription.maxImagesPerDay > 0
+      ? Math.max(
+          0,
+          effectiveSubscription.maxImagesPerDay - effectiveSubscription.dailyImageCount
+        ).toLocaleString()
+      : 'No cap'
+  const imageCreditsLeft = getRemainingWallets(effectiveSubscription).imageCredits
 
   return (
     <main className="min-h-screen bg-background px-4 py-8 sm:px-6 lg:px-10">
@@ -116,8 +145,8 @@ export default async function DashboardPage({
               Your Zenquanta usage
             </h1>
             <p className="mt-3 max-w-3xl text-sm leading-6 text-muted-foreground">
-              Track displayed credits, text usage, image usage, recent activity,
-              and any pending plan requests.
+              See what your plan has left today, your text and image usage,
+              recent activity, and any pending plan requests.
             </p>
           </div>
           <div className="flex gap-3">
@@ -180,38 +209,45 @@ export default async function DashboardPage({
 
         <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
           <MetricCard label="Current plan" value={subscription.tier.toUpperCase()} />
-          <MetricCard
-            label="Displayed credits"
-            value={displayedBudget.totalDisplayedCredits.toLocaleString()}
-          />
-          <MetricCard
-            label="Used credits"
-            value={usedDisplayedCredits.toLocaleString()}
-          />
-          <MetricCard
-            label="Remaining credits"
-            value={Math.max(
-              0,
-              displayedBudget.totalDisplayedCredits - usedDisplayedCredits
-            ).toLocaleString()}
-          />
+          <MetricCard label="Messages left today" value={messagesLeftToday} />
+          <MetricCard label="Images left today" value={imagesLeftToday} />
+          {displayedBudget.totalDisplayedCredits > 0 ? (
+            <MetricCard
+              label="Credits left this cycle"
+              value={remainingCredits.toLocaleString()}
+            />
+          ) : (
+            <MetricCard
+              label="Image credits left"
+              value={imageCreditsLeft.toLocaleString()}
+            />
+          )}
         </div>
 
         <div className="grid gap-5 lg:grid-cols-[1.2fr_0.8fr]">
           <Card className="rounded-3xl border-border/70 bg-card/70">
             <CardHeader>
-              <CardTitle>Usage overview</CardTitle>
+              <CardTitle>This billing cycle</CardTitle>
             </CardHeader>
             <CardContent className="grid gap-4 sm:grid-cols-3">
-              <MetricBlock label="Text usage" value={`$${displayedTextCostUsd.toFixed(2)}`} />
-              <MetricBlock label="Image usage" value={`$${displayedImageCostUsd.toFixed(2)}`} />
-              <MetricBlock label="Total displayed" value={`$${totalDisplayedCostUsd.toFixed(2)}`} />
+              <MetricBlock
+                label="Text replies"
+                value={periodUsageEvents.length.toLocaleString()}
+              />
+              <MetricBlock
+                label="Images created"
+                value={periodImageEvents.length.toLocaleString()}
+              />
+              <MetricBlock
+                label="Total requests"
+                value={(periodUsageEvents.length + periodImageEvents.length).toLocaleString()}
+              />
             </CardContent>
           </Card>
 
           <Card className="rounded-3xl border-border/70 bg-card/70">
             <CardHeader>
-              <CardTitle>Assistant breakdown</CardTitle>
+              <CardTitle>By assistant</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
               {assistantBreakdown.map((item) => (
@@ -226,13 +262,10 @@ export default async function DashboardPage({
                     >
                       {ASSISTANT_FAMILY_COPY[item.family].shortName}
                     </Link>
-                    <p className="text-xs text-muted-foreground">
-                      {item.events} requests
-                    </p>
                   </div>
-                  <Badge variant="secondary">
-                    ${item.displayedCostUsd.toFixed(2)}
-                  </Badge>
+                  <span className="text-sm tabular-nums text-muted-foreground">
+                    {item.events.toLocaleString()} {item.events === 1 ? 'request' : 'requests'}
+                  </span>
                 </div>
               ))}
             </CardContent>

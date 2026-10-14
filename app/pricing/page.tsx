@@ -22,6 +22,15 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 
+const tokenFormatter = new Intl.NumberFormat('en', {
+  notation: 'compact',
+  maximumFractionDigits: 1,
+})
+
+function formatTokenAllowance(tokens: number) {
+  return tokenFormatter.format(tokens)
+}
+
 function getPlanRequestBannerClass(status: string) {
   switch (status) {
     case 'pending':
@@ -186,15 +195,21 @@ export default async function PricingPage({
                   <p className="text-3xl font-medium tracking-tight">
                     ${plan.priceUsd}
                   </p>
-                  <p className="eyebrow mt-1">Monthly, manual activation</p>
+                  <p className="eyebrow mt-1">Per month, switched on by an admin</p>
                 </div>
 
                 <div className="space-y-1 text-sm text-muted-foreground">
-                  <p>{plan.coreTokens.toLocaleString()} core tokens</p>
-                  <p>{plan.tierTokens.toLocaleString()} tier tokens</p>
-                  <p>{plan.imageCredits.toLocaleString()} image credits</p>
-                  <p>{plan.dailyMessageLimit.toLocaleString()} messages/day</p>
-                  <p>{plan.maxImagesPerDay.toLocaleString()} images/day</p>
+                  <p className="text-foreground">
+                    {plan.dailyMessageLimit.toLocaleString()} messages a day
+                  </p>
+                  <p className="text-foreground">
+                    {plan.maxImagesPerDay.toLocaleString()} images a day
+                  </p>
+                  <p>{plan.imageCredits.toLocaleString()} image credits a month</p>
+                  <p>{formatTokenAllowance(plan.coreTokens)} tokens with standard models</p>
+                  {plan.tierTokens > 0 ? (
+                    <p>{formatTokenAllowance(plan.tierTokens)} tokens with premium models</p>
+                  ) : null}
                 </div>
 
                 <div className="space-y-1 border-t border-border/60 pt-3">
