@@ -120,7 +120,7 @@ Backend/API routes:
 - Most runtime API routes set `export const runtime = 'nodejs'`.
 - Text chat is `/api/chat` and streams `application/x-ndjson`.
 - Image generation is `/api/images/generate` and returns JSON.
-- Server actions exist in `app/admin/actions.ts` and `app/pricing/actions.ts`.
+- Server actions exist in `app/admin/actions.ts` and `app/(workspace)/pricing/actions.ts`.
 
 Database layer:
 
@@ -667,8 +667,8 @@ App routes:
 - `app/(assistants)/`: public assistant pages.
 - `app/admin/`: admin pages and server actions.
 - `app/auth/`: auth callback and reset-password page.
-- `app/dashboard/`: user dashboard.
-- `app/pricing/`: pricing page and manual plan request action.
+- `app/(workspace)/dashboard/`: user dashboard.
+- `app/(workspace)/pricing/`: pricing page and manual plan request action.
 - `app/api/`: all runtime API routes.
 
 Components:

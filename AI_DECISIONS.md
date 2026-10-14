@@ -1,5 +1,17 @@
 # AI Architecture Decisions
 
+## The Sidebar Library And Shared Pages
+
+Decision (2026-10-14): the sidebar has a Library section (Artifacts, Images, Playbooks, Files, Memory, Research) under New Chat. Dashboard, Files (`/knowledge`) and Plans (`/pricing`) live in `app/(workspace)/` and render inside the app layout with the sidebar; `ChatShell` picks the chat or the page from the path (`isWorkspacePath`). The chat area stays mounted, hidden, while a page is open. Signed-out visitors see Plans on its own. Admin pages stay separate.
+
+Rationale: the audit found the tools reachable only through unlabelled icons, Cmd+K or the account menu, and three pages that dropped the sidebar with different back labels. Keeping one layout mounted also makes moving between pages and chats instant and keeps drafts. Workspace links with a query (`/?tool=`, `/?conversationId=`) must be handled whenever the query changes, not once per load, because the workspace no longer remounts; that handler lives behind a Suspense boundary so `/` can still prerender.
+
+## One Playbook Editor
+
+Decision (2026-10-14): Playbook Studio owns creating and editing playbooks. The composer's "Prompts & playbooks" popover keeps prompts, Run and Share for playbooks, and sends New and Edit to the studio through the workspace tool request (`workflowId`, `playbookAction`).
+
+Rationale: the popover and the studio each had their own editor dialog with the same fields, which drifted and doubled the code. Ask Files stays its own dialog but now opens over the Files page, so files have one home.
+
 ## Each Chat Has A URL; The Workspace Lives In A Route Group Layout
 
 Decision (2026-10-14): chats live at `/c/<id>` and everything else in the workspace at `/`. `app/(workspace)/layout.tsx` renders `ChatLayout` and its pages render nothing, so moving between `/` and `/c/<id>` (native `history.pushState`, Back/Forward, or a router navigation) never remounts the workspace. The chat context is the source of truth and writes the address; on load and on `popstate` it reads it. The address decides the first screen: `/` is Workspace Home, and the last chat is no longer restored from browser storage.

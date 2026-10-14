@@ -92,8 +92,9 @@ Mode mapping:
 
 - `/`: main chat workspace (Workspace Home). The workspace is rendered by `app/(workspace)/layout.tsx`.
 - `/c/[id]`: the workspace with that chat open; the address follows the open chat (`lib/utils/chat-path.ts`).
-- `/dashboard`: user usage dashboard.
-- `/pricing`: public plan overview; signed-in users can send manual plan requests.
+- `/dashboard`: user usage dashboard, shown inside the workspace layout (`app/(workspace)/dashboard`).
+- `/knowledge`: Files, the user's uploaded and imported files, shown inside the workspace layout; Ask Files opens over it.
+- `/pricing`: public plan overview; signed-in users see it inside the workspace layout and can send manual plan requests.
 - `/admin`: admin overview and user/request management.
 - `/admin/users/[id]`: per-user admin detail.
 - `/auth/reset-password`: password reset completion page.
@@ -349,7 +350,7 @@ The auth gate is `components/auth/auth-gate.tsx`.
 Backend logic is implemented with Next route handlers and server actions:
 
 - route handlers under `app/api/*`
-- server actions in `app/admin/actions.ts` and `app/pricing/actions.ts`
+- server actions in `app/admin/actions.ts` and `app/(workspace)/pricing/actions.ts`
 - Neon database foundation in `lib/db/client.ts` and `lib/db/schema.ts`
 - Parallel Neon repositories in `lib/db/repositories/*`
 - neutral file storage helpers in `lib/storage/object-store.ts`, `lib/storage/attachments.ts`, and `lib/storage/generated-images.ts`
