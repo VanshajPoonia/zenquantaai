@@ -239,6 +239,7 @@ interface ChatContextType {
   openConversation: (conversationId: string) => Promise<Conversation | null>
   loadOlderMessages: (conversationId: string) => Promise<void>
   activeProjectHomeId: string | null
+  isNewChatDraft: boolean
   openProjectHome: (projectId: string) => void
   goHome: () => void
   createNewChat: () => Promise<void>
@@ -458,6 +459,9 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const [selectedProjectIdState, setSelectedProjectIdState] =
     useState<ProjectFilterId>('all')
   const [activeProjectHomeId, setActiveProjectHomeId] = useState<string | null>(null)
+  // True after "New chat" so the chat area shows the assistant welcome screen
+  // instead of Workspace Home. Cleared by goHome and once a chat is current.
+  const [isNewChatDraft, setIsNewChatDraft] = useState(false)
   const [promptLibrary, setPromptLibrary] = useState<PromptLibraryItem[]>([])
   const [promptWorkflows, setPromptWorkflows] = useState<PromptWorkflow[]>([])
   const [customAssistants, setCustomAssistants] = useState<CustomAssistant[]>([])
@@ -539,6 +543,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     setCurrentChatState(null)
     setProjects([])
     setActiveProjectHomeId(null)
+    setIsNewChatDraft(false)
     setPromptLibrary([])
     setPromptWorkflows([])
     setCustomAssistants([])
@@ -1324,6 +1329,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     setStreamingState({ status: 'idle' })
     setSearchQuery('')
     setActiveProjectHomeId(null)
+    setIsNewChatDraft(false)
     setCurrentChatState(null)
     currentChatRef.current = null
     setCurrentCustomAssistantId(null)
@@ -1436,12 +1442,17 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     setStreamingState({ status: 'idle' })
     setSearchQuery('')
     setActiveProjectHomeId(null)
+    setIsNewChatDraft(true)
     setCurrentChatState(null)
     currentChatRef.current = null
     setCurrentCustomAssistantId(null)
     writeBrowserCurrentChatId(null)
     setDraftSessionSettings(createSessionSettings(currentMode, sessionSettings))
   }, [currentMode, sessionSettings])
+
+  useEffect(() => {
+    if (currentChat?.id) setIsNewChatDraft(false)
+  }, [currentChat?.id])
 
   const deleteChat = useCallback(
     async (chatId: string) => {
@@ -3272,6 +3283,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       openConversation,
       loadOlderMessages,
       activeProjectHomeId,
+      isNewChatDraft,
       openProjectHome,
       goHome,
       createNewChat,
@@ -3369,6 +3381,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       authState,
       awaitRecommendationDecision,
       activeProjectHomeId,
+      isNewChatDraft,
       beginPromptPrecheck,
       chats,
       chooseModelComparisonResponse,

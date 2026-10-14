@@ -23,6 +23,7 @@ export function ChatArea() {
   const {
     currentChat,
     activeProjectHomeId,
+    isNewChatDraft,
     sendMessage,
     regenerateLastResponse,
     retryLastMessage,
@@ -276,7 +277,7 @@ export function ChatArea() {
   }
 
   const showProjectHome = !currentChat && Boolean(activeProjectHomeId)
-  const showWorkspaceHome = !currentChat && !activeProjectHomeId
+  const showWorkspaceHome = !currentChat && !activeProjectHomeId && !isNewChatDraft
   const showEmptyState = (currentChat?.messages.length ?? 0) === 0
   const upgradeErrorNudge = getUpgradeNudgeForError(streamingState.error)
 
