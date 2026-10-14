@@ -338,8 +338,8 @@ export function KnowledgeLibraryClient({ projects }: { projects: Project[] }) {
         {!embeddingsAvailable && !error ? (
           <div className="mt-5 flex items-start gap-3 rounded-2xl border border-yellow-500/40 bg-yellow-500/10 px-4 py-3 text-sm text-yellow-200">
             <AlertCircle className="mt-0.5 size-4 shrink-0" />
-            Embedding provider is not configured. Files will be stored but cannot be indexed for
-            knowledge retrieval until embeddings are enabled.
+            File search is not turned on yet. Your files are saved, but assistants cannot
+            search them until it is.
           </div>
         ) : null}
 

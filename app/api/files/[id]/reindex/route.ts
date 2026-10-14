@@ -28,7 +28,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
 
   if (!hasEmbeddingConfig()) {
     return NextResponse.json(
-      { error: 'Embedding provider is not configured.' },
+      { error: 'File search is not turned on yet, so files are stored but cannot be searched.' },
       { status: 400 }
     )
   }

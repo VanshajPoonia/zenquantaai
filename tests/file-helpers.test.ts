@@ -42,7 +42,7 @@ describe('file helper pure logic', () => {
       })
     ).toMatchObject({
       knowledgeStatus: 'skipped',
-      knowledgeReason: 'Embedding provider is not configured.',
+      knowledgeReason: 'File search is not turned on yet, so files are stored but cannot be searched.',
     })
 
     expect(

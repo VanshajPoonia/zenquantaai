@@ -34,7 +34,7 @@ function safeReason(
   if (status === 'pending') return 'Indexing state has not been recorded yet.'
   if (status === 'failed') return 'Indexing failed. Try re-indexing this file.'
   if (rawStatus === 'skipped_not_configured') {
-    return 'Embedding provider is not configured.'
+    return 'File search is not turned on yet, so files are stored but cannot be searched.'
   }
   if (typeof reason !== 'string' || !reason.trim()) return null
   return reason.replace(/\s+/g, ' ').trim().slice(0, 220)

@@ -447,8 +447,7 @@ export function WorkspaceHome() {
             Pick up your work quickly
           </h1>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
-            Continue recent threads, open project work, and jump into the core
-            Zenquanta tools without spending credits on page load.
+            Continue a recent chat, open a project, or start something new.
           </p>
         </div>
         <div className="flex flex-col gap-2 sm:flex-row">
@@ -497,7 +496,7 @@ export function WorkspaceHome() {
         <Section title="Quick actions">
           <div className="space-y-3 rounded-3xl border border-border/70 bg-card/45 p-4">
             <label className="flex flex-col gap-1 text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">
-              Target project
+              Add to project
               <select
                 value={targetProjectId}
                 onChange={(event) => setTargetProjectId(event.target.value)}

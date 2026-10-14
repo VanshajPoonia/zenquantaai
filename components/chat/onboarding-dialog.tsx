@@ -158,8 +158,8 @@ export function OnboardingDialog() {
                   Set up your workspace
                 </DialogTitle>
                 <DialogDescription className="mt-2 max-w-2xl text-sm leading-6">
-                  Choose a starting point, then Zenquanta will create user-owned
-                  prompts and preferences without running any AI calls.
+                  Pick what you mostly use Zenquanta for. We will set up starter
+                  prompts and defaults to match. Nothing is sent to an AI yet.
                 </DialogDescription>
               </div>
               <span className="shrink-0 rounded-full border border-border/70 px-3 py-1 text-xs text-muted-foreground">

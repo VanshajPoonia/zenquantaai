@@ -51,7 +51,7 @@ export async function indexUploadedFileForKnowledge(input: {
     if (!hasEmbeddingConfig()) {
       await neonFilesRepository.patch(input.userId, input.file.id, {
         metadata: withKnowledgeMetadata(input.file, 'skipped_not_configured', {
-          reason: 'Embedding provider is not configured.',
+          reason: 'File search is not turned on yet, so files are stored but cannot be searched.',
         }),
       })
       return
