@@ -152,7 +152,7 @@ export function OnboardingDialog() {
       <DialogContent className="max-h-[92vh] w-[calc(100vw-1rem)] max-w-4xl overflow-hidden rounded-[28px] border-border/70 bg-background/95 p-0 shadow-2xl shadow-black/40">
         <div className="flex max-h-[92vh] min-h-0 flex-col">
           <DialogHeader className="border-b border-border/70 bg-card/60 px-5 py-5 text-left sm:px-7">
-            <div className="flex items-start justify-between gap-4">
+            <div className="flex items-start justify-between gap-4 pr-10">
               <div>
                 <DialogTitle className="text-2xl tracking-tight">
                   Set up your workspace

@@ -683,7 +683,7 @@ export function ArtifactStudio() {
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-h-[92vh] w-[calc(100vw-1rem)] max-w-6xl overflow-hidden rounded-2xl border-border/70 bg-background/95 p-0">
           <DialogHeader className="border-b border-border/70 px-4 py-4 text-left sm:px-6">
-            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <div className="flex flex-col gap-3 pr-10 lg:flex-row lg:items-center lg:justify-between">
               <div>
                 <DialogTitle className="flex items-center gap-2">
                   <FileText className="size-5" />

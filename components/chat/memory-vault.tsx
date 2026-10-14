@@ -429,7 +429,7 @@ export function MemoryVault() {
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="flex max-h-[88vh] w-[calc(100vw-1rem)] max-w-6xl flex-col rounded-[28px] border border-border/70 bg-background/95 p-0 shadow-2xl shadow-black/40">
           <DialogHeader className="border-b border-border/70 px-5 py-5 text-left sm:px-6">
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <div className="flex flex-col gap-4 pr-10 sm:flex-row sm:items-start sm:justify-between">
               <div>
                 <DialogTitle className="flex items-center gap-2">
                   <Brain className="size-5" />

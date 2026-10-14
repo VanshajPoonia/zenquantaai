@@ -318,7 +318,7 @@ export function PulseResearchRoom() {
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="flex max-h-[88vh] max-w-6xl flex-col overflow-hidden p-0">
           <DialogHeader className="border-b border-border/60 px-6 py-5">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div className="flex flex-col gap-3 pr-10 sm:flex-row sm:items-start sm:justify-between">
               <div>
                 <DialogTitle className="flex items-center gap-2 text-xl">
                   <Zap className="size-5 text-live" />

@@ -353,7 +353,7 @@ export function ModelComparisonButton({
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-h-[92vh] w-[calc(100vw-1rem)] max-w-7xl overflow-y-auto rounded-[28px] border-border/70 bg-background/95 p-0 shadow-2xl shadow-black/40">
           <DialogHeader className="border-b border-border/70 px-5 py-5 text-left sm:px-6">
-            <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <div className="flex flex-col gap-4 pr-10 lg:flex-row lg:items-start lg:justify-between">
               <div>
                 <DialogTitle className="flex items-center gap-2 text-xl">
                   <GitCompareArrows className="size-5" />

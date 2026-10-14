@@ -330,7 +330,7 @@ export function PrismStudio() {
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="flex h-[86vh] max-w-6xl flex-col overflow-hidden border-border/70 bg-background/95 p-0 shadow-2xl">
           <DialogHeader className="border-b border-border/70 px-5 py-4">
-            <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+            <div className="flex flex-col gap-3 pr-10 md:flex-row md:items-start md:justify-between">
               <div>
                 <DialogTitle className="flex items-center gap-2 text-xl">
                   <ImageIcon className="size-5 text-primary" />
