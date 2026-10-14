@@ -5,6 +5,7 @@ import dynamic from 'next/dynamic'
 import { usePathname, useSearchParams } from 'next/navigation'
 import { ChatProvider, useChatContext } from '@/lib/chat-context'
 import { isWorkspacePath } from '@/lib/utils/chat-path'
+import { hasSessionHint } from '@/lib/utils/session-hint'
 import { cn } from '@/lib/utils'
 import { AuthGate } from '@/components/auth/auth-gate'
 import { Sidebar } from './sidebar'
@@ -80,6 +81,12 @@ function ChatShell({
   // while a page is open, so drafts, scroll position and streams survive.
   const [hasShownWorkspace, setHasShownWorkspace] = useState(isWorkspaceView)
   if (isWorkspaceView && !hasShownWorkspace) setHasShownWorkspace(true)
+  // Read after mount: "/" is prerendered, so the first render cannot know.
+  // null means not read yet.
+  const [isLikelySignedOut, setIsLikelySignedOut] = useState<boolean | null>(null)
+  useEffect(() => {
+    setIsLikelySignedOut(!hasSessionHint(document.cookie))
+  }, [])
 
   // Default the sidebar closed on phones so first load shows the chat, not a
   // full-screen drawer. Reads window width directly (once, on mount) instead
@@ -128,8 +135,15 @@ function ChatShell({
     }
   }
 
+  // A browser that has never been signed in skips the restore screen and sees
+  // the landing page while the session check finishes.
   if (authState.status === 'loading') {
-    return <LoadingScreen />
+    // Until the cookie is read, show nothing rather than a restore message
+    // that a new visitor would see flash before the landing page.
+    if (isLikelySignedOut === null) {
+      return <div className="h-screen w-full bg-background" />
+    }
+    return pathname === '/' && isLikelySignedOut ? <LandingPage /> : <LoadingScreen />
   }
 
   if (authState.status !== 'authenticated') {

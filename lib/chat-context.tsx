@@ -105,6 +105,7 @@ import {
 } from '@/lib/utils/chat'
 import { readNdjsonStream } from '@/lib/utils/stream'
 import { getChatIdFromPath, getChatPath, isWorkspacePath } from '@/lib/utils/chat-path'
+import { sessionHintCookie } from '@/lib/utils/session-hint'
 import { toast } from 'sonner'
 import {
   createAssistantPlaceholder,
@@ -1036,6 +1037,16 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       streamAbortRef.current?.abort()
     }
   }, [restoreSession])
+
+  // Remember whether this browser is signed in, so the next visit to "/" can
+  // show the landing page without waiting (see lib/utils/session-hint.ts).
+  useEffect(() => {
+    if (authState.status === 'loading') return
+    document.cookie = sessionHintCookie(
+      authState.status === 'authenticated',
+      window.location.protocol === 'https:'
+    )
+  }, [authState.status])
 
   useEffect(() => {
     if (authState.status !== 'authenticated') return
