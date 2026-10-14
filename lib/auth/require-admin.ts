@@ -4,6 +4,25 @@ import { redirect } from 'next/navigation'
 import { readCookieStoreAuthSession, requireAuthenticatedUser } from './session'
 import { neonProfilesRepository } from '@/lib/db/repositories'
 
+// For pages that are public but show more when signed in (e.g. /pricing).
+export async function getOptionalServerUser() {
+  const cookieStore = await cookies()
+  const session = await readCookieStoreAuthSession(cookieStore)
+
+  if (!session.user) return null
+
+  const profile = await neonProfilesRepository.ensureFromAuthUser(session.user)
+
+  return {
+    user: {
+      ...session.user,
+      role: profile.role,
+    },
+    profile,
+    session,
+  }
+}
+
 export async function requireServerUser() {
   const cookieStore = await cookies()
   const session = await readCookieStoreAuthSession(cookieStore)

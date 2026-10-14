@@ -6,7 +6,7 @@ import {
   TIER_ASSISTANT_NAMES,
 } from '@/lib/config'
 import { AssistantFamily } from '@/types'
-import { requireServerUser } from '@/lib/auth/require-admin'
+import { getOptionalServerUser } from '@/lib/auth/require-admin'
 import {
   getPlanRequestStatusLabel,
   isUpgradeTier,
@@ -41,12 +41,19 @@ export default async function PricingPage({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>
 }) {
-  const { user } = await requireServerUser()
-  const subscription = await neonSubscriptionsRepository.ensureForUser(user)
-  const pendingRequest =
-    await neonPlanRequestsRepository.getLatestPendingForUser(user.id)
-  const latestRequest =
-    await neonPlanRequestsRepository.getLatestForUser(user.id)
+  // Pricing is public. Signed-out visitors see the plans with a sign-in CTA;
+  // plan requests still require an account (enforced in requestPlanAction).
+  const auth = await getOptionalServerUser()
+  const user = auth?.user ?? null
+  const subscription = user
+    ? await neonSubscriptionsRepository.ensureForUser(user)
+    : null
+  const pendingRequest = user
+    ? await neonPlanRequestsRepository.getLatestPendingForUser(user.id)
+    : null
+  const latestRequest = user
+    ? await neonPlanRequestsRepository.getLatestForUser(user.id)
+    : null
   const params = await searchParams
   const requested = params.requested === '1'
   const error =
@@ -66,19 +73,22 @@ export default async function PricingPage({
               Zenquanta plans and assistant tiers
             </h1>
             <p className="mt-3 max-w-3xl text-sm leading-6 text-muted-foreground sm:text-base">
-              Request a higher plan manually for now. Your request will be reviewed
-              and activated by the admin team.
+              {subscription
+                ? 'Request a higher plan manually for now. Your request will be reviewed and activated by the admin team.'
+                : 'Every account starts on Free. Sign in or create an account to request a higher plan; requests are reviewed and activated by the admin team.'}
             </p>
           </div>
           <div className="flex flex-col items-start gap-3 sm:items-end">
-            <div className="text-sm sm:text-right">
-              <p className="eyebrow">Current plan</p>
-              <p className="mt-1 font-medium text-foreground">
-                {subscription.tier.toUpperCase()}
-              </p>
-            </div>
+            {subscription ? (
+              <div className="text-sm sm:text-right">
+                <p className="eyebrow">Current plan</p>
+                <p className="mt-1 font-medium text-foreground">
+                  {subscription.tier.toUpperCase()}
+                </p>
+              </div>
+            ) : null}
             <Button asChild variant="outline" className="rounded-full">
-              <Link href="/">Back to home</Link>
+              <Link href="/">{subscription ? 'Back to workspace' : 'Sign in'}</Link>
             </Button>
           </div>
         </div>
@@ -104,7 +114,7 @@ export default async function PricingPage({
           </div>
         ) : null}
 
-        {!latestRequest ? (
+        {subscription && !latestRequest ? (
           <div className="rounded-2xl border border-border/70 bg-card/60 px-5 py-4 text-sm text-muted-foreground">
             No plan request is active right now. Choose a paid plan below to send
             a manual request for admin review.
@@ -124,7 +134,7 @@ export default async function PricingPage({
                 </p>
                 <p className="mt-1 opacity-85">
                   {latestRequest.status === 'activated'
-                    ? `Your ${latestRequest.requestedTier.toUpperCase()} request was activated. Current plan: ${subscription.tier.toUpperCase()}.`
+                    ? `Your ${latestRequest.requestedTier.toUpperCase()} request was activated. Current plan: ${subscription?.tier.toUpperCase() ?? ''}.`
                     : latestRequest.status === 'approved'
                       ? `Your ${latestRequest.requestedTier.toUpperCase()} request was approved and is waiting for manual activation.`
                       : `Your ${latestRequest.requestedTier.toUpperCase()} request was not approved. You can submit a new request when you are ready.`}
@@ -145,16 +155,18 @@ export default async function PricingPage({
 
         <div className="grid divide-y divide-border/60 border-y border-border/60 lg:grid-cols-5 lg:divide-x lg:divide-y-0">
           {Object.values(PLAN_CONFIGS).map((plan) => {
-            const canRequest = plan.tier !== 'free' && isUpgradeTier(subscription.tier, plan.tier)
+            const currentTier = subscription?.tier ?? null
+            const canRequest =
+              plan.tier !== 'free' && (!currentTier || isUpgradeTier(currentTier, plan.tier))
             const requestDisabled = Boolean(pendingRequest) || !canRequest
             const buttonLabel = pendingRequest
               ? 'Request pending'
               : !canRequest
-                ? subscription.tier === plan.tier
+                ? currentTier === plan.tier
                   ? 'Current plan'
                   : 'Included'
                 : 'Request Plan'
-            const isCurrent = subscription.tier === plan.tier
+            const isCurrent = currentTier === plan.tier
 
             return (
               <div
@@ -197,7 +209,17 @@ export default async function PricingPage({
                   ))}
                 </div>
 
-                {plan.tier === 'free' ? (
+                {!subscription ? (
+                  <Button
+                    className="w-full rounded-full"
+                    variant={plan.tier === 'free' ? 'outline' : 'cta'}
+                    asChild
+                  >
+                    <Link href="/">
+                      {plan.tier === 'free' ? 'Start free' : 'Sign in to request'}
+                    </Link>
+                  </Button>
+                ) : plan.tier === 'free' ? (
                   <Button className="w-full rounded-full" variant="outline" asChild>
                     <Link href="/dashboard">View dashboard</Link>
                   </Button>
