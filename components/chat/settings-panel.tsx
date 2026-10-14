@@ -1,7 +1,7 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
-import { Info } from 'lucide-react'
+import { ReactNode, useEffect, useMemo, useState } from 'react'
+import { ChevronDown } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useChatContext } from '@/lib/chat-context'
 import {
@@ -14,21 +14,12 @@ import {
   FileIntelligence,
   createSessionSettings,
 } from '@/lib/types'
-import {
-  getModeAccentClass,
-  getModeTintClass,
-} from '@/lib/mode-utils'
+import { getModeAccentClass } from '@/lib/mode-utils'
 import { Button } from '@/components/ui/button'
 import { Slider } from '@/components/ui/slider'
 import { Switch } from '@/components/ui/switch'
 import { Label } from '@/components/ui/label'
 import { Separator } from '@/components/ui/separator'
-import { Badge } from '@/components/ui/badge'
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from '@/components/ui/popover'
 import {
   Select,
   SelectContent,
@@ -50,13 +41,95 @@ function getSliderClass(mode: AIMode) {
   return `[&_[data-slot=slider-range]]:${colorClass} [&_[data-slot=slider-thumb]]:${borderClass}`
 }
 
+function FeatureSwitch({
+  id,
+  icon,
+  title,
+  description,
+  checked,
+  disabled,
+  onCheckedChange,
+}: {
+  id: string
+  icon: ReactNode
+  title: string
+  description: string
+  checked: boolean
+  disabled?: boolean
+  onCheckedChange: (checked: boolean) => void
+}) {
+  return (
+    <div className="flex items-center justify-between gap-3">
+      <div className="flex min-w-0 items-center gap-3">
+        <div className="rounded-lg bg-muted p-2">{icon}</div>
+        <div className="min-w-0">
+          <Label htmlFor={id} className="cursor-pointer text-sm font-medium">
+            {title}
+          </Label>
+          <p className="text-xs text-muted-foreground">{description}</p>
+        </div>
+      </div>
+      <Switch
+        id={id}
+        checked={checked}
+        disabled={disabled}
+        onCheckedChange={onCheckedChange}
+      />
+    </div>
+  )
+}
+
+function PanelSlider({
+  id,
+  label,
+  valueLabel,
+  hint,
+  min,
+  max,
+  step,
+  value,
+  className,
+  onChange,
+}: {
+  id: string
+  label: string
+  valueLabel: string
+  hint: string
+  min: number
+  max: number
+  step: number
+  value: number
+  className?: string
+  onChange: (value: number) => void
+}) {
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between">
+        <Label htmlFor={id} className="text-sm font-medium">
+          {label}
+        </Label>
+        <span className="text-sm tabular-nums text-muted-foreground">{valueLabel}</span>
+      </div>
+      <Slider
+        id={id}
+        min={min}
+        max={max}
+        step={step}
+        value={[value]}
+        onValueChange={([next]) => onChange(next)}
+        className={className}
+      />
+      <p className="text-xs text-muted-foreground">{hint}</p>
+    </div>
+  )
+}
+
 export function SettingsPanel() {
   const {
     currentMode,
     currentChat,
     projects,
     sessionSettings,
-    statusLabel,
     updateSessionSettings,
     moveCurrentChatToProject,
     isSettingsPanelOpen,
@@ -79,12 +152,6 @@ export function SettingsPanel() {
     ],
     [currentChat?.attachments]
   )
-
-  useEffect(() => {
-    if (sessionSettings.modelOverride !== 'auto') {
-      setShowAdvanced(true)
-    }
-  }, [sessionSettings.modelOverride])
 
   useEffect(() => {
     if (attachmentFileIds.length === 0) {
@@ -166,58 +233,34 @@ export function SettingsPanel() {
           'animate-in slide-in-from-right-5 duration-200'
         )}
       >
-      <div className="flex items-center justify-between p-4 border-b border-border">
-        <div>
-          <h2 className="font-semibold text-foreground">Session Settings</h2>
-          <p className="text-xs text-muted-foreground">
-            Conversation controls for the current mode
+      <div className="flex items-center justify-between border-b border-border px-4 py-3">
+        <div className="min-w-0">
+          <h2 className="font-semibold text-foreground">Chat settings</h2>
+          <p className="truncate text-xs text-muted-foreground">
+            {currentChat?.title ?? 'New chat'} · {modeConfig.name}
           </p>
         </div>
-        <Button variant="ghost" size="icon-sm" onClick={toggleSettingsPanel}>
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          aria-label="Close chat settings"
+          onClick={toggleSettingsPanel}
+        >
           <XIcon className="size-4" />
         </Button>
       </div>
 
-      <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-6 pb-8">
-        <div
-          className={cn(
-            'rounded-2xl border p-4 space-y-3',
-            getModeTintClass(currentMode, 'subtle')
-          )}
-        >
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <p className="text-sm font-semibold text-foreground">
-                {currentChat?.title ?? 'Draft session'}
-              </p>
-              <p className="text-xs text-muted-foreground">
-                {modeConfig.name} mode
-              </p>
-            </div>
-            <Badge variant={statusLabel === 'Streaming' ? 'default' : 'secondary'}>
-              {statusLabel}
-            </Badge>
-          </div>
-          <p className="text-xs leading-relaxed text-muted-foreground">
-            {modeConfig.description}
-          </p>
-          <div className="rounded-xl border border-border/60 bg-background/60 px-3 py-2">
-            <p className="text-[11px] uppercase tracking-widest text-muted-foreground mb-1">
-              Mode
-            </p>
-            <p className="text-sm text-foreground">
-              {modeConfig.name}
-            </p>
-          </div>
-          <div className="rounded-xl border border-border/60 bg-background/60 px-3 py-2 space-y-2">
-            <p className="text-[11px] uppercase tracking-widest text-muted-foreground">
+      <div className="flex-1 min-h-0 space-y-6 overflow-y-auto p-4 pb-8">
+        {currentChat ? (
+          <div className="space-y-2">
+            <Label htmlFor="chatProject" className="text-sm font-medium">
               Project
-            </p>
+            </Label>
             <Select
-              value={currentChat?.projectId ?? projects[0]?.id}
+              value={currentChat.projectId ?? projects[0]?.id}
               onValueChange={moveCurrentChatToProject}
             >
-              <SelectTrigger className="h-9">
+              <SelectTrigger id="chatProject" className="h-9 w-full">
                 <SelectValue placeholder="Choose project" />
               </SelectTrigger>
               <SelectContent>
@@ -229,275 +272,44 @@ export function SettingsPanel() {
               </SelectContent>
             </Select>
           </div>
-          <div className="rounded-xl border border-border/60 bg-background/60 px-3 py-2">
-            <p className="text-[11px] uppercase tracking-widest text-muted-foreground mb-1">
-              Response Profile
-            </p>
-            <div className="flex items-center gap-1.5">
-              <p className="text-sm text-foreground">
-                {RESPONSE_PROFILE_LABELS[sessionSettings.modelOverride]}
-              </p>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon-sm"
-                    className="size-6 rounded-full text-muted-foreground hover:text-foreground"
-                  >
-                    <Info className="size-3.5" />
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent
-                  align="start"
-                  className="w-72 rounded-2xl border-border/70 bg-background/95 p-4"
-                >
-                  <div className="space-y-2">
-                    <p className="text-sm font-semibold text-foreground">
-                      {RESPONSE_PROFILE_LABELS[sessionSettings.modelOverride]}
-                    </p>
-                    <p className="text-sm leading-6 text-muted-foreground">
-                      {RESPONSE_PROFILE_DESCRIPTIONS[sessionSettings.modelOverride]}
-                    </p>
-                    {sessionSettings.modelOverride === 'auto' ? (
-                      <p className="text-xs text-muted-foreground/80">
-                        Tuned automatically for {modeConfig.name.toLowerCase()}.
-                      </p>
-                    ) : null}
-                  </div>
-                </PopoverContent>
-              </Popover>
-            </div>
-          </div>
-        </div>
-
-        <div className="space-y-3">
-          <div className="space-y-2">
-            <Label htmlFor="systemPreset" className="text-sm font-medium">
-              System Preset
-            </Label>
-            <Select
-              value={sessionSettings.systemPreset}
-              onValueChange={(value) =>
-                updateSessionSettings({
-                  systemPreset: value as keyof typeof SYSTEM_PRESET_CONFIGS,
-                })
-              }
-            >
-              <SelectTrigger id="systemPreset">
-                <SelectValue placeholder="Balanced" />
-              </SelectTrigger>
-              <SelectContent>
-                {Object.values(SYSTEM_PRESET_CONFIGS).map((preset) => (
-                  <SelectItem key={preset.id} value={preset.id}>
-                    {preset.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <p className="text-xs text-muted-foreground">
-              {SYSTEM_PRESET_CONFIGS[sessionSettings.systemPreset].description}
-            </p>
-          </div>
-
-          <div className="flex items-center justify-between">
-            <Label htmlFor="temperature" className="text-sm font-medium">
-              Temperature
-            </Label>
-            <span className="text-sm text-muted-foreground">
-              {getTemperatureQuantity(sessionSettings.temperature)}
-            </span>
-          </div>
-          <Slider
-            id="temperature"
-            min={0}
-            max={2}
-            step={0.05}
-            value={[sessionSettings.temperature]}
-            onValueChange={([value]) => updateSessionSettings({ temperature: value })}
-            className={getSliderClass(currentMode)}
-          />
-          <p className="text-xs text-muted-foreground">
-            Start from the mode default, then tune creativity or precision for this conversation.
-          </p>
-        </div>
-
-        <div className="space-y-3">
-          <div className="flex items-center justify-between">
-            <Label htmlFor="maxTokens" className="text-sm font-medium">
-              Max Tokens
-            </Label>
-            <span className="text-sm text-muted-foreground">
-              {getMaxTokensQuantity(sessionSettings.maxTokens)}
-            </span>
-          </div>
-          <Slider
-            id="maxTokens"
-            min={256}
-            max={4096}
-            step={256}
-            value={[sessionSettings.maxTokens]}
-            onValueChange={([value]) => updateSessionSettings({ maxTokens: value })}
-            className={getSliderClass(currentMode)}
-          />
-          <p className="text-xs text-muted-foreground">
-            Controls the response length ceiling for this chat.
-          </p>
-        </div>
-
-        <div className="space-y-3">
-          <div className="flex items-center justify-between">
-            <Label htmlFor="topP" className="text-sm font-medium">
-              Top P
-            </Label>
-            <span className="text-sm text-muted-foreground">
-              {getTopPQuantity(sessionSettings.topP)}
-            </span>
-          </div>
-          <Slider
-            id="topP"
-            min={0.1}
-            max={1}
-            step={0.05}
-            value={[sessionSettings.topP]}
-            onValueChange={([value]) => updateSessionSettings({ topP: value })}
-            className={getSliderClass(currentMode)}
-          />
-          <p className="text-xs text-muted-foreground">
-            Narrows or broadens token sampling for the current session.
-          </p>
-        </div>
-
-        <Separator />
+        ) : null}
 
         <div className="space-y-4">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <h3 className="text-sm font-medium text-foreground">Advanced Settings</h3>
-              <p className="text-xs text-muted-foreground">
-                Fine-tune the session behavior without changing the active mode.
-              </p>
-            </div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setShowAdvanced((previous) => !previous)}
-            >
-              {showAdvanced ? 'Hide' : 'Show'}
-            </Button>
-          </div>
-
-          {showAdvanced && (
-            <div className="space-y-3 rounded-2xl border border-border/70 bg-background/50 p-4">
-              <div className="space-y-2">
-                <Label htmlFor="modelOverride" className="text-sm font-medium">
-                  Response Profile
-                </Label>
-                <Select
-                  value={sessionSettings.modelOverride}
-                  onValueChange={(value: ModelOverrideOption) =>
-                    updateSessionSettings({ modelOverride: value })
-                  }
-                >
-                  <SelectTrigger id="modelOverride">
-                    <SelectValue placeholder="Smart Match" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="auto">Smart Match</SelectItem>
-                    <SelectItem value="gemini">Swift</SelectItem>
-                    <SelectItem value="claude">Polished</SelectItem>
-                    <SelectItem value="gpt">Clear</SelectItem>
-                    <SelectItem value="deepseek">Analyst</SelectItem>
-                    <SelectItem value="qwen">Builder</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="rounded-xl border border-border/60 bg-card/40 px-3 py-2 text-xs leading-relaxed text-muted-foreground">
-                Use the info icon in the session summary to compare the profiles without cluttering the panel.
-              </div>
-            </div>
-          )}
-        </div>
-
-        <Separator />
-
-        <div className="space-y-4">
-          <h3 className="text-sm font-medium text-foreground">Features</h3>
-
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-muted">
-                <GlobeIcon className="size-4 text-muted-foreground" />
-              </div>
-              <div>
-                <Label htmlFor="webSearch" className="text-sm font-medium cursor-pointer">
-                  Web Search
-                </Label>
-                <p className="text-xs text-muted-foreground">
-                  Allow retrieval-style context when available
-                </p>
-              </div>
-            </div>
-            <Switch
-              id="webSearch"
-              checked={sessionSettings.webSearch}
-              onCheckedChange={(checked) =>
-                updateSessionSettings({ webSearch: checked })
-              }
-            />
-          </div>
-
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-muted">
-                <DatabaseIcon className="size-4 text-muted-foreground" />
-              </div>
-              <div>
-                <Label htmlFor="memory" className="text-sm font-medium cursor-pointer">
-                  Memory
-                </Label>
-                <p className="text-xs text-muted-foreground">
-                  Carry forward recent conversation context
-                </p>
-              </div>
-            </div>
-            <Switch
-              id="memory"
-              checked={sessionSettings.memory}
-              onCheckedChange={(checked) =>
-                updateSessionSettings({ memory: checked })
-              }
-            />
-          </div>
-
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-muted">
-                <FileIcon className="size-4 text-muted-foreground" />
-              </div>
-              <div>
-                <Label htmlFor="fileContext" className="text-sm font-medium cursor-pointer">
-                  File Context
-                </Label>
-                <p className="text-xs text-muted-foreground">
-                  Include extracted attachment text in the assistant context for this chat
-                </p>
-              </div>
-            </div>
-            <Switch
-              id="fileContext"
-              checked={sessionSettings.fileContext}
-              onCheckedChange={(checked) =>
-                updateSessionSettings({ fileContext: checked })
-              }
-            />
-          </div>
+          <FeatureSwitch
+            id="webSearch"
+            icon={<GlobeIcon className="size-4 text-muted-foreground" />}
+            title="Search the web"
+            description={
+              currentMode === 'live'
+                ? 'Pulse always searches the web.'
+                : 'Look up current information when it helps.'
+            }
+            checked={currentMode === 'live' || sessionSettings.webSearch}
+            disabled={currentMode === 'live'}
+            onCheckedChange={(checked) => updateSessionSettings({ webSearch: checked })}
+          />
+          <FeatureSwitch
+            id="memory"
+            icon={<DatabaseIcon className="size-4 text-muted-foreground" />}
+            title="Remember context"
+            description="Keep a running summary of this chat."
+            checked={sessionSettings.memory}
+            onCheckedChange={(checked) => updateSessionSettings({ memory: checked })}
+          />
+          <FeatureSwitch
+            id="fileContext"
+            icon={<FileIcon className="size-4 text-muted-foreground" />}
+            title="Use project files"
+            description="Let replies draw on files in this project."
+            checked={sessionSettings.fileContext}
+            onCheckedChange={(checked) => updateSessionSettings({ fileContext: checked })}
+          />
         </div>
 
         <Separator />
 
         <div className="space-y-3">
-          <h3 className="text-sm font-medium text-foreground">Recent attachments</h3>
+          <h3 className="text-sm font-medium text-foreground">Files in this chat</h3>
           {currentChat?.attachments && currentChat.attachments.length > 0 ? (
             <div className="space-y-2">
               {currentChat.attachments.slice(-4).map((attachment) => {
@@ -514,7 +326,7 @@ export function SettingsPanel() {
                       </p>
                       <p className="text-xs text-muted-foreground">
                         {attachment.kind}
-                        {attachment.isExtracted ? ' / extracted text ready' : ''}
+                        {attachment.isExtracted ? ' · text ready' : ''}
                       </p>
                     </div>
                   )
@@ -534,23 +346,144 @@ export function SettingsPanel() {
               })}
             </div>
           ) : (
-            <div className="rounded-xl border border-dashed border-border bg-background/50 px-3 py-4 text-sm text-muted-foreground">
-              No files attached yet. Add PDFs, images, or text files from the composer.
-            </div>
+            <p className="text-sm text-muted-foreground">
+              No files yet. Use + in the message box, or drop files onto it.
+            </p>
           )}
         </div>
 
-        <Button
-          variant="outline"
-          className="w-full"
-          onClick={() =>
-            updateSessionSettings(
-              createSessionSettings(currentChat?.mode ?? currentMode)
-            )
-          }
-        >
-          Reset to mode defaults
-        </Button>
+        <Separator />
+
+        <div className="space-y-4">
+          <button
+            type="button"
+            aria-expanded={showAdvanced}
+            onClick={() => setShowAdvanced((previous) => !previous)}
+            className="flex w-full items-center justify-between text-left"
+          >
+            <span>
+              <span className="block text-sm font-medium text-foreground">Advanced</span>
+              <span className="block text-xs text-muted-foreground">
+                Tone, model profile and sampling.
+              </span>
+            </span>
+            <ChevronDown
+              className={cn(
+                'size-4 text-muted-foreground transition-transform',
+                showAdvanced && 'rotate-180'
+              )}
+            />
+          </button>
+
+          {showAdvanced ? (
+            <div className="space-y-5">
+              <div className="space-y-2">
+                <Label htmlFor="systemPreset" className="text-sm font-medium">
+                  Tone preset
+                </Label>
+                <Select
+                  value={sessionSettings.systemPreset}
+                  onValueChange={(value) =>
+                    updateSessionSettings({
+                      systemPreset: value as keyof typeof SYSTEM_PRESET_CONFIGS,
+                    })
+                  }
+                >
+                  <SelectTrigger id="systemPreset" className="w-full">
+                    <SelectValue placeholder="Balanced" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {Object.values(SYSTEM_PRESET_CONFIGS).map((preset) => (
+                      <SelectItem key={preset.id} value={preset.id}>
+                        {preset.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  {SYSTEM_PRESET_CONFIGS[sessionSettings.systemPreset].description}
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="modelOverride" className="text-sm font-medium">
+                  Model profile
+                </Label>
+                <Select
+                  value={sessionSettings.modelOverride}
+                  onValueChange={(value: ModelOverrideOption) =>
+                    updateSessionSettings({ modelOverride: value })
+                  }
+                >
+                  <SelectTrigger id="modelOverride" className="w-full">
+                    <SelectValue placeholder="Smart Match" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="auto">Smart Match</SelectItem>
+                    <SelectItem value="gemini">Swift</SelectItem>
+                    <SelectItem value="claude">Polished</SelectItem>
+                    <SelectItem value="gpt">Clear</SelectItem>
+                    <SelectItem value="deepseek">Analyst</SelectItem>
+                    <SelectItem value="qwen">Builder</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  {RESPONSE_PROFILE_LABELS[sessionSettings.modelOverride]}:{' '}
+                  {RESPONSE_PROFILE_DESCRIPTIONS[sessionSettings.modelOverride]}
+                </p>
+              </div>
+
+              <PanelSlider
+                id="temperature"
+                label="Temperature"
+                valueLabel={getTemperatureQuantity(sessionSettings.temperature)}
+                hint="Higher is more creative, lower is more precise."
+                min={0}
+                max={2}
+                step={0.05}
+                value={sessionSettings.temperature}
+                className={getSliderClass(currentMode)}
+                onChange={(temperature) => updateSessionSettings({ temperature })}
+              />
+              <PanelSlider
+                id="maxTokens"
+                label="Max reply length"
+                valueLabel={getMaxTokensQuantity(sessionSettings.maxTokens)}
+                hint="The longest a single reply can be."
+                min={256}
+                max={4096}
+                step={256}
+                value={sessionSettings.maxTokens}
+                className={getSliderClass(currentMode)}
+                onChange={(maxTokens) => updateSessionSettings({ maxTokens })}
+              />
+              <PanelSlider
+                id="topP"
+                label="Top P"
+                valueLabel={getTopPQuantity(sessionSettings.topP)}
+                hint="How widely the model samples words."
+                min={0.1}
+                max={1}
+                step={0.05}
+                value={sessionSettings.topP}
+                className={getSliderClass(currentMode)}
+                onChange={(topP) => updateSessionSettings({ topP })}
+              />
+
+              <Button
+                variant="outline"
+                className="w-full"
+                onClick={() =>
+                  updateSessionSettings(
+                    createSessionSettings(currentChat?.mode ?? currentMode)
+                  )
+                }
+              >
+                Reset to {modeConfig.name} defaults
+              </Button>
+            </div>
+          ) : null}
+        </div>
       </div>
       </aside>
     </>

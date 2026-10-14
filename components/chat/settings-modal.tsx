@@ -1,9 +1,9 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { ReactNode, useEffect, useState } from 'react'
+import { toast } from 'sonner'
 import { useChatContext } from '@/lib/chat-context'
 import {
-  AIMode,
   AppSettings,
   DefaultProjectBehavior,
   MODE_CONFIGS,
@@ -18,13 +18,20 @@ import {
   getModelOverrideForUsageOptimization,
   getUsageOptimizationFromModelOverride,
 } from '@/lib/types'
-import { AlertTriangle, Loader2, Trash2 } from 'lucide-react'
 import {
-  ModeIcon,
-  getModeAccentClass,
-  getModeGradient,
-  getModeTintClass,
-} from '@/lib/mode-utils'
+  AlertTriangle,
+  Brain,
+  ChevronDown,
+  Loader2,
+  MessagesSquare,
+  Settings2,
+  Trash2,
+  UserRound,
+  Wand2,
+} from 'lucide-react'
+import { cn } from '@/lib/utils'
+import { INTELLIGENCE_LEVEL_OPTIONS } from '@/lib/config'
+import { ModeIcon, getModeAccentClass } from '@/lib/mode-utils'
 import {
   Dialog,
   DialogContent,
@@ -37,8 +44,12 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
-import { Separator } from '@/components/ui/separator'
 import { Slider } from '@/components/ui/slider'
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from '@/components/ui/collapsible'
 import { Switch } from '@/components/ui/switch'
 import {
   Select,
@@ -48,6 +59,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { CheckIcon } from '@/components/icons'
+import { ASSISTANT_ROLES } from './composer-controls'
 import {
   getMaxTokensQuantity,
   getTemperatureQuantity,
@@ -59,35 +71,6 @@ interface SettingsModalProps {
   onOpenChange: (open: boolean) => void
 }
 
-interface UsageOptimizationOption {
-  id: UsageOptimization
-  label: string
-  hint: string
-}
-
-const USAGE_OPTIMIZATION_OPTIONS: UsageOptimizationOption[] = [
-  {
-    id: 'balanced',
-    label: 'Balanced',
-    hint: 'Auto-tuned for each assistant mode.',
-  },
-  {
-    id: 'fast',
-    label: 'Fast',
-    hint: 'Quicker responses, efficient model.',
-  },
-  {
-    id: 'best_quality',
-    label: 'Best Quality',
-    hint: 'Premium output from top-tier models.',
-  },
-  {
-    id: 'lowest_usage',
-    label: 'Lowest Usage',
-    hint: 'Conserves credits, efficient processing.',
-  },
-]
-
 interface ProjectBehaviorOption {
   id: DefaultProjectBehavior
   label: string
@@ -97,15 +80,21 @@ interface ProjectBehaviorOption {
 const PROJECT_BEHAVIOR_OPTIONS: ProjectBehaviorOption[] = [
   {
     id: 'last_used',
-    label: 'Remember last project',
+    label: 'The last project I used',
     hint: 'Reopens in the project you were last working in.',
   },
   {
     id: 'inbox',
-    label: 'Always start in Inbox',
-    hint: 'New sessions always open in the general Inbox project.',
+    label: 'Inbox',
+    hint: 'New chats always start in the general Inbox project.',
   },
 ]
+
+const RESPONSE_STYLE_OPTIONS = [
+  { id: 'concise', label: 'Short' },
+  { id: 'balanced', label: 'Balanced' },
+  { id: 'detailed', label: 'Detailed' },
+] as const
 
 const PURGE_COUNT_LABELS: Array<{ key: keyof UserPurgeCounts; label: string }> = [
   { key: 'conversations', label: 'Conversations' },
@@ -123,77 +112,6 @@ const PURGE_COUNT_LABELS: Array<{ key: keyof UserPurgeCounts; label: string }> =
   { key: 'sessions', label: 'Sessions' },
   { key: 'objectRefs', label: 'Storage objects' },
 ]
-
-function ModeSelectionCard({
-  mode,
-  active,
-  onClick,
-}: {
-  mode: AIMode
-  active: boolean
-  onClick: () => void
-}) {
-  const config = MODE_CONFIGS[mode]
-
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`group relative min-h-[148px] rounded-3xl border p-4 text-left transition-all duration-200 sm:min-h-[160px] sm:p-5 ${
-        active
-          ? `${getModeTintClass(mode, 'strong')} border-current ${getModeAccentClass(mode, 'text')} shadow-xl shadow-black/20`
-          : 'border-border/70 bg-card/70 hover:-translate-y-0.5 hover:border-border hover:bg-card'
-      }`}
-    >
-      <div className={`absolute inset-0 rounded-3xl opacity-0 ${active ? 'opacity-100' : ''} ${getModeGradient(mode)}`} />
-      <div className="relative flex h-full flex-col gap-4 sm:gap-5">
-        <div className={`flex size-12 items-center justify-center rounded-2xl sm:size-14 ${getModeTintClass(mode, 'strong')}`}>
-          <ModeIcon mode={mode} size="md" className={getModeAccentClass(mode, 'text')} />
-        </div>
-        <div className="space-y-2">
-          <p className="text-sm font-semibold leading-tight text-foreground sm:text-base">{config.name}</p>
-          <p className="text-xs leading-5 text-muted-foreground sm:text-sm sm:leading-6">{config.description}</p>
-        </div>
-      </div>
-    </button>
-  )
-}
-
-function UsageOptimizationCard({
-  option,
-  active,
-  onClick,
-}: {
-  option: UsageOptimizationOption
-  active: boolean
-  onClick: () => void
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`relative rounded-2xl border p-4 text-left transition-all duration-200 ${
-        active
-          ? 'border-primary bg-primary/10 shadow-lg shadow-black/10'
-          : 'border-border/70 bg-card/70 hover:-translate-y-0.5 hover:border-border hover:bg-card'
-      }`}
-    >
-      <div className="flex flex-col gap-2">
-        <div className="flex items-center justify-between">
-          <p className={`text-sm font-semibold ${active ? 'text-foreground' : 'text-foreground'}`}>
-            {option.label}
-          </p>
-          {active && (
-            <div className="flex size-5 items-center justify-center rounded-full bg-primary">
-              <CheckIcon className="size-3 text-primary-foreground" />
-            </div>
-          )}
-        </div>
-        <p className="text-xs leading-5 text-muted-foreground">{option.hint}</p>
-      </div>
-    </button>
-  )
-}
 
 function UserDeletionDangerZone() {
   const [scope, setScope] = useState<UserPurgeScope>('workspace_data')
@@ -271,10 +189,10 @@ function UserDeletionDangerZone() {
         <div>
           <div className="flex items-center gap-2">
             <AlertTriangle className="size-4 text-destructive" />
-            <h3 className="text-base font-semibold text-foreground">Danger Zone</h3>
+            <h3 className="text-base font-semibold text-foreground">Delete your data</h3>
           </div>
           <p className="mt-1 text-xs leading-6 text-muted-foreground sm:text-sm">
-            Preview and delete your Zenquanta data. This action is irreversible.
+            See exactly what will be removed before anything is deleted. Deleting cannot be undone.
           </p>
         </div>
         <Badge variant="destructive" className="w-fit rounded-full">
@@ -388,11 +306,108 @@ function UserDeletionDangerZone() {
   )
 }
 
+type SettingsSection = 'general' | 'chats' | 'suggestions' | 'memory' | 'account'
+
+const SETTINGS_SECTIONS: Array<{ id: SettingsSection; label: string; icon: ReactNode }> = [
+  { id: 'general', label: 'General', icon: <Settings2 className="size-4" /> },
+  { id: 'chats', label: 'Chats', icon: <MessagesSquare className="size-4" /> },
+  { id: 'suggestions', label: 'Suggestions', icon: <Wand2 className="size-4" /> },
+  { id: 'memory', label: 'Memory', icon: <Brain className="size-4" /> },
+  { id: 'account', label: 'Account & data', icon: <UserRound className="size-4" /> },
+]
+
+// One labelled row: text on the left, the control on the right (stacked on
+// phones). Every setting uses this so the page scans as a single list.
+function SettingRow({
+  title,
+  description,
+  htmlFor,
+  children,
+  stacked = false,
+}: {
+  title: string
+  description?: string
+  htmlFor?: string
+  children: ReactNode
+  stacked?: boolean
+}) {
+  return (
+    <div
+      className={cn(
+        'flex gap-3 border-b border-border/60 py-4 last:border-b-0',
+        stacked ? 'flex-col' : 'flex-col sm:flex-row sm:items-center sm:justify-between sm:gap-6'
+      )}
+    >
+      <div className="min-w-0">
+        <Label htmlFor={htmlFor} className="text-sm font-medium text-foreground">
+          {title}
+        </Label>
+        {description ? (
+          <p className="mt-1 text-xs leading-5 text-muted-foreground">{description}</p>
+        ) : null}
+      </div>
+      <div className={cn('shrink-0', stacked && 'w-full')}>{children}</div>
+    </div>
+  )
+}
+
+function Segmented<T extends string>({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  label: string
+  value: T
+  options: ReadonlyArray<{ id: T; label: string }>
+  onChange: (value: T) => void
+}) {
+  return (
+    <div
+      role="radiogroup"
+      aria-label={label}
+      className="inline-flex flex-wrap gap-1 rounded-xl border border-border/70 bg-background/60 p-1"
+    >
+      {options.map((option) => {
+        const selected = option.id === value
+        return (
+          <button
+            key={option.id}
+            type="button"
+            role="radio"
+            aria-checked={selected}
+            onClick={() => onChange(option.id)}
+            className={cn(
+              'rounded-lg px-3 py-1.5 text-sm transition-colors',
+              selected
+                ? 'bg-secondary text-foreground shadow-sm'
+                : 'text-muted-foreground hover:text-foreground'
+            )}
+          >
+            {option.label}
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
+function SectionHeading({ title, description }: { title: string; description: string }) {
+  return (
+    <div className="mb-2">
+      <h3 className="text-lg font-semibold tracking-tight text-foreground">{title}</h3>
+      <p className="mt-1 text-sm text-muted-foreground">{description}</p>
+    </div>
+  )
+}
+
 export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
   const { appSettings, saveAppSettings, openOnboarding, openWorkspaceTool } =
     useChatContext()
   const [localSettings, setLocalSettings] = useState<AppSettings>(appSettings)
-  const [saved, setSaved] = useState(false)
+  const [section, setSection] = useState<SettingsSection>('general')
+  const [isSaving, setIsSaving] = useState(false)
+  const [showAdvanced, setShowAdvanced] = useState(false)
 
   useEffect(() => {
     if (open) {
@@ -400,503 +415,365 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
     }
   }, [appSettings, open])
 
+  const isDirty = JSON.stringify(localSettings) !== JSON.stringify(appSettings)
+
   const handleSave = async () => {
-    const next = await saveAppSettings(localSettings)
-    setLocalSettings(next)
-    setSaved(true)
-    setTimeout(() => setSaved(false), 2000)
+    setIsSaving(true)
+    try {
+      const next = await saveAppSettings(localSettings)
+      setLocalSettings(next)
+      toast.success('Settings saved')
+    } catch (error) {
+      toast.error(
+        error instanceof Error && error.message
+          ? error.message
+          : 'Could not save your settings. Please try again.'
+      )
+    } finally {
+      setIsSaving(false)
+    }
   }
+
+  const updateSessionDefaults = (patch: Partial<AppSettings['sessionDefaults']>) =>
+    setLocalSettings((previous) => ({
+      ...previous,
+      sessionDefaults: { ...previous.sessionDefaults, ...patch },
+    }))
+
+  const updateRecommendations = (
+    patch: Partial<AppSettings['assistantRecommendations']>
+  ) =>
+    setLocalSettings((previous) => ({
+      ...previous,
+      assistantRecommendations: { ...previous.assistantRecommendations, ...patch },
+    }))
 
   const currentUsageOptimization = getUsageOptimizationFromModelOverride(
     localSettings.sessionDefaults.modelOverride
   )
+  const recommendationsOn = localSettings.assistantRecommendations.enabled
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-[calc(100vw-1rem)] max-h-[92vh] max-w-[1240px] overflow-hidden rounded-[24px] border border-border/70 bg-background/95 p-0 shadow-2xl shadow-black/40 sm:w-[min(1240px,calc(100vw-2rem))] sm:rounded-[28px]">
-        <div className="flex h-full max-h-[92vh] min-h-0 flex-col">
-        <DialogHeader className="border-b border-border/70 bg-gradient-to-b from-card/80 to-background px-4 py-5 text-left sm:px-6 sm:py-6 lg:px-8 lg:py-7">
-          <DialogTitle className="text-xl tracking-tight sm:text-2xl lg:text-[1.9rem]">Preferences</DialogTitle>
-          <DialogDescription className="max-w-3xl text-xs leading-6 sm:text-sm sm:leading-6">
-            Manage defaults, personalization, memory, and workspace behavior for your Zenquanta AI account.
+      <DialogContent className="flex h-[min(720px,92vh)] w-[calc(100vw-1rem)] max-w-4xl flex-col gap-0 overflow-hidden rounded-[24px] border border-border/70 bg-background p-0 shadow-2xl shadow-black/40 sm:w-[calc(100vw-2rem)]">
+        <DialogHeader className="border-b border-border/70 px-5 py-4 text-left sm:px-6">
+          <DialogTitle className="text-lg">Settings</DialogTitle>
+          <DialogDescription className="sr-only">
+            Defaults for new chats, suggestions, memory and your account.
           </DialogDescription>
         </DialogHeader>
 
-        <Tabs defaultValue="general" className="flex min-h-0 flex-1 flex-col gap-4 px-4 py-4 sm:gap-5 sm:px-6 sm:py-5 lg:gap-6 lg:px-8 lg:py-6">
-          <TabsList className="grid w-full grid-cols-2 rounded-2xl bg-muted/40 p-1.5 sm:max-w-md">
-            <TabsTrigger value="general" className="rounded-xl">General</TabsTrigger>
-            <TabsTrigger value="about" className="rounded-xl">About</TabsTrigger>
+        <Tabs
+          value={section}
+          onValueChange={(value) => setSection(value as SettingsSection)}
+          orientation="vertical"
+          className="min-h-0 flex-1 gap-0 md:flex-row"
+        >
+          <TabsList className="h-auto w-full shrink-0 justify-start gap-1 overflow-x-auto rounded-none border-b border-border/70 bg-transparent px-3 py-2 [scrollbar-width:none] md:w-52 md:flex-col md:items-stretch md:overflow-visible md:border-b-0 md:border-r md:px-3 md:py-4">
+            {SETTINGS_SECTIONS.map((item) => (
+              <TabsTrigger
+                key={item.id}
+                value={item.id}
+                className="h-9 flex-none justify-start gap-2.5 rounded-lg px-3 text-muted-foreground data-[state=active]:bg-secondary data-[state=active]:text-foreground data-[state=active]:shadow-none dark:data-[state=active]:border-transparent dark:data-[state=active]:bg-secondary"
+              >
+                {item.icon}
+                {item.label}
+              </TabsTrigger>
+            ))}
           </TabsList>
 
-          <TabsContent value="general" className="min-h-0 flex-1 space-y-6 overflow-y-auto pr-1 pb-6 sm:space-y-7 sm:pr-2">
-
-            {/* 1. Default Assistant */}
-            <div className="space-y-3">
-              <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-                <div>
-                  <h3 className="text-base font-semibold sm:text-lg">Default Assistant</h3>
-                  <p className="text-xs text-muted-foreground sm:text-sm">
-                    Applied when you open a fresh chat session.
-                  </p>
+          <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5 sm:px-8 sm:py-6">
+            <TabsContent value="general" className="mt-0">
+              <SectionHeading
+                title="General"
+                description="How new chats start."
+              />
+              <SettingRow
+                title="Default assistant"
+                description="Used when you start a new chat."
+                stacked
+              >
+                <div role="radiogroup" aria-label="Default assistant" className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  {MODE_ORDER.map((mode) => {
+                    const selected = localSettings.defaultMode === mode
+                    return (
+                      <button
+                        key={mode}
+                        type="button"
+                        role="radio"
+                        aria-checked={selected}
+                        onClick={() =>
+                          setLocalSettings((previous) => ({
+                            ...previous,
+                            defaultMode: mode,
+                            sessionDefaults: createSessionSettings(mode, previous.sessionDefaults),
+                          }))
+                        }
+                        className={cn(
+                          'flex items-center gap-3 rounded-xl border px-3 py-2.5 text-left transition-colors',
+                          selected
+                            ? 'border-foreground/30 bg-secondary'
+                            : 'border-border/70 hover:border-border hover:bg-card'
+                        )}
+                      >
+                        <span className={cn('inline-flex', getModeAccentClass(mode, 'text'))}>
+                          <ModeIcon mode={mode} size="sm" />
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block text-sm font-medium text-foreground">
+                            {MODE_CONFIGS[mode].name}
+                          </span>
+                          <span className="block truncate text-xs text-muted-foreground">
+                            {ASSISTANT_ROLES[mode]}
+                          </span>
+                        </span>
+                        {selected ? <CheckIcon className="size-4 shrink-0 text-foreground" /> : null}
+                      </button>
+                    )
+                  })}
                 </div>
-                <Badge variant="secondary">Saved to account</Badge>
-              </div>
-              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                {MODE_ORDER.map((mode) => (
-                  <ModeSelectionCard
-                    key={mode}
-                    mode={mode}
-                    active={localSettings.defaultMode === mode}
-                    onClick={() =>
-                      setLocalSettings((previous) => ({
-                        ...previous,
-                        defaultMode: mode,
-                        sessionDefaults: createSessionSettings(mode, previous.sessionDefaults),
-                      }))
-                    }
-                  />
-                ))}
-              </div>
-            </div>
-
-            <Separator />
-
-            {/* 2. Quality & Speed (Usage Optimization) */}
-            <div className="space-y-3">
-              <div>
-                <h3 className="text-base font-semibold sm:text-lg">Quality & Speed</h3>
-                <p className="text-xs text-muted-foreground sm:text-sm">
-                  Default model profile for new sessions. Individual sessions can still be tuned in the session panel.
-                </p>
-              </div>
-              <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
-                {USAGE_OPTIMIZATION_OPTIONS.map((opt) => (
-                  <UsageOptimizationCard
-                    key={opt.id}
-                    option={opt}
-                    active={currentUsageOptimization === opt.id}
-                    onClick={() =>
-                      setLocalSettings((previous) => ({
-                        ...previous,
-                        usageOptimization: opt.id,
-                        sessionDefaults: {
-                          ...previous.sessionDefaults,
-                          modelOverride: getModelOverrideForUsageOptimization(opt.id),
-                        },
-                      }))
-                    }
-                  />
-                ))}
-              </div>
-            </div>
-
-            <Separator />
-
-            {/* 3. Response Style & Appearance */}
-            <div className="grid gap-4 xl:grid-cols-2">
-              <div className="rounded-2xl border border-border/70 bg-card/60 p-4 space-y-4 sm:p-5">
-                <div>
-                  <h3 className="text-base font-semibold">Default Response Style</h3>
-                  <p className="text-xs leading-6 text-muted-foreground sm:text-sm">
-                    Shapes the overall tone of assistant output in new chats.
-                  </p>
-                </div>
-                <div className="grid grid-cols-3 gap-2">
-                  {(['balanced', 'concise', 'detailed'] as const).map((style) => (
-                    <Button
-                      key={style}
-                      type="button"
-                      variant={localSettings.responseStyle === style ? 'default' : 'outline'}
-                      onClick={() =>
-                        setLocalSettings((previous) => ({
-                          ...previous,
-                          responseStyle: style,
-                        }))
-                      }
-                      className="capitalize"
-                    >
-                      {style}
-                    </Button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="rounded-2xl border border-border/70 bg-card/60 p-4 space-y-4 sm:p-5">
-                <div>
-                  <h3 className="text-base font-semibold">Visual Style</h3>
-                  <p className="text-xs leading-6 text-muted-foreground sm:text-sm">
-                    Theme and accent preferences for the workspace.
-                  </p>
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <Button type="button" variant="default" disabled>
-                    Dark theme
-                  </Button>
-                  <Button
-                    type="button"
-                    variant={localSettings.accentStyle === 'glass' ? 'default' : 'outline'}
-                    onClick={() =>
-                      setLocalSettings((previous) => ({
-                        ...previous,
-                        accentStyle:
-                          previous.accentStyle === 'glass' ? 'mode' : 'glass',
-                      }))
-                    }
-                  >
-                    {localSettings.accentStyle === 'glass' ? 'Glass accents' : 'Mode accents'}
-                  </Button>
-                </div>
-              </div>
-            </div>
-
-            <Separator />
-
-            {/* 4. Default Project Behavior */}
-            <div className="space-y-3 rounded-2xl border border-border/70 bg-card/60 p-4 sm:p-5">
-              <div>
-                <h3 className="text-base font-semibold">Default Project Behavior</h3>
-                <p className="text-xs leading-6 text-muted-foreground sm:text-sm">
-                  Controls which project new chat sessions start in when you open the workspace.
-                </p>
-              </div>
-              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                {PROJECT_BEHAVIOR_OPTIONS.map((opt) => (
-                  <button
-                    key={opt.id}
-                    type="button"
-                    onClick={() =>
-                      setLocalSettings((previous) => ({
-                        ...previous,
-                        defaultProjectBehavior: opt.id,
-                      }))
-                    }
-                    className={`rounded-xl border p-3 text-left transition-all ${
-                      localSettings.defaultProjectBehavior === opt.id
-                        ? 'border-primary bg-primary/10'
-                        : 'border-border/70 bg-background/50 hover:border-border hover:bg-background'
-                    }`}
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <div>
-                        <p className="text-sm font-medium text-foreground">{opt.label}</p>
-                        <p className="mt-0.5 text-xs text-muted-foreground">{opt.hint}</p>
-                      </div>
-                      {localSettings.defaultProjectBehavior === opt.id && (
-                        <div className="mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full bg-primary">
-                          <CheckIcon className="size-3 text-primary-foreground" />
-                        </div>
-                      )}
-                    </div>
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <Separator />
-
-            {/* 5. Session Feature Defaults */}
-            <div className="space-y-4 rounded-2xl border border-border/70 bg-card/60 p-4 sm:p-5">
-              <h3 className="text-base font-semibold">Session Feature Defaults</h3>
-              <div className="grid gap-4 md:grid-cols-3">
-                <div className="flex items-center justify-between rounded-xl border border-border px-3 py-3">
-                  <div>
-                    <p className="text-xs font-medium sm:text-sm">Web Search</p>
-                    <p className="text-[11px] text-muted-foreground">Fetch live context via Pulse</p>
-                  </div>
-                  <Switch
-                    checked={localSettings.sessionDefaults.webSearch}
-                    onCheckedChange={(checked) =>
-                      setLocalSettings((previous) => ({
-                        ...previous,
-                        sessionDefaults: {
-                          ...previous.sessionDefaults,
-                          webSearch: checked,
-                        },
-                      }))
-                    }
-                  />
-                </div>
-
-                <div className="flex items-center justify-between rounded-xl border border-border px-3 py-3">
-                  <div>
-                    <p className="text-xs font-medium sm:text-sm">Memory</p>
-                    <p className="text-[11px] text-muted-foreground">Carry conversation context forward</p>
-                  </div>
-                  <Switch
-                    checked={localSettings.sessionDefaults.memory}
-                    onCheckedChange={(checked) =>
-                      setLocalSettings((previous) => ({
-                        ...previous,
-                        sessionDefaults: {
-                          ...previous.sessionDefaults,
-                          memory: checked,
-                        },
-                      }))
-                    }
-                  />
-                </div>
-
-                <div className="flex items-center justify-between rounded-xl border border-border px-3 py-3">
-                  <div>
-                    <p className="text-xs font-medium sm:text-sm">File Context</p>
-                    <p className="text-[11px] text-muted-foreground">Include extracted attachment text by default</p>
-                  </div>
-                  <Switch
-                    checked={localSettings.sessionDefaults.fileContext}
-                    onCheckedChange={(checked) =>
-                      setLocalSettings((previous) => ({
-                        ...previous,
-                        sessionDefaults: {
-                          ...previous.sessionDefaults,
-                          fileContext: checked,
-                        },
-                      }))
-                    }
-                  />
-                </div>
-              </div>
-            </div>
-
-            <Separator />
-
-            {/* 6. Assistant Intelligence */}
-            <div className="space-y-4 rounded-2xl border border-border/70 bg-card/60 p-4 sm:p-5">
-              <div>
-                <h3 className="text-base font-semibold">Assistant Intelligence</h3>
-                <p className="text-xs leading-6 text-muted-foreground sm:text-sm">
-                  Controls how the Smart Router suggests and routes prompts to the best-fit assistant.
-                </p>
-              </div>
-
-              <div className="grid gap-4 md:grid-cols-3">
-                <div className="flex items-center justify-between rounded-xl border border-border px-3 py-3">
-                  <div>
-                    <p className="text-xs font-medium sm:text-sm">
-                      Assistant recommendations
-                    </p>
-                    <p className="text-[11px] text-muted-foreground">
-                      Suggest a better-fit assistant for obvious mismatches.
-                    </p>
-                  </div>
-                  <Switch
-                    checked={localSettings.assistantRecommendations.enabled}
-                    onCheckedChange={(checked) =>
-                      setLocalSettings((previous) => ({
-                        ...previous,
-                        assistantRecommendations: {
-                          ...previous.assistantRecommendations,
-                          enabled: checked,
-                        },
-                      }))
-                    }
-                  />
-                </div>
-
-                <div className="flex items-center justify-between rounded-xl border border-border px-3 py-3">
-                  <div>
-                    <p className="text-xs font-medium sm:text-sm">
-                      Auto-switch on high confidence
-                    </p>
-                    <p className="text-[11px] text-muted-foreground">
-                      Route the prompt automatically when the match is clear.
-                    </p>
-                  </div>
-                  <Switch
-                    checked={
-                      localSettings.assistantRecommendations.autoSwitchOnHighConfidence
-                    }
-                    disabled={!localSettings.assistantRecommendations.enabled}
-                    onCheckedChange={(checked) =>
-                      setLocalSettings((previous) => ({
-                        ...previous,
-                        assistantRecommendations: {
-                          ...previous.assistantRecommendations,
-                          autoSwitchOnHighConfidence: checked,
-                        },
-                      }))
-                    }
-                  />
-                </div>
-
-                <div className="flex items-center justify-between rounded-xl border border-border px-3 py-3">
-                  <div>
-                    <p className="text-xs font-medium sm:text-sm">
-                      Personalized recommendations
-                    </p>
-                    <p className="text-[11px] text-muted-foreground">
-                      Fine-tune suggestions using only your own feedback and choices.
-                    </p>
-                  </div>
-                  <Switch
-                    checked={
-                      localSettings.assistantRecommendations.enabled &&
-                      localSettings.assistantRecommendations.personalized
-                    }
-                    disabled={!localSettings.assistantRecommendations.enabled}
-                    onCheckedChange={(checked) =>
-                      setLocalSettings((previous) => ({
-                        ...previous,
-                        assistantRecommendations: {
-                          ...previous.assistantRecommendations,
-                          personalized: checked,
-                        },
-                      }))
-                    }
-                  />
-                </div>
-              </div>
-            </div>
-
-            <Separator />
-
-            {/* 7. Advanced Session Defaults */}
-            <div className="space-y-4">
-              <div>
-                <h3 className="text-base font-semibold sm:text-lg">Advanced Session Defaults</h3>
-                <p className="text-xs text-muted-foreground sm:text-sm">
-                  Fine-tune model behavior for new sessions. Per-session overrides still apply.
-                </p>
-              </div>
-
-              <div className="space-y-3 rounded-2xl border border-border/70 bg-card/60 p-4 sm:p-5">
-                <div>
-                  <Label htmlFor="defaultSystemPreset">System Preset</Label>
-                  <p className="mt-1 text-[11px] leading-5 text-muted-foreground">
-                    Applies tone and response framing to new chats by default.
-                  </p>
-                </div>
+              </SettingRow>
+              <SettingRow
+                title="Response length"
+                description="How much detail replies include by default."
+              >
+                <Segmented
+                  label="Response length"
+                  value={localSettings.responseStyle}
+                  options={RESPONSE_STYLE_OPTIONS}
+                  onChange={(responseStyle) =>
+                    setLocalSettings((previous) => ({ ...previous, responseStyle }))
+                  }
+                />
+              </SettingRow>
+              <SettingRow
+                title="Start new chats in"
+                description="Which project a new chat is saved to."
+              >
                 <Select
-                  value={localSettings.sessionDefaults.systemPreset}
+                  value={localSettings.defaultProjectBehavior}
                   onValueChange={(value) =>
                     setLocalSettings((previous) => ({
                       ...previous,
-                      sessionDefaults: {
-                        ...previous.sessionDefaults,
-                        systemPreset:
-                          value as AppSettings['sessionDefaults']['systemPreset'],
-                      },
+                      defaultProjectBehavior: value as DefaultProjectBehavior,
                     }))
                   }
                 >
-                  <SelectTrigger id="defaultSystemPreset">
-                    <SelectValue placeholder="Balanced" />
+                  <SelectTrigger className="w-full rounded-xl sm:w-56" aria-label="Start new chats in">
+                    <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {Object.values(SYSTEM_PRESET_CONFIGS).map((preset) => (
-                      <SelectItem key={preset.id} value={preset.id}>
-                        {preset.label}
+                    {PROJECT_BEHAVIOR_OPTIONS.map((option) => (
+                      <SelectItem key={option.id} value={option.id}>
+                        {option.label}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
-                <p className="text-[11px] leading-5 text-muted-foreground">
-                  {
-                    SYSTEM_PRESET_CONFIGS[localSettings.sessionDefaults.systemPreset]
-                      .description
-                  }
-                </p>
-              </div>
+              </SettingRow>
+            </TabsContent>
 
-              <div className="grid gap-4 xl:grid-cols-3">
-                <div className="space-y-3 rounded-2xl border border-border/70 bg-card/60 p-4 sm:p-5">
-                  <div className="flex items-center justify-between">
-                    <Label htmlFor="defaultTemperature">Temperature</Label>
-                    <span className="text-xs text-muted-foreground sm:text-sm">
-                      {getTemperatureQuantity(localSettings.sessionDefaults.temperature)}
+            <TabsContent value="chats" className="mt-0">
+              <SectionHeading
+                title="Chats"
+                description="Defaults for new chats. You can change any of these inside a chat."
+              />
+              <SettingRow
+                title="Intelligence"
+                description={
+                  INTELLIGENCE_LEVEL_OPTIONS.find((option) => option.id === currentUsageOptimization)
+                    ?.hint
+                }
+                stacked
+              >
+                <Segmented
+                  label="Default intelligence"
+                  value={currentUsageOptimization}
+                  options={INTELLIGENCE_LEVEL_OPTIONS}
+                  onChange={(usageOptimization: UsageOptimization) =>
+                    setLocalSettings((previous) => ({
+                      ...previous,
+                      usageOptimization,
+                      sessionDefaults: {
+                        ...previous.sessionDefaults,
+                        modelOverride: getModelOverrideForUsageOptimization(usageOptimization),
+                      },
+                    }))
+                  }
+                />
+              </SettingRow>
+              <SettingRow
+                title="Search the web"
+                description="Look up current information when it helps. Pulse always searches."
+                htmlFor="default-web-search"
+              >
+                <Switch
+                  id="default-web-search"
+                  checked={localSettings.sessionDefaults.webSearch}
+                  onCheckedChange={(webSearch) => updateSessionDefaults({ webSearch })}
+                />
+              </SettingRow>
+              <SettingRow
+                title="Use project files"
+                description="Let replies draw on files you uploaded to the project."
+                htmlFor="default-file-context"
+              >
+                <Switch
+                  id="default-file-context"
+                  checked={localSettings.sessionDefaults.fileContext}
+                  onCheckedChange={(fileContext) => updateSessionDefaults({ fileContext })}
+                />
+              </SettingRow>
+
+              <Collapsible open={showAdvanced} onOpenChange={setShowAdvanced} className="mt-4">
+                <CollapsibleTrigger asChild>
+                  <button
+                    type="button"
+                    className="flex w-full items-center justify-between rounded-xl border border-border/70 px-4 py-3 text-left text-sm font-medium text-foreground transition-colors hover:bg-card"
+                  >
+                    <span>
+                      Advanced
+                      <span className="mt-0.5 block text-xs font-normal text-muted-foreground">
+                        Tone preset and model sampling. Most people never need these.
+                      </span>
                     </span>
-                  </div>
-                  <Slider
+                    <ChevronDown
+                      className={cn(
+                        'size-4 shrink-0 text-muted-foreground transition-transform',
+                        showAdvanced && 'rotate-180'
+                      )}
+                    />
+                  </button>
+                </CollapsibleTrigger>
+                <CollapsibleContent className="px-1">
+                  <SettingRow
+                    title="Tone preset"
+                    description={
+                      SYSTEM_PRESET_CONFIGS[localSettings.sessionDefaults.systemPreset].description
+                    }
+                    htmlFor="defaultSystemPreset"
+                  >
+                    <Select
+                      value={localSettings.sessionDefaults.systemPreset}
+                      onValueChange={(value) =>
+                        updateSessionDefaults({
+                          systemPreset: value as AppSettings['sessionDefaults']['systemPreset'],
+                        })
+                      }
+                    >
+                      <SelectTrigger id="defaultSystemPreset" className="w-full rounded-xl sm:w-56">
+                        <SelectValue placeholder="Balanced" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {Object.values(SYSTEM_PRESET_CONFIGS).map((preset) => (
+                          <SelectItem key={preset.id} value={preset.id}>
+                            {preset.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </SettingRow>
+                  <SliderRow
                     id="defaultTemperature"
+                    title="Temperature"
+                    description="Higher is more creative, lower is more precise."
+                    valueLabel={getTemperatureQuantity(localSettings.sessionDefaults.temperature)}
                     min={0}
                     max={2}
                     step={0.05}
-                    value={[localSettings.sessionDefaults.temperature]}
-                    onValueChange={([value]) =>
-                      setLocalSettings((previous) => ({
-                        ...previous,
-                        sessionDefaults: {
-                          ...previous.sessionDefaults,
-                          temperature: value,
-                        },
-                      }))
-                    }
+                    value={localSettings.sessionDefaults.temperature}
+                    onChange={(temperature) => updateSessionDefaults({ temperature })}
                   />
-                  <p className="text-[11px] leading-5 text-muted-foreground">
-                    Creativity vs. precision balance for new chats.
-                  </p>
-                </div>
-
-                <div className="space-y-3 rounded-2xl border border-border/70 bg-card/60 p-4 sm:p-5">
-                  <div className="flex items-center justify-between">
-                    <Label htmlFor="defaultMaxTokens">Max Tokens</Label>
-                    <span className="text-xs text-muted-foreground sm:text-sm">
-                      {getMaxTokensQuantity(localSettings.sessionDefaults.maxTokens)}
-                    </span>
-                  </div>
-                  <Slider
+                  <SliderRow
                     id="defaultMaxTokens"
+                    title="Max reply length"
+                    description="The longest a single reply can be."
+                    valueLabel={getMaxTokensQuantity(localSettings.sessionDefaults.maxTokens)}
                     min={256}
                     max={4096}
                     step={256}
-                    value={[localSettings.sessionDefaults.maxTokens]}
-                    onValueChange={([value]) =>
-                      setLocalSettings((previous) => ({
-                        ...previous,
-                        sessionDefaults: {
-                          ...previous.sessionDefaults,
-                          maxTokens: value,
-                        },
-                      }))
-                    }
+                    value={localSettings.sessionDefaults.maxTokens}
+                    onChange={(maxTokens) => updateSessionDefaults({ maxTokens })}
                   />
-                  <p className="text-[11px] leading-5 text-muted-foreground">
-                    Response length ceiling for new chats.
-                  </p>
-                </div>
-
-                <div className="space-y-3 rounded-2xl border border-border/70 bg-card/60 p-4 sm:p-5">
-                  <div className="flex items-center justify-between">
-                    <Label htmlFor="defaultTopP">Top P</Label>
-                    <span className="text-xs text-muted-foreground sm:text-sm">
-                      {getTopPQuantity(localSettings.sessionDefaults.topP)}
-                    </span>
-                  </div>
-                  <Slider
+                  <SliderRow
                     id="defaultTopP"
+                    title="Top P"
+                    description="How widely the model samples words."
+                    valueLabel={getTopPQuantity(localSettings.sessionDefaults.topP)}
                     min={0.1}
                     max={1}
                     step={0.05}
-                    value={[localSettings.sessionDefaults.topP]}
-                    onValueChange={([value]) =>
-                      setLocalSettings((previous) => ({
-                        ...previous,
-                        sessionDefaults: {
-                          ...previous.sessionDefaults,
-                          topP: value,
-                        },
-                      }))
-                    }
+                    value={localSettings.sessionDefaults.topP}
+                    onChange={(topP) => updateSessionDefaults({ topP })}
                   />
-                  <p className="text-[11px] leading-5 text-muted-foreground">
-                    Token sampling breadth for freshly started chats.
-                  </p>
-                </div>
-              </div>
-            </div>
+                </CollapsibleContent>
+              </Collapsible>
+            </TabsContent>
 
-            <Separator />
+            <TabsContent value="suggestions" className="mt-0">
+              <SectionHeading
+                title="Suggestions"
+                description="Zenquanta can suggest a better assistant when your message fits another one."
+              />
+              <SettingRow
+                title="Suggest a better assistant"
+                description="Show a suggestion when another assistant is a clearly better fit."
+                htmlFor="recommendations-enabled"
+              >
+                <Switch
+                  id="recommendations-enabled"
+                  checked={recommendationsOn}
+                  onCheckedChange={(enabled) => updateRecommendations({ enabled })}
+                />
+              </SettingRow>
+              <SettingRow
+                title="Switch automatically when it is obvious"
+                description="Skip the suggestion and switch when the match is very clear."
+                htmlFor="recommendations-auto"
+              >
+                <Switch
+                  id="recommendations-auto"
+                  checked={recommendationsOn && localSettings.assistantRecommendations.autoSwitchOnHighConfidence}
+                  disabled={!recommendationsOn}
+                  onCheckedChange={(autoSwitchOnHighConfidence) =>
+                    updateRecommendations({ autoSwitchOnHighConfidence })
+                  }
+                />
+              </SettingRow>
+              <SettingRow
+                title="Learn from my choices"
+                description="Tune suggestions using only your own feedback and picks."
+                htmlFor="recommendations-personalized"
+              >
+                <Switch
+                  id="recommendations-personalized"
+                  checked={recommendationsOn && localSettings.assistantRecommendations.personalized}
+                  disabled={!recommendationsOn}
+                  onCheckedChange={(personalized) => updateRecommendations({ personalized })}
+                />
+              </SettingRow>
+            </TabsContent>
 
-            {/* 8. Memory Vault & Workspace links */}
-            <div className="space-y-4">
-              <h3 className="text-base font-semibold sm:text-lg">Workspace</h3>
-
-              <div className="flex flex-col gap-3 rounded-2xl border border-border/70 bg-card/60 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
-                <div>
-                  <h4 className="text-sm font-semibold">Memory Vault</h4>
-                  <p className="text-xs leading-6 text-muted-foreground sm:text-sm">
-                    Review saved conversation summaries and control memory per chat.
-                  </p>
-                </div>
+            <TabsContent value="memory" className="mt-0">
+              <SectionHeading
+                title="Memory"
+                description="What Zenquanta remembers between messages."
+              />
+              <SettingRow
+                title="Remember context in new chats"
+                description="Keep a running summary so long chats stay on track."
+                htmlFor="default-memory"
+              >
+                <Switch
+                  id="default-memory"
+                  checked={localSettings.sessionDefaults.memory}
+                  onCheckedChange={(memory) => updateSessionDefaults({ memory })}
+                />
+              </SettingRow>
+              <SettingRow
+                title="Memory Vault"
+                description="See what has been saved, and turn memory off or clear it for any chat."
+              >
                 <Button
                   type="button"
                   variant="outline"
@@ -908,71 +785,105 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                 >
                   Open Memory Vault
                 </Button>
-              </div>
+              </SettingRow>
+            </TabsContent>
 
-              <div className="flex flex-col gap-3 rounded-2xl border border-border/70 bg-card/60 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
-                <div>
-                  <h4 className="text-sm font-semibold">Workspace Setup</h4>
-                  <p className="text-xs leading-6 text-muted-foreground sm:text-sm">
-                    Reopen onboarding to refresh starter prompts, projects, and the default assistant.
-                  </p>
-                </div>
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="rounded-xl"
-                  onClick={() => {
-                    onOpenChange(false)
-                    openOnboarding()
-                  }}
+            <TabsContent value="account" className="mt-0 space-y-6">
+              <div>
+                <SectionHeading
+                  title="Account & data"
+                  description="Set up your workspace again, or delete your data."
+                />
+                <SettingRow
+                  title="Workspace setup"
+                  description="Pick your starter assistant, prompts and first project again."
                 >
-                  Reopen onboarding
-                </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="rounded-xl"
+                    onClick={() => {
+                      onOpenChange(false)
+                      openOnboarding()
+                    }}
+                  >
+                    Run setup again
+                  </Button>
+                </SettingRow>
               </div>
-            </div>
-
-            <Separator />
-
-            <UserDeletionDangerZone />
-          </TabsContent>
-
-          <TabsContent value="about" className="min-h-0 flex-1 space-y-4 overflow-y-auto pr-1 pb-6 sm:pr-2">
-            <div className="rounded-3xl border border-border/70 bg-card/60 px-4 py-8 text-center sm:px-6 sm:py-10">
-              <div className="inline-flex items-center gap-2 mb-4">
-                <div className="size-12 rounded-xl bg-gradient-to-br from-creative via-logic to-code flex items-center justify-center">
-                  <span className="text-2xl font-bold text-white">Z</span>
-                </div>
-              </div>
-              <h2 className="mb-2 text-xl font-bold sm:text-2xl">Zenquanta AI</h2>
-              <p className="mb-4 text-sm text-muted-foreground">
-                Creative, reasoning, and coding assistant
-              </p>
-              <p className="mx-auto max-w-md text-xs leading-6 text-muted-foreground sm:text-sm">
-                Designed as a polished workspace for drafting, analysis, implementation, and focused collaboration.
-              </p>
-            </div>
-          </TabsContent>
+              <UserDeletionDangerZone />
+            </TabsContent>
+          </div>
         </Tabs>
 
-        <div className="border-t border-border/70 bg-background/90 px-4 py-4 sm:px-6 sm:py-5 lg:px-8">
-        <div className="flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <p className="text-[11px] leading-6 text-muted-foreground sm:text-xs">
-            These defaults apply to fresh chats while current sessions keep their own tuned settings.
-          </p>
-          <Button onClick={handleSave} className="gap-2">
-            {saved ? (
-              <>
-                <CheckIcon className="size-4" />
-                Saved
-              </>
-            ) : (
-              'Save preferences'
-            )}
-          </Button>
-        </div>
-        </div>
-        </div>
+        {section !== 'account' ? (
+          <div className="flex items-center justify-between gap-3 border-t border-border/70 px-5 py-3 sm:px-6">
+            <p className="text-xs text-muted-foreground" aria-live="polite">
+              {isDirty ? 'You have unsaved changes.' : 'Changes apply to new chats.'}
+            </p>
+            <div className="flex items-center gap-2">
+              {isDirty ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  disabled={isSaving}
+                  onClick={() => setLocalSettings(appSettings)}
+                >
+                  Discard
+                </Button>
+              ) : null}
+              <Button
+                type="button"
+                disabled={!isDirty || isSaving}
+                onClick={() => void handleSave()}
+              >
+                {isSaving ? <Loader2 className="size-4 animate-spin" /> : null}
+                Save
+              </Button>
+            </div>
+          </div>
+        ) : null}
       </DialogContent>
     </Dialog>
+  )
+}
+
+function SliderRow({
+  id,
+  title,
+  description,
+  valueLabel,
+  min,
+  max,
+  step,
+  value,
+  onChange,
+}: {
+  id: string
+  title: string
+  description: string
+  valueLabel: string
+  min: number
+  max: number
+  step: number
+  value: number
+  onChange: (value: number) => void
+}) {
+  return (
+    <SettingRow title={title} description={description} htmlFor={id}>
+      <div className="flex w-full items-center gap-3 sm:w-64">
+        <Slider
+          id={id}
+          min={min}
+          max={max}
+          step={step}
+          value={[value]}
+          onValueChange={([next]) => onChange(next)}
+        />
+        <span className="w-14 shrink-0 text-right text-xs tabular-nums text-muted-foreground">
+          {valueLabel}
+        </span>
+      </div>
+    </SettingRow>
   )
 }
