@@ -1,5 +1,17 @@
 # AI Architecture Decisions
 
+## Each Chat Has A URL; The Workspace Lives In A Route Group Layout
+
+Decision (2026-10-14): chats live at `/c/<id>` and everything else in the workspace at `/`. `app/(workspace)/layout.tsx` renders `ChatLayout` and its pages render nothing, so moving between `/` and `/c/<id>` (native `history.pushState`, Back/Forward, or a router navigation) never remounts the workspace. The chat context is the source of truth and writes the address; on load and on `popstate` it reads it. The address decides the first screen: `/` is Workspace Home, and the last chat is no longer restored from browser storage.
+
+Rationale: back, refresh, bookmarks, new tabs and copied links did not work while the open chat lived only in localStorage. Tools stay dialogs without their own URLs; the existing `/?tool=` deep links still open them.
+
+## Streamed Text Is Applied Once Per Frame
+
+Decision (2026-10-14): the `/api/chat` stream loop buffers `delta` events and applies them with one `applyConversationPatch` per animation frame, flushing before any other event and when the stream ends. `ChatMessage` is memoized and its handlers are kept stable with `useStableCallback`.
+
+Rationale: every delta replaced the conversations array and re-rendered the whole workspace, including every finished message. On a 4x throttled CPU a 400-delta reply took 25.7 s with about 200 long tasks; after the change it takes 12 to 13 s with 2. New per-message props passed from `ChatArea` must stay referentially stable, or the memo stops working.
+
 ## Composer Is One Row; Tools Live In The + Menu
 
 Decision (2026-10-14): the composer shows only the + tools menu, the assistant picker, active tool chips, the intelligence picker and Send/Stop. Prompt library, Playbooks, Model Duel, Artifact Studio, Prism Studio, private assistants and chat settings are opened from menus through `openWorkspaceTool`; their components keep their dialogs and accept `hideTrigger`. Usage information is shown only when it needs action (near a limit, pending plan request, image mode, very large draft).

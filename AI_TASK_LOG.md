@@ -6,6 +6,29 @@ The repository contains a real Zenquanta AI platform backed by Neon for runtime 
 
 Current direction: plan upgrades remain manual/admin-driven, payment automation is out of scope unless explicitly requested, and Neon/storage start fresh without importing Supabase database rows or storage objects.
 
+## 2026-10-14 - UX structure, phase 3 part 1: chat links and streaming speed (Claude Code, user-requested implementation)
+
+**Goal**: Start phase 3 of the UX audit with the two items that do not need product decisions: per-chat URLs and loading/streaming performance.
+
+**Implemented**:
+- Chat URLs: the workspace moved into the `app/(workspace)/` route group. Its `layout.tsx` renders `ChatLayout`; `page.tsx` (`/`) and `c/[id]/page.tsx` (`/c/<id>`) render nothing, so the workspace stays mounted while the address changes. `lib/utils/chat-path.ts` has `getChatPath` / `getChatIdFromPath` (tests in `tests/chat-path.test.ts`). `lib/chat-context.tsx` keeps the address on the open chat (push on navigation, replace on the first sync after load and when leaving a chat that no longer exists), reopens what the address names on Back/Forward, and names the tab after the chat. On load `/c/<id>` opens that chat and `/` opens Workspace Home; the last chat is no longer restored from browser storage at `/`. Unknown or deleted chat ids show a toast and replace the address with `/`. The old `/?conversationId=` and `/?tool=` deep links still work.
+- Sidebar chat rows are real links (stretched `<a href="/c/<id>">` with the actions button above it): keyboard focusable, Cmd/Ctrl/middle-click opens a new tab, a plain click still opens in place.
+- Race fix: a slow message-page fetch could switch the view back to a chat the user had already left (Back, or clicking another chat within the 2 to 5 s fetch). `chatNavigationIdRef` now makes late fetches update the cached chat without making it current.
+- Streaming: deltas are applied at most once per animation frame (`flushPendingDelta` in the `/api/chat` stream loop, flushed before any non-delta event and in `finally`). `ChatMessage` is wrapped in `React.memo`, and `ChatArea` passes handlers through the new `hooks/useStableCallback.ts`, so only the streaming message re-renders.
+- Loading: the chat named in the address is fetched together with the other workspace requests instead of after the chat list. While it loads, the chat area shows a small skeleton instead of mounting Workspace Home, which used to fetch `/api/workspace-home` (about 5.5 s here) for nothing. `hasLoadedWorkspaceData` is now exposed on the chat context.
+
+**Verification**: `pnpm run typecheck`, `pnpm run lint`, `pnpm run test` (25 files / 131 tests) and `pnpm run build` pass. Playwright against the dev server: click opens `/c/<id>` with the tab title; Back returns to `/` and Forward to the chat in the same document (no reload); New chat shows `/`; reload keeps the chat; Cmd-click opens it in a new tab; an unknown id shows the toast and replaces the address; keyboard Enter opens a row; the row actions menu still opens; phone tap opens the chat and closes the drawer; no console errors. Streaming was measured with an in-page fetch replacement (a fake 60-message chat and 400 streamed deltas, so no AI calls or database writes; the only non-GET request, an assistant-recommendations telemetry POST, was answered locally):
+
+| Build | Before | After |
+| --- | --- | --- |
+| Production, 4x CPU throttle | 25.7 s to stream, ~200 long tasks (11.5 s blocked), 30.6 fps | 12 to 13 s, 2 long tasks (0.35 s), 57 fps |
+| Production, unthrottled | 5.5 s, 1 long task (96 ms), worst frame 83 ms | 5.2 s, 0 to 1 (55 ms), worst frame 33 to 50 ms |
+| Dev | 29.6 s, 401 long tasks (28 s blocked), 26.7 fps | 8.1 s, 16 long tasks (1.5 s), 53 fps |
+
+**Not verified / known limits**: Loading a linked chat came out even locally (messages about 4.5 s after the session check), because `next start` serves HTTP/1.1 and Chrome caps a host at 6 connections, so the 8 parallel requests queue. Measured with curl, the list and single-chat endpoints do not slow each other. The saving should show over HTTP/2 in production but was not measured there. Every API request here spends about 2 s on `requireAuthenticatedUser` plus `ensureFromAuthUser` round trips to Neon; that per-request floor is the largest remaining loading cost. A real streamed reply was not sent (no AI calls).
+
+**Next steps**: phase 3 product items still need the user's direction: a sidebar Library (artifacts, images, playbooks, files), merging overlapping tools, and bringing Dashboard/Pricing/Knowledge into the app shell. Separately: cut auth/profile round trips per API request.
+
 ## 2026-10-14 - UX declutter, phase 2 (Claude Code, user-requested implementation)
 
 **Goal**: Phase 2 of the UX audit: declutter the composer, message actions, header and Settings, plus a wording and units pass. Layouts follow current AI chat conventions (single-row composer with a + tools menu, model picker beside Send, active tools as removable chips, hover action rows, settings with section navigation).

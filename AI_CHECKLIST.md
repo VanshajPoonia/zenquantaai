@@ -369,6 +369,7 @@ Before changing persistence code again:
 - Missing S3-compatible/R2 env vars breaks attachment and generated-image storage when `FILE_STORAGE_PROVIDER` is `s3` or `r2`.
 - Existing lint warnings can obscure newer warnings if not cleaned up intentionally.
 - TypeScript errors should fail both `pnpm run typecheck` and `pnpm run build`.
+- After moving or renaming an App Router page, `pnpm run typecheck` can fail with `Cannot find module '../../app/<old path>.js'` from `.next/types/validator.ts` or `.next/dev/types/validator.ts`. Those are stale generated route types: delete `.next/types` and `.next/dev/types` (or run `pnpm run build`) and typecheck again.
 - Package manager mismatch can cause lockfile churn.
 - Tavily request failures should degrade without claiming live verification.
 - OCR, scanned/image-only PDF extraction, and PDF layout reconstruction are not implemented in uploaded-file knowledge v1.

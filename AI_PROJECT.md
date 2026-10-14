@@ -90,7 +90,8 @@ Mode mapping:
 
 ## Main Routes
 
-- `/`: main chat workspace.
+- `/`: main chat workspace (Workspace Home). The workspace is rendered by `app/(workspace)/layout.tsx`.
+- `/c/[id]`: the workspace with that chat open; the address follows the open chat (`lib/utils/chat-path.ts`).
 - `/dashboard`: user usage dashboard.
 - `/pricing`: public plan overview; signed-in users can send manual plan requests.
 - `/admin`: admin overview and user/request management.
