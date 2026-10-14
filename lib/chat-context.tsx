@@ -10,6 +10,7 @@ import {
   useState,
   type ReactNode,
 } from 'react'
+import { usePathname, useRouter } from 'next/navigation'
 import {
   APISettings,
   AIMode,
@@ -103,7 +104,7 @@ import {
   toConversationSummary,
 } from '@/lib/utils/chat'
 import { readNdjsonStream } from '@/lib/utils/stream'
-import { getChatIdFromPath, getChatPath } from '@/lib/utils/chat-path'
+import { getChatIdFromPath, getChatPath, isWorkspacePath } from '@/lib/utils/chat-path'
 import { toast } from 'sonner'
 import {
   createAssistantPlaceholder,
@@ -371,6 +372,7 @@ interface ChatContextType {
   workspaceToolRequest: WorkspaceToolRequest | null
   openWorkspaceTool: (request: WorkspaceToolRequestInput) => void
   clearWorkspaceToolRequest: (requestId: number) => void
+  handleWorkspaceDeepLink: () => void
   composerDraftRequest: ComposerDraftRequest | null
   prepareComposerDraft: (request: {
     content: string
@@ -491,7 +493,19 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const workspaceSearchRequestIdRef = useRef(0)
   const composerDraftRequestIdRef = useRef(0)
   const hasAutoOpenedOnboardingRef = useRef(false)
-  const activityDeepLinkHandledRef = useRef(false)
+  const router = useRouter()
+  const pathname = usePathname()
+  const isWorkspaceRoute = isWorkspacePath(pathname)
+
+  // Dashboard, Files and Plans share the workspace layout. Picking a chat,
+  // Home or New chat from one of them has to bring the workspace back first.
+  const leavePageRoute = useCallback(
+    (path: string) => {
+      if (isWorkspacePath(window.location.pathname)) return
+      router.push(path)
+    },
+    [router]
+  )
 
   const chats = useMemo(
     () => sortConversationSummaries(conversations.map(toConversationSummary)),
@@ -1154,6 +1168,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       const navigationId = ++chatNavigationIdRef.current
 
       if (!chat) {
+        leavePageRoute('/')
         setCurrentChatState(null)
         setActiveProjectHomeId(null)
         setCurrentCustomAssistantId(null)
@@ -1165,6 +1180,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         conversations.find((conversation) => conversation.id === chat.id) ?? null
 
       if (!nextConversation) return
+
+      leavePageRoute(getChatPath(nextConversation.id))
 
       setCurrentModeState(nextConversation.mode)
       setCurrentCustomAssistantId(nextConversation.customAssistantId ?? null)
@@ -1193,12 +1210,13 @@ export function ChatProvider({ children }: { children: ReactNode }) {
           })
       }
     },
-    [commitState, conversations, fetchConversationPage]
+    [commitState, conversations, fetchConversationPage, leavePageRoute]
   )
 
   const openConversation = useCallback(
     async (conversationId: string) => {
       const navigationId = ++chatNavigationIdRef.current
+      leavePageRoute(getChatPath(conversationId))
       const existing =
         conversationsRef.current.find(
           (conversation) => conversation.id === conversationId
@@ -1235,7 +1253,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         return null
       }
     },
-    [commitState, fetchConversationPage]
+    [commitState, fetchConversationPage, leavePageRoute]
   )
 
   const loadOlderMessages = useCallback(
@@ -1372,6 +1390,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
   const goHome = useCallback(() => {
     chatNavigationIdRef.current += 1
+    leavePageRoute('/')
     streamAbortRef.current?.abort()
     streamAbortRef.current = null
     activeSendIdRef.current = null
@@ -1388,7 +1407,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     setDraftSessionSettings(
       createSessionSettings(appSettings.defaultMode, appSettings.sessionDefaults)
     )
-  }, [appSettings])
+  }, [appSettings, leavePageRoute])
 
   const openProjectHome = useCallback(
     (projectId: string) => {
@@ -1399,19 +1418,23 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     [goHome, setSelectedProjectId]
   )
 
-  useEffect(() => {
-    if (typeof window === 'undefined') return
-    if (activityDeepLinkHandledRef.current) return
+  // Links such as /?tool=artifacts or /?conversationId=... (from the
+  // dashboard, search results and Workspace Home) open the matching view and
+  // then drop their parameters. Runs whenever the query string changes, since
+  // the workspace stays mounted while those links are followed.
+  const handleWorkspaceDeepLink = useCallback(() => {
     if (authState.status !== 'authenticated' || !hasLoadedWorkspaceData) return
 
     const params = new URLSearchParams(window.location.search)
+    const askFileId = params.get('openAskFiles')
+    if (askFileId) params.set('tool', 'ask-files')
     const tool = params.get('tool') as WorkspaceTool | null
     const conversationId = params.get('conversationId')
     const messageId = params.get('messageId')
     const projectId = params.get('projectId')
     const artifactId = params.get('artifactId')
     const imageId = params.get('imageId')
-    const fileId = params.get('fileId')
+    const fileId = askFileId ?? params.get('fileId')
     const view = params.get('view')
     const isWorkspaceTool =
       tool !== null && WORKSPACE_DEEP_LINK_TOOLS.has(tool)
@@ -1419,8 +1442,6 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     if (!isWorkspaceTool && !conversationId && !(projectId && view === 'project')) {
       return
     }
-
-    activityDeepLinkHandledRef.current = true
 
     const clearActivityParams = () => {
       const nextParams = new URLSearchParams(window.location.search)
@@ -1436,6 +1457,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         'workflowId',
         'assistantId',
         'comparisonId',
+        'openAskFiles',
       ]) {
         nextParams.delete(key)
       }
@@ -1486,6 +1508,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
   const createNewChat = useCallback(async () => {
     chatNavigationIdRef.current += 1
+    leavePageRoute('/')
     streamAbortRef.current?.abort()
     streamAbortRef.current = null
     activeSendIdRef.current = null
@@ -1499,7 +1522,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     setCurrentCustomAssistantId(null)
     writeBrowserCurrentChatId(null)
     setDraftSessionSettings(createSessionSettings(currentMode, sessionSettings))
-  }, [currentMode, sessionSettings])
+  }, [currentMode, leavePageRoute, sessionSettings])
 
   useEffect(() => {
     if (currentChat?.id) setIsNewChatDraft(false)
@@ -1521,6 +1544,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     const { pathname } = window.location
     const isFirstSync = !hasSyncedChatUrlRef.current
     hasSyncedChatUrlRef.current = true
+    // On a page such as /dashboard the address belongs to that page.
+    if (!isWorkspacePath(pathname)) return
     if (pathname === nextPath) return
 
     const previousChatId = getChatIdFromPath(pathname)
@@ -1540,6 +1565,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     if (authState.status !== 'authenticated' || !hasLoadedWorkspaceData) return
 
     const handlePopState = () => {
+      if (!isWorkspacePath(window.location.pathname)) return
       const chatId = getChatIdFromPath(window.location.pathname)
 
       if (!chatId) {
@@ -1564,12 +1590,14 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const openChatTitle = currentChat?.title ?? null
   const defaultDocumentTitleRef = useRef<string | null>(null)
   useEffect(() => {
+    // Pages set their own titles.
+    if (!isWorkspaceRoute) return
     defaultDocumentTitleRef.current ??= document.title
     document.title =
       openChatTitle && !isPlaceholderTitle(openChatTitle)
         ? `${openChatTitle} · Zenquanta AI`
         : defaultDocumentTitleRef.current
-  }, [openChatTitle])
+  }, [isWorkspaceRoute, openChatTitle])
 
   const deleteChat = useCallback(
     async (chatId: string) => {
@@ -3557,6 +3585,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       workspaceToolRequest,
       openWorkspaceTool,
       clearWorkspaceToolRequest,
+      handleWorkspaceDeepLink,
       composerDraftRequest,
       prepareComposerDraft,
       clearComposerDraftRequest,
@@ -3579,6 +3608,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       chooseModelComparisonResponse,
       clearPromptPrecheck,
       clearWorkspaceToolRequest,
+      handleWorkspaceDeepLink,
       clearWorkspaceSearchRequest,
       clearComposerDraftRequest,
       clearConversationMemory,

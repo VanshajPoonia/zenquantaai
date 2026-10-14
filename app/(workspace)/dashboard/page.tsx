@@ -1,3 +1,4 @@
+import type { Metadata } from 'next'
 import Link from 'next/link'
 import { requireServerUser } from '@/lib/auth/require-admin'
 import {
@@ -38,6 +39,8 @@ import {
   WorkspaceActivityItem,
   WorkspaceActivityType,
 } from '@/types'
+
+export const metadata: Metadata = { title: 'Usage & plan · Zenquanta AI' }
 
 export default async function DashboardPage({
   searchParams,
@@ -134,7 +137,7 @@ export default async function DashboardPage({
   const imageCreditsLeft = getRemainingWallets(effectiveSubscription).imageCredits
 
   return (
-    <main className="min-h-screen bg-background px-4 py-8 sm:px-6 lg:px-10">
+    <main className="bg-background px-4 py-8 sm:px-6 lg:px-10">
       <div className="mx-auto flex max-w-7xl flex-col gap-8">
         <div className="flex flex-col gap-4 rounded-3xl border border-border/70 bg-card/60 p-6 backdrop-blur-sm sm:flex-row sm:items-end sm:justify-between">
           <div>
@@ -150,9 +153,6 @@ export default async function DashboardPage({
             </p>
           </div>
           <div className="flex gap-3">
-            <Button asChild variant="secondary" className="rounded-xl">
-              <Link href="/">Back to app</Link>
-            </Button>
             <Button asChild className="rounded-xl">
               <Link href="/pricing">View plans</Link>
             </Button>

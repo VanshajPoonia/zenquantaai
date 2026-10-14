@@ -1,3 +1,4 @@
+import type { Metadata } from 'next'
 import Link from 'next/link'
 import { cn } from '@/lib/utils'
 import {
@@ -45,6 +46,8 @@ function getPlanRequestBannerClass(status: string) {
   }
 }
 
+export const metadata: Metadata = { title: 'Plans · Zenquanta AI' }
+
 export default async function PricingPage({
   searchParams,
 }: {
@@ -73,7 +76,7 @@ export default async function PricingPage({
         : null
 
   return (
-    <main className="min-h-screen bg-background px-4 py-8 sm:px-6 lg:px-10">
+    <main className="bg-background px-4 py-8 sm:px-6 lg:px-10">
       <div className="mx-auto flex max-w-7xl flex-col gap-8">
         <div className="flex flex-col gap-4 border-b border-border/60 pb-8 sm:flex-row sm:items-end sm:justify-between">
           <div>
@@ -96,9 +99,12 @@ export default async function PricingPage({
                 </p>
               </div>
             ) : null}
-            <Button asChild variant="outline" className="rounded-full">
-              <Link href="/">{subscription ? 'Back to workspace' : 'Sign in'}</Link>
-            </Button>
+            {/* Signed in, this page sits inside the app with the sidebar. */}
+            {!subscription ? (
+              <Button asChild variant="outline" className="rounded-full">
+                <Link href="/">Sign in</Link>
+              </Button>
+            ) : null}
           </div>
         </div>
 

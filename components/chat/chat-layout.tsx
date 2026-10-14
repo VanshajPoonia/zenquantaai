@@ -1,7 +1,10 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { Suspense, useEffect, useRef, useState } from 'react'
+import { usePathname, useSearchParams } from 'next/navigation'
 import { ChatProvider, useChatContext } from '@/lib/chat-context'
+import { isWorkspacePath } from '@/lib/utils/chat-path'
+import { cn } from '@/lib/utils'
 import { AuthGate } from '@/components/auth/auth-gate'
 import { Sidebar } from './sidebar'
 import { Header } from './header'
@@ -29,18 +32,47 @@ function LoadingScreen() {
   )
 }
 
+// Pages that share the workspace layout. Their content comes from the route;
+// the sidebar and header stay in place around it.
+const SHELL_PAGES: Record<string, { title: string; requiresAccount: boolean }> = {
+  '/dashboard': { title: 'Usage & plan', requiresAccount: true },
+  '/knowledge': { title: 'Files', requiresAccount: true },
+  '/pricing': { title: 'Plans', requiresAccount: false },
+}
+
+// Opens whatever a link's query string names (?tool=..., ?conversationId=...).
+// useSearchParams needs its own Suspense boundary so "/" can still prerender.
+function WorkspaceDeepLinks() {
+  const searchParams = useSearchParams()
+  const { authState, hasLoadedWorkspaceData, handleWorkspaceDeepLink } = useChatContext()
+
+  useEffect(() => {
+    handleWorkspaceDeepLink()
+  }, [authState.status, hasLoadedWorkspaceData, handleWorkspaceDeepLink, searchParams])
+
+  return null
+}
+
 function ChatShell({
   isSettingsModalOpen,
   setIsSettingsModalOpen,
+  children,
 }: {
   isSettingsModalOpen: boolean
   setIsSettingsModalOpen: (value: boolean) => void
+  children: React.ReactNode
 }) {
   const [isAssistantHelpOpen, setIsAssistantHelpOpen] = useState(false)
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false)
-  const { authState, isSidebarOpen, toggleSidebar, workspaceSearchRequest, openWorkspaceTool } =
-    useChatContext()
+  const { authState, isSidebarOpen, toggleSidebar, workspaceSearchRequest } = useChatContext()
   const hasAppliedMobileSidebarDefault = useRef(false)
+  const pathname = usePathname()
+  const isWorkspaceView = isWorkspacePath(pathname)
+  const page = isWorkspaceView ? null : SHELL_PAGES[pathname] ?? null
+  // The chat is mounted the first time it is shown and then kept, hidden,
+  // while a page is open, so drafts, scroll position and streams survive.
+  const [hasShownWorkspace, setHasShownWorkspace] = useState(isWorkspaceView)
+  if (isWorkspaceView && !hasShownWorkspace) setHasShownWorkspace(true)
 
   // Default the sidebar closed on phones so first load shows the chat, not a
   // full-screen drawer. Reads window width directly (once, on mount) instead
@@ -60,16 +92,34 @@ function ChatShell({
     setIsCommandPaletteOpen(true)
   }, [workspaceSearchRequest])
 
-  useEffect(() => {
-    if (authState.status !== 'authenticated') return
-    const params = new URLSearchParams(window.location.search)
-    const fileId = params.get('openAskFiles')
-    if (!fileId) return
-    params.delete('openAskFiles')
-    const newSearch = params.toString()
-    window.history.replaceState(null, '', newSearch ? `?${newSearch}` : window.location.pathname)
-    openWorkspaceTool({ tool: 'ask-files', fileId })
-  }, [authState.status, openWorkspaceTool])
+  if (!isWorkspaceView) {
+    const isSignedIn = authState.status === 'authenticated'
+    const isLoadingAccountPage = authState.status === 'loading' && page?.requiresAccount
+
+    // Signed-out visitors (on Plans) see the page on its own.
+    if (!isSignedIn && !isLoadingAccountPage) {
+      return <div className="min-h-screen bg-background">{children}</div>
+    }
+
+    // While the session restores on an account page, show the page with an
+    // empty sidebar column so nothing jumps when the sidebar arrives.
+    if (!isSignedIn) {
+      return (
+        <div className="flex h-screen w-full overflow-hidden bg-background">
+          <div
+            aria-hidden
+            className="hidden h-full w-[288px] shrink-0 border-r border-sidebar-border bg-sidebar md:block"
+          />
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+            <div aria-hidden className="px-2 pt-2 sm:px-3 sm:pt-3">
+              <div className="h-12 rounded-xl border border-border/70 bg-card/60 sm:h-14 sm:rounded-2xl" />
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto">{children}</div>
+          </div>
+        </div>
+      )
+    }
+  }
 
   if (authState.status === 'loading') {
     return <LoadingScreen />
@@ -85,15 +135,28 @@ function ChatShell({
 
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         <Header
+          pageTitle={isWorkspaceView ? undefined : (page?.title ?? '')}
           onOpenSettings={() => setIsSettingsModalOpen(true)}
           onOpenCommandPalette={() => setIsCommandPaletteOpen(true)}
         />
 
-        <div className="flex min-h-0 flex-1 overflow-hidden">
-          <ChatArea onOpenAssistantHelp={() => setIsAssistantHelpOpen(true)} />
-          <SettingsPanel />
-        </div>
+        {hasShownWorkspace ? (
+          <div
+            className={cn('flex min-h-0 flex-1 overflow-hidden', !isWorkspaceView && 'hidden')}
+          >
+            <ChatArea onOpenAssistantHelp={() => setIsAssistantHelpOpen(true)} />
+            <SettingsPanel />
+          </div>
+        ) : null}
+
+        {!isWorkspaceView ? (
+          <div className="min-h-0 flex-1 overflow-y-auto">{children}</div>
+        ) : null}
       </div>
+
+      <Suspense fallback={null}>
+        <WorkspaceDeepLinks />
+      </Suspense>
 
       <AssistantHelpDialog
         open={isAssistantHelpOpen}
@@ -123,7 +186,7 @@ function ChatShell({
   )
 }
 
-export function ChatLayout() {
+export function ChatLayout({ children }: { children?: React.ReactNode }) {
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false)
 
   return (
@@ -131,7 +194,9 @@ export function ChatLayout() {
       <ChatShell
         isSettingsModalOpen={isSettingsModalOpen}
         setIsSettingsModalOpen={setIsSettingsModalOpen}
-      />
+      >
+        {children}
+      </ChatShell>
     </ChatProvider>
   )
 }

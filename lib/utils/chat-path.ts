@@ -1,5 +1,6 @@
 // Each chat has its own address so Back, refresh, bookmarks and new tabs
-// work. Everything else in the workspace lives at "/".
+// work. Home and the tools live at "/". Pages such as /dashboard share the
+// same layout but show their own content instead of the chat.
 const CHAT_PATH_PATTERN = /^\/c\/([^/]+)\/?$/
 
 export function getChatPath(chatId: string) {
@@ -15,4 +16,8 @@ export function getChatIdFromPath(pathname: string) {
   } catch {
     return null
   }
+}
+
+export function isWorkspacePath(pathname: string) {
+  return pathname === '/' || getChatIdFromPath(pathname) !== null
 }

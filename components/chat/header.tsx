@@ -46,6 +46,8 @@ import {
 } from '@/components/icons'
 
 interface HeaderProps {
+  // Set on pages such as Dashboard, which show their name instead of a chat.
+  pageTitle?: string
   onOpenSettings: () => void
   onOpenCommandPalette: () => void
 }
@@ -251,7 +253,7 @@ function ChatTitle() {
   )
 }
 
-export function Header({ onOpenSettings, onOpenCommandPalette }: HeaderProps) {
+export function Header({ pageTitle, onOpenSettings, onOpenCommandPalette }: HeaderProps) {
   const { authState, goHome, toggleSidebar, isSidebarOpen } = useChatContext()
   const isAdmin = authState.user?.role === 'admin'
 
@@ -282,7 +284,11 @@ export function Header({ onOpenSettings, onOpenCommandPalette }: HeaderProps) {
             </button>
           ) : null}
           <div className="flex min-w-0 flex-1 items-center">
-            <ChatTitle />
+            {pageTitle === undefined ? (
+              <ChatTitle />
+            ) : (
+              <p className="truncate px-2 text-sm font-medium text-foreground">{pageTitle}</p>
+            )}
           </div>
         </div>
 

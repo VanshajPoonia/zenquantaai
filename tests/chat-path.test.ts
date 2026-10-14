@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { getChatIdFromPath, getChatPath } from '@/lib/utils/chat-path'
+import { getChatIdFromPath, getChatPath, isWorkspacePath } from '@/lib/utils/chat-path'
 
 describe('chat paths', () => {
   it('round-trips a chat id', () => {
@@ -20,5 +20,13 @@ describe('chat paths', () => {
 
   it('rejects malformed escapes', () => {
     expect(getChatIdFromPath('/c/%E0%A4%A')).toBeNull()
+  })
+
+  it('tells the workspace apart from pages', () => {
+    expect(isWorkspacePath('/')).toBe(true)
+    expect(isWorkspacePath('/c/abc')).toBe(true)
+    expect(isWorkspacePath('/dashboard')).toBe(false)
+    expect(isWorkspacePath('/knowledge')).toBe(false)
+    expect(isWorkspacePath('/c')).toBe(false)
   })
 })
