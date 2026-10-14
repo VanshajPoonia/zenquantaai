@@ -6,6 +6,64 @@ The repository contains a real Zenquanta AI platform backed by Neon for runtime 
 
 Current direction: plan upgrades remain manual/admin-driven, payment automation is out of scope unless explicitly requested, and Neon/storage start fresh without importing Supabase database rows or storage objects.
 
+## 2026-10-14 - UX declutter, phase 2 (Claude Code, user-requested implementation)
+
+**Goal**: Phase 2 of the UX audit: declutter the composer, message actions, header and Settings, plus a wording and units pass. Layouts follow current AI chat conventions (single-row composer with a + tools menu, model picker beside Send, active tools as removable chips, hover action rows, settings with section navigation).
+
+**Implemented**:
+- Composer (`components/chat/composer.tsx`, new `composer-controls.tsx` and `composer-usage.tsx`): one toolbar row: + menu (attach, create image, search the web, use project files, prompt library, playbooks, Model Duel, Artifact Studio, Prism Studio, chat settings), assistant picker (built-ins plus enabled private assistants, "Create/Manage your assistants", "Which assistant should I use?"), intelligence picker, round Send/Stop. Image mode and web search show as removable chips. The always-on usage/intelligence card and the keyboard-shortcut line are gone; a one-line notice appears only near a limit, while a plan request is pending, in image mode, or for very large drafts. Files can be pasted or dropped onto the composer. `PromptLibraryButton`, `ModelComparisonButton` and `CustomAssistantButton` accept `hideTrigger` and are opened through `openWorkspaceTool`. The plan lookup (`/api/dashboard`) is done once per composer mount.
+- Removed `components/chat/usage-transparency-hint.tsx`, `ModeSwitcherCompact` and `ModeSwitcherVertical` (no remaining users). The duplicate assistant switcher above open chats is gone.
+- Message actions (`components/chat/message.tsx`): Copy, thumbs up/down, Regenerate menu (regenerate, different intelligence, ask another assistant), and a `...` menu (save as artifact, open image, improve this reply, send to another assistant). Hidden while streaming; Retry only appears on failed replies (it duplicated Regenerate). Older messages show actions on hover, focus, or always on touch screens. User message edit/resend buttons got labels.
+- Errors: the generic error banner at the top of the chat is removed (the failed message already shows its error and Retry). Plan-limit errors show an upgrade card below the last message.
+- Header (`components/chat/header.tsx`): chat title with a menu (rename inline, pin, chat settings, export Markdown/JSON, delete with confirm). Removed the unlabelled assistant icon, the Idle/Ready/Streaming badge, the separate export, session-settings and help buttons. Settings gear only shows when the sidebar (which has Settings) is closed. Added `renameChat` to the chat context; it updates the title optimistically and rolls back with an error toast on failure.
+- Titles: `updateConversationSnapshot` (`lib/utils/chat.ts`) used to re-derive the title from the first user message on every save, so renames could never stick (and paged chats could derive from the wrong message). It now keeps any non-placeholder title and only derives while the title is still a "New ... chat" placeholder.
+- Settings (`components/chat/settings-modal.tsx`): section navigation (General, Chats, Suggestions, Memory, Account & data), one row per setting, model sampling under a collapsed Advanced, delete tools on their own page, Save disabled until something changes, Discard, toasts on save. Removed the "Dark theme" button and accent style toggle, which changed nothing (`accentStyle` is stored but never read). Removed the About tab.
+- Chat settings panel (`components/chat/settings-panel.tsx`): renamed from Session Settings; dropped the duplicate summary card; features first, sampling under Advanced; Advanced no longer auto-opens when intelligence changes.
+- Wording and units: sidebar account menu no longer shows dollar "Estimated spend" (now chat and message counts plus "Usage & plan"); Dashboard usage card shows counts instead of dollars; pricing cards lead with messages and images a day and describe tokens as standard/premium model tokens; plain copy replaced "without running any AI calls", "without spending credits on page load", "Target project", and "Embedding provider is not configured" (user-facing message and `tests/file-helpers.test.ts` updated).
+
+**Verification**: `pnpm run typecheck`, `pnpm run lint`, `pnpm run test` (24 files / 127 tests) and `pnpm run build` pass. Playwright on the local dev server at 1440x900 and 390x844: all menus open and close without leaving `pointer-events: none` on the body, Prompt library popover and Model Duel open from the + menu, rename updates the header and sidebar immediately and persists (test chat renamed and restored), Settings sections render with no horizontal overflow on phones, no console errors. Composer height on a phone is 152 of 844px (was about 52% of the screen).
+
+**Not verified**: header delete success path (no data deleted), drag-and-drop and paste of files (code path only), Queue while streaming (no new AI calls were made).
+
+**Next steps**: phase 3 (chat/tool URLs, sidebar Library, merge overlapping tools, bring Dashboard/Pricing/Knowledge into the app shell, loading and streaming performance).
+
+## 2026-10-14 - UX quick fixes, phase 1 (Claude Code, user-requested implementation)
+
+**Goal**: Implement the phase 1 quick fixes from the UX audit below.
+
+**Implemented**:
+- Dialog widths: base `DialogContent` and `AlertDialogContent` now use `w-[calc(100%-2rem)] max-w-lg` (no `sm:max-w-lg`), so consumer widths apply on desktop. Six dialog headers (Artifact Studio, Prism Studio, Memory Vault, Pulse Research Room, Model Duel, Onboarding) got `pr-10` so the close button no longer overlaps their header actions.
+- New Chat: added `isNewChatDraft` to `lib/chat-context.tsx`; New Chat now shows the assistant welcome screen with starter prompts. Logo/Home still go to Workspace Home.
+- Auth: `restoreSession` no longer turns the logged-out 401 into a red error; sign-in/sign-up use a new `requestAuthJson` helper, so a wrong password shows the server message instead of "Authentication required."; the auth gate is a real `<form>` (Enter submits) with sr-only labels and `username` / `current-password` / `new-password` autocomplete; stale session errors hide while a new attempt runs.
+- Header: removed the dead "Share Chat" menu items; added aria-labels to icon-only header buttons.
+- Usage copy: Workspace Home shows messages left today (and hides the credits meter) when the plan has no credit budget; Dashboard cards now show messages left today, images left today, and image credits left (or credits left this cycle when the plan has a credit budget), using the effective subscription with overrides like `/api/dashboard`.
+- Feedback: mounted the existing sonner `Toaster` in `app/layout.tsx` (dark, top-center). Chat delete now asks for confirmation; delete, pin, and move failures show error toasts; a successful delete shows "Chat deleted".
+- Mobile: the drawer no longer shows the desktop collapse button next to its own close button. Added aria-labels to sidebar icon buttons.
+- Pricing: `/pricing` is public through new `getOptionalServerUser`; signed-out visitors get "Start free" / "Sign in to request". `requestPlanAction` still requires sign-in.
+
+**Verification**: `pnpm run typecheck`, `pnpm run lint` (zero warnings), `pnpm run test` (24 files / 127 tests), and `pnpm run build` pass. Browser-verified with Playwright on the local dev server: no error on the sign-in screen, Enter submits, wrong password shows the server message, public pricing renders, New Chat shows the welcome screen, all large dialogs render at their intended widths with no close-button overlaps, export menu has only real items, delete confirm opens and Cancel keeps the chat, a simulated 500 on delete shows the error toast and keeps the chat, dashboard shows real limits, and the phone drawer has one close button. The successful-delete toast was not exercised, to avoid deleting data.
+
+**Next steps**: phase 2 (declutter composer, message actions, header, Settings; wording pass) and phase 3 (chat/tool URLs, sidebar Library, loading and streaming performance) from the audit.
+
+## 2026-10-14 - UX audit (Claude Code, review only, no app code changed)
+
+**Goal**: User-requested UX/ease-of-use audit of the running app. Ran `pnpm run dev` locally and drove it with Playwright (installed Chrome) at 1440x900 and iPhone 13 sizes, plus code review of the shell, composer, sidebar, header, message actions, auth gate, and dialogs.
+
+**Side effects**: Created one test account in the Neon database that `.env.local` points to (login ID `ux-audit-5f0ef7`, Free plan, onboarding skipped) and sent one short Nova chat message through OpenRouter. No other data was written. Delete the account from admin if it is not wanted.
+
+**Highest-impact findings**:
+- `components/ui/dialog.tsx` base class `sm:max-w-lg` overrides the unprefixed `max-w-*` widths on about 20 large dialogs (Settings, Onboarding, Artifact Studio, Playbooks, Memory Vault, Prism Studio, Pulse Room, Model Duel, Assistant guide), so they render at 512px on desktop.
+- `createNewChat` and `goHome` in `lib/chat-context.tsx` are near-identical, so "New Chat" shows Workspace Home; `components/chat/empty-state.tsx` starter prompts are effectively unreachable.
+- `restoreSession` turns the normal logged-out 401 into a visible red "Authentication required." on the auth gate.
+- Auth gate is not a `<form>`: Enter does not submit, no autocomplete attributes, placeholder-only labels.
+- "Share Chat" header menu items have no handler; chat delete has no confirm/undo; toaster components exist but are not mounted.
+- Composer shows 15 icon-only controls plus an always-on usage/intelligence card; on phones the composer takes about 52% of the viewport. Assistant switcher is rendered twice in an open chat.
+- No per-chat or per-tool URLs (current chat lives in localStorage), so back/refresh/bookmark/share do not work.
+- Usage copy contradicts itself ("0 displayed credits left" next to "No limit"; dashboard "Remaining credits 0" for a Free user with messages left) and mixes $, credits, and tokens.
+- Each streamed delta replaces the conversations array in the single 3,400-line context; `ChatMessage` is not memoized.
+
+**Next steps**: See the audit summary in the Claude Code session for the phased plan (quick fixes, declutter, structure). No implementation started.
+
 ## 2026-07-12 - Deterministic chat order, intelligence controls, and admin plan sandbox
 
 **Goal**: Continue the user-requested chat/admin work after the prior Claude session stopped at research: keep a new user prompt above its assistant response, make intelligence selectable beside the composer, allow a response to be regenerated at another intelligence level, let an admin switch its own plan for testing, and keep any user's plan editable from admin.

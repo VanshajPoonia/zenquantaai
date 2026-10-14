@@ -92,7 +92,7 @@ Mode mapping:
 
 - `/`: main chat workspace.
 - `/dashboard`: user usage dashboard.
-- `/pricing`: plan overview and manual plan request flow.
+- `/pricing`: public plan overview; signed-in users can send manual plan requests.
 - `/admin`: admin overview and user/request management.
 - `/admin/users/[id]`: per-user admin detail.
 - `/auth/reset-password`: password reset completion page.
@@ -336,7 +336,7 @@ The main workspace is composed from:
 - `components/chat/sidebar.tsx`
 - `components/chat/header.tsx`
 - `components/chat/chat-area.tsx`
-- `components/chat/composer.tsx`
+- `components/chat/composer.tsx` (single-row composer; `composer-controls.tsx` holds the + tools menu and assistant picker, `composer-usage.tsx` the intelligence picker and limit notice)
 - `components/chat/message.tsx`
 - `components/chat/settings-panel.tsx`
 - `components/chat/settings-modal.tsx`

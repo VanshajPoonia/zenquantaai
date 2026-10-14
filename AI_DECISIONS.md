@@ -1,5 +1,33 @@
 # AI Architecture Decisions
 
+## Composer Is One Row; Tools Live In The + Menu
+
+Decision (2026-10-14): the composer shows only the + tools menu, the assistant picker, active tool chips, the intelligence picker and Send/Stop. Prompt library, Playbooks, Model Duel, Artifact Studio, Prism Studio, private assistants and chat settings are opened from menus through `openWorkspaceTool`; their components keep their dialogs and accept `hideTrigger`. Usage information is shown only when it needs action (near a limit, pending plan request, image mode, very large draft).
+
+Rationale: 15 always-visible icon buttons plus a usage card took about half of a phone screen and made the primary action hard to find. A menu item that opens a popover anchored in the composer must open after the menu has closed (see `ComposerToolsMenu`), or the popover dismisses itself.
+
+## A Chat Keeps Its Title Once It Has A Real One
+
+Decision (2026-10-14): `updateConversationSnapshot` keeps any title that is not a "New ... chat" placeholder and only derives one from the first user message while the title is still a placeholder. An explicit `title` in the update wins.
+
+Rationale: deriving on every save made renames impossible and could pick the wrong message when older messages are paged out. Editing the very first message no longer retitles the chat.
+
+## Pricing Is Public; Plan Requests Still Require Sign-In
+
+Decision (2026-10-14): `/pricing` renders for signed-out visitors using `getOptionalServerUser` (`lib/auth/require-admin.ts`). Signed-out visitors see every plan with "Start free" / "Sign in to request" links back to the auth gate. `requestPlanAction` still calls `requireServerUser`, so creating a plan request is unchanged and still manual/admin-activated.
+
+Rationale: public assistant pages link to "View plans", and a pricing page that redirects to sign-in was a dead end for prospective users. Plan data comes from static config, so nothing user-specific is exposed.
+
+## Dialog Width Is Set By The Consumer, Not Capped By The Base
+
+Decision (2026-10-14): the base `DialogContent` / `AlertDialogContent` classes are `w-[calc(100%-2rem)] max-w-lg` with no breakpoint-prefixed max width. A consumer's plain `max-w-*` class now replaces the default through `tailwind-merge` at every breakpoint.
+
+Rationale: the previous base `sm:max-w-lg` silently beat consumer `max-w-6xl` style overrides at 640px and up, so about 20 large dialogs (Settings, Onboarding, Artifact Studio, Playbooks, Memory Vault, Prism Studio, Pulse Room, Model Duel, Assistant guide) rendered at 512px on desktop. New wide dialogs should pass an unprefixed `max-w-*`. Dialog headers with right-aligned actions need `pr-10` so the built-in close button does not overlap them.
+
+## New Chat Shows The Assistant Welcome Screen, Home Shows Workspace Home
+
+Decision (2026-10-14): `createNewChat` sets `isNewChatDraft` in `lib/chat-context.tsx`, and `ChatArea` renders `EmptyState` (assistant welcome plus starter prompts) for a draft instead of `WorkspaceHome`. `goHome`, project home, and opening a chat clear the flag. Workspace Home remains the first screen after sign-in and the logo/Home destination.
+
 ## Context Engine Is Tiered Memory + Governed Budget, Not A 5-Table Rewrite
 
 Decision: Build the context/memory system as three additive tiers (rolling conversation summary → durable scoped memory items → cross-chat recall) plus a token governor, reusing the existing pgvector/embeddings/cheap-model plumbing — NOT the 5-table, 19-phase "context_memories + project_states + checkpoints + retrieval_logs + external_tool_results + dynamic tool selection" design from the external brief. Full plan and reconciliation live in `AI_CONTEXT_ENGINE.md`.
