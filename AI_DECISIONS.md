@@ -572,8 +572,11 @@ Reason:
 - The 2026-06-29 redesign pass already decided to keep these six colors as "the signature device, not replaced" rather than adopting one of the generic AI-app palette defaults (warm-cream+serif, near-black+single-accent, broadsheet). This pass reaffirms that and extends it: the six hues are unusually strong, non-generic brand material because they map 1:1 to real product concepts (Nova/Velora/Axiom/Forge/Pulse/Prism) that don't exist anywhere else, and the product name itself ("Zenquanta") plus a literal "Prism" assistant make a spectrum/refraction motif directly grounded in the subject rather than arbitrary decoration.
 - `SpectrumArc` is intentionally used sparingly — `EmptyState` and `AuthGate` only — per the design skill's restraint principle ("spend your boldness in one place"). It should not be copy-pasted onto every page; if a new hero surface wants the same treatment, extend the existing component rather than duplicating its geometry.
 - A serif display face (`Instrument_Serif`, `--font-display` / `.font-display` in `app/globals.css` and `app/layout.tsx`) was added as the one other deliberate identity risk this pass took, reserved for hero/wordmark text only — never dense UI chrome — so it stays legible and doesn't fight the existing Geist-based UI density.
+- Update 2026-10-15: `SpectrumArc` and the Instrument Serif face were removed in the Cursor/Linear redesign. The hues now carry identity as light: the landing page glow, the composer focus ring and streaming line, the lit assistant keys and the assistant icons.
 
 ## The Landing Page Is A Game Table With A Six-Sided Die
+
+Superseded on 2026-10-15 by "The Landing Page And Workspace Follow Cursor And Linear" below. The die survives as one section on the new page.
 
 Decision (2026-10-14): Signed-out visitors at `/` see a landing page built around one object, a six-sided die whose faces are the six assistants (pips 1 to 6: Nova, Velora, Axiom, Forge, Pulse, Prism, each in its existing assistant hue). The die rolls in the hero, turns to each assistant's face as their cards scroll by, then unfolds into its cube net to show the shared workspace printed inside (Chats, Projects, Files, Memory, Playbooks). Plans are a score pad, sign-up is a player card. The user chose this direction from a set of options.
 
@@ -583,6 +586,20 @@ Reason:
 - The die uses three.js (WebGL) for real lighting, shadows and the unfold. It is loaded only on this page (dynamic import), draws only while visible, has a reduced-motion path and a flat SVG face fallback when WebGL is missing.
 - The page keeps its own scoped tokens (`components/landing/landing.module.css`: baize green, bone, ink, signal yellow) and its own display face (Bagel Fat One), so the dark app theme is unchanged. The assistant hues remain the shared signature.
 - Every claim uses product facts: plan numbers come from `PLAN_CONFIGS`, prompts from `ASSISTANT_FAMILY_COPY`. There are no testimonials, user counts or benchmarks.
+
+## The Landing Page And Workspace Follow Cursor And Linear
+
+Decision (2026-10-15): At the user's request, the landing page and the workspace shell take their visual language from Cursor and Linear: a near-black neutral canvas, one sans (Geist) with tight, heavy headlines, hairline borders instead of filled cards, dense list rows, and the product itself as the landing hero. The user chose to keep the 3D die only as a small accent section and to restyle the whole workspace shell.
+
+Reason:
+
+- The user named the references and asked for subtle motion, scroll animation and catchy details; the brief pins the direction.
+- The six assistant hues stay the signature. They are used as light that follows the active assistant (landing glow, composer ring, lit keys), not as decoration spread across the page.
+- Every landing claim still comes from product facts (`ASSISTANT_FAMILY_COPY`, `ASSISTANT_PUBLIC_PAGES`, `PLAN_CONFIGS`). The hero's replies are written examples and are labelled "Example chat" / "Example image". No testimonials, logos or numbers were added.
+- Motion rules: content is visible unless the script has switched motion on; loops stop off screen; reduced motion gets finished states rather than hidden ones; three.js loads only near the die section.
+- Motion budget (added 2026-10-16 after the user reported lag, measured in `AI_TASK_LOG.md`): landing animations change only opacity and transform. No animated `filter`, no masks over moving layers, no backdrop blur on fixed bars, and no animated or scroll-written inherited custom properties (they restyle every descendant each frame). Scroll handlers write to one element and only when a value changes. The die renders on demand. Scripted demos run from one clock per tile and only while on screen.
+- The die is the page's object (added 2026-10-16 at the user's request): one onyx block with each assistant's colour inlaid. The page buddy is a small lettered version of it, and the footer wordmark uses the same block grammar. Page sections talk to the buddy only through `components/landing/buddy-bus.ts` (`useBuddySpot`, `data-buddy-face`), never by importing it. The buddy is landing-page only; the app workspace stays free of it. Colour washes are kept out of the assistants panel; the tone section keeps its glow, which follows temperature.
+- The landing page keeps its own scoped tokens in `components/landing/landing.module.css`; the app tokens live in `app/globals.css`. The root `DESIGN.md` remains a third-party reference file, not this system.
 
 ## Neon Repositories Must Not Use Drizzle's `db.transaction()`
 
