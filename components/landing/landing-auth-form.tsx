@@ -85,29 +85,29 @@ export function LandingAuthForm({
   }
 
   return (
-    <div className={cn(styles.player, 'w-full p-6 sm:p-8')}>
-      <div className={cn(styles.switch, 'grid grid-cols-2 gap-1 p-1 text-sm font-semibold')}>
+    <div className={cn(styles.formCard, 'w-full p-6 sm:p-8')}>
+      <div className={cn(styles.segmented, 'grid grid-cols-2 gap-1 p-1 text-[13.5px] font-medium')}>
         <button
           type="button"
           aria-pressed={isSignUp}
-          className="h-10"
+          className="h-9"
           onClick={() => switchMode('sign-up')}
         >
-          New player
+          Create account
         </button>
         <button
           type="button"
           aria-pressed={!isSignUp}
-          className="h-10"
+          className="h-9"
           onClick={() => switchMode('sign-in')}
         >
-          I have an ID
+          Sign in
         </button>
       </div>
 
-      <form className="mt-6 space-y-4" onSubmit={handleSubmit} noValidate>
+      <form className="mt-7 space-y-5" onSubmit={handleSubmit} noValidate>
         <div>
-          <label htmlFor="landing-identifier" className="mb-1.5 block text-sm font-semibold">
+          <label htmlFor="landing-identifier" className="mb-2 block text-[13.5px] font-medium">
             {isSignUp ? 'Pick a Zenquanta ID' : 'Your Zenquanta ID'}
           </label>
           <input
@@ -126,7 +126,7 @@ export function LandingAuthForm({
             disabled={submitting}
             aria-describedby="landing-identifier-hint"
           />
-          <p id="landing-identifier-hint" className="mt-1.5 text-xs leading-5 text-[rgb(12_31_24_/_0.7)]">
+          <p id="landing-identifier-hint" className="mt-2 text-[12.5px] leading-5 text-[var(--text-3)]">
             {isSignUp
               ? '3 to 32 characters: letters, numbers, dots, dashes or underscores.'
               : 'The ID you picked when you signed up.'}
@@ -134,13 +134,13 @@ export function LandingAuthForm({
         </div>
 
         <div>
-          <div className="mb-1.5 flex items-center justify-between">
-            <label htmlFor="landing-password" className="block text-sm font-semibold">
+          <div className="mb-2 flex items-center justify-between">
+            <label htmlFor="landing-password" className="block text-[13.5px] font-medium">
               Password
             </label>
             <button
               type="button"
-              className="inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium text-[rgb(12_31_24_/_0.75)] hover:text-[var(--ink)]"
+              className="inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[12.5px] text-[var(--text-2)] transition-colors hover:text-[var(--text)]"
               onClick={() => setShowPassword((value) => !value)}
             >
               {showPassword ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}
@@ -162,7 +162,7 @@ export function LandingAuthForm({
 
         {isSignUp && (
           <div>
-            <label htmlFor="landing-confirm" className="mb-1.5 block text-sm font-semibold">
+            <label htmlFor="landing-confirm" className="mb-2 block text-[13.5px] font-medium">
               Password again
             </label>
             <input
@@ -179,7 +179,7 @@ export function LandingAuthForm({
           </div>
         )}
 
-        <button type="submit" className={cn(styles.token, 'mt-2 w-full')} disabled={!canSubmit}>
+        <button type="submit" className={cn(styles.buttonPrimary, 'mt-2 w-full')} disabled={!canSubmit}>
           {submitting
             ? isSignUp
               ? 'Creating your account…'
@@ -193,8 +193,10 @@ export function LandingAuthForm({
           <p
             role={isError ? 'alert' : 'status'}
             className={cn(
-              'rounded-2xl px-4 py-3 text-sm leading-6',
-              isError ? 'bg-[#f6d4cc] text-[#7a1d0c]' : 'bg-[rgb(21_82_64_/_0.12)] text-[var(--ink)]'
+              'rounded-xl px-4 py-3 text-[13.5px] leading-6',
+              isError
+                ? 'bg-[oklch(0.3_0.09_25_/_0.45)] text-[oklch(0.86_0.08_25)] shadow-[inset_0_0_0_1px_oklch(0.6_0.15_25_/_0.35)]'
+                : 'bg-white/[0.05] text-[var(--text)] shadow-[inset_0_0_0_1px_var(--line)]'
             )}
           >
             {feedback}
@@ -202,11 +204,11 @@ export function LandingAuthForm({
         )}
       </form>
 
-      <p className="mt-5 text-xs leading-5 text-[rgb(12_31_24_/_0.7)]">
+      <p className="mt-6 text-[12.5px] leading-5 text-[var(--text-3)]">
         Locked out or stuck?{' '}
         <a
           href={`mailto:${ADMIN_CONTACT_EMAIL}?subject=Zenquanta%20AI%20sign-in%20help`}
-          className="font-semibold text-[var(--ink)] underline underline-offset-4"
+          className={styles.textLink}
         >
           Email the admin
         </a>
