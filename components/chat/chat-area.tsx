@@ -312,15 +312,18 @@ export function ChatArea({
         </div>
       ) : isOpeningLinkedChat ? (
         <div
-          className="mx-auto w-full max-w-4xl flex-1 space-y-6 px-3 py-6 sm:px-4"
+          className="mx-auto w-full max-w-3xl flex-1 space-y-6 px-4 py-8 sm:px-6"
           role="status"
           aria-label="Loading chat"
         >
-          <div className="ml-auto h-10 w-2/5 animate-pulse rounded-2xl bg-card/70" />
-          <div className="space-y-2.5">
-            <div className="h-3.5 w-4/5 animate-pulse rounded-full bg-card/70" />
-            <div className="h-3.5 w-3/5 animate-pulse rounded-full bg-card/70" />
-            <div className="h-3.5 w-2/3 animate-pulse rounded-full bg-card/70" />
+          <div className="ml-auto h-10 w-2/5 animate-pulse rounded-2xl bg-white/[0.05]" />
+          <div className="flex gap-3">
+            <div className="size-7 shrink-0 animate-pulse rounded-lg bg-white/[0.05]" />
+            <div className="flex-1 space-y-2.5 pt-1">
+              <div className="h-3 w-4/5 animate-pulse rounded-full bg-white/[0.05]" />
+              <div className="h-3 w-3/5 animate-pulse rounded-full bg-white/[0.05]" />
+              <div className="h-3 w-2/3 animate-pulse rounded-full bg-white/[0.05]" />
+            </div>
           </div>
         </div>
       ) : showWorkspaceHome ? (
@@ -332,8 +335,13 @@ export function ChatArea({
           <EmptyState onPromptSelect={setSelectedPrompt} />
         </div>
       ) : (
-        <ScrollArea ref={scrollAreaRef} className="min-h-0 flex-1 overscroll-contain">
-          <div className="mx-auto max-w-4xl px-3 py-4 sm:px-4 sm:py-6">
+        <ScrollArea
+          ref={scrollAreaRef}
+          // Radix wraps content in a display:table div that lets wide code
+          // blocks stretch the column; a block wrapper keeps them inside it.
+          className="min-h-0 flex-1 overscroll-contain [&_[data-slot=scroll-area-viewport]>div]:!block"
+        >
+          <div className="mx-auto max-w-3xl px-4 pt-8 pb-6 sm:px-6">
             {currentChat?.messagePageInfo?.hasMoreBefore &&
             currentChat.messagePageInfo.nextBefore ? (
               <div className="flex justify-center py-2">
@@ -341,7 +349,7 @@ export function ChatArea({
                   type="button"
                   onClick={() => void handleLoadOlder()}
                   disabled={isLoadingOlder}
-                  className="rounded-full border border-border/70 bg-background/70 px-4 py-2 text-xs font-medium text-muted-foreground transition-colors hover:border-primary/50 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60"
+                  className="rounded-md border border-border bg-white/[0.02] px-3 py-1.5 text-[12.5px] text-muted-foreground transition-colors hover:bg-white/[0.05] hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   {isLoadingOlder ? 'Loading older messages...' : 'Load older messages'}
                 </button>

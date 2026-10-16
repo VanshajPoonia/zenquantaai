@@ -4,27 +4,27 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
-  --background: oklch(0.12 0.005 260);
-  --foreground: oklch(0.95 0 0);
-  --card: oklch(0.15 0.005 260);
-  --card-foreground: oklch(0.95 0 0);
-  --popover: oklch(0.13 0.005 260);
-  --popover-foreground: oklch(0.95 0 0);
-  --primary: oklch(0.95 0 0);
-  --primary-foreground: oklch(0.12 0.005 260);
-  --secondary: oklch(0.2 0.005 260);
-  --secondary-foreground: oklch(0.9 0 0);
-  --muted: oklch(0.18 0.005 260);
-  --muted-foreground: oklch(0.6 0 0);
-  --accent: oklch(0.22 0.005 260);
-  --accent-foreground: oklch(0.95 0 0);
-  --destructive: oklch(0.55 0.2 25);
-  --destructive-foreground: oklch(0.95 0 0);
-  --border: oklch(0.25 0.005 260);
-  --input: oklch(0.2 0.005 260);
-  --ring: oklch(0.5 0.15 280);
-  
-  /* Mode-specific accent colors */
+  --background: oklch(0.165 0.004 270);
+  --foreground: oklch(0.975 0.002 260);
+  --card: oklch(0.195 0.004 270);
+  --card-foreground: oklch(0.975 0.002 260);
+  --popover: oklch(0.205 0.005 270);
+  --popover-foreground: oklch(0.975 0.002 260);
+  --primary: oklch(0.975 0.002 260);
+  --primary-foreground: oklch(0.165 0.004 270);
+  --secondary: oklch(0.235 0.005 270);
+  --secondary-foreground: oklch(0.93 0.003 260);
+  --muted: oklch(0.225 0.004 270);
+  --muted-foreground: oklch(0.67 0.012 260);
+  --accent: oklch(0.25 0.005 270);
+  --accent-foreground: oklch(0.975 0.002 260);
+  --destructive: oklch(0.62 0.19 25);
+  --destructive-foreground: oklch(0.975 0.002 260);
+  --border: oklch(1 0 0 / 0.085);
+  --input: oklch(1 0 0 / 0.11);
+  --ring: oklch(0.7 0.11 275);
+
+  /* Assistant hues: the product's signature, one per assistant. */
   --general: oklch(0.76 0.14 190);
   --general-foreground: oklch(0.98 0 0);
   --creative: oklch(0.7 0.18 330);
@@ -37,46 +37,47 @@
   --live-foreground: oklch(0.98 0 0);
   --image: oklch(0.78 0.19 38);
   --image-foreground: oklch(0.98 0 0);
-  
+
   --chart-1: oklch(0.7 0.18 330);
   --chart-2: oklch(0.65 0.2 250);
   --chart-3: oklch(0.7 0.2 145);
   --chart-4: oklch(0.75 0.15 60);
   --chart-5: oklch(0.6 0.15 200);
-  
-  --radius: 0.75rem;
-  
-  --sidebar: oklch(0.1 0.005 260);
-  --sidebar-foreground: oklch(0.9 0 0);
-  --sidebar-primary: oklch(0.65 0.2 250);
+
+  --radius: 0.625rem;
+
+  --sidebar: oklch(0.14 0.004 270);
+  --sidebar-foreground: oklch(0.93 0.003 260);
+  --sidebar-primary: oklch(0.68 0.13 275);
   --sidebar-primary-foreground: oklch(0.98 0 0);
-  --sidebar-accent: oklch(0.18 0.005 260);
-  --sidebar-accent-foreground: oklch(0.9 0 0);
-  --sidebar-border: oklch(0.2 0.005 260);
-  --sidebar-ring: oklch(0.5 0.15 280);
+  --sidebar-accent: oklch(1 0 0 / 0.055);
+  --sidebar-accent-foreground: oklch(0.975 0.002 260);
+  --sidebar-border: oklch(1 0 0 / 0.07);
+  --sidebar-ring: oklch(0.7 0.11 275);
 }
 
 .dark {
-  --background: oklch(0.12 0.005 260);
-  --foreground: oklch(0.95 0 0);
-  --card: oklch(0.15 0.005 260);
-  --card-foreground: oklch(0.95 0 0);
-  --popover: oklch(0.13 0.005 260);
-  --popover-foreground: oklch(0.95 0 0);
-  --primary: oklch(0.95 0 0);
-  --primary-foreground: oklch(0.12 0.005 260);
-  --secondary: oklch(0.2 0.005 260);
-  --secondary-foreground: oklch(0.9 0 0);
-  --muted: oklch(0.18 0.005 260);
-  --muted-foreground: oklch(0.6 0 0);
-  --accent: oklch(0.22 0.005 260);
-  --accent-foreground: oklch(0.95 0 0);
-  --destructive: oklch(0.55 0.2 25);
-  --destructive-foreground: oklch(0.95 0 0);
-  --border: oklch(0.25 0.005 260);
-  --input: oklch(0.2 0.005 260);
-  --ring: oklch(0.5 0.15 280);
-  
+  --background: oklch(0.165 0.004 270);
+  --foreground: oklch(0.975 0.002 260);
+  --card: oklch(0.195 0.004 270);
+  --card-foreground: oklch(0.975 0.002 260);
+  --popover: oklch(0.205 0.005 270);
+  --popover-foreground: oklch(0.975 0.002 260);
+  --primary: oklch(0.975 0.002 260);
+  --primary-foreground: oklch(0.165 0.004 270);
+  --secondary: oklch(0.235 0.005 270);
+  --secondary-foreground: oklch(0.93 0.003 260);
+  --muted: oklch(0.225 0.004 270);
+  --muted-foreground: oklch(0.67 0.012 260);
+  --accent: oklch(0.25 0.005 270);
+  --accent-foreground: oklch(0.975 0.002 260);
+  --destructive: oklch(0.62 0.19 25);
+  --destructive-foreground: oklch(0.975 0.002 260);
+  --border: oklch(1 0 0 / 0.085);
+  --input: oklch(1 0 0 / 0.11);
+  --ring: oklch(0.7 0.11 275);
+
+  /* Assistant hues: the product's signature, one per assistant. */
   --general: oklch(0.76 0.14 190);
   --general-foreground: oklch(0.98 0 0);
   --creative: oklch(0.7 0.18 330);
@@ -89,21 +90,29 @@
   --live-foreground: oklch(0.98 0 0);
   --image: oklch(0.78 0.19 38);
   --image-foreground: oklch(0.98 0 0);
-  
-  --sidebar: oklch(0.1 0.005 260);
-  --sidebar-foreground: oklch(0.9 0 0);
-  --sidebar-primary: oklch(0.65 0.2 250);
+
+  --chart-1: oklch(0.7 0.18 330);
+  --chart-2: oklch(0.65 0.2 250);
+  --chart-3: oklch(0.7 0.2 145);
+  --chart-4: oklch(0.75 0.15 60);
+  --chart-5: oklch(0.6 0.15 200);
+
+  --radius: 0.625rem;
+
+  --sidebar: oklch(0.14 0.004 270);
+  --sidebar-foreground: oklch(0.93 0.003 260);
+  --sidebar-primary: oklch(0.68 0.13 275);
   --sidebar-primary-foreground: oklch(0.98 0 0);
-  --sidebar-accent: oklch(0.18 0.005 260);
-  --sidebar-accent-foreground: oklch(0.9 0 0);
-  --sidebar-border: oklch(0.2 0.005 260);
-  --sidebar-ring: oklch(0.5 0.15 280);
+  --sidebar-accent: oklch(1 0 0 / 0.055);
+  --sidebar-accent-foreground: oklch(0.975 0.002 260);
+  --sidebar-border: oklch(1 0 0 / 0.07);
+  --sidebar-ring: oklch(0.7 0.11 275);
 }
 
 @theme inline {
   --font-sans: var(--font-geist-sans), 'Geist', system-ui, sans-serif;
   --font-mono: var(--font-geist-mono), 'Geist Mono', monospace;
-  --font-display: var(--font-display), 'Instrument Serif', Georgia, serif;
+  --font-display: var(--font-geist-sans), 'Geist', system-ui, sans-serif;
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -180,10 +189,20 @@
   }
 }
 
-/* Custom scrollbar for dark theme */
+::selection {
+  background: oklch(0.68 0.13 275 / 0.4);
+  color: oklch(0.99 0 0);
+}
+
+/* Scrollbars: thin and quiet, brighter on hover. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: oklch(1 0 0 / 0.12) transparent;
+}
+
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 10px;
+  height: 10px;
 }
 
 ::-webkit-scrollbar-track {
@@ -191,12 +210,15 @@
 }
 
 ::-webkit-scrollbar-thumb {
-  background: oklch(0.3 0.005 260);
-  border-radius: 4px;
+  background: oklch(1 0 0 / 0.1);
+  border: 3px solid transparent;
+  background-clip: padding-box;
+  border-radius: 999px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: oklch(0.4 0.005 260);
+  background: oklch(1 0 0 / 0.2);
+  background-clip: padding-box;
 }
 
 /* Code block syntax highlighting */
@@ -204,51 +226,26 @@
   @apply font-mono text-sm;
 }
 
-.code-block .keyword { color: oklch(0.7 0.18 330); }
-.code-block .string { color: oklch(0.7 0.2 145); }
-.code-block .comment { color: oklch(0.5 0 0); font-style: italic; }
-.code-block .function { color: oklch(0.65 0.2 250); }
-.code-block .number { color: oklch(0.75 0.15 60); }
+.code-block .keyword { color: oklch(0.76 0.15 330); }
+.code-block .string { color: oklch(0.78 0.16 145); }
+.code-block .comment { color: oklch(0.55 0.01 260); font-style: italic; }
+.code-block .function { color: oklch(0.76 0.13 250); }
+.code-block .number { color: oklch(0.8 0.13 70); }
 
-/* Uppercase tracked mono label — section/assistant eyebrows.
-   Consolidates the ad hoc text-[11px] uppercase tracking-[0.18em] pattern
-   repeated across marketing/auth/settings surfaces into one utility. */
+/* Small label for section names in settings and admin surfaces. */
 .eyebrow {
-  @apply font-mono text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground;
+  @apply text-[12px] font-medium text-muted-foreground;
 }
 
-/* Display face — reserved for wordmark + hero moments (empty state, loading
-   screen, marketing-style headlines). Never used for dense UI chrome, body
-   copy, or anything that needs to stay narrow/legible at small sizes. */
+/* Headline voice: the same sans, heavier and tighter. Used for page titles
+   and the wordmark, never for dense UI. */
 .font-display {
-  font-family: var(--font-display);
-  font-weight: 400;
-  letter-spacing: -0.01em;
+  font-family: var(--font-geist-sans), 'Geist', system-ui, sans-serif;
+  font-weight: 600;
+  letter-spacing: -0.03em;
 }
 
-/* The six assistant hues in sequence — the one signature motif of the
-   product (Nova/Velora/Axiom/Forge/Pulse/Prism, refracted from one
-   workspace). Used sparingly: empty-state hero and loading screen only. */
-:root {
-  --spectrum-gradient: linear-gradient(
-    90deg,
-    oklch(0.76 0.14 190) 0%,
-    oklch(0.7 0.18 330) 20%,
-    oklch(0.65 0.2 250) 40%,
-    oklch(0.7 0.2 145) 60%,
-    oklch(0.72 0.18 225) 80%,
-    oklch(0.78 0.19 38) 100%
-  );
-}
-
-.text-spectrum {
-  background: var(--spectrum-gradient);
-  background-clip: text;
-  -webkit-background-clip: text;
-  color: transparent;
-}
-
-/* Respect reduced-motion preferences across all animate-in/animate-float/etc. */
+/* Respect reduced-motion preferences across all animations. */
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
@@ -258,6 +255,89 @@
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }
+}
+
+/* Loading text that sweeps light across itself, for "Thinking" states. */
+@keyframes text-sweep {
+  to {
+    background-position: -200% 0;
+  }
+}
+
+.text-shimmer {
+  background: linear-gradient(
+    90deg,
+    var(--muted-foreground) 0%,
+    var(--muted-foreground) 35%,
+    var(--foreground) 50%,
+    var(--muted-foreground) 65%,
+    var(--muted-foreground) 100%
+  );
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: text-sweep 1.5s linear infinite;
+}
+
+/* Things arriving: messages, cards, panels. */
+@keyframes arrive {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+    filter: blur(4px);
+  }
+}
+
+.animate-arrive {
+  animation: arrive 0.45s cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation-delay: var(--arrive-delay, 0ms);
+}
+
+@keyframes breathe {
+  50% {
+    opacity: 0.35;
+    transform: scale(0.75);
+  }
+}
+
+.animate-breathe {
+  animation: breathe 1s ease-in-out infinite;
+}
+
+/* The composer while a reply streams: a thin light runs along its top edge
+   in the current assistant's hue. */
+@keyframes composer-run {
+  from {
+    background-position: 100% 0;
+  }
+  to {
+    background-position: -100% 0;
+  }
+}
+
+.composer-card[data-busy]::before {
+  content: '';
+  position: absolute;
+  inset: -1px 12% auto;
+  height: 1px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, transparent 0%, var(--mode) 50%, transparent 100%);
+  background-size: 200% 100%;
+  animation: composer-run 1.6s linear infinite;
+  pointer-events: none;
+}
+
+@keyframes meter {
+  from {
+    transform: scaleX(0);
+  }
+}
+
+.animate-meter {
+  transform-origin: left;
+  animation: meter 0.9s cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation-delay: 200ms;
 }
 
 /* Subtle shimmer animation */

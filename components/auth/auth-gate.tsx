@@ -7,7 +7,6 @@ import { useChatContext } from '@/lib/chat-context'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { ZenquantaLogo } from '@/components/icons'
-import { SpectrumArc } from '@/components/chat/spectrum-arc'
 
 const ADMIN_CONTACT_EMAIL = 'zqai@vanshajpoonia.com'
 
@@ -104,15 +103,18 @@ export function AuthGate() {
 
   return (
     <div className="relative flex min-h-screen w-full items-center justify-center overflow-y-auto bg-background px-6 py-10">
-      <SpectrumArc className="pointer-events-none absolute top-4 left-1/2 h-[200px] w-[360px] -translate-x-1/2 opacity-60 sm:h-[240px] sm:w-[420px]" />
+      <div
+        aria-hidden
+        className="pointer-events-none absolute top-0 left-1/2 h-80 w-[min(40rem,100%)] -translate-x-1/2 bg-[radial-gradient(closest-side,oklch(0.68_0.13_275_/_0.14),transparent)] blur-2xl"
+      />
 
-      <div className="relative w-full max-w-md rounded-2xl border border-border/70 bg-card/70 p-8">
-        <div className="mb-8 flex items-center gap-3">
-          <ZenquantaLogo className="size-10" />
-          <p className="eyebrow">Zenquanta AI</p>
+      <div className="animate-arrive relative w-full max-w-md rounded-2xl border border-white/[0.09] bg-card/80 p-8 shadow-[inset_0_1px_0_rgb(255_255_255_/_0.05),0_40px_90px_-40px_rgb(0_0_0_/_0.95)]">
+        <div className="mb-8 flex items-center gap-2.5">
+          <ZenquantaLogo className="size-8 rounded-lg" />
+          <p className="text-[14px] font-semibold tracking-[-0.01em] text-foreground">Zenquanta AI</p>
         </div>
 
-        <h1 className="font-display text-4xl text-foreground">
+        <h1 className="font-display text-[1.9rem] leading-tight text-foreground">
           Six assistants. One workspace.
         </h1>
 

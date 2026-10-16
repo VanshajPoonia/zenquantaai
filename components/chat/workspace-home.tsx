@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import {
+  CSSProperties,
   FormEvent,
   ReactNode,
   useEffect,
@@ -11,17 +12,14 @@ import {
   useState,
 } from 'react'
 import {
+  ArrowRight,
   Database,
   FileText,
-  FolderOpen,
   FolderPlus,
   ImageIcon,
-  LayoutDashboard,
-  MessageSquare,
   Play,
-  Plus,
-  Search,
   Sparkles,
+  SquarePen,
   Upload,
   Zap,
 } from 'lucide-react'
@@ -38,9 +36,9 @@ import {
   WorkspaceHomeResponse,
   WorkspaceHomeSuggestedAction,
 } from '@/types'
-import { Badge } from '@/components/ui/badge'
+import { ModeIcon, getModeAccentClass } from '@/lib/mode-utils'
+import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 
 const UPLOAD_ACCEPT =
   'image/*,.pdf,.txt,.md,.mdx,.json,.csv,.xml,.yaml,.yml,.ts,.tsx,.js,.jsx,.css,.scss,.html,.py,.go,.java,.rb,.rs,.sql'
@@ -74,17 +72,17 @@ function Section({
   title,
   action,
   children,
+  delay = 0,
 }: {
   title: string
   action?: ReactNode
   children: ReactNode
+  delay?: number
 }) {
   return (
-    <section className="space-y-3">
-      <div className="flex items-center justify-between gap-3">
-        <h2 className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-          {title}
-        </h2>
+    <section className="animate-arrive" style={{ '--arrive-delay': `${delay}ms` } as CSSProperties}>
+      <div className="mb-2 flex h-7 items-center justify-between gap-3 px-1">
+        <h2 className="text-[13px] font-medium text-foreground/90">{title}</h2>
         {action}
       </div>
       {children}
@@ -94,9 +92,15 @@ function Section({
 
 function EmptyPanel({ children }: { children: ReactNode }) {
   return (
-    <div className="rounded-2xl border border-dashed border-border/60 bg-card/25 px-4 py-6 text-center text-sm text-muted-foreground">
+    <p className="rounded-lg border border-dashed border-border px-3 py-3 text-[13px] text-muted-foreground">
       {children}
-    </div>
+    </p>
+  )
+}
+
+function ListPanel({ children }: { children: ReactNode }) {
+  return (
+    <div className="overflow-hidden rounded-xl border border-border bg-white/[0.015]">{children}</div>
   )
 }
 
@@ -117,24 +121,18 @@ function ItemButton({
     <button
       type="button"
       onClick={onClick}
-      className="flex w-full items-start gap-3 rounded-2xl border border-border/60 bg-card/35 px-4 py-3 text-left transition-colors hover:border-primary/50 hover:bg-card/60"
+      className="group flex w-full items-center gap-3 px-3 py-2.5 text-left transition-colors hover:bg-white/[0.035] focus-visible:bg-white/[0.035] focus-visible:outline-none [&+button]:border-t [&+button]:border-border"
     >
-      <span className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+      <span className="flex size-7 shrink-0 items-center justify-center rounded-md bg-white/[0.04] text-muted-foreground shadow-[inset_0_0_0_1px_rgb(255_255_255_/_0.05)] transition-colors group-hover:text-foreground">
         {icon}
       </span>
       <span className="min-w-0 flex-1">
-        <span className="block truncate text-sm font-medium text-foreground">
-          {title}
-        </span>
-        <span className="mt-1 line-clamp-2 block text-xs leading-5 text-muted-foreground">
-          {description}
-        </span>
-        {meta ? (
-          <span className="mt-2 block text-[11px] text-muted-foreground/80">
-            {meta}
-          </span>
-        ) : null}
+        <span className="block truncate text-[13.5px] text-foreground">{title}</span>
+        <span className="block truncate text-[12.5px] text-muted-foreground">{description}</span>
       </span>
+      {meta ? (
+        <span className="hidden shrink-0 text-[12px] text-muted-foreground/80 sm:block">{meta}</span>
+      ) : null}
     </button>
   )
 }
@@ -148,19 +146,41 @@ function UsageMeter({
 }) {
   const width = Math.max(0, Math.min(100, snapshot.ratio * 100))
   return (
-    <div className="space-y-2 rounded-2xl border border-border/60 bg-card/35 px-4 py-3">
-      <div className="flex items-center justify-between gap-3 text-xs">
-        <span className="font-medium text-foreground">{label}</span>
-        <span className="text-muted-foreground">{limitLabel(snapshot)}</span>
+    <div className="space-y-1.5">
+      <div className="flex items-center justify-between gap-3 text-[12.5px]">
+        <span className="text-foreground/90">{label}</span>
+        <span className="text-muted-foreground tabular-nums">{limitLabel(snapshot)}</span>
       </div>
-      <div className="h-2 rounded-full bg-muted">
+      <div className="h-1 overflow-hidden rounded-full bg-white/[0.07]">
         <div
-          className="h-full rounded-full bg-primary"
+          className={cn('animate-meter h-full rounded-full', width >= 80 ? 'bg-amber-400' : 'bg-foreground/80')}
           style={{ width: `${width}%` }}
         />
       </div>
     </div>
   )
+}
+
+function greeting() {
+  const hour = new Date().getHours()
+  if (hour < 5) return 'Working late'
+  if (hour < 12) return 'Good morning'
+  if (hour < 18) return 'Good afternoon'
+  return 'Good evening'
+}
+
+function relativeTime(value: string | null | undefined): string {
+  if (!value) return ''
+  const time = new Date(value).getTime()
+  if (Number.isNaN(time)) return ''
+  const minutes = Math.round((Date.now() - time) / 60000)
+  if (minutes < 1) return 'Just now'
+  if (minutes < 60) return `${minutes}m ago`
+  const hours = Math.round(minutes / 60)
+  if (hours < 24) return `${hours}h ago`
+  const days = Math.round(hours / 24)
+  if (days < 7) return `${days}d ago`
+  return formatDate(value)
 }
 
 export function WorkspaceHome() {
@@ -176,6 +196,7 @@ export function WorkspaceHome() {
     openWorkspaceSearch,
     uploadProjectFiles,
     prepareComposerDraft,
+    authState,
   } = useChatContext()
   const [home, setHome] = useState<WorkspaceHomeResponse | null>(null)
   const [isLoading, setIsLoading] = useState(true)
@@ -236,9 +257,6 @@ export function WorkspaceHome() {
     }
   }, [defaultProjectId, targetProjectId])
 
-  const targetProject = home?.recentProjects.find(
-    (project) => project.id === targetProjectId
-  )
 
   const handleNewChat = async () => {
     if (targetProjectId) setSelectedProjectId(targetProjectId)
@@ -415,9 +433,21 @@ export function WorkspaceHome() {
 
   if (isLoading) {
     return (
-      <div className="mx-auto flex min-h-full max-w-6xl items-center justify-center px-4 py-10">
-        <div className="rounded-3xl border border-border/70 bg-card/60 px-6 py-4 text-sm text-muted-foreground">
-          Loading workspace home...
+      <div className="mx-auto w-full max-w-6xl px-4 py-10 sm:px-8" role="status" aria-label="Loading workspace home">
+        <div className="h-8 w-64 animate-pulse rounded-md bg-white/[0.05]" />
+        <div className="mt-3 h-4 w-40 animate-pulse rounded bg-white/[0.04]" />
+        <div className="mt-8 flex gap-2">
+          {Array.from({ length: 5 }, (_, index) => (
+            <div key={index} className="h-9 w-28 animate-pulse rounded-lg bg-white/[0.04]" />
+          ))}
+        </div>
+        <div className="mt-10 grid gap-8 lg:grid-cols-[minmax(0,1.6fr)_minmax(18rem,1fr)]">
+          <div className="space-y-2">
+            {Array.from({ length: 6 }, (_, index) => (
+              <div key={index} className="h-12 animate-pulse rounded-lg bg-white/[0.035]" />
+            ))}
+          </div>
+          <div className="h-56 animate-pulse rounded-xl bg-white/[0.035]" />
         </div>
       </div>
     )
@@ -426,9 +456,9 @@ export function WorkspaceHome() {
   if (error || !home) {
     return (
       <div className="mx-auto flex min-h-full max-w-6xl items-center justify-center px-4 py-10">
-        <div className="space-y-4 rounded-3xl border border-destructive/40 bg-destructive/10 px-6 py-5 text-sm text-destructive">
+        <div className="animate-arrive space-y-3 rounded-xl border border-destructive/40 bg-destructive/10 px-5 py-4 text-[13.5px] text-destructive">
           <p>{error ?? 'Workspace home is unavailable.'}</p>
-          <Button type="button" variant="outline" onClick={() => void loadHome()}>
+          <Button type="button" variant="outline" size="sm" onClick={() => void loadHome()}>
             Try again
           </Button>
         </div>
@@ -436,345 +466,266 @@ export function WorkspaceHome() {
     )
   }
 
+  const name = authState.user?.loginId ?? null
+  const usage = home.usageSnapshot
+  type QuickActionId = 'chat' | 'upload' | 'playbook' | 'image' | 'pulse'
+  const quickActions: { id: QuickActionId; label: string; icon: ReactNode; disabled?: boolean }[] = [
+    { id: 'chat', label: 'New chat', icon: <SquarePen className="size-4" /> },
+    {
+      id: 'upload',
+      label: isUploading ? 'Uploading…' : 'Upload files',
+      icon: <Upload className="size-4" />,
+      disabled: !targetProjectId || isUploading,
+    },
+    { id: 'playbook', label: 'Run a playbook', icon: <Play className="size-4" /> },
+    { id: 'image', label: 'Make an image', icon: <ImageIcon className="size-4 text-image" /> },
+    { id: 'pulse', label: 'Research with Pulse', icon: <Zap className="size-4 text-live" /> },
+  ]
+
+  function runQuickAction(id: QuickActionId) {
+    const projectId = targetProjectId || null
+    switch (id) {
+      case 'chat':
+        void handleNewChat()
+        return
+      case 'upload':
+        uploadInputRef.current?.click()
+        return
+      case 'playbook':
+        openWorkspaceTool({ tool: 'playbooks', projectId })
+        return
+      case 'image':
+        prepareComposerDraft({ content: '', kind: 'image', mode: 'image', projectId })
+        return
+      case 'pulse':
+        openWorkspaceTool({ tool: 'pulse-research-room', projectId })
+        return
+    }
+  }
+
   return (
-    <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 py-5 sm:px-6 lg:px-8">
-      <div className="flex flex-col gap-4 rounded-3xl border border-border/70 bg-card/50 p-5 sm:p-6 lg:flex-row lg:items-end lg:justify-between">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.22em] text-muted-foreground">
-            Workspace Home
-          </p>
-          <h1 className="mt-3 text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
-            Pick up your work quickly
+    <div className="mx-auto flex w-full max-w-6xl flex-col px-4 pt-10 pb-8 sm:px-8">
+      <header className="animate-arrive">
+        <div className="min-w-0">
+          <h1 className="font-display truncate text-[clamp(1.6rem,3.4vw,2.1rem)] leading-tight text-foreground">
+            {greeting()}
+            {name ? `, ${name}` : ''}
           </h1>
-          <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
-            Continue a recent chat, open a project, or start something new.
+          <p className="mt-1.5 text-[14px] text-muted-foreground">
+            Pick up a chat, open a project, or start something new.
           </p>
         </div>
-        <div className="flex flex-col gap-2 sm:flex-row">
-          <Button type="button" className="rounded-xl" onClick={() => void handleNewChat()}>
-            <Plus className="size-4" />
-            New chat
-          </Button>
-          <Button
+      </header>
+
+      <div className="animate-arrive mt-7 flex flex-wrap items-center gap-2" style={{ '--arrive-delay': '60ms' } as CSSProperties}>
+        {quickActions.map((action) => (
+          <button
+            key={action.label}
             type="button"
-            variant="secondary"
-            className="rounded-xl"
-            onClick={() => openWorkspaceSearch({ scope: 'global' })}
+            disabled={action.disabled}
+            onClick={() => runQuickAction(action.id)}
+            className="inline-flex h-9 items-center gap-2 rounded-lg border border-border bg-white/[0.02] px-3 text-[13px] text-foreground/90 shadow-[inset_0_1px_0_rgb(255_255_255_/_0.03)] transition-[background-color,border-color,transform] duration-150 hover:border-white/15 hover:bg-white/[0.05] active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50"
           >
-            <Search className="size-4" />
-            Search
-          </Button>
-          <Button asChild variant="outline" className="rounded-xl">
-            <Link href="/dashboard">
-              <LayoutDashboard className="size-4" />
-              Dashboard
-            </Link>
-          </Button>
-        </div>
-      </div>
-
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,1.4fr)_minmax(320px,0.6fr)]">
-        <Section title="Continue where you left off">
-          {home.continueItems.length > 0 ? (
-            <div className="grid gap-3 sm:grid-cols-2">
-              {home.continueItems.map((item: WorkspaceHomeContinueItem) => (
-                <ItemButton
-                  key={item.id}
-                  title={item.title}
-                  description={item.description}
-                  meta={`${item.projectName ?? 'Workspace'} · ${formatDate(item.occurredAt)}`}
-                  icon={<Sparkles className="size-4" />}
-                  onClick={() => void executeTarget(item.target)}
-                />
-              ))}
-            </div>
-          ) : (
-            <EmptyPanel>Start a chat, create a project, or upload a file.</EmptyPanel>
-          )}
-        </Section>
-
-        <Section title="Quick actions">
-          <div className="space-y-3 rounded-3xl border border-border/70 bg-card/45 p-4">
-            <label className="flex flex-col gap-1 text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">
-              Add to project
-              <select
-                value={targetProjectId}
-                onChange={(event) => setTargetProjectId(event.target.value)}
-                className="h-10 rounded-xl border border-border/70 bg-background/70 px-3 text-sm normal-case tracking-normal text-foreground outline-none transition focus:border-primary"
-              >
-                {home.recentProjects.length === 0 ? (
-                  <option value="">Create a project first</option>
-                ) : null}
-                {home.recentProjects.map((project) => (
-                  <option key={project.id} value={project.id}>
-                    {project.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            <div className="grid grid-cols-2 gap-2">
-              <Button type="button" variant="secondary" onClick={() => void handleNewChat()}>
-                <MessageSquare className="size-4" />
-                New chat
-              </Button>
-              <Button
-                type="button"
-                variant="secondary"
-                disabled={!targetProjectId || isUploading}
-                onClick={() => uploadInputRef.current?.click()}
-              >
-                <Upload className="size-4" />
-                Upload
-              </Button>
-              <Button
-                type="button"
-                variant="secondary"
-                onClick={() =>
-                  openWorkspaceTool({ tool: 'playbooks', projectId: targetProjectId || null })
-                }
-              >
-                <Play className="size-4" />
-                Playbook
-              </Button>
-              <Button
-                type="button"
-                variant="secondary"
-                onClick={() =>
-                  prepareComposerDraft({
-                    content: '',
-                    kind: 'image',
-                    mode: 'image',
-                    projectId: targetProjectId || null,
-                  })
-                }
-              >
-                <ImageIcon className="size-4" />
-                Prism
-              </Button>
-              <Button
-                type="button"
-                variant="secondary"
-                onClick={() =>
-                  openWorkspaceTool({
-                    tool: 'pulse-research-room',
-                    projectId: targetProjectId || null,
-                  })
-                }
-              >
-                <Zap className="size-4" />
-                Pulse
-              </Button>
-              <Button
-                type="button"
-                variant="secondary"
-                onClick={() => openWorkspaceSearch({ scope: 'global' })}
-              >
-                <Search className="size-4" />
-                Search
-              </Button>
-            </div>
-
-            <form className="flex gap-2" onSubmit={(event) => void handleCreateProject(event)}>
-              <Input
-                value={newProjectName}
-                onChange={(event) => setNewProjectName(event.target.value)}
-                placeholder="New project name"
-                className="h-10 rounded-xl"
-              />
-              <Button
-                type="submit"
-                variant="outline"
-                className="h-10 rounded-xl"
-                disabled={!newProjectName.trim() || isCreatingProject}
-              >
-                <FolderPlus className="size-4" />
-              </Button>
-            </form>
-
-            <input
-              ref={uploadInputRef}
-              type="file"
-              multiple
-              accept={UPLOAD_ACCEPT}
-              className="hidden"
-              onChange={(event) => void handleUploadFiles(event.target.files)}
-            />
-          </div>
-        </Section>
-      </div>
-
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(320px,0.6fr)]">
-        <Section title="Suggested next actions">
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-            {home.suggestedActions.map((action) => (
-              <ItemButton
-                key={action.id}
-                title={action.title}
-                description={action.description}
-                meta={targetProject?.name ?? null}
-                icon={<Sparkles className="size-4" />}
-                onClick={() => void runSuggestedAction(action)}
-              />
+            <span className="text-muted-foreground">{action.icon}</span>
+            {action.label}
+          </button>
+        ))}
+        <label className="ml-auto flex items-center gap-2 text-[12.5px] text-muted-foreground">
+          <span className="hidden sm:inline">Project</span>
+          <select
+            value={targetProjectId}
+            onChange={(event) => setTargetProjectId(event.target.value)}
+            aria-label="Project for new chats and uploads"
+            className="h-8 rounded-md border border-border bg-white/[0.02] px-2 text-[13px] text-foreground outline-none transition-colors hover:bg-white/[0.04] focus:border-ring"
+          >
+            {home.recentProjects.length === 0 ? <option value="">Create a project first</option> : null}
+            {home.recentProjects.map((project) => (
+              <option key={project.id} value={project.id}>
+                {project.name}
+              </option>
             ))}
-          </div>
-        </Section>
-
-        <Section title="Usage snapshot">
-          <div className="space-y-3 rounded-3xl border border-border/70 bg-card/45 p-4">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <p className="text-sm font-medium text-foreground">
-                  {home.usageSnapshot.planTier.toUpperCase()} plan
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  {home.usageSnapshot.displayedCredits.limit > 0
-                    ? `${home.usageSnapshot.displayedCreditsRemaining.toLocaleString()} usage credits left this cycle`
-                    : home.usageSnapshot.dailyMessages.limit > 0
-                      ? `${home.usageSnapshot.dailyMessages.remaining.toLocaleString()} messages left today`
-                      : 'No daily message cap'}
-                </p>
-              </div>
-              <Badge variant="secondary">
-                {home.usageSnapshot.subscriptionStatus}
-              </Badge>
-            </div>
-            <UsageMeter label="Messages today" snapshot={home.usageSnapshot.dailyMessages} />
-            <UsageMeter label="Images today" snapshot={home.usageSnapshot.dailyImages} />
-            {home.usageSnapshot.displayedCredits.limit > 0 ? (
-              <UsageMeter label="Usage credits" snapshot={home.usageSnapshot.displayedCredits} />
-            ) : null}
-            {home.usageSnapshot.pendingPlanRequest ? (
-              <Button asChild variant="secondary" className="w-full rounded-xl">
-                <Link href="/pricing">
-                  Review {home.usageSnapshot.pendingPlanRequest.requestedTier.toUpperCase()} request
-                </Link>
-              </Button>
-            ) : (
-              <Button asChild variant="outline" className="w-full rounded-xl">
-                <Link href="/dashboard">Open usage dashboard</Link>
-              </Button>
-            )}
-          </div>
-        </Section>
+          </select>
+        </label>
+        <input
+          ref={uploadInputRef}
+          type="file"
+          multiple
+          accept={UPLOAD_ACCEPT}
+          className="hidden"
+          onChange={(event) => void handleUploadFiles(event.target.files)}
+        />
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-3">
-        <Section title="Recent projects">
-          <div className="space-y-3">
-            {home.recentProjects.length > 0 ? (
-              home.recentProjects.map((project) => (
-                <ItemButton
-                  key={project.id}
-                  title={project.name}
-                  description={project.description ?? 'Project workspace'}
-                  meta={formatDate(project.updatedAt)}
-                  icon={<FolderOpen className="size-4" />}
-                  onClick={() => openProjectItem(project)}
-                />
-              ))
+      <div className="mt-10 grid gap-x-10 gap-y-8 lg:grid-cols-[minmax(0,1.6fr)_minmax(18rem,1fr)]">
+        <div className="min-w-0 space-y-8">
+          <Section title="Continue where you left off" delay={100}>
+            {home.continueItems.length > 0 ? (
+              <ListPanel>
+                {home.continueItems.map((item: WorkspaceHomeContinueItem) => (
+                  <ItemButton
+                    key={item.id}
+                    title={item.title}
+                    description={item.description}
+                    meta={[item.projectName, relativeTime(item.occurredAt)].filter(Boolean).join(' · ')}
+                    icon={<Sparkles className="size-3.5" />}
+                    onClick={() => void executeTarget(item.target)}
+                  />
+                ))}
+              </ListPanel>
             ) : (
-              <EmptyPanel>No projects yet.</EmptyPanel>
+              <EmptyPanel>Start a chat, create a project, or upload a file.</EmptyPanel>
             )}
-          </div>
-        </Section>
+          </Section>
 
-        <Section title="Recent conversations">
-          <div className="space-y-3">
+          <Section title="Recent chats" delay={140}>
             {home.recentConversations.length > 0 ? (
-              home.recentConversations.map((conversation) => (
-                <ItemButton
-                  key={conversation.id}
-                  title={conversation.title}
-                  description={conversation.preview || 'Conversation'}
-                  meta={`${conversation.projectName ?? 'Workspace'} · ${formatDate(conversation.updatedAt)}`}
-                  icon={<MessageSquare className="size-4" />}
-                  onClick={() => openConversationItem(conversation)}
-                />
-              ))
+              <ListPanel>
+                {home.recentConversations.map((conversation) => (
+                  <ItemButton
+                    key={conversation.id}
+                    title={conversation.title}
+                    description={conversation.preview || 'Conversation'}
+                    meta={[conversation.projectName, relativeTime(conversation.updatedAt)].filter(Boolean).join(' · ')}
+                    icon={
+                      <span className={getModeAccentClass(conversation.mode, 'text')}>
+                        <ModeIcon mode={conversation.mode} size="sm" className="size-3.5" />
+                      </span>
+                    }
+                    onClick={() => openConversationItem(conversation)}
+                  />
+                ))}
+              </ListPanel>
             ) : (
-              <EmptyPanel>No conversations yet.</EmptyPanel>
+              <EmptyPanel>No chats yet.</EmptyPanel>
             )}
-          </div>
-        </Section>
+          </Section>
 
-        <Section title="Recent artifacts">
-          <div className="space-y-3">
-            {home.recentArtifacts.length > 0 ? (
-              home.recentArtifacts.map((artifact) => (
-                <ItemButton
-                  key={artifact.id}
-                  title={artifact.title}
-                  description={`${artifact.artifactType} · ${artifact.sourceType}`}
-                  meta={artifact.projectName ?? 'Workspace'}
-                  icon={<FileText className="size-4" />}
-                  onClick={() => openArtifactItem(artifact)}
-                />
-              ))
-            ) : (
-              <EmptyPanel>No artifacts yet.</EmptyPanel>
-            )}
-          </div>
-        </Section>
-      </div>
+          {home.suggestedActions.length > 0 ? (
+            <Section title="Suggested next" delay={180}>
+              <div className="grid gap-2 sm:grid-cols-3">
+                {home.suggestedActions.map((action) => (
+                  <button
+                    key={action.id}
+                    type="button"
+                    onClick={() => void runSuggestedAction(action)}
+                    className="group flex flex-col rounded-xl border border-border bg-white/[0.015] p-3.5 text-left transition-colors hover:border-white/15 hover:bg-white/[0.035]"
+                  >
+                    <span className="flex items-center justify-between gap-2 text-[13.5px] text-foreground">
+                      {action.title}
+                      <ArrowRight className="size-3.5 shrink-0 -translate-x-1 text-muted-foreground opacity-0 transition-[opacity,transform] duration-200 group-hover:translate-x-0 group-hover:opacity-100" />
+                    </span>
+                    <span className="mt-1 text-[12.5px] leading-5 text-muted-foreground">{action.description}</span>
+                  </button>
+                ))}
+              </div>
+            </Section>
+          ) : null}
+        </div>
 
-      <div className="grid gap-4 lg:grid-cols-3">
-        <Section title="Recent playbook runs">
-          <div className="space-y-3">
-            {home.recentPlaybookRuns.length > 0 ? (
-              home.recentPlaybookRuns.map((run) => (
-                <ItemButton
-                  key={run.id}
-                  title={run.workflowTitle}
-                  description={`Status: ${run.status}`}
-                  meta={run.projectName ?? formatDate(run.updatedAt)}
-                  icon={<Play className="size-4" />}
-                  onClick={() => openRunItem(run)}
-                />
-              ))
-            ) : (
-              <EmptyPanel>No playbook runs yet.</EmptyPanel>
-            )}
-          </div>
-        </Section>
+        <aside className="min-w-0 space-y-8">
+          <Section
+            title="Usage"
+            delay={120}
+            action={
+              <Link href={usage.pendingPlanRequest ? '/pricing' : '/dashboard'} className="text-[12.5px] text-muted-foreground transition-colors hover:text-foreground">
+                {usage.pendingPlanRequest ? `Review ${usage.pendingPlanRequest.requestedTier} request` : 'Details'}
+              </Link>
+            }
+          >
+            <div className="space-y-4 rounded-xl border border-border bg-white/[0.015] p-4">
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-[13.5px] text-foreground">
+                  <span className="capitalize">{usage.planTier}</span> plan
+                </p>
+                <span className="rounded-full bg-white/[0.06] px-2 py-0.5 text-[11.5px] text-muted-foreground capitalize">
+                  {usage.subscriptionStatus}
+                </span>
+              </div>
+              <UsageMeter label="Messages today" snapshot={usage.dailyMessages} />
+              <UsageMeter label="Images today" snapshot={usage.dailyImages} />
+              {usage.displayedCredits.limit > 0 ? (
+                <UsageMeter label="Usage credits" snapshot={usage.displayedCredits} />
+              ) : null}
+            </div>
+          </Section>
 
-        <Section title="Recent files">
-          <div className="space-y-3">
-            {home.recentFiles.length > 0 ? (
-              home.recentFiles.map((file) => (
-                <ItemButton
-                  key={file.id}
-                  title={file.fileName}
-                  description={`${file.knowledgeStatusLabel} · ${formatBytes(file.byteSize)}`}
-                  meta={file.projectName ?? file.mimeType ?? 'Workspace file'}
-                  icon={<Database className="size-4" />}
-                  onClick={() => openFileItem(file)}
+          <Section title="Projects" delay={160}>
+            <ListPanel>
+              {home.recentProjects.map((project) => (
+                <button
+                  key={project.id}
+                  type="button"
+                  onClick={() => openProjectItem(project)}
+                  className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-[13.5px] text-foreground/90 transition-colors hover:bg-white/[0.035] [&+*]:border-t [&+*]:border-border"
+                >
+                  <span aria-hidden className="size-2 shrink-0 rounded-[3px]" style={{ background: project.color }} />
+                  <span className="min-w-0 flex-1 truncate">{project.name}</span>
+                  <span className="shrink-0 text-[12px] text-muted-foreground/80">{relativeTime(project.updatedAt)}</span>
+                </button>
+              ))}
+              <form className="flex items-center gap-2 px-3 py-1.5" onSubmit={(event) => void handleCreateProject(event)}>
+                <FolderPlus className="size-3.5 shrink-0 text-muted-foreground" />
+                <input
+                  value={newProjectName}
+                  onChange={(event) => setNewProjectName(event.target.value)}
+                  placeholder="New project"
+                  aria-label="New project name"
+                  className="h-7 min-w-0 flex-1 bg-transparent text-[13px] text-foreground outline-none placeholder:text-muted-foreground/80"
                 />
-              ))
-            ) : (
-              <EmptyPanel>No files yet.</EmptyPanel>
-            )}
-          </div>
-        </Section>
+                {newProjectName.trim() ? (
+                  <Button type="submit" size="sm" className="h-6 rounded px-2 text-[12px]" disabled={isCreatingProject}>
+                    Create
+                  </Button>
+                ) : null}
+              </form>
+            </ListPanel>
+          </Section>
 
-        <Section title="Recent Prism images">
-          <div className="space-y-3">
-            {home.recentImages.length > 0 ? (
-              home.recentImages.map((image) => (
-                <ItemButton
-                  key={image.id}
-                  title={image.prompt}
-                  description={`${image.model} · ${image.status}`}
-                  meta={image.projectName ?? formatDate(image.createdAt)}
-                  icon={<ImageIcon className="size-4" />}
-                  onClick={() => openImageItem(image)}
-                />
-              ))
+          <Section title="Library" delay={200}>
+            {home.recentArtifacts.length + home.recentFiles.length + home.recentImages.length + home.recentPlaybookRuns.length > 0 ? (
+              <ListPanel>
+                {home.recentArtifacts.map((artifact) => (
+                  <ItemButton
+                    key={artifact.id}
+                    title={artifact.title}
+                    description={`Artifact · ${artifact.artifactType}`}
+                    icon={<FileText className="size-3.5" />}
+                    onClick={() => openArtifactItem(artifact)}
+                  />
+                ))}
+                {home.recentFiles.map((file) => (
+                  <ItemButton
+                    key={file.id}
+                    title={file.fileName}
+                    description={`${file.knowledgeStatusLabel} · ${formatBytes(file.byteSize)}`}
+                    icon={<Database className="size-3.5" />}
+                    onClick={() => openFileItem(file)}
+                  />
+                ))}
+                {home.recentImages.map((image) => (
+                  <ItemButton
+                    key={image.id}
+                    title={image.prompt}
+                    description={`Image · ${image.status}`}
+                    icon={<ImageIcon className="size-3.5 text-image" />}
+                    onClick={() => openImageItem(image)}
+                  />
+                ))}
+                {home.recentPlaybookRuns.map((run) => (
+                  <ItemButton
+                    key={run.id}
+                    title={run.workflowTitle}
+                    description={`Playbook run · ${run.status}`}
+                    icon={<Play className="size-3.5" />}
+                    onClick={() => openRunItem(run)}
+                  />
+                ))}
+              </ListPanel>
             ) : (
-              <EmptyPanel>No Prism images yet.</EmptyPanel>
+              <EmptyPanel>Artifacts, files, images and playbook runs show up here.</EmptyPanel>
             )}
-          </div>
-        </Section>
+          </Section>
+        </aside>
       </div>
     </div>
   )

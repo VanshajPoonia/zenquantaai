@@ -258,7 +258,7 @@ export function IntelligencePicker({
           size="sm"
           disabled={disabled}
           aria-label={`Intelligence: ${selected.label}`}
-          className="h-9 gap-1 rounded-full px-3 text-xs font-medium text-muted-foreground hover:text-foreground"
+          className="h-8 gap-1 rounded-full px-2.5 text-[12.5px] font-medium text-muted-foreground hover:text-foreground"
         >
           {selected.label}
           <ChevronDown className="size-3.5 opacity-70" />

@@ -8,6 +8,7 @@ import { isWorkspacePath } from '@/lib/utils/chat-path'
 import { hasSessionHint } from '@/lib/utils/session-hint'
 import { cn } from '@/lib/utils'
 import { AuthGate } from '@/components/auth/auth-gate'
+import { ZenquantaLogo } from '@/components/icons'
 import { Sidebar } from './sidebar'
 import { Header } from './header'
 import { ChatArea } from './chat-area'
@@ -27,14 +28,15 @@ import { GitHubIntegrationPanel } from './github-integration-panel'
 // Signed-out visitors at "/" get the landing page. It carries three.js, so it
 // loads in its own chunk and never reaches signed-in users.
 const LandingPage = dynamic(() => import('@/components/landing/landing-page'), {
-  loading: () => <div className="min-h-screen bg-[#155240]" />,
+  loading: () => <div className="min-h-screen bg-[#08090a]" />,
 })
 
 function LoadingScreen() {
   return (
     <div className="flex h-screen w-full items-center justify-center bg-background">
-      <div className="rounded-3xl border border-border/70 bg-card/60 px-6 py-4 shadow-xl shadow-black/20">
-        <p className="font-display text-lg text-foreground">Restoring your workspace…</p>
+      <div role="status" className="animate-arrive flex flex-col items-center gap-4">
+        <ZenquantaLogo className="size-9 rounded-lg opacity-90" />
+        <p className="text-shimmer text-[13px]">Restoring your workspace</p>
       </div>
     </div>
   )
@@ -125,9 +127,7 @@ function ChatShell({
             className="hidden h-full w-[288px] shrink-0 border-r border-sidebar-border bg-sidebar md:block"
           />
           <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-            <div aria-hidden className="px-2 pt-2 sm:px-3 sm:pt-3">
-              <div className="h-12 rounded-xl border border-border/70 bg-card/60 sm:h-14 sm:rounded-2xl" />
-            </div>
+            <div aria-hidden className="h-12 shrink-0 border-b border-border" />
             <div className="min-h-0 flex-1 overflow-y-auto">{children}</div>
           </div>
         </div>

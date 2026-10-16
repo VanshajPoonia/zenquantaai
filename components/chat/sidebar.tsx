@@ -2,22 +2,23 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import {
   BookOpen,
   Brain,
   ChevronDown,
+  ChevronsUpDown,
   FolderInput,
   FolderOpen,
   FolderPlus,
   FolderTree,
-  GripVertical,
   Images,
   Layers,
   LayoutDashboard,
   MoreHorizontal,
   PanelLeftClose,
+  SquarePen,
   Zap,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -65,35 +66,16 @@ import {
 } from '@/components/ui/dropdown-menu'
 import {
   ZenquantaLogo,
-  PlusIcon,
   SearchIcon,
   PinIcon,
   TrashIcon,
   SettingsIcon,
-  UserIcon,
   XIcon,
   MessageIcon,
 } from '@/components/icons'
 
 interface SidebarProps {
   onOpenSettings: () => void
-}
-
-function getFittedSidebarTitle(title: string, availableWidth: number): string {
-  const trimmed = title.trim()
-
-  if (!trimmed) return ''
-  if (availableWidth <= 0) return ''
-
-  const averageCharacterWidth = 7.2
-  const safeWidth = Math.max(0, availableWidth - 6)
-  const estimatedCharacters = Math.floor(safeWidth / averageCharacterWidth)
-
-  if (estimatedCharacters >= trimmed.length) return trimmed
-  if (estimatedCharacters <= 2) return ''
-
-  const visibleCharacters = Math.max(1, estimatedCharacters - 1)
-  return `${trimmed.slice(0, visibleCharacters).trimEnd()}…`
 }
 
 function ChatItem({
@@ -113,37 +95,13 @@ function ChatItem({
   onMoveToProject: (projectId: string) => void
   projects: Project[]
 }) {
-  const titleLaneRef = useRef<HTMLDivElement | null>(null)
-  const [availableTitleWidth, setAvailableTitleWidth] = useState(0)
-
-  useEffect(() => {
-    const element = titleLaneRef.current
-    if (!element) return
-
-    const updateWidth = () => {
-      setAvailableTitleWidth(element.getBoundingClientRect().width)
-    }
-
-    updateWidth()
-
-    const observer = new ResizeObserver(() => {
-      updateWidth()
-    })
-
-    observer.observe(element)
-
-    return () => observer.disconnect()
-  }, [])
-
-  const fittedTitle = getFittedSidebarTitle(chat.title, availableTitleWidth)
-
   return (
     <div
       className={cn(
-        'group relative flex items-start gap-3 rounded-xl border border-transparent px-3 py-3 cursor-pointer transition-all duration-200 has-[a:focus-visible]:ring-2 has-[a:focus-visible]:ring-sidebar-ring',
+        'group relative flex h-8 items-center gap-2 rounded-md pr-1 pl-2 text-[13px] transition-colors duration-150 has-[a:focus-visible]:ring-2 has-[a:focus-visible]:ring-sidebar-ring',
         isActive
-          ? 'border-sidebar-border/70 bg-sidebar-accent text-sidebar-accent-foreground shadow-sm'
-          : 'border-sidebar-border/40 hover:border-sidebar-border/70 hover:bg-sidebar-accent/50 text-sidebar-foreground/70 hover:text-sidebar-foreground'
+          ? 'bg-sidebar-accent text-sidebar-accent-foreground'
+          : 'text-sidebar-foreground/70 hover:bg-sidebar-accent/70 hover:text-sidebar-foreground'
       )}
     >
       {/* A real link, stretched over the row, so the chat can be opened in a
@@ -153,7 +111,7 @@ function ChatItem({
         aria-current={isActive ? 'page' : undefined}
         aria-label={chat.title}
         title={chat.title}
-        className="absolute inset-0 z-[1] rounded-xl outline-none"
+        className="absolute inset-0 z-[1] rounded-md outline-none"
         onClick={(event) => {
           if (!isPlainClick(event)) return
           event.preventDefault()
@@ -161,108 +119,106 @@ function ChatItem({
         }}
       />
 
-      {/* Mode indicator */}
-      <div
+      <span
+        aria-hidden
         className={cn(
-          'flex items-center justify-center shrink-0 size-8 rounded-lg transition-colors',
-          isActive ? 'bg-sidebar-accent' : 'bg-sidebar-accent/50',
-          getModeAccentClass(chat.mode, 'text')
+          'flex size-4 shrink-0 items-center justify-center transition-opacity',
+          getModeAccentClass(chat.mode, 'text'),
+          !isActive && 'opacity-75 group-hover:opacity-100'
         )}
       >
-        <ModeIcon mode={chat.mode} size="sm" />
-      </div>
+        <ModeIcon mode={chat.mode} size="sm" className="size-3.5" />
+      </span>
 
-      <div className="min-w-0 flex-1 overflow-hidden">
-        <div className="flex items-start gap-2">
-          <div ref={titleLaneRef} className="min-w-0 flex-1">
-            {fittedTitle && (
-              <p
-                className="truncate pr-2 text-[13px] font-medium leading-5"
-                style={{
-                  WebkitMaskImage:
-                    'linear-gradient(to right, black 84%, transparent 100%)',
-                  maskImage:
-                    'linear-gradient(to right, black 84%, transparent 100%)',
-                }}
-              >
-                {fittedTitle}
-              </p>
-            )}
-          </div>
+      <span className="min-w-0 flex-1 truncate">{chat.title}</span>
 
-          <div className="relative z-10 flex h-8 w-8 shrink-0 items-start justify-end">
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="icon-sm"
-                  title="Chat actions"
-                  aria-label="Chat actions"
-                  className={cn(
-                    'size-8 cursor-pointer rounded-lg border-sidebar-border bg-sidebar-accent text-sidebar-foreground shadow-sm transition-all hover:border-sidebar-primary/50 hover:bg-sidebar-primary/10 hover:text-sidebar-foreground',
-                    isActive && 'border-sidebar-primary/40 bg-sidebar-primary/10 text-sidebar-foreground'
-                  )}
-                  onClick={(event) => event.stopPropagation()}
-                >
-                  <MoreHorizontal className="size-4" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent
-                align="end"
-                className="w-52 rounded-xl border-sidebar-border/70 bg-sidebar p-1.5 text-sidebar-foreground"
-                onClick={(event) => event.stopPropagation()}
-              >
-                <DropdownMenuSub>
-                  <DropdownMenuSubTrigger className="cursor-pointer rounded-lg">
-                    <FolderInput className="size-4" />
-                    Move to project
-                  </DropdownMenuSubTrigger>
-                  <DropdownMenuSubContent className="w-48 rounded-xl border-sidebar-border/70 bg-sidebar p-1.5 text-sidebar-foreground">
-                    {projects.map((project) => (
-                      <DropdownMenuItem
-                        key={project.id}
-                        className="cursor-pointer rounded-lg"
-                        disabled={project.id === chat.projectId}
-                        onClick={() => onMoveToProject(project.id)}
-                      >
-                        {project.name}
-                      </DropdownMenuItem>
-                    ))}
-                  </DropdownMenuSubContent>
-                </DropdownMenuSub>
-                <DropdownMenuSeparator className="bg-sidebar-border/70" />
-                <DropdownMenuItem
-                  className="cursor-pointer rounded-lg"
-                  onClick={onPin}
-                >
-                  <PinIcon className={cn('size-4', chat.isPinned && 'text-sidebar-primary')} />
-                  {chat.isPinned ? 'Unpin chat' : 'Pin chat'}
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  variant="destructive"
-                  className="cursor-pointer rounded-lg"
-                  onClick={onDelete}
-                >
-                  <TrashIcon className="size-4" />
-                  Delete chat
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-        </div>
+      {chat.isPinned ? (
+        <PinIcon
+          aria-label="Pinned"
+          className="size-3 shrink-0 text-sidebar-foreground/40 group-hover:hidden group-has-[[data-state=open]]:hidden"
+        />
+      ) : null}
 
-        {chat.isPinned && (
-          <div className="mt-1 flex items-center gap-2 text-[11px] text-sidebar-foreground/50">
-            <span className="inline-flex shrink-0 items-center">
-              <PinIcon className="size-3 text-sidebar-primary" />
-            </span>
-            <p>Pinned</p>
-          </div>
-        )}
+      <div className="relative z-10 shrink-0">
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              title="Chat actions"
+              aria-label="Chat actions"
+              className="size-6 rounded-md text-sidebar-foreground/60 opacity-0 transition-opacity group-hover:opacity-100 hover:bg-sidebar-accent hover:text-sidebar-foreground focus-visible:opacity-100 data-[state=open]:opacity-100 [@media(hover:none)]:opacity-100"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <MoreHorizontal className="size-3.5" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent
+            align="start"
+            className="w-52"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <DropdownMenuSub>
+              <DropdownMenuSubTrigger>
+                <FolderInput className="size-4" />
+                Move to project
+              </DropdownMenuSubTrigger>
+              <DropdownMenuSubContent className="w-48">
+                {projects.map((project) => (
+                  <DropdownMenuItem
+                    key={project.id}
+                    disabled={project.id === chat.projectId}
+                    onClick={() => onMoveToProject(project.id)}
+                  >
+                    {project.name}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuSubContent>
+            </DropdownMenuSub>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={onPin}>
+              <PinIcon className={cn('size-4', chat.isPinned && 'text-sidebar-primary')} />
+              {chat.isPinned ? 'Unpin chat' : 'Pin chat'}
+            </DropdownMenuItem>
+            <DropdownMenuItem variant="destructive" onClick={onDelete}>
+              <TrashIcon className="size-4" />
+              Delete chat
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
     </div>
   )
+}
+
+// Recent chats, grouped the way people remember them.
+function groupChatsByDate(chats: ConversationSummary[]) {
+  const now = new Date()
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()
+  const day = 24 * 60 * 60 * 1000
+  const groups: { title: string; chats: ConversationSummary[] }[] = [
+    { title: 'Today', chats: [] },
+    { title: 'Yesterday', chats: [] },
+    { title: 'Previous 7 days', chats: [] },
+    { title: 'Previous 30 days', chats: [] },
+    { title: 'Older', chats: [] },
+  ]
+  for (const chat of chats) {
+    const time = new Date(chat.updatedAt).getTime()
+    const index =
+      time >= startOfToday
+        ? 0
+        : time >= startOfToday - day
+          ? 1
+          : time >= startOfToday - 7 * day
+            ? 2
+            : time >= startOfToday - 30 * day
+              ? 3
+              : 4
+    groups[index].chats.push(chat)
+  }
+  return groups.filter((group) => group.chats.length > 0)
 }
 
 function ChatSection({
@@ -287,8 +243,8 @@ function ChatSection({
   if (chats.length === 0) return null
 
   return (
-    <div className="space-y-1">
-      <h3 className="text-[11px] font-semibold text-sidebar-foreground/40 uppercase tracking-wider px-3 mb-2">
+    <div className="space-y-px">
+      <h3 className="mb-1 px-2 text-[12px] font-medium text-sidebar-foreground/45">
         {title}
       </h3>
       {chats.map((chat) => (
@@ -362,15 +318,15 @@ function LibrarySection({
   }
 
   const rowClassName =
-    'flex h-8 items-center gap-2.5 rounded-lg px-3 text-[13px] text-sidebar-foreground/75 outline-none transition-colors hover:bg-sidebar-accent/60 hover:text-sidebar-foreground focus-visible:ring-2 focus-visible:ring-sidebar-ring'
+    'group/row flex h-8 items-center gap-2.5 rounded-md px-2 text-[13px] text-sidebar-foreground/75 outline-none transition-colors duration-150 hover:bg-sidebar-accent/70 hover:text-sidebar-foreground focus-visible:ring-2 focus-visible:ring-sidebar-ring'
 
   return (
-    <nav aria-label="Library" className="px-2 pb-3">
+    <nav aria-label="Library" className="px-2 pb-2">
       <button
         type="button"
         aria-expanded={isOpen}
         onClick={toggle}
-        className="flex w-full items-center gap-1 rounded-md px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-sidebar-foreground/40 outline-none transition-colors hover:text-sidebar-foreground/70 focus-visible:ring-2 focus-visible:ring-sidebar-ring"
+        className="flex w-full items-center gap-1 rounded-md px-2 py-1 text-[12px] font-medium text-sidebar-foreground/45 outline-none transition-colors hover:text-sidebar-foreground/75 focus-visible:ring-2 focus-visible:ring-sidebar-ring"
       >
         Library
         <ChevronDown
@@ -378,12 +334,12 @@ function LibrarySection({
         />
       </button>
       {isOpen ? (
-        <ul className="mt-1 space-y-0.5">
+        <ul className="mt-0.5 space-y-px">
           {LIBRARY_ITEMS.map((item) => {
             const Icon = item.icon
             const content = (
               <>
-                <Icon className="size-4 shrink-0 text-sidebar-foreground/50" />
+                <Icon className="size-4 shrink-0 text-sidebar-foreground/45 transition-colors group-hover/row:text-sidebar-foreground/75" />
                 <span className="truncate">{item.label}</span>
               </>
             )
@@ -436,11 +392,11 @@ function LibrarySection({
 
 function EmptyChatState({ hasSearch }: { hasSearch: boolean }) {
   return (
-    <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
-      <div className="size-12 rounded-xl bg-sidebar-accent/50 flex items-center justify-center mb-3">
-        <MessageIcon className="size-5 text-sidebar-foreground/40" />
+    <div className="flex flex-col items-center justify-center px-4 py-10 text-center">
+      <div className="mb-3 flex size-9 items-center justify-center rounded-lg border border-sidebar-border">
+        <MessageIcon className="size-4 text-sidebar-foreground/40" />
       </div>
-      <p className="text-sm font-medium text-sidebar-foreground/60">
+      <p className="text-[13px] font-medium text-sidebar-foreground/60">
         {hasSearch ? 'No chats found' : 'No chats yet'}
       </p>
       <p className="text-xs text-sidebar-foreground/40 mt-1">
@@ -591,68 +547,99 @@ export function Sidebar({ onOpenSettings }: SidebarProps) {
     window.addEventListener('mouseup', handlePointerUp)
   }
 
+  const accountName = authState.user?.loginId ?? authState.user?.email ?? 'Zenquanta user'
+  const recentGroups = groupChatsByDate(recentChats)
+  const selectChat = (chat: ConversationSummary) => {
+    setCurrentChat(chat)
+    closeOnMobile()
+  }
+  const pinChat = (id: string) =>
+    void runChatAction(() => togglePinChat(id), 'Could not update the pin.')
+  const askDeleteChat = (id: string) =>
+    setPendingDeleteChat(filteredChats.find((chat) => chat.id === id) ?? null)
+  const moveChat = (chatId: string, projectId: string) =>
+    void runChatAction(() => moveChatToProject(chatId, projectId), 'Could not move the chat.')
+
   const sidebarBody = (
     <>
-      {/* Header with logo and new chat */}
-      <div className="space-y-3 p-3 sm:space-y-4 sm:p-4">
-        <div className="flex items-center justify-between gap-2">
-          <button
-            type="button"
-            onClick={() => {
-              goHome()
-              closeOnMobile()
-            }}
-            className="flex min-w-0 cursor-pointer items-center gap-2 rounded-xl p-1 text-left transition-colors hover:bg-sidebar-accent/40 sm:gap-3 sm:rounded-2xl"
-          >
-            <ZenquantaLogo className="size-7 sm:size-9" />
-            <div className="min-w-0">
-              <span className="font-display text-lg text-sidebar-foreground sm:text-xl">
-                Zenquanta
-              </span>
-              <span className="ml-1 text-[10px] font-medium rounded bg-sidebar-primary/20 px-1 py-0.5 text-sidebar-primary sm:ml-1.5 sm:px-1.5 sm:text-xs">
-                AI
-              </span>
-            </div>
-          </button>
+      <div className="flex items-center gap-1 px-3 pt-3 pb-2">
+        <button
+          type="button"
+          onClick={() => {
+            goHome()
+            closeOnMobile()
+          }}
+          className="flex min-w-0 flex-1 items-center gap-2 rounded-md px-1.5 py-1 text-left transition-colors hover:bg-sidebar-accent/70"
+        >
+          <ZenquantaLogo className="size-6 shrink-0 rounded-md" />
+          <span className="truncate text-[14px] font-semibold tracking-[-0.01em] text-sidebar-foreground">
+            Zenquanta
+          </span>
+        </button>
 
-          {/* The mobile drawer has its own close button, so only show this on desktop. */}
-          {!isMobile ? (
-            <TooltipProvider delayDuration={300}>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    aria-label="Collapse sidebar"
-                    className="size-9 rounded-lg text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground sm:size-9 sm:rounded-xl"
-                    onClick={toggleSidebar}
-                  >
-                    <PanelLeftClose className="size-4" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent side="bottom" className="text-xs">
-                  Collapse sidebar
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-          ) : null}
-        </div>
+        {/* The mobile drawer has its own close button, so only show this on desktop. */}
+        {!isMobile ? (
+          <TooltipProvider delayDuration={300}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  aria-label="Collapse sidebar"
+                  className="size-8 rounded-md text-sidebar-foreground/55 hover:bg-sidebar-accent hover:text-sidebar-foreground"
+                  onClick={toggleSidebar}
+                >
+                  <PanelLeftClose className="size-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" className="text-xs">
+                Collapse sidebar
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        ) : null}
+      </div>
 
-        <Button
+      <div className="space-y-2 px-3 pb-3">
+        <button
+          type="button"
           onClick={() => {
             createNewChat()
             closeOnMobile()
           }}
-          variant="cta"
-          className={cn(
-            'h-10 w-full justify-center gap-2 font-semibold',
-            'bg-sidebar-primary text-sidebar-primary-foreground hover:bg-sidebar-primary/90'
-          )}
+          className="flex h-8 w-full items-center gap-2 rounded-md border border-sidebar-border bg-white/[0.03] px-2 text-[13px] font-medium text-sidebar-foreground shadow-[inset_0_1px_0_rgb(255_255_255_/_0.04)] transition-colors hover:bg-sidebar-accent focus-visible:ring-2 focus-visible:ring-sidebar-ring focus-visible:outline-none active:scale-[0.99]"
         >
-          <PlusIcon className="size-4" />
-          New Chat
-        </Button>
+          <SquarePen className="size-3.5 text-sidebar-foreground/70" />
+          New chat
+        </button>
+
+        <div className="relative">
+          <SearchIcon className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-sidebar-foreground/40" />
+          <Input
+            type="text"
+            aria-label="Search chats"
+            placeholder="Search chats"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className={cn(
+              'h-8 rounded-md border-transparent bg-sidebar-accent/70 pl-8 text-[13px] shadow-none',
+              'placeholder:text-sidebar-foreground/40',
+              'focus-visible:border-sidebar-border focus-visible:ring-2 focus-visible:ring-sidebar-ring/40'
+            )}
+          />
+          {searchQuery && (
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label="Clear search"
+              className="absolute top-1/2 right-1 size-6 -translate-y-1/2 rounded hover:bg-sidebar-accent"
+              onClick={() => setSearchQuery('')}
+            >
+              <XIcon className="size-3" />
+            </Button>
+          )}
+        </div>
       </div>
 
       <LibrarySection
@@ -663,25 +650,22 @@ export function Sidebar({ onOpenSettings }: SidebarProps) {
         onNavigate={closeOnMobile}
       />
 
-      {/* Search */}
-      <div className="px-4 pb-3 space-y-3">
-        <div className="flex items-center gap-2">
-          <div className="relative flex-1">
-            <FolderTree className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-sidebar-foreground/40" />
+      <div className="space-y-2 px-3 pb-2">
+        <div className="flex items-center gap-1">
+          <div className="relative min-w-0 flex-1">
+            <FolderTree className="pointer-events-none absolute top-1/2 left-2.5 z-10 size-3.5 -translate-y-1/2 text-sidebar-foreground/45" />
             <Select
               value={selectedProjectId}
               onValueChange={(value) => setSelectedProjectId(value)}
             >
               <SelectTrigger
-                className={cn(
-                  'h-9 rounded-xl border-sidebar-border/50 bg-sidebar-accent/50 pl-9',
-                  'text-sidebar-foreground/80'
-                )}
+                aria-label="Filter chats by project"
+                className="h-8 w-full rounded-md border-transparent bg-transparent pl-8 text-[13px] text-sidebar-foreground/80 shadow-none hover:bg-sidebar-accent/70"
               >
-                <SelectValue placeholder="All Projects" />
+                <SelectValue placeholder="All projects" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All Projects</SelectItem>
+                <SelectItem value="all">All projects</SelectItem>
                 {projects.map((project) => (
                   <SelectItem key={project.id} value={project.id}>
                     {project.name}
@@ -690,43 +674,65 @@ export function Sidebar({ onOpenSettings }: SidebarProps) {
               </SelectContent>
             </Select>
           </div>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            title="Project home"
-            aria-label="Open project home"
-            className="size-9 rounded-xl bg-sidebar-accent/40 text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground"
-            disabled={selectedProjectId === 'all'}
-            onClick={() => {
-              if (selectedProjectId !== 'all') {
-                openProjectHome(selectedProjectId)
-              }
-            }}
-          >
-            <LayoutDashboard className="size-4" />
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            title="New project"
-            aria-label="New project"
-            className="size-9 rounded-xl bg-sidebar-accent/40 text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground"
-            onClick={() => setIsCreatingProject((previous) => !previous)}
-          >
-            <FolderPlus className="size-4" />
-          </Button>
+          <TooltipProvider delayDuration={300}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  aria-label="Open project home"
+                  className="size-8 rounded-md text-sidebar-foreground/55 hover:bg-sidebar-accent hover:text-sidebar-foreground"
+                  disabled={selectedProjectId === 'all'}
+                  onClick={() => {
+                    if (selectedProjectId !== 'all') {
+                      openProjectHome(selectedProjectId)
+                    }
+                  }}
+                >
+                  <LayoutDashboard className="size-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" className="text-xs">
+                Project home
+              </TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  aria-label="New project"
+                  aria-expanded={isCreatingProject}
+                  className="size-8 rounded-md text-sidebar-foreground/55 hover:bg-sidebar-accent hover:text-sidebar-foreground"
+                  onClick={() => setIsCreatingProject((previous) => !previous)}
+                >
+                  <FolderPlus className="size-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" className="text-xs">
+                New project
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         </div>
 
         {isCreatingProject && (
-          <div className="rounded-2xl border border-sidebar-border/60 bg-sidebar-accent/30 p-3 space-y-2">
+          <div className="animate-arrive space-y-2 rounded-lg border border-sidebar-border bg-white/[0.02] p-2">
             <Input
               value={newProjectName}
               onChange={(event) => setNewProjectName(event.target.value)}
-              placeholder="New project name"
-              className="h-9 rounded-xl border-sidebar-border/50 bg-sidebar/60"
+              placeholder="Project name"
+              aria-label="New project name"
+              autoFocus
+              className="h-8 rounded-md text-[13px]"
               onKeyDown={async (event) => {
+                if (event.key === 'Escape') {
+                  setIsCreatingProject(false)
+                  setNewProjectName('')
+                  return
+                }
                 if (event.key !== 'Enter') return
                 const project = await createProject(newProjectName)
                 if (!project) return
@@ -734,11 +740,11 @@ export function Sidebar({ onOpenSettings }: SidebarProps) {
                 setIsCreatingProject(false)
               }}
             />
-            <div className="flex justify-end gap-2">
+            <div className="flex justify-end gap-1.5">
               <Button
                 variant="ghost"
                 size="sm"
-                className="h-8 rounded-lg"
+                className="h-7 rounded-md px-2.5 text-[12.5px]"
                 onClick={() => {
                   setIsCreatingProject(false)
                   setNewProjectName('')
@@ -748,7 +754,7 @@ export function Sidebar({ onOpenSettings }: SidebarProps) {
               </Button>
               <Button
                 size="sm"
-                className="h-8 rounded-lg"
+                className="h-7 rounded-md px-2.5 text-[12.5px]"
                 disabled={!newProjectName.trim()}
                 onClick={async () => {
                   const project = await createProject(newProjectName)
@@ -762,82 +768,35 @@ export function Sidebar({ onOpenSettings }: SidebarProps) {
             </div>
           </div>
         )}
-
-        <div className="relative">
-          <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-sidebar-foreground/40 size-4" />
-          <Input
-            type="text"
-            placeholder="Search chats..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className={cn(
-              'pl-9 h-9 rounded-xl bg-sidebar-accent/50 border-sidebar-border/50',
-              'placeholder:text-sidebar-foreground/30',
-              'focus-visible:ring-sidebar-primary/50 focus-visible:border-sidebar-primary/30'
-            )}
-          />
-          {searchQuery && (
-            <Button
-              variant="ghost"
-              size="icon"
-              aria-label="Clear search"
-              className="absolute right-1 top-1/2 -translate-y-1/2 size-7 hover:bg-sidebar-accent"
-              onClick={() => setSearchQuery('')}
-            >
-              <XIcon className="size-3" />
-            </Button>
-          )}
-        </div>
       </div>
 
-      {/* Chat List */}
-      <ScrollArea className="min-h-0 flex-1 px-2">
-        <div className="space-y-6 py-2 pr-6">
+      {/* Chat list */}
+      <ScrollArea className="min-h-0 flex-1 px-2 [&_[data-slot=scroll-area-viewport]>div]:!block">
+        <div className="space-y-5 pt-1 pb-4">
           <ChatSection
             title="Pinned"
             chats={pinnedChats}
             currentChatId={currentChat?.id}
-            onSelectChat={(chat) => {
-              setCurrentChat(chat)
-              closeOnMobile()
-            }}
-            onPinChat={(id) =>
-              void runChatAction(() => togglePinChat(id), 'Could not update the pin.')
-            }
-            onDeleteChat={(id) =>
-              setPendingDeleteChat(filteredChats.find((chat) => chat.id === id) ?? null)
-            }
-            onMoveChatToProject={(chatId, projectId) =>
-              void runChatAction(
-                () => moveChatToProject(chatId, projectId),
-                'Could not move the chat.'
-              )
-            }
+            onSelectChat={selectChat}
+            onPinChat={pinChat}
+            onDeleteChat={askDeleteChat}
+            onMoveChatToProject={moveChat}
             projects={projects}
           />
 
-          <ChatSection
-            title="Chats"
-            chats={recentChats}
-            currentChatId={currentChat?.id}
-            onSelectChat={(chat) => {
-              setCurrentChat(chat)
-              closeOnMobile()
-            }}
-            onPinChat={(id) =>
-              void runChatAction(() => togglePinChat(id), 'Could not update the pin.')
-            }
-            onDeleteChat={(id) =>
-              setPendingDeleteChat(filteredChats.find((chat) => chat.id === id) ?? null)
-            }
-            onMoveChatToProject={(chatId, projectId) =>
-              void runChatAction(
-                () => moveChatToProject(chatId, projectId),
-                'Could not move the chat.'
-              )
-            }
-            projects={projects}
-          />
+          {recentGroups.map((group) => (
+            <ChatSection
+              key={group.title}
+              title={group.title}
+              chats={group.chats}
+              currentChatId={currentChat?.id}
+              onSelectChat={selectChat}
+              onPinChat={pinChat}
+              onDeleteChat={askDeleteChat}
+              onMoveChatToProject={moveChat}
+              projects={projects}
+            />
+          ))}
 
           {filteredChats.length === 0 && (
             <EmptyChatState hasSearch={!!searchQuery} />
@@ -846,50 +805,36 @@ export function Sidebar({ onOpenSettings }: SidebarProps) {
       </ScrollArea>
 
       {/* Footer */}
-      <div className="p-3 border-t border-sidebar-border">
-        <div className="flex items-center gap-2">
-          <Button
-            variant="ghost"
-            size="sm"
-            className="flex-1 justify-start gap-2 h-9 text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent rounded-xl"
-            onClick={onOpenSettings}
-          >
-            <SettingsIcon className="size-4" />
-            <span>Settings</span>
-          </Button>
+      <div className="border-t border-sidebar-border p-2">
+        <div className="flex items-center gap-1">
           <DropdownMenu>
-            <TooltipProvider delayDuration={300}>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <DropdownMenuTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      aria-label="Account"
-                      className="size-9 rounded-xl text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground"
-                    >
-                      <UserIcon className="size-4" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                </TooltipTrigger>
-                <TooltipContent side="top" className="text-xs">
-                  Account
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-            <DropdownMenuContent align="end" className="w-60">
-              <div className="px-3 py-2">
-                <p className="eyebrow">Signed in</p>
-                <p className="mt-1 truncate text-sm text-foreground">
-                  {authState.user?.loginId ?? authState.user?.email ?? 'Zenquanta user'}
-                </p>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                aria-label="Account"
+                className="flex min-w-0 flex-1 items-center gap-2 rounded-md px-1.5 py-1.5 text-left transition-colors hover:bg-sidebar-accent/70 focus-visible:ring-2 focus-visible:ring-sidebar-ring focus-visible:outline-none data-[state=open]:bg-sidebar-accent"
+              >
+                <span
+                  aria-hidden
+                  className="flex size-6 shrink-0 items-center justify-center rounded-full bg-white/[0.08] text-[11px] font-semibold text-sidebar-foreground uppercase shadow-[inset_0_0_0_1px_rgb(255_255_255_/_0.08)]"
+                >
+                  {accountName.slice(0, 1)}
+                </span>
+                <span className="min-w-0 flex-1 truncate text-[13px] text-sidebar-foreground/85">
+                  {accountName}
+                </span>
+                <ChevronsUpDown className="size-3.5 shrink-0 text-sidebar-foreground/40" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" side="top" className="w-60">
+              <div className="px-2 py-1.5">
+                <p className="eyebrow">Signed in as</p>
+                <p className="mt-0.5 truncate text-sm text-foreground">{accountName}</p>
                 {authState.user?.role === 'admin' ? (
-                  <p className="eyebrow mt-1 text-sidebar-primary">
-                    Admin access enabled
-                  </p>
+                  <p className="mt-0.5 text-[12px] text-sidebar-primary">Admin access enabled</p>
                 ) : null}
               </div>
-              <p className="px-3 pb-2 text-xs text-muted-foreground">
+              <p className="px-2 pb-1.5 text-xs text-muted-foreground">
                 {conversations.length.toLocaleString()} chats ·{' '}
                 {totalMessageCount.toLocaleString()} messages
               </p>
@@ -911,6 +856,24 @@ export function Sidebar({ onOpenSettings }: SidebarProps) {
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
+          <TooltipProvider delayDuration={300}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  aria-label="Settings"
+                  className="size-8 rounded-md text-sidebar-foreground/55 hover:bg-sidebar-accent hover:text-sidebar-foreground"
+                  onClick={onOpenSettings}
+                >
+                  <SettingsIcon className="size-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="top" className="text-xs">
+                Settings
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         </div>
       </div>
     </>
@@ -984,12 +947,10 @@ export function Sidebar({ onOpenSettings }: SidebarProps) {
           role="separator"
           aria-orientation="vertical"
           aria-label="Resize sidebar"
-          className="absolute inset-y-0 right-0 z-20 flex w-3 translate-x-1/2 cursor-col-resize items-center justify-center"
+          className="group/resize absolute inset-y-0 right-0 z-20 w-2 translate-x-1/2 cursor-col-resize"
           onMouseDown={handleResizeStart}
         >
-          <div className="flex h-16 w-1.5 items-center justify-center rounded-full bg-sidebar-border/70 text-sidebar-foreground/30 transition-colors hover:bg-sidebar-primary/40 hover:text-sidebar-foreground/60">
-            <GripVertical className="size-3.5" />
-          </div>
+          <div className="mx-auto h-full w-px bg-transparent transition-colors duration-200 group-hover/resize:bg-sidebar-primary/70 group-active/resize:bg-sidebar-primary" />
         </div>
       </aside>
       {deleteChatDialog}

@@ -68,7 +68,7 @@ function HeaderIconButton({
           <Button
             variant="ghost"
             size="icon"
-            className="size-9 rounded-xl text-muted-foreground hover:text-foreground"
+            className="size-8 rounded-md text-muted-foreground hover:text-foreground"
             aria-label={label}
             onClick={onClick}
           >
@@ -108,7 +108,7 @@ function ChatTitle() {
 
   if (!currentChat) {
     return isNewChatDraft ? (
-      <span className="truncate px-2 text-sm text-muted-foreground">New chat</span>
+      <span className="truncate px-2 text-[13px] text-muted-foreground">New chat</span>
     ) : null
   }
 
@@ -159,7 +159,7 @@ function ChatTitle() {
             setIsRenaming(false)
           }
         }}
-        className="h-9 w-full min-w-0 max-w-md rounded-lg border border-border bg-background px-2.5 text-sm text-foreground outline-none focus:border-foreground/30"
+        className="h-8 w-full min-w-0 max-w-md rounded-md border border-border bg-background px-2 text-[13px] text-foreground outline-none focus:border-foreground/30"
       />
     )
   }
@@ -170,7 +170,7 @@ function ChatTitle() {
         <DropdownMenuTrigger asChild>
           <Button
             variant="ghost"
-            className="h-9 min-w-0 max-w-full gap-1 rounded-lg px-2.5 text-sm font-medium text-foreground"
+            className="h-8 min-w-0 max-w-full gap-1 rounded-md px-2 text-[13px] font-medium text-foreground"
             aria-label={`Chat options for ${title}`}
           >
             {currentChat.isPinned ? (
@@ -254,69 +254,98 @@ function ChatTitle() {
 }
 
 export function Header({ pageTitle, onOpenSettings, onOpenCommandPalette }: HeaderProps) {
-  const { authState, goHome, toggleSidebar, isSidebarOpen } = useChatContext()
+  const { authState, goHome, toggleSidebar, isSidebarOpen, currentChat, projects } = useChatContext()
   const isAdmin = authState.user?.role === 'admin'
+  const projectName =
+    pageTitle === undefined && currentChat
+      ? projects.find((project) => project.id === currentChat.projectId)?.name ?? null
+      : null
+  const [isMac, setIsMac] = useState(true)
+  useEffect(() => {
+    setIsMac(/mac|iphone|ipad/i.test(navigator.platform || navigator.userAgent))
+  }, [])
 
   return (
-    <div className="px-2 pt-2 sm:px-3 sm:pt-3">
-      <header className="flex h-12 items-center gap-2 rounded-xl border border-border/70 bg-card/60 px-1.5 shadow-sm backdrop-blur-sm sm:h-14 sm:rounded-2xl sm:px-3">
-        <div className="flex min-w-0 flex-1 items-center gap-1">
-          <Button
-            variant="ghost"
-            size="icon"
-            className="size-9 shrink-0 rounded-xl"
-            aria-label={isSidebarOpen ? 'Close sidebar' : 'Open sidebar'}
-            onClick={toggleSidebar}
+    <header className="flex h-12 shrink-0 items-center gap-2 border-b border-border px-2 sm:px-3">
+      <div className="flex min-w-0 flex-1 items-center gap-1">
+        <Button
+          variant="ghost"
+          size="icon"
+          className="size-8 shrink-0 rounded-md text-muted-foreground hover:text-foreground"
+          aria-label={isSidebarOpen ? 'Close sidebar' : 'Open sidebar'}
+          onClick={toggleSidebar}
+        >
+          <MenuIcon className="size-4" />
+        </Button>
+        {!isSidebarOpen ? (
+          <button
+            type="button"
+            onClick={goHome}
+            aria-label="Zenquanta AI home"
+            className="hidden shrink-0 items-center gap-2 rounded-md px-1.5 py-1 transition-colors hover:bg-accent/60 sm:flex"
           >
-            <MenuIcon className="size-4 sm:size-5" />
-          </Button>
-          {!isSidebarOpen ? (
-            <button
-              type="button"
-              onClick={goHome}
-              aria-label="Zenquanta AI home"
-              className="hidden shrink-0 items-center gap-2 rounded-xl px-2 py-1 transition-colors hover:bg-accent/40 sm:flex"
-            >
-              <ZenquantaLogo className="size-6" />
-              <span className="font-display hidden text-lg text-foreground lg:inline">
-                Zenquanta AI
-              </span>
-            </button>
+            <ZenquantaLogo className="size-5 rounded" />
+            <span className="hidden text-[14px] font-semibold tracking-[-0.01em] text-foreground lg:inline">
+              Zenquanta
+            </span>
+          </button>
+        ) : null}
+        {!isSidebarOpen ? (
+          <span aria-hidden className="mx-1 hidden h-4 w-px bg-border sm:block" />
+        ) : null}
+        <div className="flex min-w-0 flex-1 items-center">
+          {projectName ? (
+            <span className="hidden shrink-0 items-center text-[13px] text-muted-foreground md:flex">
+              <span className="max-w-[12rem] truncate px-1">{projectName}</span>
+              <span aria-hidden className="px-0.5 text-muted-foreground/50">/</span>
+            </span>
           ) : null}
-          <div className="flex min-w-0 flex-1 items-center">
-            {pageTitle === undefined ? (
-              <ChatTitle />
-            ) : (
-              <p className="truncate px-2 text-sm font-medium text-foreground">{pageTitle}</p>
-            )}
-          </div>
+          {pageTitle === undefined ? (
+            <ChatTitle />
+          ) : (
+            <p className="truncate px-2 text-[13px] font-medium text-foreground">{pageTitle}</p>
+          )}
         </div>
+      </div>
 
-        <div className="flex shrink-0 items-center gap-0.5 sm:gap-1">
-          {isAdmin ? (
-            <Button
-              asChild
-              variant="ghost"
-              size="sm"
-              className="hidden gap-2 rounded-xl px-3 text-muted-foreground hover:text-foreground sm:inline-flex"
-            >
-              <Link href="/admin">
-                <Shield className="size-3.5" />
-                <span>Admin</span>
-              </Link>
-            </Button>
-          ) : null}
+      <div className="flex shrink-0 items-center gap-1">
+        {isAdmin ? (
+          <Button
+            asChild
+            variant="ghost"
+            size="sm"
+            className="hidden h-8 gap-1.5 rounded-md px-2.5 text-[13px] text-muted-foreground hover:text-foreground sm:inline-flex"
+          >
+            <Link href="/admin">
+              <Shield className="size-3.5" />
+              <span>Admin</span>
+            </Link>
+          </Button>
+        ) : null}
+        <button
+          type="button"
+          onClick={onOpenCommandPalette}
+          aria-label="Search"
+          className="group hidden h-8 items-center gap-2 rounded-md border border-border bg-white/[0.02] pr-1.5 pl-2.5 text-[13px] text-muted-foreground transition-colors hover:border-white/15 hover:bg-white/[0.05] hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none sm:flex"
+        >
+          <Search className="size-3.5" />
+          <span>Search</span>
+          <kbd className="ml-3 rounded border border-border px-1 font-mono text-[10.5px] leading-4 text-muted-foreground/80">
+            {isMac ? '⌘K' : 'Ctrl K'}
+          </kbd>
+        </button>
+        <span className="sm:hidden">
           <HeaderIconButton label="Search" onClick={onOpenCommandPalette}>
             <Search className="size-4" />
           </HeaderIconButton>
-          {/* The open sidebar already has Settings in its footer. */}
-          {!isSidebarOpen ? (
-            <HeaderIconButton label="Settings" onClick={onOpenSettings}>
-              <SettingsIcon className="size-4" />
-            </HeaderIconButton>
-          ) : null}
-        </div>
-      </header>
-    </div>
+        </span>
+        {/* The open sidebar already has Settings in its footer. */}
+        {!isSidebarOpen ? (
+          <HeaderIconButton label="Settings" onClick={onOpenSettings}>
+            <SettingsIcon className="size-4" />
+          </HeaderIconButton>
+        ) : null}
+      </div>
+    </header>
   )
 }

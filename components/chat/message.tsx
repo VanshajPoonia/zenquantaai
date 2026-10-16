@@ -72,7 +72,6 @@ import {
   CheckIcon,
   CopyIcon,
   RefreshIcon,
-  UserIcon,
   XIcon,
 } from '@/components/icons'
 import { getWebPreviewDocument } from '@/lib/utils/web-preview'
@@ -111,43 +110,32 @@ interface ChatMessageProps {
 }
 
 function getModeColorClasses(mode: AIMode) {
-  return cn(
-    'border-opacity-30',
-    getModeAccentClass(mode, 'text'),
-    getModeAccentClass(mode, 'border'),
-    getModeTintClass(mode, 'strong')
-  )
+  return cn(getModeAccentClass(mode, 'text'), getModeTintClass(mode, 'subtle'))
 }
 
 function renderStreamingState(content: string, mode: AIMode) {
   if (!content.trim()) {
     return (
-      <div className="flex items-center gap-2 text-sm text-muted-foreground">
-        <div className="flex gap-1">
-          <span className="size-2 rounded-full bg-current animate-bounce" />
-          <span
-            className="size-2 rounded-full bg-current animate-bounce"
-            style={{ animationDelay: '120ms' }}
-          />
-          <span
-            className="size-2 rounded-full bg-current animate-bounce"
-            style={{ animationDelay: '240ms' }}
-          />
-        </div>
-        <span>{mode === 'image' ? 'Generating image...' : 'Generating response...'}</span>
+      <div className="flex items-center gap-2.5 py-0.5 text-[14px]">
+        <span
+          aria-hidden
+          className={cn('size-1.5 rounded-full animate-breathe', getModeAccentClass(mode, 'bg'))}
+        />
+        <span className="text-shimmer">{mode === 'image' ? 'Creating image' : 'Thinking'}</span>
       </div>
     )
   }
 
   return (
-    <div className="space-y-3">
-      <div className="prose prose-sm prose-invert max-w-none text-foreground">
+    <div>
+      <div className="max-w-none text-[15px] leading-7 text-foreground/90">
         {renderContent(content)}
       </div>
-      <div className="flex items-center gap-2 text-xs text-muted-foreground">
-        <span className="size-1.5 rounded-full bg-current animate-pulse" />
-        Streaming
-      </div>
+      <span
+        role="status"
+        aria-label="Still writing"
+        className={cn('mt-2 block size-1.5 rounded-full animate-breathe', getModeAccentClass(mode, 'bg'))}
+      />
     </div>
   )
 }
@@ -166,21 +154,21 @@ function WorkingNotesPanel({
   if (notes.length === 0) return null
 
   return (
-    <div className="mt-3 rounded-2xl border border-border/60 bg-background/40">
+    <div className="mt-3 overflow-hidden rounded-lg border border-border bg-white/[0.02]">
       <button
         type="button"
-        className="flex w-full items-center justify-between gap-3 px-3 py-2.5 text-left transition-colors hover:bg-background/40 sm:px-4"
+        className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left transition-colors hover:bg-white/[0.03]"
         onClick={(event) => {
           event.stopPropagation()
           onToggle()
         }}
       >
         <div className="min-w-0">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+          <p className="text-[13px] font-medium text-foreground/90">
             {title ?? 'Working notes'}
           </p>
-          <p className="mt-1 text-xs text-foreground/85 sm:text-sm">
-            Click to view live response progress
+          <p className="mt-0.5 text-[12px] text-muted-foreground">
+            {expanded ? 'Hide progress' : 'Show progress'}
           </p>
         </div>
         <ChevronDown
@@ -192,14 +180,14 @@ function WorkingNotesPanel({
       </button>
 
       {expanded ? (
-        <div className="border-t border-border/60 px-3 py-3 sm:px-4">
-          <ul className="space-y-2">
+        <div className="border-t border-border px-3 py-2.5">
+          <ul className="space-y-1.5">
             {notes.map((note) => (
               <li
                 key={note}
-                className="flex items-start gap-2 text-xs leading-6 text-foreground/90 sm:text-sm"
+                className="animate-arrive flex items-start gap-2 text-[13px] leading-6 text-foreground/85"
               >
-                <span className="mt-2 size-1.5 shrink-0 rounded-full bg-foreground/70" />
+                <span className="mt-2.5 size-1 shrink-0 rounded-full bg-foreground/50" />
                 <span>{note}</span>
               </li>
             ))}
@@ -242,7 +230,7 @@ function renderContent(content: string) {
 
     if (line.startsWith('# ')) {
       elements.push(
-        <h1 key={index} className="text-xl font-bold mt-4 mb-2">
+        <h1 key={index} className="mt-5 mb-2 text-[1.2rem] font-semibold tracking-[-0.015em] text-foreground first:mt-0">
           {line.slice(2)}
         </h1>
       )
@@ -251,7 +239,7 @@ function renderContent(content: string) {
 
     if (line.startsWith('## ')) {
       elements.push(
-        <h2 key={index} className="text-lg font-semibold mt-3 mb-2">
+        <h2 key={index} className="mt-5 mb-1.5 text-[1.075rem] font-semibold tracking-[-0.01em] text-foreground first:mt-0">
           {line.slice(3)}
         </h2>
       )
@@ -260,7 +248,7 @@ function renderContent(content: string) {
 
     if (line.startsWith('### ')) {
       elements.push(
-        <h3 key={index} className="text-base font-semibold mt-2 mb-1">
+        <h3 key={index} className="mt-4 mb-1 text-[15px] font-semibold text-foreground first:mt-0">
           {line.slice(4)}
         </h3>
       )
@@ -268,13 +256,13 @@ function renderContent(content: string) {
     }
 
     if (line.match(/^---+$/)) {
-      elements.push(<hr key={index} className="my-4 border-border" />)
+      elements.push(<hr key={index} className="my-5 border-border" />)
       return
     }
 
     if (line.match(/^[-*•]\s/)) {
       elements.push(
-        <li key={index} className="ml-4 list-disc">
+        <li key={index} className="ml-5 list-disc pl-1 marker:text-muted-foreground/70 [&+li]:mt-1">
           {formatInlineStyles(line.slice(2))}
         </li>
       )
@@ -285,7 +273,7 @@ function renderContent(content: string) {
       elements.push(
         <div
           key={index}
-          className="overflow-x-auto text-sm font-mono bg-muted/30 px-2 py-1 rounded"
+          className="overflow-x-auto bg-white/[0.03] px-2.5 py-1 font-mono text-[13px] first:rounded-t-md last:rounded-b-md"
         >
           {line}
         </div>
@@ -299,7 +287,7 @@ function renderContent(content: string) {
     }
 
     elements.push(
-      <p key={index} className="leading-relaxed">
+      <p key={index} className="leading-7">
         {formatInlineStyles(line)}
       </p>
     )
@@ -316,7 +304,7 @@ function formatInlineStyles(text: string): React.ReactNode {
       return (
         <code
           key={i}
-          className="px-1.5 py-0.5 rounded bg-muted font-mono text-sm"
+          className="rounded-[5px] bg-white/[0.07] px-1.5 py-0.5 font-mono text-[0.85em] text-foreground shadow-[inset_0_0_0_1px_rgb(255_255_255_/_0.05)]"
         >
           {part.slice(1, -1)}
         </code>
@@ -328,7 +316,7 @@ function formatInlineStyles(text: string): React.ReactNode {
     return boldParts.map((boldPart, j) => {
       if (boldPart.startsWith('**') && boldPart.endsWith('**')) {
         return (
-          <strong key={`${i}-${j}`} className="font-semibold">
+          <strong key={`${i}-${j}`} className="font-semibold text-foreground">
             {boldPart.slice(2, -2)}
           </strong>
         )
@@ -361,33 +349,28 @@ function CodeBlock({ code, language }: { code: string; language: string }) {
   }
 
   return (
-    <div className="my-3 rounded-xl overflow-hidden border border-border bg-background/50">
-      <div className="flex items-center justify-between px-4 py-2 bg-muted/50 border-b border-border">
-        <span className="text-xs font-mono text-muted-foreground">
+    <div className="my-4 overflow-hidden rounded-lg border border-border bg-black/30">
+      <div className="flex items-center justify-between border-b border-border bg-white/[0.02] py-1 pr-1 pl-3">
+        <span className="font-mono text-[11.5px] text-muted-foreground">
           {language || 'plaintext'}
         </span>
-        <TooltipProvider delayDuration={300}>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                className="size-6"
-                onClick={handleCopy}
-              >
-                {copied ? (
-                  <CheckIcon className="size-3 text-code" />
-                ) : (
-                  <CopyIcon className="size-3" />
-                )}
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>{copied ? 'Copied!' : 'Copy code'}</TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
+        <Button
+          variant="ghost"
+          size="sm"
+          aria-label={copied ? 'Code copied' : 'Copy code'}
+          className="h-7 gap-1.5 rounded-md px-2 text-[12px] text-muted-foreground hover:text-foreground"
+          onClick={handleCopy}
+        >
+          {copied ? (
+            <CheckIcon className="size-3.5 text-code" />
+          ) : (
+            <CopyIcon className="size-3.5" />
+          )}
+          {copied ? 'Copied' : 'Copy'}
+        </Button>
       </div>
-      <pre className="overflow-x-auto p-3 sm:p-4">
-        <code className="text-sm font-mono leading-relaxed">{code}</code>
+      <pre className="overflow-x-auto p-4">
+        <code className="font-mono text-[13px] leading-6 text-foreground/90">{code}</code>
       </pre>
     </div>
   )
@@ -889,16 +872,16 @@ export const ChatMessage = memo(function ChatMessage({
 
   if (message.role === 'user') {
     return (
-      <div className="group mb-5 flex justify-end sm:mb-6">
-        <div className="flex max-w-[94%] items-start gap-2 sm:max-w-[85%] sm:gap-3">
+      <div className="group animate-arrive mb-8 flex justify-end">
+        <div className="flex max-w-[92%] items-start sm:max-w-[80%]">
           <div className="flex min-w-0 flex-col items-end">
-            <div className="min-w-0 max-w-full rounded-2xl rounded-tr-md bg-primary px-3 py-2.5 text-primary-foreground sm:px-4 sm:py-3">
+            <div className="min-w-0 max-w-full rounded-2xl rounded-br-md bg-white/[0.07] px-4 py-2.5 text-foreground shadow-[inset_0_0_0_1px_rgb(255_255_255_/_0.04)]">
               {isEditing ? (
                 <div className="space-y-3">
                   <Textarea
                     value={draftValue}
                     onChange={(event) => setDraftValue(event.target.value)}
-                    className="min-h-[120px] border-white/15 bg-white/5 text-primary-foreground placeholder:text-primary-foreground/60"
+                    className="min-h-[120px] min-w-[min(32rem,70vw)] border-white/15 bg-black/20 text-foreground placeholder:text-muted-foreground"
                   />
                   <div className="flex justify-end gap-2">
                     <Button
@@ -928,7 +911,7 @@ export const ChatMessage = memo(function ChatMessage({
               ) : (
                 <div>
                   {!!message.content && (
-                    <p className="[overflow-wrap:anywhere] whitespace-pre-wrap text-sm leading-relaxed">
+                    <p className="[overflow-wrap:anywhere] text-[15px] leading-7 whitespace-pre-wrap">
                       {message.content}
                     </p>
                   )}
@@ -940,7 +923,7 @@ export const ChatMessage = memo(function ChatMessage({
                 </div>
               )}
             </div>
-            <div className="mt-2 flex flex-wrap items-center justify-end gap-2 text-xs text-muted-foreground">
+            <div className="mt-1.5 flex min-h-8 flex-wrap items-center justify-end gap-2 text-[12px] text-muted-foreground/80">
               <span>{formatMessageTime(message.createdAt)}</span>
               {isLastUser && !isEditing && (
                 <div className="flex items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100 [@media(hover:none)]:opacity-100">
@@ -956,9 +939,6 @@ export const ChatMessage = memo(function ChatMessage({
               )}
             </div>
           </div>
-          <div className="flex size-7 shrink-0 items-center justify-center rounded-full bg-primary/20 sm:size-8">
-            <UserIcon className="size-4 text-primary" />
-          </div>
         </div>
       </div>
     )
@@ -966,11 +946,11 @@ export const ChatMessage = memo(function ChatMessage({
 
   return (
     <>
-      <div className="group mb-5 flex justify-start sm:mb-6">
-        <div className="flex max-w-[96%] items-start gap-2 sm:max-w-[88%] sm:gap-3">
+      <div className="group animate-arrive mb-8 flex justify-start">
+        <div className="flex w-full min-w-0 items-start gap-3">
           <div
             className={cn(
-              'flex size-7 shrink-0 items-center justify-center rounded-full border sm:size-8',
+              'mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-lg shadow-[inset_0_0_0_1px_rgb(255_255_255_/_0.06)]',
               getModeColorClasses(message.mode)
             )}
           >
@@ -983,12 +963,13 @@ export const ChatMessage = memo(function ChatMessage({
             )}
           </div>
           <div className="min-w-0 flex-1">
+            <p className="mb-1 flex h-7 items-center gap-2 text-[13px] font-medium text-foreground">
+              {message.customAssistant?.name ?? MODE_CONFIGS[message.mode].name}
+            </p>
             <div
               className={cn(
-                'rounded-2xl rounded-tl-md border border-border bg-card px-3 py-2.5 transition-colors sm:px-4 sm:py-3',
-                isStreamingMessage &&
-                  workingNotes.length > 0 &&
-                  'cursor-pointer hover:border-border/80 hover:bg-card/95'
+                'transition-colors',
+                isStreamingMessage && workingNotes.length > 0 && 'cursor-pointer'
               )}
               onClick={() => {
                 if (isStreamingMessage && workingNotes.length > 0) {
@@ -997,16 +978,16 @@ export const ChatMessage = memo(function ChatMessage({
               }}
             >
               {message.branchLabel ? (
-                <div className="mb-3 inline-flex items-center gap-1 rounded-full border border-border/60 bg-background/60 px-2.5 py-1 text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+                <div className="mb-3 inline-flex items-center gap-1.5 rounded-md border border-border bg-white/[0.02] px-2 py-0.5 text-[12px] text-muted-foreground">
                   <ModeIcon mode={message.mode} size="sm" />
                   {message.branchLabel}
                 </div>
               ) : null}
               {message.customAssistant ? (
-                <div className="mb-3 inline-flex items-center gap-1.5 rounded-full border border-border/60 bg-background/60 px-2.5 py-1 text-xs text-muted-foreground">
+                <div className="mb-3 inline-flex items-center gap-1.5 rounded-md border border-border bg-white/[0.02] px-2 py-0.5 text-[12px] text-muted-foreground">
                   <span>{message.customAssistant.iconEmoji}</span>
                   <span>{message.customAssistant.name}</span>
-                  <span className="text-[10px] uppercase tracking-[0.16em]">
+                  <span className="text-muted-foreground/70">
                     {MODE_CONFIGS[message.customAssistant.baseMode].name}
                   </span>
                 </div>
@@ -1014,7 +995,7 @@ export const ChatMessage = memo(function ChatMessage({
               {effectiveStatus === 'streaming' ? (
                 renderStreamingState(displayContent, message.mode)
               ) : (
-                <div className="prose prose-sm prose-invert max-w-none [overflow-wrap:anywhere] text-foreground">
+                <div className="max-w-none [overflow-wrap:anywhere] text-[15px] leading-7 text-foreground/90">
                   {renderedContent}
                 </div>
               )}
@@ -1037,7 +1018,7 @@ export const ChatMessage = memo(function ChatMessage({
             {effectiveStatus !== 'streaming' ? (
               <div
                 className={cn(
-                  'mt-1.5 flex flex-wrap items-center gap-0.5 transition-opacity',
+                  '-ml-1.5 mt-2 flex flex-wrap items-center gap-0.5 transition-opacity duration-200',
                   isLastAssistant || effectiveStatus === 'error'
                     ? 'opacity-100'
                     : 'opacity-0 group-hover:opacity-100 focus-within:opacity-100 [@media(hover:none)]:opacity-100'

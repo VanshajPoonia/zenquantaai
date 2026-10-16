@@ -73,7 +73,7 @@ export function AssistantPicker({
           disabled={disabled}
           aria-label={`Assistant: ${activeCustomAssistant?.name ?? MODE_CONFIGS[currentMode].name}`}
           className={cn(
-            'h-9 min-w-0 gap-1.5 rounded-full px-2.5 text-sm font-medium',
+            'h-8 min-w-0 gap-1.5 rounded-full bg-white/[0.05] px-2.5 text-[13px] font-medium hover:bg-white/[0.09]',
             getModeAccentClass(currentMode, 'text')
           )}
         >
@@ -238,9 +238,9 @@ export function ComposerToolsMenu({
           size="icon"
           disabled={disabled}
           aria-label="Add files and tools"
-          className="size-9 shrink-0 rounded-full text-muted-foreground hover:text-foreground"
+          className="size-8 shrink-0 rounded-full text-muted-foreground transition-transform hover:text-foreground data-[state=open]:rotate-45 data-[state=open]:text-foreground"
         >
-          <Plus className="size-5" />
+          <Plus className="size-[18px]" />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent

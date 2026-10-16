@@ -1,65 +1,12 @@
 'use client'
 
-import { memo } from 'react'
+import type { CSSProperties } from 'react'
+import { ArrowUpRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useChatContext } from '@/lib/chat-context'
-import { AIMode, MODE_CONFIGS } from '@/lib/types'
-import { ModeIcon, getModeAccentClass, getModeGradient, getModeGlow } from '@/lib/mode-utils'
+import { MODE_CONFIGS } from '@/lib/types'
+import { ModeIcon } from '@/lib/mode-utils'
 import { ModeSwitcher } from './mode-switcher'
-import { SpectrumArc } from './spectrum-arc'
-import { ChevronRightIcon } from '@/components/icons'
-import { Button } from '@/components/ui/button'
-
-interface SuggestedPromptCardProps {
-  prompt: string
-  onClick: () => void
-  index: number
-  mode: AIMode
-}
-
-const SuggestedPromptCard = memo(function SuggestedPromptCard({
-  prompt,
-  onClick,
-  index,
-  mode,
-}: SuggestedPromptCardProps) {
-  return (
-    <button
-      onClick={onClick}
-      className={cn(
-        'group relative text-left p-5 rounded-2xl transition-all duration-300',
-        'border border-border/30 bg-card/20 backdrop-blur-sm',
-        'hover:bg-card/40 hover:border-border/50 hover:scale-[1.02]',
-        'animate-in fade-in slide-in-from-bottom-4 fill-mode-both'
-      )}
-      style={{ animationDelay: `${index * 75}ms` }}
-    >
-      {/* Subtle gradient overlay on hover */}
-      <div
-        className={cn(
-          'absolute inset-0 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-300',
-          getModeGradient(mode)
-        )}
-      />
-
-      <div className="relative">
-        <p className="text-sm text-foreground leading-relaxed line-clamp-2 mb-3">
-          {prompt}
-        </p>
-        <div
-          className={cn(
-            'flex items-center gap-1.5 text-xs font-medium transition-all duration-300',
-            getModeAccentClass(mode, 'text'),
-            'opacity-0 translate-x-[-4px] group-hover:opacity-100 group-hover:translate-x-0'
-          )}
-        >
-          <span>Use this prompt</span>
-          <ChevronRightIcon className="size-3" />
-        </div>
-      </div>
-    </button>
-  )
-})
 
 interface EmptyStateProps {
   onPromptSelect: (prompt: string) => void
@@ -70,83 +17,69 @@ export function EmptyState({ onPromptSelect }: EmptyStateProps) {
   const modeConfig = MODE_CONFIGS[currentMode]
 
   return (
-    <div className="relative flex min-h-full flex-col items-center justify-center px-4 py-8 md:py-10">
-      {/* Spectrum arc — the six assistants, refracted. The current one lit. */}
-      <SpectrumArc
-        activeMode={currentMode}
-        className="absolute top-6 left-1/2 h-[180px] w-[300px] -translate-x-1/2 opacity-70 transition-opacity duration-500 sm:top-2 sm:h-[260px] sm:w-[440px] sm:opacity-80"
+    <div
+      style={{ '--mode': `var(--${currentMode})` } as CSSProperties}
+      className="relative flex min-h-full flex-col items-center justify-center px-4 py-10 sm:py-14"
+    >
+      {/* Light from the chosen assistant, behind everything. */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute top-[8%] left-1/2 h-72 w-[min(44rem,90%)] -translate-x-1/2 bg-[radial-gradient(closest-side,color-mix(in_oklab,var(--mode)_16%,transparent),color-mix(in_oklab,var(--mode)_5%,transparent)_55%,transparent)]"
       />
 
-      <div className="relative z-10 flex flex-col items-center max-w-3xl mx-auto">
-        {/* Mode Icon with premium styling */}
-        <div
-          className={cn(
-            'relative mb-8 animate-in zoom-in duration-500',
-          )}
-        >
-          {/* Outer ring */}
-          <div
-            className={cn(
-              'absolute -inset-3 rounded-3xl opacity-20 blur-md',
-              getModeAccentClass(currentMode, 'bg')
-            )}
-          />
-          {/* Icon container */}
-          <div
-            className={cn(
-              'relative flex items-center justify-center size-24 rounded-3xl',
-              'bg-gradient-to-br from-secondary/80 to-secondary/40',
-              'border border-border/50',
-              getModeGlow(currentMode)
-            )}
+      <div className="relative z-10 mx-auto flex w-full max-w-2xl flex-col">
+        <div key={currentMode} className="animate-arrive flex flex-col items-center text-center">
+          <span
+            aria-hidden
+            className="flex size-11 items-center justify-center rounded-xl text-[var(--mode)] shadow-[inset_0_0_0_1px_rgb(255_255_255_/_0.08),0_10px_30px_-12px_color-mix(in_oklab,var(--mode)_60%,transparent)]"
+            style={{ background: 'color-mix(in oklab, var(--mode) 14%, transparent)' }}
           >
-            <ModeIcon
-              mode={currentMode}
-              size="xl"
-              className={cn(getModeAccentClass(currentMode, 'text'))}
-            />
-          </div>
+            <ModeIcon mode={currentMode} size="md" />
+          </span>
+          <h1 className="font-display mt-5 text-[clamp(1.75rem,4vw,2.25rem)] leading-tight text-foreground">
+            What are we working on?
+          </h1>
+          <p className="mt-2 max-w-md text-[15px] leading-6 text-balance text-muted-foreground">
+            {modeConfig.description}
+          </p>
         </div>
 
-        {/* Title & Description */}
-        <h1 className="font-display text-5xl text-foreground mb-3 text-center text-balance animate-in fade-in slide-in-from-bottom-2 duration-500 delay-100 fill-mode-both sm:text-6xl">
-          {modeConfig.emptyStateTitle}
-        </h1>
-        <p className="text-lg text-muted-foreground text-center max-w-lg mb-10 text-balance animate-in fade-in slide-in-from-bottom-2 duration-500 delay-150 fill-mode-both">
-          {modeConfig.emptyStateDescription}
-        </p>
-
-        {/* Mode Switcher */}
-        <div className="mb-12 animate-in fade-in slide-in-from-bottom-2 duration-500 delay-200 fill-mode-both">
+        <div className="animate-arrive mt-8" style={{ '--arrive-delay': '80ms' } as CSSProperties}>
           <ModeSwitcher />
-          <div className="mt-4 flex justify-center">
-            <Button
+        </div>
+
+        <div className="mt-8">
+          <div className="mb-2 flex items-center justify-between px-1">
+            <p className="text-[12.5px] text-muted-foreground">Try asking {modeConfig.name}</p>
+            <button
               type="button"
-              variant="outline"
-              className="rounded-xl"
               onClick={openOnboarding}
+              className="rounded text-[12.5px] text-muted-foreground underline-offset-4 transition-colors hover:text-foreground hover:underline"
             >
               Personalize workspace
-            </Button>
+            </button>
           </div>
-        </div>
-
-        {/* Suggested Prompts */}
-        <div className="w-full max-w-2xl">
-          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-4 text-center">
-            Try asking
-          </p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <ul key={currentMode} className="overflow-hidden rounded-xl border border-border bg-white/[0.015]">
             {modeConfig.suggestedPrompts.map((prompt, index) => (
-              <SuggestedPromptCard
-                key={index}
-                prompt={prompt}
-                onClick={() => onPromptSelect(prompt)}
-                index={index}
-                mode={currentMode}
-              />
+              <li
+                key={prompt}
+                className="animate-arrive border-border [&+li]:border-t"
+                style={{ '--arrive-delay': `${120 + index * 50}ms` } as CSSProperties}
+              >
+                <button
+                  type="button"
+                  onClick={() => onPromptSelect(prompt)}
+                  className={cn(
+                    'group flex w-full items-center gap-3 px-4 py-3 text-left text-[14px] leading-6 text-foreground/85 transition-colors',
+                    'hover:bg-white/[0.035] hover:text-foreground focus-visible:bg-white/[0.035] focus-visible:outline-none'
+                  )}
+                >
+                  <span className="min-w-0 flex-1">{prompt}</span>
+                  <ArrowUpRight className="size-4 shrink-0 -translate-x-1 text-[var(--mode)] opacity-0 transition-[opacity,transform] duration-200 group-hover:translate-x-0 group-hover:opacity-100 group-focus-visible:translate-x-0 group-focus-visible:opacity-100" />
+                </button>
+              </li>
             ))}
-          </div>
+          </ul>
         </div>
       </div>
     </div>

@@ -43,7 +43,7 @@ function ActiveToolChip({
   onRemove: () => void
 }) {
   return (
-    <span className="inline-flex h-8 shrink-0 items-center gap-1 rounded-full bg-secondary pl-2.5 pr-1 text-xs font-medium text-foreground">
+    <span className="animate-arrive inline-flex h-7 shrink-0 items-center gap-1 rounded-full bg-white/[0.06] pl-2.5 pr-1 text-[12px] font-medium text-foreground shadow-[inset_0_0_0_1px_rgb(255_255_255_/_0.06)]">
       {icon}
       <span className="hidden sm:inline">{label}</span>
       <button
@@ -281,8 +281,8 @@ export function Composer({
     !isImageDraft && sessionSettings.webSearch && currentMode !== 'live' && currentMode !== 'image'
 
   return (
-    <div className="sticky bottom-0 z-20 bg-gradient-to-t from-background via-background to-background/0 px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-2 sm:px-4 sm:pb-4">
-      <div className="mx-auto max-w-4xl">
+    <div className="sticky bottom-0 z-20 bg-gradient-to-t from-background via-background to-background/0 px-3 pt-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-6 sm:pb-5">
+      <div className="mx-auto max-w-3xl">
         {draftRecommendation ? (
           <AssistantRecommendationChip
             recommendation={draftRecommendation}
@@ -300,10 +300,12 @@ export function Composer({
           settings={sessionSettings}
         />
         <div
+          data-busy={isStreaming ? '' : undefined}
+          style={{ '--mode': `var(--${currentMode})` } as React.CSSProperties}
           className={cn(
-            'rounded-3xl border border-border/80 bg-card shadow-lg shadow-black/20 transition-colors duration-150',
-            'focus-within:border-foreground/25',
-            isDraggingFiles && 'border-foreground/40 bg-card/80'
+            'composer-card relative rounded-2xl border border-white/[0.09] bg-card shadow-[0_1px_0_rgb(255_255_255_/_0.04)_inset,0_16px_40px_-20px_rgb(0_0_0_/_0.9)] transition-[border-color,box-shadow] duration-200',
+            'focus-within:border-[color-mix(in_oklab,var(--mode)_45%,transparent)] focus-within:shadow-[0_1px_0_rgb(255_255_255_/_0.04)_inset,0_0_0_4px_color-mix(in_oklab,var(--mode)_10%,transparent),0_16px_40px_-20px_rgb(0_0_0_/_0.9)]',
+            isDraggingFiles && 'border-dashed border-foreground/40 bg-card/80'
           )}
           onDragOver={(event) => {
             if (!event.dataTransfer.types.includes('Files')) return
@@ -330,7 +332,7 @@ export function Composer({
               {pendingAttachments.map((attachment) => (
                 <div
                   key={attachment.id}
-                  className="flex max-w-full items-center gap-2 rounded-xl border border-border/60 bg-background/70 py-1.5 pl-3 pr-1.5 text-sm"
+                  className="animate-arrive flex max-w-full items-center gap-2 rounded-lg border border-border bg-white/[0.03] py-1.5 pr-1.5 pl-3 text-[13px]"
                 >
                   <div className="min-w-0">
                     <p className="truncate text-foreground">{attachment.name}</p>
@@ -374,7 +376,7 @@ export function Composer({
             disabled={disabled}
             rows={1}
             className={cn(
-              'block w-full resize-none bg-transparent px-4 pt-4 pb-2 text-base leading-6 text-foreground placeholder:text-muted-foreground',
+              'block w-full resize-none bg-transparent px-4 pt-3.5 pb-2 text-[15px] leading-6 text-foreground placeholder:text-muted-foreground/80',
               'focus:outline-none disabled:cursor-not-allowed disabled:opacity-50',
               'min-h-[56px] max-h-[200px]'
             )}
@@ -445,7 +447,7 @@ export function Composer({
                       type="button"
                       variant="secondary"
                       size="sm"
-                      className="h-9 rounded-full px-3"
+                      className="h-8 rounded-full px-3 text-[12.5px]"
                       disabled={!canSend}
                       onClick={() => void handleSubmit()}
                     >
@@ -460,7 +462,7 @@ export function Composer({
                     type="button"
                     size="icon"
                     aria-label="Stop generating"
-                    className="size-9 rounded-full bg-foreground text-background hover:bg-foreground/90"
+                    className="size-8 rounded-full bg-foreground text-background hover:bg-foreground/90"
                     onClick={handleStop}
                   >
                     <StopIcon className="size-3.5" />
@@ -474,7 +476,7 @@ export function Composer({
                   disabled={!canSend}
                   onClick={() => void handleSubmit()}
                   className={cn(
-                    'size-9 rounded-full text-white transition-opacity hover:opacity-90 disabled:bg-muted disabled:text-muted-foreground disabled:opacity-100',
+                    'size-8 rounded-full text-black transition-[opacity,transform,background-color] duration-200 hover:opacity-90 active:scale-95 disabled:bg-white/[0.08] disabled:text-muted-foreground disabled:opacity-100',
                     getModeAccentClass(currentMode, 'bg')
                   )}
                 >
