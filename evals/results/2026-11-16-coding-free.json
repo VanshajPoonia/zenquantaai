@@ -1,0 +1,250 @@
+{
+  "ranAt": "2026-11-16T17:54:37.726Z",
+  "summary": [
+    {
+      "model": "forge",
+      "passed": 6,
+      "total": 6,
+      "avgCostUsd": 0.00273,
+      "avgBillableTokens": 3940,
+      "avgSteps": 4.8,
+      "avgSeconds": 60
+    },
+    {
+      "model": "forge-fast",
+      "passed": 4,
+      "total": 6,
+      "avgCostUsd": 0.00249,
+      "avgBillableTokens": 6433,
+      "avgSteps": 4,
+      "avgSeconds": 42
+    },
+    {
+      "model": "forge-lite",
+      "passed": 2,
+      "total": 6,
+      "avgCostUsd": 0.00071,
+      "avgBillableTokens": 1205,
+      "avgSteps": 1.2,
+      "avgSeconds": 55
+    }
+  ],
+  "results": [
+    {
+      "model": "forge",
+      "task": "cli-flag",
+      "passed": true,
+      "seconds": 49,
+      "exit": 0,
+      "steps": 3,
+      "prompt": 11053,
+      "completion": 509,
+      "billable": 5025,
+      "cost": 0.002372
+    },
+    {
+      "model": "forge",
+      "task": "fix-from-log",
+      "passed": true,
+      "seconds": 96,
+      "exit": 1,
+      "steps": 8,
+      "prompt": 33526,
+      "completion": 436,
+      "billable": 5497,
+      "cost": 0.004169
+    },
+    {
+      "model": "forge",
+      "task": "off-by-one",
+      "passed": true,
+      "seconds": 31,
+      "exit": 0,
+      "steps": 3,
+      "prompt": 11000,
+      "completion": 306,
+      "billable": 2523,
+      "cost": 0.001654
+    },
+    {
+      "model": "forge",
+      "task": "readme-usage",
+      "passed": true,
+      "seconds": 40,
+      "exit": 0,
+      "steps": 4,
+      "prompt": 14869,
+      "completion": 425,
+      "billable": 3156,
+      "cost": 0.002188
+    },
+    {
+      "model": "forge",
+      "task": "rename",
+      "passed": true,
+      "seconds": 117,
+      "exit": 1,
+      "steps": 8,
+      "prompt": 35872,
+      "completion": 536,
+      "billable": 4847,
+      "cost": 0.004284
+    },
+    {
+      "model": "forge",
+      "task": "validate-input",
+      "passed": true,
+      "seconds": 27,
+      "exit": 0,
+      "steps": 3,
+      "prompt": 11011,
+      "completion": 349,
+      "billable": 2592,
+      "cost": 0.001704
+    },
+    {
+      "model": "forge-fast",
+      "task": "cli-flag",
+      "passed": false,
+      "seconds": 91,
+      "exit": 1,
+      "steps": 8,
+      "prompt": 30614,
+      "completion": 519,
+      "billable": 18802,
+      "cost": 0.006781
+    },
+    {
+      "model": "forge-fast",
+      "task": "fix-from-log",
+      "passed": true,
+      "seconds": 52,
+      "exit": 0,
+      "steps": 4,
+      "prompt": 15486,
+      "completion": 217,
+      "billable": 6640,
+      "cost": 0.00247
+    },
+    {
+      "model": "forge-fast",
+      "task": "off-by-one",
+      "passed": true,
+      "seconds": 33,
+      "exit": 0,
+      "steps": 4,
+      "prompt": 14086,
+      "completion": 221,
+      "billable": 4446,
+      "cost": 0.001821
+    },
+    {
+      "model": "forge-fast",
+      "task": "readme-usage",
+      "passed": true,
+      "seconds": 26,
+      "exit": 0,
+      "steps": 3,
+      "prompt": 10562,
+      "completion": 223,
+      "billable": 3383,
+      "cost": 0.001505
+    },
+    {
+      "model": "forge-fast",
+      "task": "rename",
+      "passed": false,
+      "seconds": 22,
+      "exit": 0,
+      "steps": 2,
+      "prompt": 6806,
+      "completion": 92,
+      "billable": 1971,
+      "cost": 0.000794
+    },
+    {
+      "model": "forge-fast",
+      "task": "validate-input",
+      "passed": true,
+      "seconds": 25,
+      "exit": 0,
+      "steps": 3,
+      "prompt": 10515,
+      "completion": 244,
+      "billable": 3357,
+      "cost": 0.001544
+    },
+    {
+      "model": "forge-lite",
+      "task": "cli-flag",
+      "passed": true,
+      "seconds": 63,
+      "exit": 0,
+      "steps": 2,
+      "prompt": 6881,
+      "completion": 241,
+      "billable": 4070,
+      "cost": 0.001542
+    },
+    {
+      "model": "forge-lite",
+      "task": "fix-from-log",
+      "passed": true,
+      "seconds": 100,
+      "exit": 1,
+      "steps": 5,
+      "prompt": 18033,
+      "completion": 271,
+      "billable": 3157,
+      "cost": 0.002746
+    },
+    {
+      "model": "forge-lite",
+      "task": "off-by-one",
+      "passed": false,
+      "seconds": 42,
+      "exit": 1,
+      "steps": 0,
+      "prompt": 0,
+      "completion": 0,
+      "billable": 0,
+      "cost": 0
+    },
+    {
+      "model": "forge-lite",
+      "task": "readme-usage",
+      "passed": false,
+      "seconds": 41,
+      "exit": 1,
+      "steps": 0,
+      "prompt": 0,
+      "completion": 0,
+      "billable": 0,
+      "cost": 0
+    },
+    {
+      "model": "forge-lite",
+      "task": "rename",
+      "passed": false,
+      "seconds": 41,
+      "exit": 1,
+      "steps": 0,
+      "prompt": 0,
+      "completion": 0,
+      "billable": 0,
+      "cost": 0
+    },
+    {
+      "model": "forge-lite",
+      "task": "validate-input",
+      "passed": false,
+      "seconds": 41,
+      "exit": 1,
+      "steps": 0,
+      "prompt": 0,
+      "completion": 0,
+      "billable": 0,
+      "cost": 0
+    }
+  ]
+}

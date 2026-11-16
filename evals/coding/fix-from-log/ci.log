@@ -1,0 +1,7 @@
+> node slug.test.mjs
+file:///app/slug.test.mjs:2
+if (slugify('Hello Big World') !== 'hello-big-world') throw new Error('slugify failed')
+                                                             ^
+Error: slugify failed
+    at file:///app/slug.test.mjs:2:62
+expected "hello-big-world", received "hello-big world"

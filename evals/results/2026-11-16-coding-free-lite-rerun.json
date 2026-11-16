@@ -1,0 +1,64 @@
+{
+  "ranAt": "2026-11-16T18:11:38.115Z",
+  "summary": [
+    {
+      "model": "forge-lite",
+      "passed": 4,
+      "total": 4,
+      "avgCostUsd": 0.00431,
+      "avgBillableTokens": 5124,
+      "avgSteps": 5.3,
+      "avgSeconds": 60
+    }
+  ],
+  "results": [
+    {
+      "model": "forge-lite",
+      "task": "off-by-one",
+      "passed": true,
+      "seconds": 33,
+      "exit": 0,
+      "steps": 4,
+      "prompt": 14279,
+      "completion": 252,
+      "billable": 8225,
+      "cost": 0.005416
+    },
+    {
+      "model": "forge-lite",
+      "task": "readme-usage",
+      "passed": true,
+      "seconds": 42,
+      "exit": 0,
+      "steps": 5,
+      "prompt": 18411,
+      "completion": 398,
+      "billable": 4239,
+      "cost": 0.003731
+    },
+    {
+      "model": "forge-lite",
+      "task": "rename",
+      "passed": true,
+      "seconds": 117,
+      "exit": 1,
+      "steps": 8,
+      "prompt": 33326,
+      "completion": 409,
+      "billable": 5112,
+      "cost": 0.005652
+    },
+    {
+      "model": "forge-lite",
+      "task": "validate-input",
+      "passed": true,
+      "seconds": 48,
+      "exit": 0,
+      "steps": 4,
+      "prompt": 14435,
+      "completion": 464,
+      "billable": 2919,
+      "cost": 0.002452
+    }
+  ]
+}
