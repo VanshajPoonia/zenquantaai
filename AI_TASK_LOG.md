@@ -6,6 +6,29 @@ The repository contains a real Zenquanta AI platform backed by Neon for runtime 
 
 Current direction: plan upgrades remain manual/admin-driven, payment automation is out of scope unless explicitly requested, and Neon/storage start fresh without importing Supabase database rows or storage objects.
 
+## 2026-11-16 - Agent platform built: pi web loop, Model API, zq, PWA, R2 (Claude Code, user-requested implementation)
+
+**Goal**: The user gave full permissions to execute the launch plan. Later they asked to keep owner-only items in a separate file and chose R2 for storage.
+
+**What changed** (branch `feat/agent-platform`, fast-forwarded to `main` several times; production runs with `AGENT_LOOP=admins`, `NEXT_PUBLIC_ZQ_RELEASED` unset):
+
+- **Migration 23** `20261117_zenquanta_agent_platform.sql`, applied and verified on Neon. The local env and production share one Neon database.
+- **Agent loop** (`lib/agent/*`): pi `Agent` per turn in `/api/chat` with server tools (web search, page reading, file search, memory search, save artifact, image handoff), per-step metering (`AgentMeter`, `reserveAgentStep`, provider-reported usage, cache reads at a tenth), a loop guard, a web step cap of 8, and `tool_call`, `tool_result` and `step` stream events. Tool cards are in `components/chat/tool-steps.tsx` and parts are saved in `zen_messages.parts`.
+- **OpenRouter fallbacks**: without Tavily or embeddings keys, web search uses OpenRouter's web plugin and embeddings use OpenRouter `/embeddings`. Pulse search and file indexing now work in production.
+- **zq auth and API**: device login (`/api/cli/device`, `/cli/authorize`, `/api/cli/token`), hashed `zq_` tokens, rate limits (`zen_rate_limits`), `/api/cli/me`, the OpenAI-compatible Model API at `/api/v1` (direct OpenRouter proxy, model IDs scrubbed), session sync (`/api/cli/sessions`), and Settings > Terminal (hidden until release).
+- **zq** (`packages/zq`): pi's `main` plus one extension (provider, login, permissions, sync, `/usage`, `/sync`, `/permissions`). It is branded through an overlay folder and `PI_PACKAGE_DIR`. 9 permission tests. Verified against a local server: read, edit with `--allow-edits`, and sync to the web.
+- **App**: installable PWA, terminal badge and read-only view for zq sessions, agent limits on the dashboard and pricing, an admin cost split, `/terms`, `/privacy`, `/docs/cli`, a landing zq section (hidden until release), consent lines on sign-up, and sign-up rate limiting.
+- **R2**: private bucket `zenquanta-files` and an account token scoped to it, created in the user's Cloudflare dashboard through Chrome. Production env vars are set on Vercel and production was redeployed.
+- **Upload crash fixed**: every upload failed on Vercel with `DOMMatrix is not defined` (pdf.js loaded at module start). pdf-parse now loads on demand through `pdf-parse/worker` and is a server-external package.
+- **Evals**: `evals/coding/*` (6 tasks) and `scripts/evals/run-coding.mjs`. Free models: `forge` (Qwen3 Coder) 6/6 at about $0.003 per task, `forge-fast` (Gemini 2.5 Flash) 4/6, `forge-lite` (DeepSeek V3.1) 6/6 after a rerun. The first run hit the Free plan's 60 agent steps a day, which showed the cap works. Pro `forge` (GPT-5.3 Codex) 6/6 at about $0.012.
+- **Docs**: `docs/launch/NEEDS_YOU.md` holds owner-only items. Updated `AI_PROJECT.md`, `AI_CHECKLIST.md`, `AI_DECISIONS.md`, `README.md`, `AGENTS.md` and the launch plan progress.
+
+**Verified**: typecheck, lint, 148 web tests and 9 zq tests, and the production build pass. Gate A passed on a preview. In production, as admin: a tool-using turn (web search then answer in 6 s), a plain turn, uploads to R2, PDF indexing, and owner-only downloads (401 signed out).
+
+**Known issues**: one production agent turn stalled for over 120 s before the first model response and did not reproduce. Previews still use local storage, because the Vercel CLI could not add Preview env vars non-interactively. Web search cost through OpenRouter is not metered to users. The test account `zq-agent-test` exists in the shared database (role `user`, Free plan).
+
+**Next steps**: finish the Ultra eval and fill the Gate B table, chat evals, then the items in `docs/launch/NEEDS_YOU.md` (npm publish, legal review).
+
 ## 2026-11-16 - Pi chosen as the harness, 15-day launch plan written (Claude Code, planning only)
 
 **Goal**: The user asked why OpenCode over pi, asked for an installable app and resumable or cloud sessions, then asked for a plan of what is feasible to launch in 15 days, written into docs.
