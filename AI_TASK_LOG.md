@@ -6,6 +6,20 @@ The repository contains a real Zenquanta AI platform backed by Neon for runtime 
 
 Current direction: plan upgrades remain manual/admin-driven, payment automation is out of scope unless explicitly requested, and Neon/storage start fresh without importing Supabase database rows or storage objects.
 
+## 2026-11-16 - Pi chosen as the harness, 15-day launch plan written (Claude Code, planning only)
+
+**Goal**: The user asked why OpenCode over pi, asked for an installable app and resumable or cloud sessions, then asked for a plan of what is feasible to launch in 15 days, written into docs.
+
+**Decisions**: Pi replaces OpenCode and the Vercel AI SDK as the harness for both web chat and `zq`. Launch is 2026-12-01 with tools in web chat, tokens and the Model API, `zq` 0.1, the PWA, agent limits and legal pages. The desktop app, MCP and cross-device resume are v1.1. Cloud sessions and `run_code` are v1.2.
+
+**What changed**: rewrote `AI_PLATFORM_PLAN.md` around pi. Added `docs/launch/LAUNCH_PLAN.md` (scope, lanes, day-by-day table, gates A to D, cut order, user decisions, definition of launched) and six specs in `docs/launch/specs/`: 01 agent loop and tools, 02 tokens and Model API, 03 `zq`, 04 PWA, 05 evals and limits, 06 launch readiness. Replaced the earlier platform decision in `AI_DECISIONS.md` with "Pi Is The Harness" and "Launch Scope". Updated the direction line in `AGENTS.md`. No app code changed.
+
+**Checked**: pi facts were read from `earendil-works/pi` on GitHub on 2026-11-16: MIT, version 1.5.2 (released 2026-11-10), Node 22.19 or newer. The coding-agent package exports `main`, `InteractiveMode`, `runPrintMode` and `runRpcMode`. Extensions can block `tool_call` and use `ctx.ui.confirm`. `pi.registerProvider` and `pi.registerCommand` exist. `pi-agent-core` has `prepareRequest`, `finishTurn` and tool hooks. `pi-ai` has an OpenRouter provider that reports the cost OpenRouter charged. Sessions are JSONL trees with `--continue`, `--resume` and `--fork`. `pi-durable` (experimental) and `pi-env` cover cloud later. Pi has no permission system by design.
+
+**Not verified**: that pi runs inside a Vercel function (Gate A on Day 1), how `MainOptions` sets the app name and directories (Day 1 spike), OpenRouter's terms for a public model API, and the Vercel Node version.
+
+**Next steps**: Day 1 on 2026-11-17. The user approves the pi dependencies and the Node version. Lane A and Lane B run their spikes.
+
 ## 2026-11-16 - Platform plan for chat tools and a terminal coding agent (Claude Code, planning only)
 
 **Goal**: The user asked to make Zenquanta a complete AI platform, a harness for coding plus a chatbot, and to plan for it. Partway through they asked whether to use open source tools for the features instead of building everything.
