@@ -75,6 +75,61 @@ function tavilyApiKey(): string | null {
   return key || null
 }
 
+function openRouterApiKey(): string | null {
+  const key = process.env.OPENROUTER_API_KEY?.trim()
+  return key || null
+}
+
+const OPENROUTER_SEARCH_MODEL = 'google/gemini-2.5-flash'
+
+type OpenRouterWebAnnotation = {
+  type?: string
+  url_citation?: { url?: unknown; title?: unknown; content?: unknown }
+}
+
+/**
+ * Without a Tavily key, search runs through OpenRouter's web plugin. Only the
+ * cited pages are used; the model's own answer is discarded.
+ */
+async function searchWithOpenRouter(
+  query: string,
+  apiKey: string,
+  signal: AbortSignal
+): Promise<WebSearchSource[]> {
+  const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+      'X-Title': 'Zenquanta AI',
+    },
+    body: JSON.stringify({
+      model: OPENROUTER_SEARCH_MODEL,
+      plugins: [{ id: 'web', max_results: getMaxResults() }],
+      messages: [{ role: 'user', content: query }],
+      max_tokens: 64,
+    }),
+    signal,
+  })
+
+  if (!response.ok) return []
+
+  const body = (await response.json().catch(() => null)) as {
+    choices?: Array<{ message?: { annotations?: OpenRouterWebAnnotation[] } }>
+  } | null
+  const annotations = body?.choices?.[0]?.message?.annotations ?? []
+
+  return normalizeSources(
+    annotations
+      .filter((annotation) => annotation.type === 'url_citation' && annotation.url_citation)
+      .map((annotation) => ({
+        title: annotation.url_citation?.title,
+        url: annotation.url_citation?.url,
+        content: annotation.url_citation?.content,
+      }))
+  )
+}
+
 function toSource(
   result: TavilySearchResult,
   index: number
@@ -160,7 +215,7 @@ export function buildWebSearchQuery(content: string): string {
 }
 
 export function hasWebSearchConfig(): boolean {
-  return Boolean(tavilyApiKey())
+  return Boolean(tavilyApiKey() || openRouterApiKey())
 }
 
 export function createUnavailableWebSearchContext(
@@ -183,14 +238,22 @@ export async function searchWebForContext(query: string): Promise<WebSearchConte
   }
 
   const apiKey = tavilyApiKey()
-  if (!apiKey) {
+  const fallbackKey = apiKey ? null : openRouterApiKey()
+  if (!apiKey && !fallbackKey) {
     return createUnavailableWebSearchContext(normalizedQuery, 'not_configured')
   }
 
   const controller = new AbortController()
-  const timeout = setTimeout(() => controller.abort(), 10_000)
+  const timeout = setTimeout(() => controller.abort(), fallbackKey ? 20_000 : 10_000)
 
   try {
+    if (fallbackKey) {
+      const sources = await searchWithOpenRouter(normalizedQuery, fallbackKey, controller.signal)
+      return sources.length
+        ? { query: normalizedQuery, searchedAt: new Date().toISOString(), sources }
+        : createUnavailableWebSearchContext(normalizedQuery, 'no_results')
+    }
+
     const response = await fetch(TAVILY_SEARCH_URL, {
       method: 'POST',
       headers: {

@@ -11,16 +11,29 @@ type EmbeddingResponse = {
   }>
 }
 
+const OPENROUTER_EMBEDDINGS_URL = 'https://openrouter.ai/api/v1'
+
+function hasDirectEmbeddingKey(): boolean {
+  return Boolean(process.env.EMBEDDINGS_API_KEY?.trim() || process.env.OPENAI_API_KEY?.trim())
+}
+
+// Without a dedicated key, embeddings go through OpenRouter with the gateway key.
+function usesOpenRouterEmbeddings(): boolean {
+  return !hasDirectEmbeddingKey() && Boolean(process.env.OPENROUTER_API_KEY?.trim())
+}
+
 function getEmbeddingApiKey(): string | null {
   const key =
     process.env.EMBEDDINGS_API_KEY?.trim() ||
     process.env.OPENAI_API_KEY?.trim() ||
+    process.env.OPENROUTER_API_KEY?.trim() ||
     ''
 
   return key || null
 }
 
 function getEmbeddingBaseUrl(): string {
+  if (usesOpenRouterEmbeddings()) return OPENROUTER_EMBEDDINGS_URL
   return (
     process.env.EMBEDDINGS_BASE_URL?.trim().replace(/\/$/, '') ||
     'https://api.openai.com/v1'
@@ -28,6 +41,7 @@ function getEmbeddingBaseUrl(): string {
 }
 
 export function getEmbeddingModel(): string {
+  if (usesOpenRouterEmbeddings()) return `openai/${DEFAULT_EMBEDDING_MODEL}`
   return process.env.EMBEDDINGS_MODEL?.trim() || DEFAULT_EMBEDDING_MODEL
 }
 
