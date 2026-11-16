@@ -2463,6 +2463,71 @@ export function ChatProvider({ children }: { children: ReactNode }) {
                 )
                 break
               }
+              case 'tool_call': {
+                applyConversationPatch(event.conversationId, (conversation) =>
+                  updateConversationSnapshot(conversation, {
+                    messages: conversation.messages.map((message) =>
+                      message.id === event.messageId
+                        ? {
+                            ...message,
+                            parts: [
+                              ...(message.parts ?? []),
+                              {
+                                type: 'tool_call',
+                                callId: event.callId,
+                                name: event.name,
+                                label: event.label,
+                                args: event.args,
+                              },
+                            ],
+                          }
+                        : message
+                    ),
+                  })
+                )
+                setStreamingState((previous) => ({
+                  ...previous,
+                  status: 'streaming',
+                  conversationId: event.conversationId,
+                  messageId: event.messageId,
+                  workingNotes: [`${event.label}...`],
+                }))
+                break
+              }
+              case 'tool_result': {
+                applyConversationPatch(event.conversationId, (conversation) =>
+                  updateConversationSnapshot(conversation, {
+                    messages: conversation.messages.map((message) => {
+                      if (message.id !== event.messageId) return message
+                      const knownSourceIds = new Set((message.sources ?? []).map((source) => source.id))
+                      const newSources = (event.sources ?? []).filter(
+                        (source) => !knownSourceIds.has(source.id)
+                      )
+                      return {
+                        ...message,
+                        sources: newSources.length
+                          ? [...(message.sources ?? []), ...newSources]
+                          : message.sources,
+                        parts: [
+                          ...(message.parts ?? []),
+                          {
+                            type: 'tool_result',
+                            callId: event.callId,
+                            name: event.name,
+                            ok: event.ok,
+                            summary: event.summary,
+                            sources: event.sources,
+                            data: event.data,
+                          },
+                        ],
+                      }
+                    }),
+                  })
+                )
+                break
+              }
+              case 'step':
+                break
               case 'done': {
                 terminalEvent = 'done'
                 completedConversation = event.conversation

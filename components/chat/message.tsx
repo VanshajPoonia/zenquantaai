@@ -82,6 +82,7 @@ import {
 import { ChatImageMessage } from './chat-image-message'
 import { FeedbackButtons } from './feedback-buttons'
 import { FileIntelligenceCard } from './file-intelligence-card'
+import { ToolSteps } from './tool-steps'
 
 interface ChatMessageProps {
   message: Message
@@ -744,6 +745,10 @@ export const ChatMessage = memo(function ChatMessage({
   )
   const [draftValue, setDraftValue] = useState(message.content)
   const [isWorkingExpanded, setIsWorkingExpanded] = useState(false)
+  const prismTarget = ASSISTANT_HANDOFF_TARGETS.find((target) => target.mode === 'image')
+  const handleCreateImage = (prompt: string) => {
+    if (prismTarget && onHandoff) void onHandoff(message, prismTarget, prompt)
+  }
   const [isSavingArtifact, setIsSavingArtifact] = useState(false)
   const [handoffDraft, setHandoffDraft] = useState<{
     target: AssistantHandoffTarget
@@ -992,6 +997,11 @@ export const ChatMessage = memo(function ChatMessage({
                   </span>
                 </div>
               ) : null}
+              <ToolSteps
+                parts={message.parts}
+                isStreaming={isStreamingMessage}
+                onCreateImage={prismTarget && onHandoff ? handleCreateImage : undefined}
+              />
               {effectiveStatus === 'streaming' ? (
                 renderStreamingState(displayContent, message.mode)
               ) : (
