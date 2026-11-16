@@ -174,6 +174,7 @@ class NeonUserPurgeRepository {
         tx.query('delete from public.zen_files where user_id = $1', [userId]),
         tx.query('delete from public.zen_image_generation_events where user_id = $1', [userId]),
         tx.query('delete from public.zen_usage_events where user_id = $1', [userId]),
+        tx.query('delete from public.zen_agent_runs where user_id = $1', [userId]),
         tx.query('delete from public.zen_plan_change_requests where user_id = $1', [userId]),
         tx.query('delete from public.zen_model_comparisons where user_id = $1', [userId]),
         tx.query('delete from public.zen_prompt_workflow_runs where user_id = $1', [userId]),
@@ -196,6 +197,7 @@ class NeonUserPurgeRepository {
                 image_credits_used = 0,
                 daily_message_count = 0,
                 daily_image_count = 0,
+                daily_agent_step_count = 0,
                 updated_at = timezone('utc', now())
               where user_id = $1
             `,
@@ -219,6 +221,8 @@ class NeonUserPurgeRepository {
         tx.query('delete from public.zen_auth_credentials where user_id = $1', [userId]),
         tx.query('delete from public.zen_auth_identities where user_id = $1', [userId]),
         tx.query('delete from public.zen_auth_sessions where user_id = $1', [userId]),
+        tx.query('delete from public.zen_api_tokens where user_id = $1', [userId]),
+        tx.query('delete from public.zen_device_codes where user_id = $1', [userId]),
         tx.query(
           `
             update public.zen_users
