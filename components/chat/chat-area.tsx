@@ -134,6 +134,8 @@ export function ChatArea({
     })
   }, [getScrollViewport, streamingState.status])
 
+  // zq sessions ran on the user's computer, so their turns cannot be redone here.
+  const isTerminalChat = currentChat?.surface === 'cli'
   const lastAssistantId = useMemo(
     () =>
       [...(currentChat?.messages ?? [])]
@@ -387,13 +389,13 @@ export function ChatArea({
                   }
                   isLastAssistant={message.id === lastAssistantId}
                   isLastUser={message.id === lastUserId}
-                  onRegenerate={onRegenerate}
-                  onRetry={onRetry}
-                  onEdit={onEdit}
-                  onAskAnotherMode={onAskAnotherMode}
+                  onRegenerate={isTerminalChat ? undefined : onRegenerate}
+                  onRetry={isTerminalChat ? undefined : onRetry}
+                  onEdit={isTerminalChat ? undefined : onEdit}
+                  onAskAnotherMode={isTerminalChat ? undefined : onAskAnotherMode}
                   onSaveArtifact={onSaveArtifact}
-                  onHandoff={onHandoff}
-                  onQualityAction={onQualityAction}
+                  onHandoff={isTerminalChat ? undefined : onHandoff}
+                  onQualityAction={isTerminalChat ? undefined : onQualityAction}
                 />
               </div>
             ))}
