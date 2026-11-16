@@ -23,6 +23,18 @@ zq login`}</pre>
         and approve it.
       </p>
 
+      <h2>Models</h2>
+      <p>
+        zq uses Zenquanta&apos;s hosted Forge models on your plan when they are open for your account.
+        Until then, it runs on your own <a href="https://openrouter.ai/keys">OpenRouter key</a>:
+      </p>
+      <pre>{`zq key sk-or-...   # saved on your computer, never sent to Zenquanta
+zq key --clear     # remove it`}</pre>
+      <p>
+        With your own key, model calls go straight from your computer to OpenRouter and bill your
+        OpenRouter account. Sign-in and session sync still use your Zenquanta account.
+      </p>
+
       <h2>Use it</h2>
       <pre>{`cd your-project
 zq                       # start a session

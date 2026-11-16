@@ -4,6 +4,7 @@ export interface MeResponse {
   loginId: string | null
   plan: string
   cliAccess: boolean
+  modelApi: boolean
   models: string[]
   coreTokens: { included: number; used: number; left: number }
   tierTokens: { included: number; used: number; left: number }

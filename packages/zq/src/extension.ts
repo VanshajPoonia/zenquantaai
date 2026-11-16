@@ -5,9 +5,13 @@ import { getAppUrl, readCredentials, readSettings, setProjectSync, updateGlobalS
 import { decide } from './permissions.js'
 import { SessionSync } from './sync.js'
 
+export type ModelSource = 'zenquanta' | 'openrouter'
+
 export interface ZenquantaExtensionOptions {
   yolo: boolean
   allowEdits: boolean
+  modelSource: ModelSource
+  me: MeResponse | null
 }
 
 const FALLBACK_LIMITS = { input: 32_000, output: 4_000 }
@@ -24,11 +28,11 @@ function usageLine(me: MeResponse): string {
 export function createZenquantaExtension(options: ZenquantaExtensionOptions): ExtensionFactory {
   return async (pi: ExtensionAPI) => {
     const credentials = readCredentials()
-    const me = await apiFetch<MeResponse>('/api/cli/me').catch(() => null)
+    const me = options.me
     const contextWindow = me?.maxAgentInputTokens ?? FALLBACK_LIMITS.input
     const maxTokens = me?.maxAgentOutputTokens ?? FALLBACK_LIMITS.output
 
-    pi.registerProvider('zenquanta', {
+    if (options.modelSource === 'zenquanta') pi.registerProvider('zenquanta', {
       name: 'Zenquanta',
       baseUrl: `${getAppUrl()}/api/v1`,
       apiKey: credentials?.token ?? '',
@@ -61,7 +65,9 @@ export function createZenquantaExtension(options: ZenquantaExtensionOptions): Ex
       if (!ctx.hasUI) return
       ctx.ui.notify(
         me
-          ? `Zenquanta Forge. ${usageLine(me)}. Permissions: ${mode()}. Sync: ${settings.sync ? 'on' : 'off'}.`
+          ? options.modelSource === 'openrouter'
+            ? `Zenquanta Forge on your own OpenRouter key. Permissions: ${mode()}. Sync: ${settings.sync ? 'on' : 'off'}.`
+            : `Zenquanta Forge. ${usageLine(me)}. Permissions: ${mode()}. Sync: ${settings.sync ? 'on' : 'off'}.`
           : 'Zenquanta Forge. Could not reach Zenquanta, check your connection or run `zq login`.',
         me ? 'info' : 'warning'
       )

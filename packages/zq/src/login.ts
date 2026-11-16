@@ -56,7 +56,12 @@ export async function login(): Promise<void> {
       error?: string
     }
     if (body.access_token) {
-      writeCredentials({ token: body.access_token, appUrl, loginId: body.login_id ?? null })
+      writeCredentials({
+        token: body.access_token,
+        appUrl,
+        loginId: body.login_id ?? null,
+        openrouterKey: readCredentials()?.openrouterKey ?? null,
+      })
       process.stdout.write(`\nSigned in${body.login_id ? ` as ${body.login_id}` : ''}.\n`)
       return
     }

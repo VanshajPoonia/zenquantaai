@@ -15,6 +15,17 @@ zq login
 
 `zq login` opens your browser. Approve the code it shows and you are signed in.
 
+## Models
+
+zq uses Zenquanta's hosted Forge models on your plan when they are open for your account. Until then, it runs on your own OpenRouter key:
+
+```sh
+zq key sk-or-...      # saved in ~/.zq/credentials.json, never sent to Zenquanta
+zq key --clear        # remove it
+```
+
+With your own key, model calls go straight from your computer to OpenRouter and bill your OpenRouter account. Sign-in and session sync still use your Zenquanta account.
+
 ## Use
 
 ```sh

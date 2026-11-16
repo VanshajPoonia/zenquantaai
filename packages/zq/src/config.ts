@@ -8,6 +8,8 @@ export interface Credentials {
   token: string
   appUrl: string
   loginId: string | null
+  /** The user's own OpenRouter key, used when hosted zq models are not open. Never sent to Zenquanta. */
+  openrouterKey?: string | null
 }
 
 export interface ZqSettings {
@@ -38,11 +40,24 @@ export function getAppUrl(): string {
 
 export function readCredentials(): Credentials | null {
   const value = readJson<Credentials>(CREDENTIALS_PATH)
-  return value?.token ? { token: value.token, appUrl: value.appUrl ?? DEFAULT_APP_URL, loginId: value.loginId ?? null } : null
+  return value?.token
+    ? {
+        token: value.token,
+        appUrl: value.appUrl ?? DEFAULT_APP_URL,
+        loginId: value.loginId ?? null,
+        openrouterKey: value.openrouterKey ?? null,
+      }
+    : null
 }
 
 export function writeCredentials(credentials: Credentials) {
   writeJson(CREDENTIALS_PATH, credentials, 0o600)
+}
+
+export function setOpenRouterKey(key: string | null) {
+  const current = readCredentials()
+  if (!current) throw new Error('Run `zq login` first.')
+  writeCredentials({ ...current, openrouterKey: key })
 }
 
 export function deleteCredentials() {
