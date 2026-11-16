@@ -386,6 +386,8 @@ export interface WebSearchContext {
   searchedAt: string
   sources: WebSearchSource[]
   unavailableReason?: 'not_configured' | 'request_failed' | 'no_results'
+  /** Upstream cost of the search, when the provider reports it. */
+  costUsd?: number
 }
 
 export type ConversationSurface = 'web' | 'cli'

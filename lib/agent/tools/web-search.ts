@@ -1,6 +1,7 @@
 import type { AgentTool } from '@earendil-works/pi-agent-core'
 import { obj, str } from '@earendil-works/pi-schema'
 import { searchWebForContext } from '@/lib/search/web-search'
+import { webSearchCharge } from '../metering'
 import type { ToolContext, ToolDetails } from '../types'
 import { toolResult } from './shared'
 
@@ -35,6 +36,7 @@ export function createWebSearchTool(ctx: ToolContext): AgentTool<typeof paramete
       return toolResult(text, {
         summary: `Found ${sources.length} source${sources.length === 1 ? '' : 's'} for "${context.query}"`,
         sources,
+        charge: webSearchCharge(context) ?? undefined,
       })
     },
   }

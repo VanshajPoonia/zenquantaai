@@ -1,5 +1,11 @@
 import type { AIMode, MessageSource, ToolResultData } from '@/types'
 
+/** Cost of work a tool did outside the model call, such as a web search. */
+export interface ExtraCharge {
+  walletTokens: number
+  rawCostUsd: number
+}
+
 /** Server-side facts every tool gets. Never taken from model arguments. */
 export interface ToolContext {
   userId: string
@@ -16,6 +22,7 @@ export interface ToolDetails {
   summary: string
   sources?: MessageSource[]
   data?: ToolResultData
+  charge?: ExtraCharge
 }
 
 export type AgentRunEvent =

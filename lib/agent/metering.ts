@@ -3,7 +3,7 @@ import 'server-only'
 import { neonAgentRunsRepository, neonSubscriptionsRepository } from '@/lib/db/repositories'
 import { recordTextUsageEvent } from '@/lib/billing/log-usage'
 import { resolveDisplayMultiplier } from '@/lib/billing/costs'
-import { usdToDisplayedCredits } from '@/lib/config/pricing'
+import { usdToDisplayedCredits, WEB_SEARCH_WALLET_TOKENS } from '@/lib/config/pricing'
 import type {
   AgentPlanLimits,
   AIMode,
@@ -11,8 +11,9 @@ import type {
   ConversationSurface,
   SubscriptionTier,
   UsageEstimate,
+  WebSearchContext,
 } from '@/types'
-import type { StepUsage } from './types'
+import type { ExtraCharge, StepUsage } from './types'
 
 export class AgentLimitError extends Error {
   constructor(message: string) {
@@ -54,6 +55,33 @@ export function buildStepUsageEstimate(input: {
     estimatedCostUsd: displayedCostUsd,
     displayMultiplier,
     marginUsd: displayedCostUsd - rawCostUsd,
+    walletType: input.walletType,
+    creditsConsumed: usdToDisplayedCredits(displayedCostUsd),
+  }
+}
+
+/** What a web search draws from the wallet, or null when no search ran. */
+export function webSearchCharge(context: WebSearchContext | undefined): ExtraCharge | null {
+  if (!context?.sources.length) return null
+  return { walletTokens: WEB_SEARCH_WALLET_TOKENS, rawCostUsd: context.costUsd ?? 0 }
+}
+
+export function buildChargeEstimate(input: {
+  tier: SubscriptionTier
+  walletType: TokenWallet
+  charge: ExtraCharge
+}): UsageEstimate {
+  const displayMultiplier = resolveDisplayMultiplier(input.tier)
+  const displayedCostUsd = input.charge.rawCostUsd * displayMultiplier
+  return {
+    promptTokens: 0,
+    completionTokens: 0,
+    totalTokens: input.charge.walletTokens,
+    rawCostUsd: input.charge.rawCostUsd,
+    displayedCostUsd,
+    estimatedCostUsd: displayedCostUsd,
+    displayMultiplier,
+    marginUsd: displayedCostUsd - input.charge.rawCostUsd,
     walletType: input.walletType,
     creditsConsumed: usdToDisplayedCredits(displayedCostUsd),
   }
@@ -101,6 +129,7 @@ export class AgentMeter {
   private pending: { reservedTokens: number; countedMessage: boolean } | null = null
   private subscriptionId: string | null = null
   private total: UsageEstimate | null = null
+  private charges: ExtraCharge[] = []
 
   constructor(private readonly options: AgentMeterOptions) {}
 
@@ -114,6 +143,11 @@ export class AgentMeter {
 
   get totalUsage(): UsageEstimate | null {
     return this.total
+  }
+
+  /** Adds tool costs, such as web searches, to the next step that settles. */
+  addCharge(charge: ExtraCharge): void {
+    this.charges.push(charge)
   }
 
   async reserveStep(estimatedPromptTokens: number): Promise<void> {
@@ -154,11 +188,17 @@ export class AgentMeter {
     if (!pending || !this.subscriptionId) return null
     this.pending = null
 
-    const estimate = buildStepUsageEstimate({
+    let estimate = buildStepUsageEstimate({
       tier: this.options.tier,
       walletType: this.options.walletType,
       usage,
     })
+    for (const charge of this.charges.splice(0)) {
+      estimate = addUsageEstimates(
+        estimate,
+        buildChargeEstimate({ tier: this.options.tier, walletType: this.options.walletType, charge })
+      )
+    }
 
     await neonSubscriptionsRepository.finalizeTextUsage({
       userId: this.options.userId,

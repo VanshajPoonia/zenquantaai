@@ -54,7 +54,13 @@ import {
 import { estimatePromptTokens } from '@/lib/utils/cost'
 import { hasOpenRouterConfig } from '@/lib/ai/openrouter'
 import { isAgentLoopEnabledFor } from '@/lib/agent/flags'
-import { AgentMeter, buildStepUsageEstimate } from '@/lib/agent/metering'
+import {
+  addUsageEstimates,
+  AgentMeter,
+  buildChargeEstimate,
+  buildStepUsageEstimate,
+  webSearchCharge,
+} from '@/lib/agent/metering'
 import { runAgentTurn } from '@/lib/agent/runtime'
 import { createServerTools, getToolNamesForMode } from '@/lib/agent/tools'
 
@@ -523,6 +529,8 @@ export async function POST(request: NextRequest) {
             model: routeConfig.model,
           },
         })
+        const preSearchCharge = webSearchCharge(webSearchContext)
+        if (preSearchCharge) meter.addCharge(preSearchCharge)
         const promptParts = buildAgentPromptParts(
           prepared.generationConversation,
           prepared.responseSettings,
@@ -897,13 +905,24 @@ export async function POST(request: NextRequest) {
         })
       )
 
-      const usage = calculateTextUsageEstimate({
+      const textUsage = calculateTextUsageEstimate({
         tier: subscription.tier,
         walletType: routeConfig.walletType,
         model: routeConfig.model,
         promptText,
         completionText: accumulated || 'No response returned.',
       })
+      const searchCharge = webSearchCharge(webSearchContext)
+      const usage = searchCharge
+        ? addUsageEstimates(
+            textUsage,
+            buildChargeEstimate({
+              tier: subscription.tier,
+              walletType: textUsageReservation.walletType,
+              charge: searchCharge,
+            })
+          )
+        : textUsage
       const clientUsage = {
         ...usage,
         rawCostUsd: 0,

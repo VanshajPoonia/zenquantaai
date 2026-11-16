@@ -19,6 +19,7 @@ class FakeMeter {
   reserved = 0
   finalized: StepUsage[] = []
   released = 0
+  charges: Array<{ walletTokens: number; rawCostUsd: number }> = []
   constructor(private readonly maxSteps: number, private readonly failAt?: number) {}
   get reachedStepCap() {
     return this.stepCount >= this.maxSteps
@@ -33,6 +34,9 @@ class FakeMeter {
   async finalizeStep(usage: StepUsage) {
     this.finalized.push(usage)
     return null
+  }
+  addCharge(charge: { walletTokens: number; rawCostUsd: number }) {
+    this.charges.push(charge)
   }
   async releasePending() {
     if (this.reserved > this.finalized.length + this.released) this.released += 1

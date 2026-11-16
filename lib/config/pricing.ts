@@ -138,19 +138,19 @@ export const PLAN_CONFIGS: Record<SubscriptionTier, TierPlanConfig> = {
   },
 }
 
-// Provisional until Gate B (docs/launch/specs/05-evals-and-limits.md). The
-// wallets stay the real cost ceiling; these cap runaway loops and request size.
+// Approved at Gate B on 2026-11-17 (docs/launch/specs/05-evals-and-limits.md).
+// The wallets stay the real cost ceiling; these cap runaway loops and request size.
 export const AGENT_PLAN_LIMITS: Record<SubscriptionTier, AgentPlanLimits> = {
   free: {
     agentStepsPerDay: 60,
-    maxStepsPerRun: 8,
+    maxStepsPerRun: 15,
     maxAgentInputTokens: 32_000,
     maxAgentOutputTokens: 4_000,
     cliAccess: true,
   },
   basic: {
     agentStepsPerDay: 200,
-    maxStepsPerRun: 12,
+    maxStepsPerRun: 20,
     maxAgentInputTokens: 64_000,
     maxAgentOutputTokens: 8_000,
     cliAccess: true,
@@ -180,6 +180,9 @@ export const AGENT_PLAN_LIMITS: Record<SubscriptionTier, AgentPlanLimits> = {
 
 // Web chat stays short so a turn fits one serverless request.
 export const WEB_AGENT_MAX_STEPS = 8
+
+// A web search costs about $0.007 upstream, so it draws this many wallet tokens.
+export const WEB_SEARCH_WALLET_TOKENS = 8_000
 
 // These cost figures are centrally configurable estimates and should be reviewed
 // against current OpenRouter pricing before production billing.

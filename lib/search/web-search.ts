@@ -95,7 +95,7 @@ async function searchWithOpenRouter(
   query: string,
   apiKey: string,
   signal: AbortSignal
-): Promise<WebSearchSource[]> {
+): Promise<{ sources: WebSearchSource[]; costUsd: number }> {
   const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
     method: 'POST',
     headers: {
@@ -112,14 +112,15 @@ async function searchWithOpenRouter(
     signal,
   })
 
-  if (!response.ok) return []
+  if (!response.ok) return { sources: [], costUsd: 0 }
 
   const body = (await response.json().catch(() => null)) as {
     choices?: Array<{ message?: { annotations?: OpenRouterWebAnnotation[] } }>
+    usage?: { cost?: number }
   } | null
   const annotations = body?.choices?.[0]?.message?.annotations ?? []
 
-  return normalizeSources(
+  const sources = normalizeSources(
     annotations
       .filter((annotation) => annotation.type === 'url_citation' && annotation.url_citation)
       .map((annotation) => ({
@@ -128,7 +129,10 @@ async function searchWithOpenRouter(
         content: annotation.url_citation?.content,
       }))
   )
+  return { sources, costUsd: typeof body?.usage?.cost === 'number' ? body.usage.cost : 0 }
 }
+
+const TAVILY_SEARCH_COST_USD = 0.008
 
 function toSource(
   result: TavilySearchResult,
@@ -248,9 +252,9 @@ export async function searchWebForContext(query: string): Promise<WebSearchConte
 
   try {
     if (fallbackKey) {
-      const sources = await searchWithOpenRouter(normalizedQuery, fallbackKey, controller.signal)
+      const { sources, costUsd } = await searchWithOpenRouter(normalizedQuery, fallbackKey, controller.signal)
       return sources.length
-        ? { query: normalizedQuery, searchedAt: new Date().toISOString(), sources }
+        ? { query: normalizedQuery, searchedAt: new Date().toISOString(), sources, costUsd }
         : createUnavailableWebSearchContext(normalizedQuery, 'no_results')
     }
 
@@ -289,6 +293,7 @@ export async function searchWebForContext(query: string): Promise<WebSearchConte
       query: normalizedQuery,
       searchedAt: new Date().toISOString(),
       sources,
+      costUsd: TAVILY_SEARCH_COST_USD,
     }
   } catch {
     return createUnavailableWebSearchContext(normalizedQuery, 'request_failed')

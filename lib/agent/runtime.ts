@@ -6,7 +6,7 @@ import type { Models } from '@earendil-works/pi-ai/models'
 import type { MessagePart, UsageEstimate } from '@/types'
 import { AgentLimitError } from './metering'
 import { getAgentIdentity, getAgentModels, getOpenRouterApiKey, resolveAgentModel } from './models'
-import type { AgentRunEvent, StepUsage, ToolDetails } from './types'
+import type { AgentRunEvent, ExtraCharge, StepUsage, ToolDetails } from './types'
 
 const MAX_SAVED_TOOL_OUTPUT_CHARS = 4_000
 const LOOP_GUARD_REPEATS = 3
@@ -27,6 +27,7 @@ export interface AgentHistoryMessage {
 export interface StepMeter {
   readonly stepCount: number
   readonly reachedStepCap: boolean
+  addCharge(charge: ExtraCharge): void
   reserveStep(estimatedPromptTokens: number): Promise<void>
   finalizeStep(usage: StepUsage): Promise<UsageEstimate | null>
   releasePending(): Promise<void>
@@ -217,6 +218,7 @@ export async function* runAgentTurn(
     }
     if (event.type === 'tool_execution_end') {
       const details = (event.result as { details?: ToolDetails } | undefined)?.details
+      if (details?.charge) input.meter.addCharge(details.charge)
       const output = toolResultText(event.result)
       const ok = !event.isError
       const summary = ok ? details?.summary ?? 'Done' : output || 'The tool failed.'
