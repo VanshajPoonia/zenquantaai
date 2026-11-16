@@ -20,6 +20,7 @@ import {
   PanelLeftClose,
   SquarePen,
   Zap,
+  SquareTerminal,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useChatContext } from '@/lib/chat-context'
@@ -131,6 +132,13 @@ function ChatItem({
       </span>
 
       <span className="min-w-0 flex-1 truncate">{chat.title}</span>
+
+      {chat.surface === 'cli' ? (
+        <SquareTerminal
+          aria-label={`zq session${chat.workspace?.repo ? ` in ${chat.workspace.repo}` : ''}`}
+          className="size-3 shrink-0 text-sidebar-foreground/40"
+        />
+      ) : null}
 
       {chat.isPinned ? (
         <PinIcon

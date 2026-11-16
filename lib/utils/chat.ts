@@ -166,6 +166,8 @@ export function toConversationSummary(
     memoryUpdatedAt: conversation.memoryUpdatedAt,
     customAssistantId: conversation.customAssistantId,
     customAssistant: conversation.customAssistant,
+    surface: conversation.surface,
+    workspace: conversation.workspace,
   }
 }
 

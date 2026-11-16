@@ -420,11 +420,19 @@ export function ChatArea({
         </ScrollArea>
       )}
 
-      <Composer
-        onSend={handleSendMessage}
-        initialValue={selectedPrompt}
-        onOpenAssistantHelp={onOpenAssistantHelp}
-      />
+      {currentChat?.surface === 'cli' ? (
+        <div className="border-t border-border px-4 py-3 text-center text-[13px] text-muted-foreground">
+          This session ran in zq on your computer
+          {currentChat.workspace?.repo ? ` in ${currentChat.workspace.repo}` : ''}. Continue it there
+          with <code className="rounded bg-white/[0.06] px-1.5 py-0.5 text-foreground/85">zq -r</code>.
+        </div>
+      ) : (
+        <Composer
+          onSend={handleSendMessage}
+          initialValue={selectedPrompt}
+          onOpenAssistantHelp={onOpenAssistantHelp}
+        />
+      )}
     </div>
   )
 }
