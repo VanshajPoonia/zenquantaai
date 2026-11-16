@@ -51,6 +51,8 @@ function rowToUsageEvent(row: UsageEventRow): UsageEvent {
     displayMultiplier: toNumber(row.displayMultiplier),
     marginUsd: toNumber(row.marginUsd),
     creditsConsumed: row.creditsConsumed,
+    surface: row.surface as UsageEvent['surface'],
+    agentRunId: row.agentRunId,
     createdAt: toIsoString(row.createdAt),
   }
 }
@@ -144,6 +146,8 @@ class NeonUsageEventsRepository {
         displayMultiplier: String(event.displayMultiplier),
         marginUsd: String(event.marginUsd),
         creditsConsumed: event.creditsConsumed,
+        surface: event.surface ?? 'web',
+        agentRunId: event.agentRunId ?? null,
       })
       .returning()
 

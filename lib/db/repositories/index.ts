@@ -1,6 +1,8 @@
 import 'server-only'
 
 export { neonActivityRepository } from './activity'
+export { neonAgentRunsRepository } from './agent-runs'
+export type { AgentRunRecord, AgentRunStatus } from './agent-runs'
 export { neonArtifactSharesRepository } from './artifact-shares'
 export { neonAdminRepository } from './admin'
 export {

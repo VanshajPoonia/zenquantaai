@@ -262,6 +262,7 @@ export const zenSubscriptions = pgTable(
       .default(800),
     maxImagesPerDay: integer('max_images_per_day').notNull().default(2),
     dailyImageCount: integer('daily_image_count').notNull().default(0),
+    dailyAgentStepCount: integer('daily_agent_step_count').notNull().default(0),
     currentPeriodStartedAt: timestamp('current_period_started_at', {
       withTimezone: true,
     })
@@ -532,6 +533,8 @@ export const zenConversations = pgTable(
     // declared in the migration SQL.
     summaryEmbedding: vector('summary_embedding', { dimensions: 1536 }),
     memoryUpdatedAt: timestamp('memory_updated_at', { withTimezone: true }),
+    surface: text('surface').notNull().default('web'),
+    workspace: jsonb('workspace'),
     ...timestamps,
   },
   (table) => [
@@ -555,6 +558,7 @@ export const zenConversations = pgTable(
       'zen_conversations_assistant_family_check',
       sql`${table.assistantFamily} in ('nova', 'velora', 'axiom', 'forge', 'pulse', 'prism')`
     ),
+    check('zen_conversations_surface_check', sql`${table.surface} in ('web', 'cli')`),
   ]
 )
 
@@ -583,6 +587,7 @@ export const zenMessages = pgTable(
     attachments: jsonb('attachments').notNull().default([]),
     usage: jsonb('usage'),
     sources: jsonb('sources').notNull().default([]),
+    parts: jsonb('parts'),
     createdAt: timestamp('created_at', { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -906,6 +911,10 @@ export const zenUsageEvents = pgTable(
       .notNull()
       .default('0'),
     creditsConsumed: integer('credits_consumed').notNull().default(0),
+    surface: text('surface').notNull().default('web'),
+    agentRunId: uuid('agent_run_id').references(() => zenAgentRuns.id, {
+      onDelete: 'set null',
+    }),
     createdAt: timestamp('created_at', { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -938,6 +947,8 @@ export const zenUsageEvents = pgTable(
       'zen_usage_events_wallet_type_check',
       sql`${table.walletType} in ('core_tokens', 'tier_tokens', 'image_credits')`
     ),
+    check('zen_usage_events_surface_check', sql`${table.surface} in ('web', 'cli')`),
+    index('zen_usage_events_surface_created_idx').on(table.surface, table.createdAt),
   ]
 )
 
@@ -1551,3 +1562,87 @@ export const zenMemoryItems = pgTable(
     ),
   ]
 )
+
+export const zenAgentRuns = pgTable(
+  'zen_agent_runs',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => zenUsers.id, { onDelete: 'cascade' }),
+    conversationId: text('conversation_id').references(() => zenConversations.id, {
+      onDelete: 'set null',
+    }),
+    surface: text('surface').notNull().default('web'),
+    clientRunId: text('client_run_id'),
+    clientSessionId: text('client_session_id'),
+    stepCount: integer('step_count').notNull().default(0),
+    promptTokens: integer('prompt_tokens').notNull().default(0),
+    completionTokens: integer('completion_tokens').notNull().default(0),
+    status: text('status').notNull().default('running'),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex('zen_agent_runs_user_client_run_idx')
+      .on(table.userId, table.clientRunId)
+      .where(sql`${table.clientRunId} is not null`),
+    index('zen_agent_runs_user_created_idx').on(table.userId, table.createdAt),
+    check('zen_agent_runs_surface_check', sql`${table.surface} in ('web', 'cli')`),
+    check(
+      'zen_agent_runs_status_check',
+      sql`${table.status} in ('running', 'completed', 'failed', 'stopped')`
+    ),
+  ]
+)
+
+export const zenApiTokens = pgTable(
+  'zen_api_tokens',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => zenUsers.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    tokenHash: text('token_hash').notNull().unique(),
+    prefix: text('prefix').notNull(),
+    scopes: text('scopes').array().notNull().default(sql`array['cli']::text[]`),
+    lastUsedAt: timestamp('last_used_at', { withTimezone: true }),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    revokedAt: timestamp('revoked_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [index('zen_api_tokens_user_created_idx').on(table.userId, table.createdAt)]
+)
+
+export const zenDeviceCodes = pgTable(
+  'zen_device_codes',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    deviceCodeHash: text('device_code_hash').notNull().unique(),
+    userCode: text('user_code').notNull().unique(),
+    userId: uuid('user_id').references(() => zenUsers.id, { onDelete: 'cascade' }),
+    clientName: text('client_name').notNull().default('zq'),
+    status: text('status').notNull().default('pending'),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    index('zen_device_codes_expires_idx').on(table.expiresAt),
+    check(
+      'zen_device_codes_status_check',
+      sql`${table.status} in ('pending', 'approved', 'denied', 'used', 'expired')`
+    ),
+  ]
+)
+
+export const zenRateLimits = pgTable('zen_rate_limits', {
+  key: text('key').primaryKey(),
+  windowStartedAt: timestamp('window_started_at', { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+  count: integer('count').notNull().default(0),
+})

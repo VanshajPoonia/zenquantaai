@@ -24,6 +24,7 @@ function subscription(overrides: Partial<Subscription> = {}): Subscription {
     maxOutputTokensPerRequest: 2500,
     maxImagesPerDay: 5,
     dailyImageCount: 1,
+    dailyAgentStepCount: 0,
     currentPeriodStartedAt: '2026-06-01T00:00:00.000Z',
     currentPeriodEndsAt: '2026-07-01T00:00:00.000Z',
     lastDailyResetAt: '2026-06-03T00:00:00.000Z',

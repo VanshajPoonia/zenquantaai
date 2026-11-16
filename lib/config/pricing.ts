@@ -1,4 +1,5 @@
 import {
+  AgentPlanLimits,
   AssistantFamily,
   PricingConfig,
   SubscriptionTier,
@@ -136,6 +137,49 @@ export const PLAN_CONFIGS: Record<SubscriptionTier, TierPlanConfig> = {
     maxImagesPerDay: 100,
   },
 }
+
+// Provisional until Gate B (docs/launch/specs/05-evals-and-limits.md). The
+// wallets stay the real cost ceiling; these cap runaway loops and request size.
+export const AGENT_PLAN_LIMITS: Record<SubscriptionTier, AgentPlanLimits> = {
+  free: {
+    agentStepsPerDay: 60,
+    maxStepsPerRun: 8,
+    maxAgentInputTokens: 32_000,
+    maxAgentOutputTokens: 4_000,
+    cliAccess: true,
+  },
+  basic: {
+    agentStepsPerDay: 200,
+    maxStepsPerRun: 12,
+    maxAgentInputTokens: 64_000,
+    maxAgentOutputTokens: 8_000,
+    cliAccess: true,
+  },
+  pro: {
+    agentStepsPerDay: 800,
+    maxStepsPerRun: 25,
+    maxAgentInputTokens: 128_000,
+    maxAgentOutputTokens: 16_000,
+    cliAccess: true,
+  },
+  ultra: {
+    agentStepsPerDay: 2_000,
+    maxStepsPerRun: 40,
+    maxAgentInputTokens: 200_000,
+    maxAgentOutputTokens: 32_000,
+    cliAccess: true,
+  },
+  prime: {
+    agentStepsPerDay: 5_000,
+    maxStepsPerRun: 60,
+    maxAgentInputTokens: 400_000,
+    maxAgentOutputTokens: 64_000,
+    cliAccess: true,
+  },
+}
+
+// Web chat stays short so a turn fits one serverless request.
+export const WEB_AGENT_MAX_STEPS = 8
 
 // These cost figures are centrally configurable estimates and should be reviewed
 // against current OpenRouter pricing before production billing.

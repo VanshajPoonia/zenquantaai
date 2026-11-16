@@ -84,6 +84,8 @@ export async function recordTextUsageEvent(input: {
     model: string
     walletType: UsageEvent['walletType']
     usage: UsageEstimate
+    surface?: UsageEvent['surface']
+    agentRunId?: string | null
   }
 }): Promise<UsageEvent> {
   return await neonUsageEventsRepository.create({
@@ -103,6 +105,8 @@ export async function recordTextUsageEvent(input: {
     displayMultiplier: input.event.usage.displayMultiplier,
     marginUsd: input.event.usage.marginUsd,
     creditsConsumed: input.event.usage.creditsConsumed ?? 0,
+    surface: input.event.surface,
+    agentRunId: input.event.agentRunId,
   })
 }
 

@@ -64,6 +64,7 @@ function rowToSubscription(row: SubscriptionRow): Subscription {
     maxOutputTokensPerRequest: row.maxOutputTokensPerRequest,
     maxImagesPerDay: row.maxImagesPerDay,
     dailyImageCount: row.dailyImageCount,
+    dailyAgentStepCount: row.dailyAgentStepCount,
     currentPeriodStartedAt: toIsoString(row.currentPeriodStartedAt),
     currentPeriodEndsAt: toIsoString(row.currentPeriodEndsAt),
     lastDailyResetAt: toIsoString(row.lastDailyResetAt),
@@ -117,6 +118,7 @@ function buildPlanInsert(
     maxOutputTokensPerRequest: plan.maxOutputTokensPerRequest,
     maxImagesPerDay: plan.maxImagesPerDay,
     dailyImageCount: 0,
+    dailyAgentStepCount: 0,
     currentPeriodStartedAt: now,
     currentPeriodEndsAt: periodEnd,
     lastDailyResetAt: now,
@@ -328,6 +330,7 @@ class NeonSubscriptionsRepository {
       patch.maxOutputTokensPerRequest = reset.maxOutputTokensPerRequest
       patch.maxImagesPerDay = reset.maxImagesPerDay
       patch.dailyImageCount = 0
+      patch.dailyAgentStepCount = 0
       patch.currentPeriodStartedAt = reset.currentPeriodStartedAt
       patch.currentPeriodEndsAt = reset.currentPeriodEndsAt
       patch.lastDailyResetAt = reset.lastDailyResetAt
@@ -338,6 +341,7 @@ class NeonSubscriptionsRepository {
     ) {
       patch.dailyMessageCount = 0
       patch.dailyImageCount = 0
+      patch.dailyAgentStepCount = 0
       patch.lastDailyResetAt = now
     }
 
@@ -593,6 +597,83 @@ class NeonSubscriptionsRepository {
     }
 
     return rowToSubscription(rows[0])
+  }
+
+  /**
+   * Claims one agent step: worst-case tokens plus one daily agent step, in the
+   * same conditional update as reserveTextUsage. It never counts a daily
+   * message, so the caller decides whether a turn also counts one.
+   */
+  async reserveAgentStep(input: {
+    userId: string
+    walletType: 'core_tokens' | 'tier_tokens'
+    estimatedTokens: number
+    effectiveIncluded: number
+    agentStepsPerDay: number
+    /** Set on the first step of a web turn, which also counts one daily message. */
+    dailyMessageLimit?: number
+  }): Promise<Subscription | null> {
+    const usedColumn =
+      input.walletType === 'tier_tokens'
+        ? zenSubscriptions.tierTokensUsed
+        : zenSubscriptions.coreTokensUsed
+
+    const rows = await getDatabaseClient()
+      .update(zenSubscriptions)
+      .set({
+        ...(input.walletType === 'tier_tokens'
+          ? {
+              tierTokensUsed: sql`${zenSubscriptions.tierTokensUsed} + ${input.estimatedTokens}`,
+            }
+          : {
+              coreTokensUsed: sql`${zenSubscriptions.coreTokensUsed} + ${input.estimatedTokens}`,
+            }),
+        dailyAgentStepCount: sql`${zenSubscriptions.dailyAgentStepCount} + 1`,
+        ...(typeof input.dailyMessageLimit === 'number'
+          ? { dailyMessageCount: sql`${zenSubscriptions.dailyMessageCount} + 1` }
+          : {}),
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(zenSubscriptions.userId, input.userId),
+          eq(zenSubscriptions.status, 'active'),
+          lt(zenSubscriptions.dailyAgentStepCount, input.agentStepsPerDay),
+          typeof input.dailyMessageLimit === 'number'
+            ? lt(zenSubscriptions.dailyMessageCount, input.dailyMessageLimit)
+            : undefined,
+          sql`(${input.effectiveIncluded} - ${usedColumn}) >= ${input.estimatedTokens}`
+        )
+      )
+      .returning()
+
+    return rows[0] ? rowToSubscription(rows[0]) : null
+  }
+
+  /** Releases a reservation made by reserveAgentStep when the step fails or is aborted. */
+  async releaseAgentStep(input: {
+    userId: string
+    walletType: 'core_tokens' | 'tier_tokens'
+    reservedTokens: number
+    countedMessage?: boolean
+  }): Promise<void> {
+    await getDatabaseClient()
+      .update(zenSubscriptions)
+      .set({
+        ...(input.walletType === 'tier_tokens'
+          ? {
+              tierTokensUsed: sql`greatest(${zenSubscriptions.tierTokensUsed} - ${input.reservedTokens}, 0)`,
+            }
+          : {
+              coreTokensUsed: sql`greatest(${zenSubscriptions.coreTokensUsed} - ${input.reservedTokens}, 0)`,
+            }),
+        ...(input.countedMessage
+          ? { dailyMessageCount: sql`greatest(${zenSubscriptions.dailyMessageCount} - 1, 0)` }
+          : {}),
+        dailyAgentStepCount: sql`greatest(${zenSubscriptions.dailyAgentStepCount} - 1, 0)`,
+        updatedAt: new Date(),
+      })
+      .where(eq(zenSubscriptions.userId, input.userId))
   }
 
   /**

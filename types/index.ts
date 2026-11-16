@@ -388,6 +388,35 @@ export interface WebSearchContext {
   unavailableReason?: 'not_configured' | 'request_failed' | 'no_results'
 }
 
+export type ConversationSurface = 'web' | 'cli'
+
+export interface ConversationWorkspace {
+  repo?: string
+  branch?: string
+}
+
+export interface ToolResultData {
+  imagePrompt?: string
+  artifactId?: string
+  artifactTitle?: string
+  url?: string
+}
+
+/** Ordered steps of an agent turn. `Message.content` still holds the final text. */
+export type MessagePart =
+  | { type: 'text'; text: string }
+  | { type: 'tool_call'; callId: string; name: string; label: string; args: unknown }
+  | {
+      type: 'tool_result'
+      callId: string
+      name: string
+      ok: boolean
+      summary: string
+      output?: string
+      sources?: MessageSource[]
+      data?: ToolResultData
+    }
+
 export interface Message {
   id: string
   role: MessageRole
@@ -406,6 +435,7 @@ export interface Message {
   assistantFamily?: AssistantFamily
   customAssistantId?: string | null
   customAssistant?: CustomAssistantReference | null
+  parts?: MessagePart[]
 }
 
 export interface ConversationSummary {
@@ -423,6 +453,8 @@ export interface ConversationSummary {
   memoryUpdatedAt?: string
   customAssistantId?: string | null
   customAssistant?: CustomAssistantReference | null
+  surface?: ConversationSurface
+  workspace?: ConversationWorkspace | null
 }
 
 export interface ConversationMemoryStructured {
@@ -1893,6 +1925,33 @@ export type StreamEvent =
       error: string
       recoverable?: boolean
     }
+  | {
+      type: 'tool_call'
+      conversationId: string
+      messageId: string
+      callId: string
+      name: string
+      label: string
+      args: unknown
+    }
+  | {
+      type: 'tool_result'
+      conversationId: string
+      messageId: string
+      callId: string
+      name: string
+      ok: boolean
+      summary: string
+      sources?: MessageSource[]
+      data?: ToolResultData
+    }
+  | {
+      type: 'step'
+      conversationId: string
+      messageId: string
+      step: number
+      maxSteps: number
+    }
 
 export interface StreamingState {
   status: StreamingStatus
@@ -1994,6 +2053,15 @@ export interface TierBudgetConfig {
   maxImagesPerDay: number
 }
 
+/** Limits for tool-using agent runs on the web and in zq. */
+export interface AgentPlanLimits {
+  agentStepsPerDay: number
+  maxStepsPerRun: number
+  maxAgentInputTokens: number
+  maxAgentOutputTokens: number
+  cliAccess: boolean
+}
+
 export interface TierPlanConfig extends TierBudgetConfig {
   tier: SubscriptionTier
   priceUsd: number
@@ -2076,6 +2144,7 @@ export interface Subscription {
   maxOutputTokensPerRequest: number
   maxImagesPerDay: number
   dailyImageCount: number
+  dailyAgentStepCount: number
   currentPeriodStartedAt: string
   currentPeriodEndsAt: string
   lastDailyResetAt: string
@@ -2118,6 +2187,8 @@ export interface UsageEvent {
   displayMultiplier: number
   marginUsd: number
   creditsConsumed: number
+  surface?: ConversationSurface
+  agentRunId?: string | null
   createdAt: string
 }
 

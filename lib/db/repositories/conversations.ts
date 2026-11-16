@@ -21,7 +21,10 @@ import {
   CrossChatMatch,
   CustomAssistantReference,
   ConversationMessagesPageResponse,
+  MessagePart,
   MessageSource,
+  ConversationSurface,
+  ConversationWorkspace,
   Message,
   SessionSettings,
   UsageEstimate,
@@ -124,6 +127,7 @@ async function rowToMessage(messageRow: MessageRow): Promise<Message> {
       ? toJsonObject<UsageEstimate>(messageRow.usage, {} as UsageEstimate)
       : undefined,
     sources: toJsonArray<MessageSource>(messageRow.sources),
+    parts: messageRow.parts ? toJsonArray<MessagePart>(messageRow.parts) : undefined,
     parentUserMessageId: messageRow.parentUserMessageId ?? undefined,
     branchLabel: messageRow.branchLabel ?? undefined,
     customAssistantId: messageRow.customAssistantId,
@@ -182,6 +186,10 @@ async function rowToConversation(row: ConversationRow): Promise<Conversation> {
         )
       : null,
     messagePageInfo: row.messagePageInfo,
+    surface: (row.surface as ConversationSurface | null) ?? 'web',
+    workspace: row.workspace
+      ? toJsonObject<ConversationWorkspace>(row.workspace, {})
+      : null,
   }
 }
 
@@ -202,6 +210,8 @@ function conversationToInsert(userId: string, conversation: Conversation) {
     usage: conversation.usage ?? null,
     memorySummary: conversation.memorySummary ?? null,
     memoryUpdatedAt: toNullableDate(conversation.memoryUpdatedAt),
+    surface: conversation.surface ?? 'web',
+    workspace: conversation.workspace ?? null,
     createdAt: toDate(conversation.createdAt),
     updatedAt: toDate(conversation.updatedAt),
   }
@@ -226,6 +236,7 @@ function messageToInsert(conversationId: string, message: Message) {
     attachments: message.attachments ?? [],
     usage: message.usage ?? null,
     sources: message.sources ?? [],
+    parts: message.parts ?? null,
     createdAt: toDate(message.createdAt),
   }
 }
@@ -353,6 +364,8 @@ class NeonConversationsRepository {
         memoryUpdatedAt: conversation.memoryUpdatedAt,
         customAssistantId: conversation.customAssistantId,
         customAssistant: conversation.customAssistant,
+        surface: conversation.surface,
+        workspace: conversation.workspace,
       }))
     )
   }
@@ -501,6 +514,7 @@ class NeonConversationsRepository {
           attachments: sql`excluded.attachments`,
           usage: sql`excluded.usage`,
           sources: sql`excluded.sources`,
+          parts: sql`excluded.parts`,
           createdAt: sql`excluded.created_at`,
         },
       })
