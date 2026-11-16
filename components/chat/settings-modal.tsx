@@ -32,6 +32,7 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { TerminalTokens } from './terminal-tokens'
+import { ZQ_RELEASED } from '@/lib/config/features'
 import { INTELLIGENCE_LEVEL_OPTIONS } from '@/lib/config'
 import { ModeIcon, getModeAccentClass } from '@/lib/mode-utils'
 import {
@@ -315,7 +316,9 @@ const SETTINGS_SECTIONS: Array<{ id: SettingsSection; label: string; icon: React
   { id: 'chats', label: 'Chats', icon: <MessagesSquare className="size-4" /> },
   { id: 'suggestions', label: 'Suggestions', icon: <Wand2 className="size-4" /> },
   { id: 'memory', label: 'Memory', icon: <Brain className="size-4" /> },
-  { id: 'terminal', label: 'Terminal', icon: <SquareTerminal className="size-4" /> },
+  ...(ZQ_RELEASED
+    ? [{ id: 'terminal' as const, label: 'Terminal', icon: <SquareTerminal className="size-4" /> }]
+    : []),
   { id: 'account', label: 'Account & data', icon: <UserRound className="size-4" /> },
 ]
 

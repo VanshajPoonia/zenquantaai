@@ -48,6 +48,7 @@ import { PageBuddy } from './page-buddy'
 import { ToneDemo } from './tone-demo'
 import { WorkspaceTiles } from './workspace-tiles'
 import styles from './landing.module.css'
+import { ZQ_RELEASED } from '@/lib/config/features'
 
 const TIERS: SubscriptionTier[] = ['free', 'basic', 'pro', 'ultra', 'prime']
 const TIER_LABEL: Record<SubscriptionTier, string> = {
@@ -588,6 +589,7 @@ export function LandingPage() {
           </div>
         </section>
 
+        {ZQ_RELEASED ? (
         <section id="terminal" aria-labelledby="terminal-heading" className={cn(styles.band, 'scroll-mt-16 py-24 sm:py-32')}>
           <div className="mx-auto max-w-[75rem] px-5 sm:px-8">
             <div className="grid gap-6 lg:grid-cols-2 lg:items-end">
@@ -620,6 +622,7 @@ $ zq
             </figure>
           </div>
         </section>
+        ) : null}
 
         <section id="plans" aria-labelledby="plans-heading" className="scroll-mt-16 py-24 sm:py-36">
           <div className="mx-auto max-w-[75rem] px-5 sm:px-8">
@@ -738,9 +741,11 @@ $ zq
               <Link href="/pricing" className={cn(styles.footerLink, 'block')}>
                 Plans
               </Link>
-              <Link href="/docs/cli" className={cn(styles.footerLink, 'block')}>
-                zq for your terminal
-              </Link>
+              {ZQ_RELEASED ? (
+                <Link href="/docs/cli" className={cn(styles.footerLink, 'block')}>
+                  zq for your terminal
+                </Link>
+              ) : null}
               <Link href="/terms" className={cn(styles.footerLink, 'block')}>
                 Terms
               </Link>

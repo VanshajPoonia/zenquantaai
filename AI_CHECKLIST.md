@@ -116,6 +116,7 @@ FILE_STORAGE_LOCAL_DIR=.storage/zenquanta
 # Agent platform (see AI_PLATFORM_PLAN.md and docs/launch/)
 # AGENT_LOOP=           # off (default), admins, or on: tool-using turns in /api/chat through pi (needs migration #23)
 # NEXT_PUBLIC_APP_URL=  # public origin used in zq login links and OpenRouter attribution
+# NEXT_PUBLIC_ZQ_RELEASED= # true once `zenquanta` is on npm; shows the zq landing section, footer link, pricing line and Settings > Terminal
 ```
 
 Without `TAVILY_API_KEY`, web search falls back to OpenRouter's web plugin and page reading (`fetch_url`) is off. Without an embeddings or OpenAI key, file search and memory embeddings fall back to OpenRouter's embeddings endpoint (`openai/text-embedding-3-small`, 1536 dimensions). Both fallbacks use `OPENROUTER_API_KEY`.

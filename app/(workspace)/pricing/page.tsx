@@ -8,6 +8,7 @@ import {
   TIER_ASSISTANT_NAMES,
 } from '@/lib/config'
 import { AssistantFamily } from '@/types'
+import { ZQ_RELEASED } from '@/lib/config/features'
 import { getOptionalServerUser } from '@/lib/auth/require-admin'
 import {
   getPlanRequestStatusLabel,
@@ -214,7 +215,7 @@ export default async function PricingPage({
                   </p>
                   <p className="text-foreground">
                     {AGENT_PLAN_LIMITS[plan.tier].agentStepsPerDay.toLocaleString()} agent steps a day
-                    {AGENT_PLAN_LIMITS[plan.tier].cliAccess ? ', including zq in your terminal' : ''}
+                    {ZQ_RELEASED && AGENT_PLAN_LIMITS[plan.tier].cliAccess ? ', including zq in your terminal' : ''}
                   </p>
                   <p>{plan.imageCredits.toLocaleString()} image credits a month</p>
                   <p>{formatTokenAllowance(plan.coreTokens)} tokens with standard models</p>
