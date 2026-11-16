@@ -28,8 +28,10 @@ import {
   Trash2,
   UserRound,
   Wand2,
+  SquareTerminal,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { TerminalTokens } from './terminal-tokens'
 import { INTELLIGENCE_LEVEL_OPTIONS } from '@/lib/config'
 import { ModeIcon, getModeAccentClass } from '@/lib/mode-utils'
 import {
@@ -306,13 +308,14 @@ function UserDeletionDangerZone() {
   )
 }
 
-type SettingsSection = 'general' | 'chats' | 'suggestions' | 'memory' | 'account'
+type SettingsSection = 'general' | 'chats' | 'suggestions' | 'memory' | 'terminal' | 'account'
 
 const SETTINGS_SECTIONS: Array<{ id: SettingsSection; label: string; icon: ReactNode }> = [
   { id: 'general', label: 'General', icon: <Settings2 className="size-4" /> },
   { id: 'chats', label: 'Chats', icon: <MessagesSquare className="size-4" /> },
   { id: 'suggestions', label: 'Suggestions', icon: <Wand2 className="size-4" /> },
   { id: 'memory', label: 'Memory', icon: <Brain className="size-4" /> },
+  { id: 'terminal', label: 'Terminal', icon: <SquareTerminal className="size-4" /> },
   { id: 'account', label: 'Account & data', icon: <UserRound className="size-4" /> },
 ]
 
@@ -786,6 +789,14 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
                   Open Memory Vault
                 </Button>
               </SettingRow>
+            </TabsContent>
+
+            <TabsContent value="terminal" className="mt-0">
+              <SectionHeading
+                title="Terminal"
+                description="Sign in to zq, Forge in your terminal, and manage signed-in terminals."
+              />
+              <TerminalTokens />
             </TabsContent>
 
             <TabsContent value="account" className="mt-0 space-y-6">
