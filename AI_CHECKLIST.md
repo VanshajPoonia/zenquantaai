@@ -116,6 +116,7 @@ FILE_STORAGE_LOCAL_DIR=.storage/zenquanta
 # Agent platform (see AI_PLATFORM_PLAN.md and docs/launch/)
 # AGENT_LOOP=           # off (default), admins, or on: tool-using turns in /api/chat through pi (needs migration #23)
 # NEXT_PUBLIC_APP_URL=  # public origin used in zq login links and OpenRouter attribution
+# ZQ_MODEL_API=         # on: hosted zq models for every plan. Unset: admins only, others use their own OpenRouter key (zq key). Keep unset until OpenRouter confirms resale terms
 # NEXT_PUBLIC_ZQ_RELEASED= # true once `zenquanta` is on npm; shows the zq landing section, footer link, pricing line and Settings > Terminal
 ```
 

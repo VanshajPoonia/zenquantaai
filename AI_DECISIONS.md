@@ -38,6 +38,8 @@ Rationale: a search costs about $0.007 upstream, which is about 8,000 tokens at 
 
 Finding (2026-11-17): OpenRouter's terms (last updated 31 August 2026), section 7, forbid "reselling API access to Models" and "developing a competing service". Sections 5.1 and 5.2 allow products built for your own customers if they agree to the model providers' terms. The web app fits that. The zq Model API, an OpenAI-compatible endpoint with user keys, may not. Until OpenRouter confirms in writing, zq stays unpublished and the endpoint is not advertised for other tools. The options are in `docs/launch/NEEDS_YOU.md`, and `/terms` now passes on the model providers' terms.
 
+Follow-up (2026-11-17): the hosted Model API is admin-only unless `ZQ_MODEL_API=on`. For everyone else zq runs in bring-your-own-key mode: `zq key <openrouter key>` stores the key locally, and pi's built-in OpenRouter provider calls OpenRouter directly from the user's machine with `qwen/qwen3-coder`. Zenquanta still handles sign-in and session sync. So zq can launch on 2026-12-01 whatever OpenRouter answers, and setting `ZQ_MODEL_API=on` switches users to hosted models once permission arrives.
+
 ## Web Search And Embeddings Fall Back To OpenRouter
 
 Decision (2026-11-16): when `TAVILY_API_KEY` is missing, web search runs through OpenRouter's web plugin and keeps only the cited pages. When no embeddings or OpenAI key is set, embeddings go through OpenRouter's `/embeddings` endpoint with `openai/text-embedding-3-small` (1536 dimensions, matching pgvector). Both use `OPENROUTER_API_KEY`.
