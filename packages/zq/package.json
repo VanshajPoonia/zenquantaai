@@ -18,7 +18,8 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "prepublishOnly": "pnpm run typecheck && pnpm test && pnpm run build"
   },
   "license": "MIT",
   "dependencies": {
@@ -28,5 +29,18 @@
     "@types/node": "22.19.1",
     "typescript": "5.7.3",
     "vitest": "4.1.8"
-  }
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/VanshajPoonia/zenquantaai.git",
+    "directory": "packages/zq"
+  },
+  "homepage": "https://zqai.vercel.app/docs/cli",
+  "keywords": [
+    "zenquanta",
+    "coding-agent",
+    "cli",
+    "pi",
+    "ai"
+  ]
 }
