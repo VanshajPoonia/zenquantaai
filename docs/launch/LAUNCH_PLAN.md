@@ -16,11 +16,13 @@ Updated 2026-11-16, end of Day 0. Work runs ahead of the day plan on branch `fea
 | Spec 02: tokens, device login, Model API | Built and tested locally |
 | Spec 03: `zq` 0.1 | Built and tested locally: login, read, edit, sync to web. Not published |
 | Spec 04: PWA | Built. Install flow still to check on real phones |
-| Spec 05: evals and limits | Eval suite built. Limits are provisional until Gate B |
+| Spec 05: evals and limits | Coding evals: Free `forge` 6/6, `forge-lite` 6/6, `forge-fast` 4/6, Pro 6/6, Ultra 6/6. Chat evals 12/12 on Free. Gate B recommendation written, waiting on the user |
 | Spec 06: terms, privacy, docs, landing section, sign-up rate limit, admin cost split | Built. Production setup and the user's legal review are open |
 
 | Production file storage | Cloudflare R2 bucket `zenquanta-files` live. Uploads and PDF indexing verified in production |
 | Upload crash on Vercel (`DOMMatrix is not defined`) | Fixed: pdf-parse loads with its worker and is a server-external package |
+| Files on the first message of a new chat failed (foreign key) | Fixed: files link to the chat after it is saved |
+| `AGENT_LOOP` in production | `admins` since 2026-11-16, verified with a web search turn |
 
 Extra: without Tavily or embeddings keys, web search and embeddings fall back to OpenRouter, so search, file search and memory work with the one gateway key.
 

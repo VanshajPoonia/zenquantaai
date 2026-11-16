@@ -27,7 +27,9 @@ Current direction: plan upgrades remain manual/admin-driven, payment automation 
 
 **Known issues**: one production agent turn stalled for over 120 s before the first model response and did not reproduce. Previews still use local storage, because the Vercel CLI could not add Preview env vars non-interactively. Web search cost through OpenRouter is not metered to users. The test account `zq-agent-test` exists in the shared database (role `user`, Free plan).
 
-**Next steps**: finish the Ultra eval and fill the Gate B table, chat evals, then the items in `docs/launch/NEEDS_YOU.md` (npm publish, legal review).
+**Follow-up the same night**: the Ultra eval (Claude Sonnet 4.6) passed 6/6 at about $0.057 per task. The Gate B results and recommendation are in `docs/launch/specs/05-evals-and-limits.md`. The chat evals (`evals/chat/tasks.json`, `scripts/evals/run-chat.mjs`) found a real bug: a file attached to the first message of a new chat failed with a foreign key error, because files were linked before `saveTurnStart` created the conversation. That is fixed, and the agent path now names attached files. Chat evals pass 12/12 on Free at about $0.0007 per turn. `AGENT_LOOP=admins` is set in production.
+
+**Next steps**: the user approves Gate B (then apply the limits), then the rest of `docs/launch/NEEDS_YOU.md` (npm publish, legal review).
 
 ## 2026-11-16 - Pi chosen as the harness, 15-day launch plan written (Claude Code, planning only)
 
