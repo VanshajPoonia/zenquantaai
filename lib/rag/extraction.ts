@@ -1,12 +1,6 @@
 import 'server-only'
 
 import { createHash } from 'crypto'
-import {
-  FormatError,
-  InvalidPDFException,
-  PasswordException,
-  PDFParse,
-} from 'pdf-parse'
 
 const TEXT_MIME_PREFIXES = ['text/']
 const TEXT_MIME_TYPES = new Set([
@@ -156,10 +150,21 @@ function hashText(text: string): string {
   return createHash('sha256').update(text).digest('hex')
 }
 
+// pdf.js needs DOMMatrix and a worker, which pdf-parse/worker sets up for
+// Node and serverless. Loaded only when a PDF arrives so other uploads stay light.
+async function loadPdfParse() {
+  const { CanvasFactory } = await import('pdf-parse/worker')
+  const pdfParse = await import('pdf-parse')
+  return { ...pdfParse, CanvasFactory }
+}
+
 async function extractTextFromPdfBytes(input: {
   bytes: Buffer
 }): Promise<ExtractedFileText> {
+  const { CanvasFactory, FormatError, InvalidPDFException, PasswordException, PDFParse } =
+    await loadPdfParse()
   const parser = new PDFParse({
+    CanvasFactory,
     data: new Uint8Array(input.bytes),
     disableFontFace: true,
     useSystemFonts: false,
