@@ -1,0 +1,159 @@
+{
+  "ranAt": "2026-11-16T18:31:23.004Z",
+  "summary": {
+    "passed": 12,
+    "total": 12,
+    "avgCostUsd": 0.00068,
+    "avgSteps": 1.7
+  },
+  "results": [
+    {
+      "id": "web-nextjs",
+      "passed": true,
+      "toolOk": true,
+      "answerOk": true,
+      "tools": [
+        "web_search"
+      ],
+      "error": null,
+      "seconds": 21,
+      "cost": 0.001071,
+      "steps": 2
+    },
+    {
+      "id": "web-f1",
+      "passed": true,
+      "toolOk": true,
+      "answerOk": true,
+      "tools": [
+        "web_search"
+      ],
+      "error": null,
+      "seconds": 21,
+      "cost": 0.001103,
+      "steps": 2
+    },
+    {
+      "id": "web-bitcoin",
+      "passed": true,
+      "toolOk": true,
+      "answerOk": true,
+      "tools": [
+        "web_search"
+      ],
+      "error": null,
+      "seconds": 20,
+      "cost": 0.000739,
+      "steps": 2
+    },
+    {
+      "id": "file-refund",
+      "passed": true,
+      "toolOk": true,
+      "answerOk": true,
+      "tools": [
+        "files_search"
+      ],
+      "error": null,
+      "seconds": 18,
+      "cost": 0.000798,
+      "steps": 2
+    },
+    {
+      "id": "file-oncall",
+      "passed": true,
+      "toolOk": true,
+      "answerOk": true,
+      "tools": [
+        "files_search"
+      ],
+      "error": null,
+      "seconds": 17,
+      "cost": 0.000808,
+      "steps": 2
+    },
+    {
+      "id": "file-ratelimit",
+      "passed": true,
+      "toolOk": true,
+      "answerOk": true,
+      "tools": [
+        "files_search"
+      ],
+      "error": null,
+      "seconds": 17,
+      "cost": 0.000625,
+      "steps": 2
+    },
+    {
+      "id": "artifact-checklist",
+      "passed": true,
+      "toolOk": true,
+      "answerOk": true,
+      "tools": [
+        "save_artifact"
+      ],
+      "error": null,
+      "seconds": 18,
+      "cost": 0.00087,
+      "steps": 2
+    },
+    {
+      "id": "artifact-brief",
+      "passed": true,
+      "toolOk": true,
+      "answerOk": true,
+      "tools": [
+        "save_artifact"
+      ],
+      "error": null,
+      "seconds": 18,
+      "cost": 0.000841,
+      "steps": 2
+    },
+    {
+      "id": "none-math",
+      "passed": true,
+      "toolOk": true,
+      "answerOk": true,
+      "tools": [],
+      "error": null,
+      "seconds": 13,
+      "cost": 0.000268,
+      "steps": 1
+    },
+    {
+      "id": "none-grammar",
+      "passed": true,
+      "toolOk": true,
+      "answerOk": true,
+      "tools": [],
+      "error": null,
+      "seconds": 12,
+      "cost": 0.000294,
+      "steps": 1
+    },
+    {
+      "id": "none-recursion",
+      "passed": true,
+      "toolOk": true,
+      "answerOk": true,
+      "tools": [],
+      "error": null,
+      "seconds": 12,
+      "cost": 0.00038,
+      "steps": 1
+    },
+    {
+      "id": "none-spanish",
+      "passed": true,
+      "toolOk": true,
+      "answerOk": true,
+      "tools": [],
+      "error": null,
+      "seconds": 12,
+      "cost": 0.000351,
+      "steps": 1
+    }
+  ]
+}
