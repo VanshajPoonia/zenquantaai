@@ -601,6 +601,52 @@ function buildOpenRouterMessages(
   ]
 }
 
+/**
+ * The same context the plain chat path sends, split for pi's agent loop:
+ * system blocks become one prompt, prior turns become history, and the last
+ * user message is the turn's input.
+ */
+export function buildAgentPromptParts(
+  conversation: Conversation,
+  settings: SessionSettings,
+  mode: AIMode,
+  webSearchContext?: WebSearchContext,
+  fileKnowledgeContext?: FileKnowledgeContext,
+  customAssistantContext?: CustomAssistantRuntimeContext,
+  durableMemoryContext?: DurableMemoryContext,
+  crossChatContext?: CrossChatRecallContext,
+  timeZone?: string
+): {
+  systemPrompt: string
+  history: Array<{ role: 'user' | 'assistant'; content: string }>
+  userContent: string
+} {
+  const messages = buildOpenRouterMessages(
+    conversation,
+    settings,
+    mode,
+    webSearchContext,
+    fileKnowledgeContext,
+    customAssistantContext,
+    durableMemoryContext,
+    crossChatContext,
+    timeZone
+  )
+  const systemPrompt = messages
+    .filter((message) => message.role === 'system')
+    .map((message) => message.content)
+    .join('\n\n')
+  const turns = messages.filter(
+    (message): message is { role: 'user' | 'assistant'; content: string } =>
+      message.role !== 'system'
+  )
+  const lastUserIndex = turns.findLastIndex((message) => message.role === 'user')
+  const userContent = lastUserIndex >= 0 ? turns[lastUserIndex].content : ''
+  const history = lastUserIndex >= 0 ? turns.slice(0, lastUserIndex) : turns
+
+  return { systemPrompt, history, userContent }
+}
+
 export function buildPromptTextForUsage(
   conversation: Conversation,
   settings: SessionSettings,

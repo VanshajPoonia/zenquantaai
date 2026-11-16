@@ -4,12 +4,15 @@ import {
   requireAuthenticatedUser,
 } from '@/lib/auth/session'
 import {
+  AGENT_PLAN_LIMITS,
   createSessionSettings,
   getAllowedModelsForTier,
   isModelOverrideOption,
   resolveModelConfig,
+  WEB_AGENT_MAX_STEPS,
 } from '@/lib/config'
 import {
+  neonAgentRunsRepository,
   neonConversationRepository,
   neonCustomAssistantsRepository,
   neonProfilesRepository,
@@ -23,6 +26,7 @@ import { updateConversationSnapshot } from '@/lib/utils/chat'
 import { encodeStreamEvent } from '@/lib/utils/stream'
 import { ChatRequest, CustomAssistant, MessageSource, SessionSettings } from '@/types'
 import {
+  buildAgentPromptParts,
   buildPromptTextForUsage,
   clampSessionSettingsMaxTokens,
   completeConversationWithAssistant,
@@ -48,8 +52,14 @@ import {
   retrieveFileKnowledgeContext,
 } from '@/lib/rag/retrieval'
 import { estimatePromptTokens } from '@/lib/utils/cost'
+import { hasOpenRouterConfig } from '@/lib/ai/openrouter'
+import { isAgentLoopEnabledFor } from '@/lib/agent/flags'
+import { AgentMeter, buildStepUsageEstimate } from '@/lib/agent/metering'
+import { runAgentTurn } from '@/lib/agent/runtime'
+import { createServerTools, getToolNamesForMode } from '@/lib/agent/tools'
 
 export const runtime = 'nodejs'
+export const maxDuration = 300
 
 const WORKING_NOTES_TITLE = 'Working notes'
 
@@ -285,6 +295,7 @@ export async function POST(request: NextRequest) {
       walletType: 'core_tokens' | 'tier_tokens'
       reservedTokens: number
     } | null = null
+    let agentRunId: string | null = null
 
     try {
       const preparedBase = await prepareConversationForChat(payload)
@@ -392,7 +403,7 @@ export async function POST(request: NextRequest) {
             currentConversationId: prepared.conversation.id,
           })
         : undefined
-      const messageSources = [
+      const messageSources: MessageSource[] = [
         ...(webSearchContext?.sources ?? []),
         ...(fileKnowledgeContext?.sources ?? []),
       ]
@@ -410,6 +421,270 @@ export async function POST(request: NextRequest) {
       )
 
       const estimatedPromptTokens = estimatePromptTokens(promptText)
+
+      const useAgentLoop =
+        isAgentLoopEnabledFor(auth.user) &&
+        hasOpenRouterConfig() &&
+        getToolNamesForMode(prepared.assistantMode).length > 0
+
+      if (useAgentLoop) {
+        const agentLimits = AGENT_PLAN_LIMITS[subscription.tier]
+        const agentMaxSteps = Math.min(WEB_AGENT_MAX_STEPS, agentLimits.maxStepsPerRun)
+        const agentWallet: 'core_tokens' | 'tier_tokens' =
+          routeConfig.walletType === 'tier_tokens' ? 'tier_tokens' : 'core_tokens'
+        const placeholder = {
+          ...prepared.assistantPlaceholder,
+          mode: billingMode,
+          model: routeConfig.model,
+          assistantFamily: getAssistantFamilyFromMode(billingMode),
+          customAssistantId: customAssistant?.id ?? null,
+          customAssistant: customAssistantSnapshot,
+        }
+        const persistedConversation = await neonConversationRepository.saveTurnStart(
+          auth.user.id,
+          {
+            conversation: prepared.conversation,
+            userMessage: prepared.userMessage,
+            assistantPlaceholder: placeholder,
+            action: payload.action,
+          }
+        )
+        conversationId = persistedConversation.id
+        messageId = placeholder.id
+
+        await writer.write(
+          encodeStreamEvent({
+            type: 'start',
+            conversation: persistedConversation,
+            message: placeholder,
+          })
+        )
+        await writer.write(
+          encodeStreamEvent({
+            type: 'working',
+            conversationId: persistedConversation.id,
+            messageId: placeholder.id,
+            title: WORKING_NOTES_TITLE,
+            notes: webSearchRequested && webSearchContext?.sources.length
+              ? buildWorkingNotes('searching')
+              : buildWorkingNotes('understanding'),
+          })
+        )
+        if (messageSources.length) {
+          await writer.write(
+            encodeStreamEvent({
+              type: 'sources',
+              conversationId: persistedConversation.id,
+              messageId: placeholder.id,
+              sources: messageSources,
+            })
+          )
+        }
+
+        const agentRun = await neonAgentRunsRepository.create({
+          userId: auth.user.id,
+          conversationId: persistedConversation.id,
+          surface: 'web',
+        })
+        agentRunId = agentRun.id
+        const meter = new AgentMeter({
+          userId: auth.user.id,
+          tier: subscription.tier,
+          walletType: agentWallet,
+          effectiveIncluded:
+            agentWallet === 'tier_tokens'
+              ? effectiveSubscription.tierTokensIncluded
+              : effectiveSubscription.coreTokensIncluded,
+          limits: agentLimits,
+          maxSteps: agentMaxSteps,
+          maxOutputTokens: agentLimits.maxAgentOutputTokens,
+          surface: 'web',
+          runId: agentRun.id,
+          dailyMessageLimit: effectiveSubscription.dailyMessageLimit,
+          event: {
+            conversationId: persistedConversation.id,
+            messageId: placeholder.id,
+            assistantFamily: getAssistantFamilyFromMode(billingMode),
+            mode: billingMode,
+            model: routeConfig.model,
+          },
+        })
+        const promptParts = buildAgentPromptParts(
+          prepared.generationConversation,
+          prepared.responseSettings,
+          prepared.assistantMode,
+          webSearchContext,
+          fileKnowledgeContext,
+          customAssistantContext,
+          durableMemoryContext,
+          crossChatContext,
+          payload.timeZone
+        )
+        let nextSourceId = messageSources.length
+        const tools = createServerTools({
+          userId: auth.user.id,
+          conversationId: persistedConversation.id,
+          messageId: placeholder.id,
+          projectId: persistedConversation.projectId,
+          mode: prepared.assistantMode,
+          nextSourceId: () => String(++nextSourceId),
+        })
+
+        const turn = runAgentTurn({
+          ...promptParts,
+          modelId: routeConfig.model,
+          temperature: prepared.responseSettings.temperature,
+          maxOutputTokens: agentLimits.maxAgentOutputTokens,
+          maxSteps: agentMaxSteps,
+          tools,
+          sessionId: persistedConversation.id,
+          meter,
+          signal: request.signal,
+        })
+
+        let turnResult: Awaited<ReturnType<typeof turn.next>>['value'] | undefined
+        while (true) {
+          const next = await turn.next()
+          if (next.done) {
+            turnResult = next.value
+            break
+          }
+          const event = next.value
+          if (event.type === 'text') {
+            accumulated += event.delta
+            await writer.write(
+              encodeStreamEvent({
+                type: 'delta',
+                conversationId: persistedConversation.id,
+                messageId: placeholder.id,
+                delta: event.delta,
+              })
+            )
+          } else if (event.type === 'step') {
+            await writer.write(
+              encodeStreamEvent({
+                type: 'step',
+                conversationId: persistedConversation.id,
+                messageId: placeholder.id,
+                step: event.step,
+                maxSteps: event.maxSteps,
+              })
+            )
+          } else if (event.type === 'tool_call') {
+            await writer.write(
+              encodeStreamEvent({
+                type: 'tool_call',
+                conversationId: persistedConversation.id,
+                messageId: placeholder.id,
+                callId: event.callId,
+                name: event.name,
+                label: event.label,
+                args: event.args,
+              })
+            )
+          } else {
+            if (event.sources?.length) {
+              messageSources.push(...event.sources)
+              persistedMessageSources = messageSources
+            }
+            await writer.write(
+              encodeStreamEvent({
+                type: 'tool_result',
+                conversationId: persistedConversation.id,
+                messageId: placeholder.id,
+                callId: event.callId,
+                name: event.name,
+                ok: event.ok,
+                summary: event.summary,
+                sources: event.sources,
+                data: event.data,
+              })
+            )
+          }
+        }
+
+        const agentUsage =
+          meter.totalUsage ??
+          buildStepUsageEstimate({
+            tier: subscription.tier,
+            walletType: agentWallet,
+            usage: {
+              inputTokens: 0,
+              outputTokens: 0,
+              cacheReadTokens: 0,
+              cacheWriteTokens: 0,
+              rawCostUsd: 0,
+              costFromProvider: false,
+            },
+          })
+        const finalText = turnResult?.text || accumulated || 'No response returned.'
+        const completedConversation = await completeConversationWithAssistant(
+          persistedConversation,
+          placeholder,
+          finalText,
+          prepared.generationConversation,
+          billingMode,
+          {
+            action: payload.action,
+            userMessage: prepared.userMessage,
+            tier: subscription.tier,
+            usageOverride: { ...agentUsage, rawCostUsd: 0, marginUsd: 0 },
+            modelOverride: routeConfig.model,
+            webSearchContext,
+            fileKnowledgeContext,
+            customAssistantContext,
+            durableMemoryContext,
+            crossChatContext,
+            timeZone: payload.timeZone,
+            sources: messageSources,
+            responseSettings: prepared.responseSettings,
+          }
+        )
+        const assistantMessage =
+          completedConversation.messages.find((message) => message.id === placeholder.id) ??
+          placeholder
+        assistantMessage.parts = turnResult?.parts ?? []
+        const savedConversation = await neonConversationRepository.saveAssistantCompletion(
+          auth.user.id,
+          completedConversation,
+          assistantMessage
+        )
+        await neonAgentRunsRepository.finish({
+          userId: auth.user.id,
+          runId: agentRun.id,
+          status: 'completed',
+        })
+        agentRunId = null
+
+        const savedMessage = savedConversation.messages.at(-1)
+        await writer.write(
+          encodeStreamEvent({
+            type: 'done',
+            conversation: savedConversation,
+            message: {
+              ...placeholder,
+              content: finalText,
+              status: 'complete',
+              usage: savedMessage?.usage,
+              sources: savedMessage?.sources,
+              parts: savedMessage?.parts ?? assistantMessage.parts,
+            },
+            usage: savedMessage?.usage,
+          })
+        )
+
+        await maybeUpdateRollingSummary({
+          userId: auth.user.id,
+          conversation: savedConversation,
+          settings: payload.settings,
+        })
+        await maybeExtractDurableMemories({
+          userId: auth.user.id,
+          conversation: savedConversation,
+          settings: payload.settings,
+        })
+        return
+      }
 
       // Fast, specific error messages for the common case (checked against a
       // point-in-time snapshot). The atomic reservation below is the real
@@ -707,6 +982,17 @@ export async function POST(request: NextRequest) {
         settings: payload.settings,
       })
     } catch (error) {
+      if (agentRunId) {
+        await neonAgentRunsRepository
+          .finish({
+            userId: auth.user.id,
+            runId: agentRunId,
+            status: request.signal.aborted ? 'stopped' : 'failed',
+          })
+          .catch((finishError) => {
+            console.error('Failed to close the agent run.', finishError)
+          })
+      }
       if (textUsageReservation) {
         await neonSubscriptionsRepository
           .releaseTextUsage({
