@@ -7,10 +7,9 @@ Things only the owner can do or decide before the 2026-12-01 launch. Claude Code
 | # | What | Why | When |
 |---|---|---|---|
 | 1 | **Send the permission request to OpenRouter** (paste `docs/launch/openrouter-permission-request.md` into the "Talk to sales" form on openrouter.ai, or tell Claude to fill it in through Chrome). When they say yes, set `ZQ_MODEL_API=on` | OpenRouter's terms forbid reselling API access. Until they confirm, zq runs on each user's own OpenRouter key (option B, built 2026-11-17) and hosted models stay admin-only, so zq can still launch on 12-01 | Now |
-| 2 | Turn on two-factor authentication for npm (npmjs.com, Account, Two-Factor Authentication), then give Claude a fresh 6-digit code, or run `! pnpm --filter zenquanta publish --access public --tag beta --otp=<code>` yourself | npm now refuses publishes from accounts without 2FA (403 on 2026-11-17). You are logged in as `vanshajpoonia` and `zenquanta@0.1.0-beta.1` is built and ready | Now |
-| 3 | Read `/terms` and `/privacy` and say OK or what to change. If zq stays on OpenRouter, the terms also need a line passing on the model providers' terms (OpenRouter section 5.2) | They are plain-language drafts, not legal advice | Day 9 (11-25) |
-| 4 | Check the `v0-zenquantaai` Vercel project (it is in another Vercel account): set Node 22.19 or newer, or disconnect it from `main` | It also deploys `main`. The agent loop needs Node 22.19 or newer | Before Day 11 |
-| 5 | Optional: Apple Developer account ($99 a year) | Needed to sign the Mac desktop app in v1.1 | After launch |
+| 2 | Read `/terms` and `/privacy` and say OK or what to change. If zq stays on OpenRouter, the terms also need a line passing on the model providers' terms (OpenRouter section 5.2) | They are plain-language drafts, not legal advice | Day 9 (11-25) |
+| 3 | Check the `v0-zenquantaai` Vercel project (it is in another Vercel account): set Node 22.19 or newer, or disconnect it from `main` | It also deploys `main`. The agent loop needs Node 22.19 or newer | Before Day 11 |
+| 4 | Optional: Apple Developer account ($99 a year) | Needed to sign the Mac desktop app in v1.1 | After launch |
 
 ## OpenRouter terms
 
@@ -38,5 +37,5 @@ Options for zq:
 | 2026-11-16 | R2 set up by Claude through your Cloudflare dashboard: private bucket `zenquanta-files` (Asia Pacific), an Account API token "Zenquanta app files" with Object Read & Write on that bucket only, and the production env vars on Vercel. Uploads and PDF indexing verified in production |
 | 2026-11-17 | Approved Gate B: daily caps kept, zq steps per run raised (Free 15, Basic 20), Free zq on Qwen3 Coder, `forge-fast` replaced, web searches metered at 8,000 wallet tokens |
 | 2026-11-17 | R2 env vars added to Vercel Preview deploys |
-| 2026-11-17 | Logged in to npm as `vanshajpoonia` |
+| 2026-11-17 | Logged in to npm as `vanshajpoonia`, turned on 2FA with a passkey, published `zenquanta@0.1.0-beta.1` and approved npm's staged release. `latest` and `beta` both point to it. Verified by installing from npm and running a task against production |
 | 2026-11-17 | Built option B as the fallback: zq runs on the user's own OpenRouter key until `ZQ_MODEL_API=on` |

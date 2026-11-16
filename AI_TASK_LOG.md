@@ -21,7 +21,9 @@ Current direction: plan upgrades remain manual/admin-driven, payment automation 
 
 **Verified**: typecheck, lint, 152 web tests and 9 zq tests pass. A production browser smoke test passed 16/16 (landing, chat, dashboard, pricing, files, terms, privacy, docs) on desktop and at 390 px with no overflow. Locally, zq in bring-your-own-key mode fixed the sample bug and synced the session. The hosted API returns 403 for non-admins.
 
-**Open**: npm login (the user has to run it), sending the OpenRouter request, the legal review and the `v0-zenquantaai` project check. All are in `docs/launch/NEEDS_YOU.md`.
+**Release**: the user enabled npm 2FA with a passkey and published `zenquanta@0.1.0-beta.1` from their own terminal. npm's passkey flow needs a TTY and fails with EOTP from Claude Code, and new packages go through npm's staged release, which the user approved on npmjs.com. `latest` and `beta` point to `0.1.0-beta.1`. A fresh `npm install` (use `--prefer-online` if npm cached the old placeholder) ran `zq --version` and fixed the sample bug against production in bring-your-own-key mode, with the session synced. Short runs take 3 to 5 s.
+
+**Open**: sending the OpenRouter request, the legal review and the `v0-zenquantaai` project check. All are in `docs/launch/NEEDS_YOU.md`.
 
 ## 2026-11-16 - Agent platform built: pi web loop, Model API, zq, PWA, R2 (Claude Code, user-requested implementation)
 
