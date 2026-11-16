@@ -1,0 +1,32 @@
+{
+  "name": "zenquanta",
+  "version": "0.1.0",
+  "description": "zq: Zenquanta Forge in your terminal, built on pi.",
+  "type": "module",
+  "bin": {
+    "zq": "dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE",
+    "NOTICE"
+  ],
+  "engines": {
+    "node": ">=22.19.0"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "@earendil-works/pi-coding-agent": "1.5.2"
+  },
+  "devDependencies": {
+    "@types/node": "22.19.1",
+    "typescript": "5.7.3",
+    "vitest": "4.1.8"
+  }
+}

@@ -19,3 +19,4 @@ node_modules
 data/runtime/*.json
 .storage/
 tsconfig.tsbuildinfo
+packages/*/dist/
