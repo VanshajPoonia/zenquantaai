@@ -17,6 +17,7 @@ import {
   neonUsageLimitOverridesRepository,
 } from '@/lib/db/repositories'
 import {
+  countTextReplies,
   filterEventsForSubscriptionPeriod,
   getAssistantUsageBreakdown,
   getDisplayedCreditsSnapshot,
@@ -239,7 +240,7 @@ export default async function DashboardPage({
             <CardContent className="grid gap-4 sm:grid-cols-3">
               <MetricBlock
                 label="Text replies"
-                value={periodUsageEvents.length.toLocaleString()}
+                value={countTextReplies(periodUsageEvents).toLocaleString()}
               />
               <MetricBlock
                 label="Images created"
@@ -247,7 +248,7 @@ export default async function DashboardPage({
               />
               <MetricBlock
                 label="Total requests"
-                value={(periodUsageEvents.length + periodImageEvents.length).toLocaleString()}
+                value={(countTextReplies(periodUsageEvents) + periodImageEvents.length).toLocaleString()}
               />
             </CardContent>
           </Card>

@@ -116,8 +116,23 @@ export function filterEventsForSubscriptionPeriod<T extends { createdAt: string 
   })
 }
 
+/** One agent run writes a usage event per step, so a run counts as one reply. */
+export function countTextReplies(events: Array<{ agentRunId?: string | null }>): number {
+  const runs = new Set<string>()
+  let plain = 0
+  for (const event of events) {
+    if (event.agentRunId) runs.add(event.agentRunId)
+    else plain += 1
+  }
+  return plain + runs.size
+}
+
 export function getAssistantUsageBreakdown(input: {
-  textEvents: Array<{ assistantFamily: AssistantFamily; displayedCostUsd: number }>
+  textEvents: Array<{
+    assistantFamily: AssistantFamily
+    displayedCostUsd: number
+    agentRunId?: string | null
+  }>
   imageEvents: Array<{ assistantFamily: AssistantFamily; displayedCostUsd: number; imageCount: number }>
 }) {
   const breakdown = new Map<
@@ -125,13 +140,15 @@ export function getAssistantUsageBreakdown(input: {
     { family: AssistantFamily; events: number; displayedCostUsd: number }
   >()
 
+  const countedRuns = new Set<string>()
   for (const event of input.textEvents) {
     const current = breakdown.get(event.assistantFamily) ?? {
       family: event.assistantFamily,
       events: 0,
       displayedCostUsd: 0,
     }
-    current.events += 1
+    if (!event.agentRunId || !countedRuns.has(event.agentRunId)) current.events += 1
+    if (event.agentRunId) countedRuns.add(event.agentRunId)
     current.displayedCostUsd += event.displayedCostUsd
     breakdown.set(event.assistantFamily, current)
   }

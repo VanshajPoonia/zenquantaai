@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { calculateImageUsageEstimate, calculateTextUsageEstimate, estimateTokens, getDisplayedCreditsSnapshot, getRemainingWallets } from '@/lib/billing/costs'
+import { calculateImageUsageEstimate, calculateTextUsageEstimate, countTextReplies, estimateTokens, getAssistantUsageBreakdown, getDisplayedCreditsSnapshot, getRemainingWallets } from '@/lib/billing/costs'
 import { buildUsageLimitSnapshot, getPlanRequestStatusLabel, getUpgradeNudgeForError, isNearLimit, isUpgradeTier, sanitizePlanRequestAdminNote } from '@/lib/billing/upgrade-nudges'
 import { MODEL_PRICING_CONFIG, usdToDisplayedCredits } from '@/lib/config/pricing'
 import { Subscription } from '@/types'
@@ -113,3 +113,22 @@ describe('billing and pricing pure helpers', () => {
     expect(sanitizePlanRequestAdminNote('x'.repeat(300))).toHaveLength(280)
   })
 })
+
+describe('agent run reply counting', () => {
+  it('counts an agent run as one reply however many steps it took', () => {
+    const events = [
+      { agentRunId: null },
+      { agentRunId: 'run-1' },
+      { agentRunId: 'run-1' },
+      { agentRunId: 'run-1' },
+      { agentRunId: 'run-2' },
+    ]
+    expect(countTextReplies(events)).toBe(3)
+    const breakdown = getAssistantUsageBreakdown({
+      textEvents: events.map((event) => ({ ...event, assistantFamily: 'forge' as const, displayedCostUsd: 0.01 })),
+      imageEvents: [],
+    })
+    expect(breakdown.find((item) => item.family === 'forge')?.events).toBe(3)
+  })
+})
+
