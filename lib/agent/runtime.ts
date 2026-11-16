@@ -10,6 +10,9 @@ import type { AgentRunEvent, ExtraCharge, StepUsage, ToolDetails } from './types
 
 const MAX_SAVED_TOOL_OUTPUT_CHARS = 4_000
 const LOOP_GUARD_REPEATS = 3
+// One model request may not hang a turn; the function itself has a 300 s limit.
+const STEP_TIMEOUT_MS = 120_000
+const STEP_TIMEOUT_MESSAGE = 'The model took too long to respond. Please try again.'
 
 export const AGENT_TOOL_GUIDANCE = [
   '[Tools]',
@@ -46,6 +49,7 @@ export interface RunAgentTurnInput {
   sessionId: string
   meter: StepMeter
   signal: AbortSignal
+  stepTimeoutMs?: number
   /** Test hook: a model collection and model to use instead of OpenRouter. */
   runtime?: { models: Models; model: Model<Api>; apiKey?: string }
 }
@@ -122,6 +126,7 @@ export async function* runAgentTurn(
   const parts: MessagePart[] = []
   let text = ''
   let limitError: AgentLimitError | null = null
+  let timedOut = false
 
   const queue: AgentRunEvent[] = []
   let wake: (() => void) | null = null
@@ -148,13 +153,24 @@ export async function* runAgentTurn(
       tools: input.tools,
       messages: toPiHistory(input.history, model),
     },
-    streamFn: (streamModel, context, options) =>
-      models.streamSimple(streamModel, context, {
+    streamFn: (streamModel, context, options) => {
+      const stepController = new AbortController()
+      const timer = setTimeout(() => {
+        timedOut = true
+        stepController.abort()
+      }, input.stepTimeoutMs ?? STEP_TIMEOUT_MS)
+      const stream = models.streamSimple(streamModel, context, {
         ...options,
+        signal: options?.signal
+          ? AbortSignal.any([options.signal, stepController.signal])
+          : stepController.signal,
         apiKey,
         maxTokens: input.maxOutputTokens,
         temperature: input.temperature,
-      }),
+      })
+      void stream.result().finally(() => clearTimeout(timer))
+      return stream
+    },
     sessionId: input.sessionId,
     identity: getAgentIdentity(),
     toolExecution: 'parallel',
@@ -282,6 +298,7 @@ export async function* runAgentTurn(
   }
 
   if (limitError) throw limitError
+  if (timedOut && !input.signal.aborted) throw new Error(STEP_TIMEOUT_MESSAGE)
   if (failure) throw failure
 
   const lastAssistant = [...agent.state.messages]

@@ -57,8 +57,8 @@ function echoTool(): AgentTool<typeof echoParameters, ToolDetails> {
   }
 }
 
-function setup(responses: ReturnType<typeof fauxAssistantMessage>[]) {
-  const faux = fauxProvider()
+function setup(responses: ReturnType<typeof fauxAssistantMessage>[], tokensPerSecond?: number) {
+  const faux = fauxProvider(tokensPerSecond ? { tokensPerSecond } : undefined)
   const models = createModels()
   models.setProvider(faux.provider)
   faux.setResponses(responses)
@@ -126,6 +126,14 @@ describe('agent runtime', () => {
     const meter = new FakeMeter(2)
     await drain(runAgentTurn({ ...baseInput(meter, runtime), maxSteps: 2 }))
     expect(meter.stepCount).toBe(2)
+  })
+
+  it('fails a step that takes too long with a clear message', async () => {
+    const { runtime } = setup([fauxAssistantMessage([fauxText('word '.repeat(200))])], 5)
+    const meter = new FakeMeter(4)
+    await expect(drain(runAgentTurn({ ...baseInput(meter, runtime), stepTimeoutMs: 100 }))).rejects.toThrow(
+      'The model took too long to respond'
+    )
   })
 
   it('surfaces plan limit errors', async () => {
