@@ -6,6 +6,18 @@ The repository contains a real Zenquanta AI platform backed by Neon for runtime 
 
 Current direction: plan upgrades remain manual/admin-driven, payment automation is out of scope unless explicitly requested, and Neon/storage start fresh without importing Supabase database rows or storage objects.
 
+## 2026-11-16 - Platform plan for chat tools and a terminal coding agent (Claude Code, planning only)
+
+**Goal**: The user asked to make Zenquanta a complete AI platform, a harness for coding plus a chatbot, and to plan for it. Partway through they asked whether to use open source tools for the features instead of building everything.
+
+**User decisions**: the coding agent runs on the user's machine as a CLI first and a cloud sandbox comes later. Payments stay manual. One agent loop powers chat and code. Open source covers the commodity layers.
+
+**What changed**: added `AI_PLATFORM_PLAN.md` (goal, starting point audit, build or adopt map, architecture, data changes, metering, security, phases 0 to 6, evals, risks, dependencies, open questions). Added a decision entry to `AI_DECISIONS.md` and a direction line to `AGENTS.md`. No app code changed.
+
+**Checked**: no tool calling exists today (`lib/ai/openrouter.ts`, `types/index.ts` `Message`). Auth is cookie-only (`lib/auth/session.ts`). `reserveTextUsage` adds one daily message per request. Licenses and activity of candidate repos were read from the GitHub API on 2026-11-16: OpenCode (`anomalyco/opencode`, MIT, TypeScript), Gemini CLI (Apache-2.0, TypeScript), Codex CLI and Goose (Apache-2.0, Rust), Aider (Apache-2.0, Python, last push 2026-05-22), Cline (Apache-2.0), Kilo Code and OpenHands (MIT), OpenRouter AI SDK provider and E2B (Apache-2.0). GitHub reports no standard license for the `vercel/ai` and MCP SDK repos, Crush and Open WebUI, so those license files get read before adoption. The npm name `zenquanta` is free. Current npm versions were not checked because the shell checks kept failing, so versions get pinned per phase.
+
+**Next steps**: the user approves the Phase 0 dependencies (`ai`, `@openrouter/ai-sdk-provider`, a zod bump), then Phase 0 starts. Before Phase 2 ships publicly, read OpenRouter's terms on a metered public model API.
+
 ## 2026-10-16 - Page buddy, redesigned die, quieter assistants panel, more 3D (Claude Code, user-requested implementation)
 
 **Goal**: The user asked for an interactive buddy that stays on screen the whole time ("maybe the faces with letters"), less gradient in the assistants section while keeping it in "Same question. Your kind of answer.", more 3D and interactive elements, and a better die design and animation. Their stated aim is a design showpiece.
