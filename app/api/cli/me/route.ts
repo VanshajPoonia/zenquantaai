@@ -34,5 +34,7 @@ export async function GET(request: NextRequest) {
     tierTokens: wallet(effective.tierTokensIncluded, subscription.tierTokensUsed),
     agentSteps: wallet(limits.agentStepsPerDay, subscription.dailyAgentStepCount),
     maxStepsPerRun: limits.maxStepsPerRun,
+    maxAgentInputTokens: limits.maxAgentInputTokens,
+    maxAgentOutputTokens: limits.maxAgentOutputTokens,
   })
 }
