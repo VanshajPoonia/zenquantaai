@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import { cn } from '@/lib/utils'
 import {
+  AGENT_PLAN_LIMITS,
   ASSISTANT_PUBLIC_PAGES,
   PLAN_CONFIGS,
   TIER_ASSISTANT_NAMES,
@@ -210,6 +211,10 @@ export default async function PricingPage({
                   </p>
                   <p className="text-foreground">
                     {plan.maxImagesPerDay.toLocaleString()} images a day
+                  </p>
+                  <p className="text-foreground">
+                    {AGENT_PLAN_LIMITS[plan.tier].agentStepsPerDay.toLocaleString()} agent steps a day
+                    {AGENT_PLAN_LIMITS[plan.tier].cliAccess ? ', including zq in your terminal' : ''}
                   </p>
                   <p>{plan.imageCredits.toLocaleString()} image credits a month</p>
                   <p>{formatTokenAllowance(plan.coreTokens)} tokens with standard models</p>

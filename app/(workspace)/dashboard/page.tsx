@@ -28,6 +28,7 @@ import {
   sanitizePlanRequestAdminNote,
 } from '@/lib/billing/upgrade-nudges'
 import {
+  AGENT_PLAN_LIMITS,
   ASSISTANT_FAMILY_COPY,
   ASSISTANT_PUBLIC_PAGES,
   usdToDisplayedCredits,
@@ -135,6 +136,11 @@ export default async function DashboardPage({
         ).toLocaleString()
       : 'No cap'
   const imageCreditsLeft = getRemainingWallets(effectiveSubscription).imageCredits
+  const agentLimits = AGENT_PLAN_LIMITS[subscription.tier]
+  const agentStepsLeftToday = Math.max(
+    0,
+    agentLimits.agentStepsPerDay - subscription.dailyAgentStepCount
+  ).toLocaleString()
 
   return (
     <main className="bg-background px-4 py-8 sm:px-6 lg:px-10">
@@ -207,10 +213,11 @@ export default async function DashboardPage({
           </div>
         ) : null}
 
-        <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
+        <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-5">
           <MetricCard label="Current plan" value={subscription.tier.toUpperCase()} />
           <MetricCard label="Messages left today" value={messagesLeftToday} />
           <MetricCard label="Images left today" value={imagesLeftToday} />
+          <MetricCard label="Agent steps left today" value={agentStepsLeftToday} />
           {displayedBudget.totalDisplayedCredits > 0 ? (
             <MetricCard
               label="Credits left this cycle"
