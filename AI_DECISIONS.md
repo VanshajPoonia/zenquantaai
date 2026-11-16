@@ -1,5 +1,19 @@
 # AI Architecture Decisions
 
+## Zenquanta Becomes An Agent Platform With Four Surfaces
+
+Decision (2026-11-16, planned, nothing built yet): Zenquanta grows into a chat and coding platform with one account, memory and plan across four surfaces. The web app gets a tool-using agent loop. A metered OpenAI-compatible Model API and an MCP server let any harness use Zenquanta. `zq` is Forge in the terminal, built on OpenCode. The full plan is `AI_PLATFORM_PLAN.md`.
+
+User choices: the coding agent runs on the user's machine first and a cloud sandbox comes later. Payments stay manual. One loop powers chat and code. Open source is used for the commodity layers.
+
+Rationale:
+
+- The agent loop, terminal agent UI, tool protocol and sandboxes are solved by permissive open source (Vercel AI SDK, OpenCode, MCP, E2B). Building them again would cost months. Zenquanta's value is the shared memory, the six assistants, plans and metering, and session sync, so that is what we build.
+- One model call per Model API request fits serverless limits. Local tools run on the user's machine and Zenquanta tools run on our server.
+- Adopted code must be MIT, Apache-2.0 or BSD. Prefer a library or wrapper to a fork, and record any fork here.
+
+This plans to change three earlier statements: the Context Engine note that there is no tool-calling surface, MCP being out of scope, and GitHub staying read-only (only at the Phase 5 decision). OpenRouter as the only gateway, separate text and image transports, and manual plans all stay.
+
 ## The Sidebar Library And Shared Pages
 
 Decision (2026-10-14): the sidebar has a Library section (Artifacts, Images, Playbooks, Files, Memory, Research) under New Chat. Dashboard, Files (`/knowledge`) and Plans (`/pricing`) live in `app/(workspace)/` and render inside the app layout with the sidebar; `ChatShell` picks the chat or the page from the path (`isWorkspacePath`). The chat area stays mounted, hidden, while a page is open. Signed-out visitors see Plans on its own. Admin pages stay separate.
