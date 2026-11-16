@@ -586,6 +586,66 @@ class NeonConversationsRepository {
       .where(and(eq(zenConversations.userId, userId), eq(zenConversations.id, conversation.id)))
   }
 
+  /** Creates or refreshes the conversation that mirrors one zq session. */
+  async upsertCliSession(
+    userId: string,
+    input: { id: string; title: string; workspace: ConversationWorkspace | null }
+  ): Promise<void> {
+    await this.assertConversationWritable(userId, input.id)
+    await neonUsersRepository.ensureUserReference(userId)
+    const now = new Date()
+    await getDatabaseClient()
+      .insert(zenConversations)
+      .values({
+        id: input.id,
+        userId,
+        projectId: DEFAULT_PROJECT_ID,
+        title: input.title,
+        mode: 'code',
+        assistantFamily: 'forge',
+        sessionSettings: createSessionSettings('code'),
+        surface: 'cli',
+        workspace: input.workspace,
+        createdAt: now,
+        updatedAt: now,
+      })
+      .onConflictDoUpdate({
+        target: zenConversations.id,
+        set: { title: input.title, workspace: input.workspace, updatedAt: now },
+        where: eq(zenConversations.userId, userId),
+      })
+  }
+
+  /** Upserts zq session entries. Returns false when the session is not the user's. */
+  async appendCliMessages(
+    userId: string,
+    conversationId: string,
+    messages: Message[]
+  ): Promise<boolean> {
+    const rows = await getDatabaseClient()
+      .select({ id: zenConversations.id })
+      .from(zenConversations)
+      .where(
+        and(
+          eq(zenConversations.id, conversationId),
+          eq(zenConversations.userId, userId),
+          eq(zenConversations.surface, 'cli')
+        )
+      )
+      .limit(1)
+    if (!rows[0]) return false
+
+    await this.upsertMessages(conversationId, messages)
+    const conversation = await this.get(userId, conversationId, { messageLimit: 1 })
+    if (conversation) {
+      await this.refreshConversationHeaderFromMessages(userId, {
+        ...conversation,
+        updatedAt: new Date().toISOString(),
+      })
+    }
+    return true
+  }
+
   async save(userId: string, conversation: Conversation): Promise<Conversation> {
     await this.upsertConversationHeader(userId, conversation)
     await this.upsertMessages(conversation.id, conversation.messages)
