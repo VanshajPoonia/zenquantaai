@@ -6,6 +6,23 @@ The repository contains a real Zenquanta AI platform backed by Neon for runtime 
 
 Current direction: plan upgrades remain manual/admin-driven, payment automation is out of scope unless explicitly requested, and Neon/storage start fresh without importing Supabase database rows or storage objects.
 
+## 2026-11-17 - Gate B applied, zq key mode, production smoke test (Claude Code, user-requested implementation)
+
+**Goal**: The user approved everything on the needs-you list and asked to proceed.
+
+**What changed**:
+- Gate B: zq steps per run raised (Free 15, Basic 20). Web searches draw 8,000 wallet tokens plus upstream cost in both chat paths.
+- zq model table (`lib/agent/model-names.ts`): `forge-fast` is GPT-5.1 Codex Mini (6/6), `forge-lite` is DeepSeek V3.1 (6/6), `forge-best` is Claude Sonnet 4.6 on Pro and up, and the cheap models are now on every plan.
+- OpenRouter's terms (section 7) restrict reselling API access. The hosted Model API is admin-only unless `ZQ_MODEL_API=on`. zq falls back to the user's own OpenRouter key (`zq key`), with sign-in and sync still through Zenquanta. A permission request for OpenRouter is drafted in `docs/launch/openrouter-permission-request.md`. `/terms` passes on the model providers' terms.
+- R2 env vars added to Preview (`vercel env add NAME preview "" --value ... --yes` works non-interactively).
+- Agent steps abort after 120 s with a clear error (the one production stall).
+- The dashboard counts an agent run as one reply.
+- zq package metadata and prepublish checks. `npm pack --dry-run` gives 13 files, 10.6 kB.
+
+**Verified**: typecheck, lint, 152 web tests and 9 zq tests pass. A production browser smoke test passed 16/16 (landing, chat, dashboard, pricing, files, terms, privacy, docs) on desktop and at 390 px with no overflow. Locally, zq in bring-your-own-key mode fixed the sample bug and synced the session. The hosted API returns 403 for non-admins.
+
+**Open**: npm login (the user has to run it), sending the OpenRouter request, the legal review and the `v0-zenquantaai` project check. All are in `docs/launch/NEEDS_YOU.md`.
+
 ## 2026-11-16 - Agent platform built: pi web loop, Model API, zq, PWA, R2 (Claude Code, user-requested implementation)
 
 **Goal**: The user gave full permissions to execute the launch plan. Later they asked to keep owner-only items in a separate file and chose R2 for storage.
