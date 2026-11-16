@@ -4,6 +4,23 @@ Launch: **Tuesday 2026-12-01**. Code freeze: **Saturday 2026-11-28**. Planned on
 
 The direction and architecture are in `AI_PLATFORM_PLAN.md`. This file says what ships, in what order and what gets cut if we fall behind. Each workstream has a spec in `docs/launch/specs/`.
 
+## Progress
+
+Updated 2026-11-16, end of Day 0. Work runs ahead of the day plan on branch `feat/agent-platform`.
+
+| Item | Status |
+|---|---|
+| Gate A: pi loop in a Vercel function | Passed on a preview: a Pulse turn searched and cited in 12 s on Node 24 |
+| Migration `20261117_zenquanta_agent_platform.sql` | Applied to Neon and verified |
+| Spec 01: agent loop, tools, tool cards, per-step metering | Built and tested locally and on a preview, behind `AGENT_LOOP` |
+| Spec 02: tokens, device login, Model API | Built and tested locally |
+| Spec 03: `zq` 0.1 | Built and tested locally: login, read, edit, sync to web. Not published |
+| Spec 04: PWA | Built. Install flow still to check on real phones |
+| Spec 05: evals and limits | Eval suite built. Limits are provisional until Gate B |
+| Spec 06: terms, privacy, docs, landing section, sign-up rate limit, admin cost split | Built. Production setup and the user's legal review are open |
+
+Extra: without Tavily or embeddings keys, web search and embeddings fall back to OpenRouter, so search, file search and memory work with the one gateway key.
+
 ## What ships on 2026-12-01
 
 | # | Feature | Spec |
@@ -55,7 +72,7 @@ Work runs in parallel lanes. One person or agent can own a lane.
 | 11 | Fri 11-27 | Flags on in production for admins only | Publish `zenquanta@0.1.0-beta.1` after a yes | Production setup from `docs/BETA_LAUNCH_CHECKLIST.md` |
 | 12 | Sat 11-28 | **Code freeze.** Bug bash with `docs/manual-product-smoke-test.md` and spec 06 checks | | |
 | 13 | Sun 11-29 | Blocker fixes only. Dry run with 3 to 5 testers | | |
-| 14 | Mon 11-30 | Flags on for everyone. Publish `zenquanta@0.1.0`. Queue launch posts in Postroom. **Gate D** | | |
+| 14 | Mon 11-30 | Flags on for everyone. Publish `zenquanta@0.1.0`, then set `NEXT_PUBLIC_ZQ_RELEASED=true`. Queue launch posts in Postroom. **Gate D** | | |
 | 15 | Tue 12-01 | **Launch.** Watch errors, signups and OpenRouter spend every few hours | | |
 
 ## Gates
