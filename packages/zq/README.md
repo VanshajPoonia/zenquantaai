@@ -32,7 +32,7 @@ Inside a session:
 | `/usage` | Your plan, tokens left and agent steps left today |
 | `/sync on`, `/sync off` | Turn web sync on or off for this project |
 | `/permissions` | Show the permission mode and always-allowed commands |
-| `/model` | Pick a model: `forge`, `forge-fast`, `forge-lite`, or `forge-best` on paid plans |
+| `/model` | Pick a model: `forge`, `forge-fast`, `forge-lite`, or `forge-best` on Pro and up |
 
 ## Permissions
 

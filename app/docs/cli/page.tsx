@@ -35,7 +35,7 @@ zq -p "fix the failing test" --allow-edits`}</pre>
         </thead>
         <tbody>
           <tr><td><code>/usage</code></td><td>Your plan, tokens left and agent steps left today</td></tr>
-          <tr><td><code>/model</code></td><td>Pick forge, forge-fast, forge-lite, or forge-best on paid plans</td></tr>
+          <tr><td><code>/model</code></td><td>Pick forge, forge-fast, forge-lite, or forge-best on Pro and up</td></tr>
           <tr><td><code>/sync on</code>, <code>/sync off</code></td><td>Turn web sync on or off for this project</td></tr>
           <tr><td><code>/permissions</code></td><td>Show the permission mode and always-allowed commands</td></tr>
         </tbody>
