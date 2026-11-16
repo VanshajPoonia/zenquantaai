@@ -1,18 +1,26 @@
 # AI Architecture Decisions
 
-## Zenquanta Becomes An Agent Platform With Four Surfaces
+## Pi Is The Harness For Web Chat And The Terminal
 
-Decision (2026-11-16, planned, nothing built yet): Zenquanta grows into a chat and coding platform with one account, memory and plan across four surfaces. The web app gets a tool-using agent loop. A metered OpenAI-compatible Model API and an MCP server let any harness use Zenquanta. `zq` is Forge in the terminal, built on OpenCode. The full plan is `AI_PLATFORM_PLAN.md`.
+Decision (2026-11-16, planned, nothing built yet): Zenquanta becomes a chat and coding platform with one account, memory and plan. Pi (`earendil-works/pi`, MIT, TypeScript) is the harness. `pi-ai` and `pi-agent-core` run the tool loop inside `/api/chat`. `zq`, the terminal agent, runs pi's `main` with a Zenquanta extension. The direction is in `AI_PLATFORM_PLAN.md` and the launch plan is in `docs/launch/`.
 
-User choices: the coding agent runs on the user's machine first and a cloud sandbox comes later. Payments stay manual. One loop powers chat and code. Open source is used for the commodity layers.
+User choices: the coding agent runs on the user's machine first and cloud comes later. Payments stay manual. One loop powers chat and code. Open source covers the commodity layers. The app must be installable. Launch is 2026-12-01.
 
 Rationale:
 
-- The agent loop, terminal agent UI, tool protocol and sandboxes are solved by permissive open source (Vercel AI SDK, OpenCode, MCP, E2B). Building them again would cost months. Zenquanta's value is the shared memory, the six assistants, plans and metering, and session sync, so that is what we build.
-- One model call per Model API request fits serverless limits. Local tools run on the user's machine and Zenquanta tools run on our server.
+- Pi is a set of libraries, so one loop can serve web chat, `zq` and later the desktop app. OpenCode was the first pick but is a large standalone product with a SolidJS UI, and the web chat would have needed a second loop on the Vercel AI SDK.
+- Pi already has what we would otherwise build: OpenRouter access with provider-reported cost, `prepareRequest` and `finishTurn` hooks for metering, `tool_call` blocking for permission prompts, custom providers and commands, resumable session trees, and `pi-durable` and `pi-env` for cloud sessions later.
+- What we build ourselves: the permission extension (pi has none by design), metering, session sync, Zenquanta tools, and the UI.
+- Exact version pins, because pi releases often. If pi cannot run in a Vercel function (Day 1 spike), the web loop falls back to the Vercel AI SDK and `zq` stays on pi.
 - Adopted code must be MIT, Apache-2.0 or BSD. Prefer a library or wrapper to a fork, and record any fork here.
 
-This plans to change three earlier statements: the Context Engine note that there is no tool-calling surface, MCP being out of scope, and GitHub staying read-only (only at the Phase 5 decision). OpenRouter as the only gateway, separate text and image transports, and manual plans all stay.
+## Launch Scope For 2026-12-01
+
+Decision (2026-11-16): v1.0 ships tools in web chat, API tokens with device login, the OpenAI-compatible Model API, `zq` 0.1 (login, permissions, local resume, session sync to web), the PWA, agent limits per plan, and terms and privacy pages. The desktop app, MCP, resume on another device and a `curl` installer move to v1.1. Cloud sessions, `run_code` and GitHub write access move to v1.2.
+
+Rationale: 15 days fits features that reuse what exists (Neon, OpenRouter, Tavily, RAG, artifacts) plus pi. The desktop app needs its own UI for files, diffs and permissions, and cloud sessions depend on `pi-durable`, which is experimental. The cut order and gates are in `docs/launch/LAUNCH_PLAN.md`.
+
+These plans change two earlier statements once built: the Context Engine note that there is no tool-calling surface, and MCP being out of scope (v1.1). GitHub stays read-only until v1.2. OpenRouter as the only gateway, separate text and image transports, and manual plans all stay.
 
 ## The Sidebar Library And Shared Pages
 
