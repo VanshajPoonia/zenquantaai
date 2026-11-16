@@ -239,6 +239,12 @@ export function AuthGate() {
           </Button>
         </form>
 
+        <p className="mt-4 text-center text-xs text-muted-foreground">
+          By continuing you agree to the{' '}
+          <Link href="/terms" className="underline underline-offset-4">Terms</Link> and{' '}
+          <Link href="/privacy" className="underline underline-offset-4">Privacy Policy</Link>.
+        </p>
+
         {(validationMessage || message || visibleAuthError) && (
           <div
             role={feedbackTone === 'error' ? 'alert' : 'status'}

@@ -205,6 +205,11 @@ export function LandingAuthForm({
       </form>
 
       <p className="mt-6 text-[12.5px] leading-5 text-[var(--text-3)]">
+        By continuing you agree to the{' '}
+        <a href="/terms" className={styles.textLink}>Terms</a> and{' '}
+        <a href="/privacy" className={styles.textLink}>Privacy Policy</a>.
+      </p>
+      <p className="mt-2 text-[12.5px] leading-5 text-[var(--text-3)]">
         Locked out or stuck?{' '}
         <a
           href={`mailto:${ADMIN_CONTACT_EMAIL}?subject=Zenquanta%20AI%20sign-in%20help`}

@@ -588,6 +588,39 @@ export function LandingPage() {
           </div>
         </section>
 
+        <section id="terminal" aria-labelledby="terminal-heading" className={cn(styles.band, 'scroll-mt-16 py-24 sm:py-32')}>
+          <div className="mx-auto max-w-[75rem] px-5 sm:px-8">
+            <div className="grid gap-6 lg:grid-cols-2 lg:items-end">
+              <h2 id="terminal-heading" data-reveal className={styles.h2}>
+                Forge, in your
+                <br />
+                terminal.
+              </h2>
+              <p data-reveal style={{ '--delay': '80ms' } as CSSProperties} className="max-w-md text-[17px] leading-7 text-[var(--text-2)] lg:justify-self-end">
+                zq reads, edits and runs code in your project. It asks before it changes a file or runs a
+                command, works on your plan, and every session shows up in your chats.{' '}
+                <Link href="/docs/cli" className={styles.textLink}>Read the zq docs</Link>
+              </p>
+            </div>
+            <figure data-reveal style={{ '--delay': '120ms' } as CSSProperties} className="mt-14 overflow-hidden rounded-xl border border-[var(--line)] bg-black/40">
+              <figcaption className="flex items-center justify-between border-b border-[var(--line)] px-4 py-2 text-[12px] text-[var(--text-3)]">
+                <span>Terminal</span>
+                <span>Example</span>
+              </figcaption>
+              <pre className="overflow-x-auto px-4 py-4 font-mono text-[13px] leading-6 text-[var(--text-2)]">
+{`$ npm install -g zenquanta
+$ zq login
+$ zq
+> fix the failing test in sum.test.ts
+  read   src/sum.ts
+  edit   src/sum.ts            Apply this edit? Yes
+  bash   pnpm test             Run this command? Yes
+  The add function returned a - b. It now returns a + b, and the tests pass.`}
+              </pre>
+            </figure>
+          </div>
+        </section>
+
         <section id="plans" aria-labelledby="plans-heading" className="scroll-mt-16 py-24 sm:py-36">
           <div className="mx-auto max-w-[75rem] px-5 sm:px-8">
             <div className="grid gap-6 lg:grid-cols-2 lg:items-end">
@@ -704,6 +737,15 @@ export function LandingPage() {
               <p className="text-[13px] text-[var(--text-3)]">Product</p>
               <Link href="/pricing" className={cn(styles.footerLink, 'block')}>
                 Plans
+              </Link>
+              <Link href="/docs/cli" className={cn(styles.footerLink, 'block')}>
+                zq for your terminal
+              </Link>
+              <Link href="/terms" className={cn(styles.footerLink, 'block')}>
+                Terms
+              </Link>
+              <Link href="/privacy" className={cn(styles.footerLink, 'block')}>
+                Privacy
               </Link>
               <button type="button" onClick={() => goStart('sign-in')} className={cn(styles.footerLink, 'block')}>
                 Sign in
