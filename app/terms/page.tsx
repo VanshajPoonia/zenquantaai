@@ -34,6 +34,17 @@ export default function TermsPage() {
         legal, medical and money matters, before you rely on it.
       </p>
 
+      <h2>AI models and their providers</h2>
+      <p>
+        Zenquanta answers with AI models from third-party providers, reached through OpenRouter. By
+        using Zenquanta you also agree to follow the terms of the model providers that serve your
+        requests. OpenRouter lists them at{' '}
+        <a href="https://openrouter.ai/docs/features/provider-routing#terms-of-service">
+          openrouter.ai
+        </a>
+        .
+      </p>
+
       <h2>zq on your computer</h2>
       <p>
         zq can read, change and run files and commands on your computer. By default it asks before it
