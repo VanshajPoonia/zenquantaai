@@ -5,10 +5,18 @@ import {
   parseLoginId,
   signInWithLocalCredentials,
 } from '@/lib/auth/session'
+import { getClientIp, hitRateLimit } from '@/lib/security/rate-limit'
 
 export const runtime = 'nodejs'
 
 export async function POST(request: NextRequest) {
+  if (!(await hitRateLimit(`signup:${getClientIp(request)}`, 10, 3_600))) {
+    return NextResponse.json(
+      { error: 'Too many new accounts from this network. Try again in an hour.' },
+      { status: 429 }
+    )
+  }
+
   const body = (await request.json().catch(() => null)) as
     | { identifier?: string; password?: string }
     | null
