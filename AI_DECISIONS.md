@@ -22,6 +22,36 @@ Rationale: 15 days fits features that reuse what exists (Neon, OpenRouter, Tavil
 
 These plans change two earlier statements once built: the Context Engine note that there is no tool-calling surface, and MCP being out of scope (v1.1). GitHub stays read-only until v1.2. OpenRouter as the only gateway, separate text and image transports, and manual plans all stay.
 
+## Web Search And Embeddings Fall Back To OpenRouter
+
+Decision (2026-11-16): when `TAVILY_API_KEY` is missing, web search runs through OpenRouter's web plugin and keeps only the cited pages. When no embeddings or OpenAI key is set, embeddings go through OpenRouter's `/embeddings` endpoint with `openai/text-embedding-3-small` (1536 dimensions, matching pgvector). Both use `OPENROUTER_API_KEY`.
+
+Rationale: production had neither key, so Pulse, web search, file search and memory were all off. The fallback adds no new account and keeps OpenRouter as the one gateway. A search costs about $0.007. That cost is not metered to the user yet, which is a Gate B item. Tavily stays the preferred search provider when its key is set.
+
+## The Model API Proxies OpenRouter Directly
+
+Decision (2026-11-16): `/api/v1/chat/completions` forwards a whitelisted OpenAI request body to OpenRouter and streams the response back, rather than converting it through pi-ai as the spec first said.
+
+Rationale: a direct proxy keeps tool calls byte-exact for any OpenAI-compatible client, including zq. Every chunk has its `model` replaced with the Zenquanta name and `provider` removed, so raw model IDs never leave the server. Routing fields such as `provider`, `models` and `plugins` from clients are dropped. Each request reserves and finalizes one agent step from OpenRouter's reported usage and cost.
+
+## zq Is pi Plus One Extension, Branded Through An Overlay
+
+Decision (2026-11-16): zq calls pi's exported `main` with one inline extension. That extension adds the Zenquanta provider, device login, permission prompts, session sync and the `/usage`, `/sync` and `/permissions` commands. For branding, zq builds a small overlay folder in `~/.zq/runtime/`. It links pi's files and adds a package.json with `piConfig: { name: 'zq', configDir: '.zq' }`, and `PI_PACKAGE_DIR` points pi at it. `ZQ_CODING_AGENT_DIR` keeps pi's data under `~/.zq/agent`.
+
+Rationale: no fork and no patches to pi, so upgrades are a version bump. pi has no permission system, so the extension's `tool_call` hook is the safety layer, and its rules are unit-tested in `packages/zq/src/permissions.test.ts`.
+
+## Agent Steps Bill Cache Reads At A Tenth
+
+Decision (2026-11-16, provisional until Gate B): a step's wallet tokens are input plus output plus cache writes plus a tenth of cache reads. Usage events store the full prompt tokens and the cost the provider reported.
+
+Rationale: agent turns resend long contexts, and providers charge about a tenth for cached input. Counting cached tokens in full would drain wallets around ten times faster than real cost.
+
+## zq Session Conversations Use User-Scoped Ids
+
+Decision (2026-11-16): a synced zq session becomes the conversation `cli-<sha256(userId:sessionId)>`, and its message ids are `<conversationId>:<entryId>`.
+
+Rationale: conversation and message ids are global primary keys. Hashing in the user id means one user's session id can never reach or overwrite another user's chat, even with the same pi session id.
+
 ## The Sidebar Library And Shared Pages
 
 Decision (2026-10-14): the sidebar has a Library section (Artifacts, Images, Playbooks, Files, Memory, Research) under New Chat. Dashboard, Files (`/knowledge`) and Plans (`/pricing`) live in `app/(workspace)/` and render inside the app layout with the sidebar; `ChatShell` picks the chat or the page from the path (`isWorkspacePath`). The chat area stays mounted, hidden, while a page is open. Signed-out visitors see Plans on its own. Admin pages stay separate.

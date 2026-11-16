@@ -64,6 +64,14 @@ If the current assistant is already a good fit, the message sends immediately. I
 
 During streamed text responses, the UI can also show a live `Working notes` panel. This is a display-safe progress view, not hidden chain-of-thought.
 
+## Agent Platform
+
+Zenquanta is growing into a chat and coding platform. The plan is in `AI_PLATFORM_PLAN.md` and the launch plan in `docs/launch/`.
+
+- With `AGENT_LOOP=on` (or `admins`), text assistants run through [pi](https://pi.dev)'s agent loop and can search the web, read pages, search your files, check memory, save artifacts and hand image prompts to Prism. Each step is metered against the plan.
+- `zq` (`packages/zq`, npm `zenquanta`) is Forge in the terminal, built on pi. It signs in through `/cli/authorize`, calls the OpenAI-compatible Model API at `/api/v1`, asks before edits and shell commands, and syncs sessions into the web history.
+- The web app is installable from the browser.
+
 ## Plan Ladder
 
 The current plan ladder is:

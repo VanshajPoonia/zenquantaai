@@ -62,6 +62,8 @@ Zenquanta model names map onto the existing response profiles:
 
 Final defaults come from evals (spec 05). Raw OpenRouter model IDs are never accepted or returned.
 
+Built as a direct OpenRouter proxy rather than through pi-ai, so tool calls stay exact. See "The Model API Proxies OpenRouter Directly" in `AI_DECISIONS.md`.
+
 Each request:
 
 1. Authenticates the token and loads the subscription and overrides.

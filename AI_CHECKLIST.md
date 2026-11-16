@@ -113,7 +113,12 @@ FILE_STORAGE_LOCAL_DIR=.storage/zenquanta
 # CROSS_CHAT_RECALL=    # cross-chat summary recall (needs migration #22 + embeddings; write also needs MEMORY_V2)
 # TOON_SERIALIZATION=   # Phase 5 (shipped): opt-in TOON swap on web/file source lists, applied only when it beats the readable rendering by >=10% tokens; no migration, no new deps
 # CONTEXT_DEBUG=        # dev-only structured context logging
+# Agent platform (see AI_PLATFORM_PLAN.md and docs/launch/)
+# AGENT_LOOP=           # off (default), admins, or on: tool-using turns in /api/chat through pi (needs migration #23)
+# NEXT_PUBLIC_APP_URL=  # public origin used in zq login links and OpenRouter attribution
 ```
+
+Without `TAVILY_API_KEY`, web search falls back to OpenRouter's web plugin and page reading (`fetch_url`) is off. Without an embeddings or OpenAI key, file search and memory embeddings fall back to OpenRouter's embeddings endpoint (`openai/text-embedding-3-small`, 1536 dimensions). Both fallbacks use `OPENROUTER_API_KEY`.
 
 Accepted aliases in code include:
 
@@ -258,6 +263,7 @@ Fresh foundation migration available for Neon:
 20. `neon/migrations/20260711_zenquanta_context_engine_summary.sql`
 21. `neon/migrations/20260711_zenquanta_context_engine_memory_items.sql`
 22. `neon/migrations/20260712_zenquanta_context_engine_cross_chat.sql`
+23. `neon/migrations/20261117_zenquanta_agent_platform.sql` (message parts, conversation surface, agent runs, API tokens, device codes, rate limits, per-surface usage; applied and verified on 2026-11-16)
 
 Context Engine Phase 5 (TOON) and Phase 3c (Memory Vault durable surfacing + forget) add **no** migration — they only read/soft-expire existing `zen_memory_items` and serialize existing blocks.
 
@@ -384,3 +390,34 @@ Before changing persistence code again:
 - Fresh schema parity checks matter for admin data, usage records, subscriptions, plan requests, conversations, projects, prompts, and settings.
 - Old Supabase Storage URLs and objects are intentionally not migrated into the new storage layer.
 - Neon repositories are active for settings, prompt library, assistant recommendation telemetry, projects, conversations, messages, conversation memory, subscriptions/manual plans, usage records, plan requests, dashboard data, image history, admin data, and profile/role hydration.
+
+## zq Package
+
+`packages/zq` is a pnpm workspace package (npm name `zenquanta`, command `zq`). The root Next.js app ignores it in `tsconfig.json`.
+
+```bash
+pnpm --filter zenquanta run typecheck
+pnpm --filter zenquanta test
+pnpm --filter zenquanta run build
+```
+
+Run it against a local server with an isolated home and stdin closed (pi's print mode waits for piped input otherwise):
+
+```bash
+ZQ_HOME=/tmp/zqhome ZQ_APP_URL=http://localhost:3000 node packages/zq/dist/cli.js login
+ZQ_HOME=/tmp/zqhome ZQ_APP_URL=http://localhost:3000 node packages/zq/dist/cli.js -p "explain this repo" < /dev/null
+```
+
+Publishing to npm needs the user's go-ahead and an npm login.
+
+## Evals
+
+Coding evals live in `evals/coding/<task>/` (a tiny repo, `TASK.md` and `check.mjs`). Run them through zq:
+
+```bash
+DATABASE_URL=... ZQ_HOME=/tmp/zqhome ZQ_APP_URL=http://localhost:3000 EVAL_LOGIN_ID=<test login> \
+  node scripts/evals/run-coding.mjs --models forge,forge-fast,forge-lite
+```
+
+Results land in `evals/results/<date>-coding.json` with pass rate, steps, billable tokens and raw cost per model.
+

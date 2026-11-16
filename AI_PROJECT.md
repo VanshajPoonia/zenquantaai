@@ -65,6 +65,11 @@ This is the current six-assistant platform, not the old four-mode version.
 - Manual plan request flow.
 - Usage tracking for text and image requests.
 - Public assistant pages.
+- Tool-using agent turns in web chat on pi (`lib/agent/*`), behind `AGENT_LOOP`: web search, page reading, file search, memory search, save artifact and a Prism image handoff, shown as tool cards and metered per step.
+- zq, Forge in the terminal (`packages/zq`, npm `zenquanta`): device login, the Zenquanta model provider, permission prompts, local resume and session sync to the web.
+- OpenAI-compatible Model API at `/api/v1` for zq, metered per request under Zenquanta model names.
+- Installable web app (manifest, icons, Install app menu item).
+- Terms, privacy and zq docs pages.
 
 Prompt workflow v1 runs are intentionally simple: each step is queued as a normal chat or Prism image send using the chosen assistant family. There is no background automation engine, and normal usage logging remains the billing/usage source of truth.
 
@@ -98,11 +103,18 @@ Mode mapping:
 - `/admin`: admin overview and user/request management.
 - `/admin/users/[id]`: per-user admin detail.
 - `/auth/reset-password`: password reset completion page.
+- `/cli/authorize`: approve a `zq login` code.
+- `/terms`, `/privacy`, `/docs/cli`: public static pages.
 - `/nova`, `/velora`, `/axiom`, `/forge`, `/pulse`, `/prism`: public assistant pages.
 
 ## Main APIs
 
-- `/api/chat`: streamed text chat.
+- `/api/chat`: streamed text chat. With `AGENT_LOOP` on, text assistants run through pi's agent loop with server tools and stream `tool_call`, `tool_result` and `step` events.
+- `/api/v1/models` and `/api/v1/chat/completions`: OpenAI-compatible Model API for zq (bearer token, `cli` scope).
+- `/api/cli/device`, `/api/cli/device/approve`, `/api/cli/token`: zq device login.
+- `/api/cli/me`, `/api/cli/logout`: zq account info and sign-out.
+- `/api/cli/tokens` and `/api/cli/tokens/[id]`: list and revoke terminal sign-ins (cookie auth, for Settings).
+- `/api/cli/sessions` and `/api/cli/sessions/[id]/entries`: zq session sync into web conversations.
 - `/api/images/generate`: Prism image generation.
 - `/api/images/history`: user-scoped Prism Studio generated-image gallery.
 - `/api/images/history/[id]`: generated-image favorite/project metadata updates.
@@ -228,6 +240,10 @@ Neon migration order:
 17. `20260616_zenquanta_feedback_events.sql`
 18. `20260616_zenquanta_incremental_performance_indexes.sql`
 19. `20260617_zenquanta_template_shares.sql`
+20. `20260711_zenquanta_context_engine_summary.sql`
+21. `20260711_zenquanta_context_engine_memory_items.sql`
+22. `20260712_zenquanta_context_engine_cross_chat.sql`
+23. `20261117_zenquanta_agent_platform.sql`
 
 Historical Supabase migration order documented in `README.md`:
 
@@ -388,6 +404,10 @@ Required or expected variables:
 - `GITHUB_APP_CLIENT_ID`
 - `GITHUB_APP_PRIVATE_KEY`
 - `GITHUB_APP_CALLBACK_URL`
+- `AGENT_LOOP` (`off`, `admins` or `on`)
+- `NEXT_PUBLIC_APP_URL`
+
+Without Tavily or embeddings keys, web search and embeddings fall back to OpenRouter with `OPENROUTER_API_KEY`.
 
 Accepted aliases in code include:
 
