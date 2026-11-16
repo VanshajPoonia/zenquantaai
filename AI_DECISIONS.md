@@ -24,7 +24,7 @@ These plans change two earlier statements once built: the Context Engine note th
 
 ## zq Models Are Their Own Table, Not Chat Profiles
 
-Decision (2026-11-17, Gate B): `lib/agent/model-names.ts` maps zq names to models directly. `forge` follows each plan's Forge model, `forge-fast` (Qwen3 Coder Flash) and `forge-lite` (DeepSeek V4 Flash) are on every plan and draw core tokens, and `forge-best` (Claude Sonnet 4.6) is on Pro and up and draws tier tokens. `ZQ_FAST_MODEL`, `ZQ_LITE_MODEL` and `ZQ_BEST_MODEL` swap a model without a deploy.
+Decision (2026-11-17, Gate B): `lib/agent/model-names.ts` maps zq names to models directly. `forge` follows each plan's Forge model, `forge-fast` (GPT-5.1 Codex Mini, 6/6 at $0.0047 a task) and `forge-lite` (DeepSeek V3.1, 6/6) are on every plan. Qwen3 Coder Flash passed 5/6, and DeepSeek V4 Flash was inconclusive and draw core tokens, and `forge-best` (Claude Sonnet 4.6) is on Pro and up and draws tier tokens. `ZQ_FAST_MODEL`, `ZQ_LITE_MODEL` and `ZQ_BEST_MODEL` swap a model without a deploy.
 
 Rationale: zq names used to reuse the chat response profiles, which are only allowed when a plan's assistant list contains that model. So paid plans lost `forge-fast` and `forge-lite` while Free had them. Chat's Fast, Balanced and other levels are unchanged.
 

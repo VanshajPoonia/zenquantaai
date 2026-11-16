@@ -82,7 +82,7 @@ Every paid plan keeps a healthy margin even at full use. Free costs at most abou
 
 ### Approved on 2026-11-17
 
-The user approved the recommendation. Applied: Free 15 and Basic 20 zq steps per run, the zq model table (`forge-fast` Qwen3 Coder Flash, `forge-lite` DeepSeek V4 Flash, `forge-best` Claude Sonnet 4.6 on Pro and up), and 8,000 wallet tokens per web search.
+The user approved the recommendation. Applied: Free 15 and Basic 20 zq steps per run, the zq model table (`forge-fast` GPT-5.1 Codex Mini after it passed 6/6, `forge-lite` DeepSeek V3.1, `forge-best` Claude Sonnet 4.6 on Pro and up), and 8,000 wallet tokens per web search.
 
 ## Build after Gate B (Day 7)
 

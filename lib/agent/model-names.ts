@@ -19,12 +19,12 @@ const ALL_TIERS = ['free', 'basic', 'pro', 'ultra', 'prime'] as const
  */
 const FIXED_ZQ_MODELS: Record<Exclude<ZqModelName, 'forge'>, FixedZqModel> = {
   'forge-fast': {
-    model: process.env.ZQ_FAST_MODEL?.trim() || 'qwen/qwen3-coder-flash',
+    model: process.env.ZQ_FAST_MODEL?.trim() || 'openai/gpt-5.1-codex-mini',
     wallet: 'core_tokens',
     tiers: ALL_TIERS,
   },
   'forge-lite': {
-    model: process.env.ZQ_LITE_MODEL?.trim() || 'deepseek/deepseek-v4-flash',
+    model: process.env.ZQ_LITE_MODEL?.trim() || 'deepseek/deepseek-chat-v3.1',
     wallet: 'core_tokens',
     tiers: ALL_TIERS,
   },
