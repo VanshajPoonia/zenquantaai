@@ -23,7 +23,12 @@ export const metadata: Metadata = {
   icons: {
     icon: '/file.svg',
     shortcut: '/file.svg',
-    apple: '/file.svg',
+    apple: '/apple-icon.png',
+  },
+  appleWebApp: {
+    capable: true,
+    title: 'Zenquanta',
+    statusBarStyle: 'black',
   },
 }
 

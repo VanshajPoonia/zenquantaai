@@ -25,6 +25,7 @@ import {
 import { cn } from '@/lib/utils'
 import { useChatContext } from '@/lib/chat-context'
 import { ConversationSummary, Project } from '@/lib/types'
+import { InstallAppItem } from './install-app-item'
 import { ModeIcon, getModeAccentClass } from '@/lib/mode-utils'
 import { getChatPath } from '@/lib/utils/chat-path'
 import { useIsMobile } from '@/components/ui/use-mobile'
@@ -858,6 +859,7 @@ export function Sidebar({ onOpenSettings }: SidebarProps) {
                   <Link href="/admin">Admin</Link>
                 </DropdownMenuItem>
               ) : null}
+              <InstallAppItem />
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={() => void signOut()}>
                 Sign out
