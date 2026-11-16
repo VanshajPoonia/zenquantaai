@@ -367,13 +367,26 @@ export async function POST(request: NextRequest) {
       const webSearchContext = webSearchRequested
         ? await searchWebForContext(buildWebSearchQuery(prepared.userMessage.content))
         : undefined
+      // A new chat is not saved until saveTurnStart, so its files are linked
+      // to the conversation only after that (the conversation id is a foreign key).
+      const conversationSaved = Boolean(storedConversation)
       const attachmentFileIds = await linkAttachmentKnowledgeScope({
         userId: auth.user.id,
         attachments: prepared.userMessage.attachments,
         projectId: prepared.conversation.projectId,
-        conversationId: prepared.conversation.id,
-        messageId: prepared.userMessage.id,
+        conversationId: conversationSaved ? prepared.conversation.id : null,
+        messageId: conversationSaved ? prepared.userMessage.id : null,
       })
+      const linkFilesToSavedConversation = async (savedConversationId: string) => {
+        if (conversationSaved || attachmentFileIds.length === 0) return
+        await linkAttachmentKnowledgeScope({
+          userId: auth.user.id,
+          attachments: prepared.userMessage.attachments,
+          projectId: prepared.conversation.projectId,
+          conversationId: savedConversationId,
+          messageId: prepared.userMessage.id,
+        })
+      }
       const fileKnowledgeContext = payload.settings.fileContext
         ? await retrieveFileKnowledgeContext({
             userId: auth.user.id,
@@ -451,6 +464,7 @@ export async function POST(request: NextRequest) {
         )
         conversationId = persistedConversation.id
         messageId = placeholder.id
+        await linkFilesToSavedConversation(persistedConversation.id)
 
         await writer.write(
           encodeStreamEvent({
@@ -530,8 +544,16 @@ export async function POST(request: NextRequest) {
           nextSourceId: () => String(++nextSourceId),
         })
 
+        const attachedNames = (prepared.userMessage.attachments ?? [])
+          .map((attachment) => attachment.name)
+          .filter(Boolean)
+        const canSearchFiles = tools.some((tool) => tool.name === 'files_search')
         const turn = runAgentTurn({
           ...promptParts,
+          userContent:
+            attachedNames.length && canSearchFiles && !prepared.responseSettings.fileContext
+              ? `${promptParts.userContent}\n\n[Attached files: ${attachedNames.join(', ')}. Use files_search to read them.]`
+              : promptParts.userContent,
           modelId: routeConfig.model,
           temperature: prepared.responseSettings.temperature,
           maxOutputTokens: agentLimits.maxAgentOutputTokens,
@@ -750,6 +772,7 @@ export async function POST(request: NextRequest) {
 
       conversationId = persistedConversation.id
       messageId = placeholder.id
+      await linkFilesToSavedConversation(persistedConversation.id)
 
       await writer.write(
         encodeStreamEvent({
