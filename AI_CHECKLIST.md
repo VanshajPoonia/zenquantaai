@@ -119,6 +119,10 @@ FILE_STORAGE_LOCAL_DIR=.storage/zenquanta
 # NEXT_PUBLIC_ZQ_RELEASED= # true once `zenquanta` is on npm; shows the zq landing section, footer link, pricing line and Settings > Terminal
 ```
 
+Production file storage is Cloudflare R2 since 2026-11-16: private bucket `zenquanta-files`, an account API token scoped to Object Read & Write on that bucket only, and `FILE_STORAGE_PROVIDER=r2`, `FILE_STORAGE_BUCKET`, `FILE_STORAGE_REGION=auto`, `FILE_STORAGE_ENDPOINT`, `FILE_STORAGE_ACCESS_KEY_ID` and `FILE_STORAGE_SECRET_ACCESS_KEY` set for Production on Vercel. Preview deploys still use local storage.
+
+PDF parsing loads `pdf-parse/worker` first and `next.config.mjs` lists `pdf-parse` and `@napi-rs/canvas` in `serverExternalPackages`. Without both, every upload fails on Vercel with `DOMMatrix is not defined`.
+
 Without `TAVILY_API_KEY`, web search falls back to OpenRouter's web plugin and page reading (`fetch_url`) is off. Without an embeddings or OpenAI key, file search and memory embeddings fall back to OpenRouter's embeddings endpoint (`openai/text-embedding-3-small`, 1536 dimensions). Both fallbacks use `OPENROUTER_API_KEY`.
 
 Accepted aliases in code include:

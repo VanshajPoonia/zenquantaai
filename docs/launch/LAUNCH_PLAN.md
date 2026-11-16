@@ -19,6 +19,9 @@ Updated 2026-11-16, end of Day 0. Work runs ahead of the day plan on branch `fea
 | Spec 05: evals and limits | Eval suite built. Limits are provisional until Gate B |
 | Spec 06: terms, privacy, docs, landing section, sign-up rate limit, admin cost split | Built. Production setup and the user's legal review are open |
 
+| Production file storage | Cloudflare R2 bucket `zenquanta-files` live. Uploads and PDF indexing verified in production |
+| Upload crash on Vercel (`DOMMatrix is not defined`) | Fixed: pdf-parse loads with its worker and is a server-external package |
+
 Extra: without Tavily or embeddings keys, web search and embeddings fall back to OpenRouter, so search, file search and memory work with the one gateway key.
 
 ## What ships on 2026-12-01
@@ -97,6 +100,8 @@ If a lane slips, cut from the top. Never cut the bottom block.
 Never cut: per-step metering and limits, permission prompts in `zq`, the security review, terms and privacy pages.
 
 ## Decisions the user needs to make
+
+The live list, with what is done, is in `docs/launch/NEEDS_YOU.md`. The table below is the original schedule.
 
 | When | Decision |
 |---|---|
