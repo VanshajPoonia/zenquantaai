@@ -337,6 +337,16 @@ export default async function AdminPage({
               value={formatCurrency(overview.textVsImageCostSplit.imageRawCostUsd)}
               detail={`${overview.textVsImageCostSplit.imageCount.toLocaleString()} images · ${formatCurrency(overview.textVsImageCostSplit.imageDisplayedCostUsd)} displayed`}
             />
+            <InsightRow
+              label="Web agent (part of text)"
+              value={formatCurrency(overview.textVsImageCostSplit.webAgentRawCostUsd)}
+              detail={`${overview.textVsImageCostSplit.webAgentSteps.toLocaleString()} agent steps`}
+            />
+            <InsightRow
+              label="zq terminal (part of text)"
+              value={formatCurrency(overview.textVsImageCostSplit.cliRawCostUsd)}
+              detail={`${overview.textVsImageCostSplit.cliSteps.toLocaleString()} requests`}
+            />
           </AnalyticsCard>
 
           <AnalyticsCard title="Estimated margin by plan">

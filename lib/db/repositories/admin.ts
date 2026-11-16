@@ -91,6 +91,10 @@ export interface AdminOverview {
     imageRawCostUsd: number
     imageDisplayedCostUsd: number
     imageCount: number
+    webAgentRawCostUsd: number
+    webAgentSteps: number
+    cliRawCostUsd: number
+    cliSteps: number
   }
   mostExpensiveModels: Array<{
     model: string
@@ -1300,6 +1304,18 @@ class NeonAdminRepository {
         imageRawCostUsd: rawImageCostUsd,
         imageDisplayedCostUsd: displayedImageCostUsd,
         imageCount: sum(filteredImageEvents, (event) => event.imageCount),
+        webAgentRawCostUsd: sum(
+          filteredUsageEvents.filter((event) => event.surface !== 'cli' && event.agentRunId),
+          (event) => event.rawCostUsd
+        ),
+        webAgentSteps: filteredUsageEvents.filter(
+          (event) => event.surface !== 'cli' && event.agentRunId
+        ).length,
+        cliRawCostUsd: sum(
+          filteredUsageEvents.filter((event) => event.surface === 'cli'),
+          (event) => event.rawCostUsd
+        ),
+        cliSteps: filteredUsageEvents.filter((event) => event.surface === 'cli').length,
       },
       mostExpensiveModels: [...modelBuckets.values()]
         .sort((a, b) => b.rawCostUsd - a.rawCostUsd)
