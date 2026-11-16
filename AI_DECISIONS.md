@@ -22,6 +22,22 @@ Rationale: 15 days fits features that reuse what exists (Neon, OpenRouter, Tavil
 
 These plans change two earlier statements once built: the Context Engine note that there is no tool-calling surface, and MCP being out of scope (v1.1). GitHub stays read-only until v1.2. OpenRouter as the only gateway, separate text and image transports, and manual plans all stay.
 
+## zq Models Are Their Own Table, Not Chat Profiles
+
+Decision (2026-11-17, Gate B): `lib/agent/model-names.ts` maps zq names to models directly. `forge` follows each plan's Forge model, `forge-fast` (Qwen3 Coder Flash) and `forge-lite` (DeepSeek V4 Flash) are on every plan and draw core tokens, and `forge-best` (Claude Sonnet 4.6) is on Pro and up and draws tier tokens. `ZQ_FAST_MODEL`, `ZQ_LITE_MODEL` and `ZQ_BEST_MODEL` swap a model without a deploy.
+
+Rationale: zq names used to reuse the chat response profiles, which are only allowed when a plan's assistant list contains that model. So paid plans lost `forge-fast` and `forge-lite` while Free had them. Chat's Fast, Balanced and other levels are unchanged.
+
+## Web Searches Draw 8,000 Wallet Tokens
+
+Decision (2026-11-17, Gate B): every web search that returns sources, whether it runs before the turn (Pulse or the `webSearch` setting) or as the agent's `web_search` tool, adds 8,000 wallet tokens and its real upstream cost to the step's usage event. `WEB_SEARCH_WALLET_TOKENS` lives in `lib/config/pricing.ts`.
+
+Rationale: a search costs about $0.007 upstream, which is about 8,000 tokens at cheap-model rates. Before this, searches were free to users and only visible as cost to us.
+
+## OpenRouter's Terms Restrict Reselling API Access
+
+Finding (2026-11-17): OpenRouter's terms (last updated 31 August 2026), section 7, forbid "reselling API access to Models" and "developing a competing service". Sections 5.1 and 5.2 allow products built for your own customers if they agree to the model providers' terms. The web app fits that. The zq Model API, an OpenAI-compatible endpoint with user keys, may not. Until OpenRouter confirms in writing, zq stays unpublished and the endpoint is not advertised for other tools. The options are in `docs/launch/NEEDS_YOU.md`, and `/terms` now passes on the model providers' terms.
+
 ## Web Search And Embeddings Fall Back To OpenRouter
 
 Decision (2026-11-16): when `TAVILY_API_KEY` is missing, web search runs through OpenRouter's web plugin and keeps only the cited pages. When no embeddings or OpenAI key is set, embeddings go through OpenRouter's `/embeddings` endpoint with `openai/text-embedding-3-small` (1536 dimensions, matching pgvector). Both use `OPENROUTER_API_KEY`.

@@ -80,6 +80,10 @@ Every paid plan keeps a healthy margin even at full use. Free costs at most abou
 5. Replace or drop `forge-fast`. Gemini 2.5 Flash failed 2 of 6. Swapping it changes the chat "Fast" level too, so it needs its own eval run first.
 6. Meter web search at 8,000 wallet tokens a search (about $0.007 at cheap-model rates) once decided. See `NEEDS_YOU.md`.
 
+### Approved on 2026-11-17
+
+The user approved the recommendation. Applied: Free 15 and Basic 20 zq steps per run, the zq model table (`forge-fast` Qwen3 Coder Flash, `forge-lite` DeepSeek V4 Flash, `forge-best` Claude Sonnet 4.6 on Pro and up), and 8,000 wallet tokens per web search.
+
 ## Build after Gate B (Day 7)
 
 - Add the agent fields to every plan in `lib/config/pricing.ts` (`PLAN_CONFIGS`) and to the plan types.

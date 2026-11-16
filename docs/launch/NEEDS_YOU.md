@@ -6,14 +6,28 @@ Things only the owner can do or decide before the 2026-12-01 launch. Claude Code
 
 | # | What | Why | When |
 |---|---|---|---|
-| 1 | `npm login` on this Mac (or share an npm automation token), then say go to publish `zenquanta` | zq cannot be installed until it is on npm. After publishing, `NEXT_PUBLIC_ZQ_RELEASED=true` turns on the zq pointers in the app | By Day 11 (11-27) |
-| 2 | Approve the Gate B recommendation in `specs/05-evals-and-limits.md` ("Gate B results"). Short version: keep the daily caps, raise zq steps per run on Free to 15 and Basic to 20, give Free zq on Qwen3 Coder, replace `forge-fast` | Evals ran on 2026-11-16. Worst-case raw cost per user a month: Free $0.84, Basic $1.70, Pro $4.40, Ultra $13.30, Prime about $52, all under plan prices | Day 4 (11-20) |
-| 3 | Read `/terms` and `/privacy` and say OK or what to change | They are plain-language drafts, not legal advice | Day 9 (11-25) |
+| 1 | **Decide how zq gets model access, given OpenRouter's terms.** See "OpenRouter terms" below. Recommended: email OpenRouter for written permission now (Claude has a draft ready), and keep zq invite-only until they answer | OpenRouter's terms forbid reselling API access to models. zq's Model API gives users keys to an OpenAI-compatible endpoint, which looks like that | Now. It decides whether zq can launch publicly on 12-01 |
+| 2 | Run `! npm login` in this Claude Code session (it opens npm in your browser) | Publishing `zenquanta` needs a logged-in npm account. Publish also waits on item 1 | After item 1 |
+| 3 | Read `/terms` and `/privacy` and say OK or what to change. If zq stays on OpenRouter, the terms also need a line passing on the model providers' terms (OpenRouter section 5.2) | They are plain-language drafts, not legal advice | Day 9 (11-25) |
 | 4 | Check the `v0-zenquantaai` Vercel project (it is in another Vercel account): set Node 22.19 or newer, or disconnect it from `main` | It also deploys `main`. The agent loop needs Node 22.19 or newer | Before Day 11 |
-| 5 | Read OpenRouter's terms on reselling access through an API, or decide zq-only at launch | Decides whether other tools (Aider, Cline, Codex CLI) can use the Model API at launch | Day 10 (11-26) |
-| 6 | Decide whether web search costs count against plan wallets. Recommendation: 8,000 wallet tokens a search | Searches go through OpenRouter's web plugin at about $0.007 each and are not metered to users yet | With Gate B |
-| 7 | Optional: copy the six `FILE_STORAGE_*` Production env vars to Preview in the Vercel dashboard (the Vercel CLI cannot add Preview vars without a prompt here) | Preview deploys still use local storage, so uploads fail on previews | Any time |
-| 8 | Optional: Apple Developer account ($99 a year) | Needed to sign the Mac desktop app in v1.1 | After launch |
+| 5 | Optional: Apple Developer account ($99 a year) | Needed to sign the Mac desktop app in v1.1 | After launch |
+
+## OpenRouter terms
+
+Read on 2026-11-17 from https://openrouter.ai/terms (last updated 31 August 2026). This is a plain reading, not legal advice.
+
+- Section 7 (Prohibited Conduct), item 4 forbids accessing the service "for purposes of reselling API access to Models" or "developing a competing service". Item 14 forbids selling or transferring "the access granted under these Terms".
+- Section 5.1 contemplates "your customers (to the extent you incorporate the Service into your own products and services)", so the web app itself, a product built on OpenRouter, looks fine.
+- Sections 5.1 and 5.2 require that your customers agree to and follow each model provider's terms. The terms page must say so.
+
+Options for zq:
+
+| Option | What it means | Trade-off |
+|---|---|---|
+| A. Ask OpenRouter (recommended) | Email their sales team describing zq and the metered endpoint, and ask for written permission | Cleanest. Depends on their answer and timing |
+| B. Bring your own key | zq users paste their own OpenRouter key. Zenquanta keeps login, sync and memory but does not sell model access through zq | Allowed, but zq earns nothing and setup is harder |
+| C. Different gateway for zq | Route zq through a provider whose terms allow resale | Needs a terms review and a code change. Breaks "OpenRouter is the only gateway" |
+| D. zq-only lockdown | Keep the endpoint but tie it to zq so it is not general API access | Weakest. A token still works from any OpenAI-compatible client |
 
 ## Done
 
@@ -22,3 +36,5 @@ Things only the owner can do or decide before the 2026-12-01 launch. Claude Code
 | 2026-11-16 | Approved the pi dependencies and the plan (full permissions given) |
 | 2026-11-16 | Chose R2 for production file storage |
 | 2026-11-16 | R2 set up by Claude through your Cloudflare dashboard: private bucket `zenquanta-files` (Asia Pacific), an Account API token "Zenquanta app files" with Object Read & Write on that bucket only, and the production env vars on Vercel. Uploads and PDF indexing verified in production |
+| 2026-11-17 | Approved Gate B: daily caps kept, zq steps per run raised (Free 15, Basic 20), Free zq on Qwen3 Coder, `forge-fast` replaced, web searches metered at 8,000 wallet tokens |
+| 2026-11-17 | R2 env vars added to Vercel Preview deploys |
