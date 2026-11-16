@@ -1,0 +1,14 @@
+[
+  { "id": "web-nextjs", "mode": "general", "prompt": "What is the latest stable version of Next.js right now? One sentence.", "expectTool": "web_search", "answer": "\\d+\\.\\d+" },
+  { "id": "web-f1", "mode": "general", "prompt": "Who won the most recent Formula 1 Grand Prix? One sentence.", "expectTool": "web_search", "answer": "[A-Z][a-z]+" },
+  { "id": "web-bitcoin", "mode": "logic", "prompt": "Roughly what is the price of one Bitcoin in US dollars today?", "expectTool": "web_search", "answer": "\\$?\\d{2,3}[,.]?\\d{3}|\\d+k" },
+  { "id": "file-refund", "mode": "general", "prompt": "How many days is the refund window in the attached policy?", "file": { "name": "policy.txt", "text": "Refund policy. Customers can ask for a refund within 37 days of purchase. Refunds go back to the original payment method." }, "expectTool": "files_search", "answer": "37" },
+  { "id": "file-oncall", "mode": "general", "prompt": "According to the attached roster, who is on call in December?", "file": { "name": "roster.md", "text": "# On-call roster\n\n- October: Dev Malhotra\n- November: Sara Okafor\n- December: Priya Raman\n" }, "expectTool": "files_search", "answer": "Priya" },
+  { "id": "file-ratelimit", "mode": "code", "prompt": "What rate limit does the attached API spec set?", "file": { "name": "spec.txt", "text": "Orders API v2. Authentication uses bearer tokens. The rate limit is 240 requests per minute per token. Pagination uses cursors." }, "expectTool": "files_search", "answer": "240" },
+  { "id": "artifact-checklist", "mode": "general", "prompt": "Write a three-item packing checklist for a beach day and save it as an artifact.", "expectTool": "save_artifact", "answer": "." },
+  { "id": "artifact-brief", "mode": "creative", "prompt": "Save an artifact titled Launch brief with two sentences describing a coffee shop's opening day.", "expectTool": "save_artifact", "answer": "." },
+  { "id": "none-math", "mode": "logic", "prompt": "What is 17 times 23?", "expectTool": null, "answer": "391" },
+  { "id": "none-grammar", "mode": "creative", "prompt": "Fix the grammar: we is going home now.", "expectTool": null, "answer": "[Ww]e are going home" },
+  { "id": "none-recursion", "mode": "code", "prompt": "Explain recursion in one sentence.", "expectTool": null, "answer": "itself" },
+  { "id": "none-spanish", "mode": "general", "prompt": "Translate good morning to Spanish.", "expectTool": null, "answer": "[Bb]uenos d" }
+]
