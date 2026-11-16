@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireApiTokenUser } from '@/lib/auth/api-token'
+import { isModelApiEnabledFor } from '@/lib/agent/flags'
 import { AgentLimitError, AgentMeter } from '@/lib/agent/metering'
 import { isZqModelName, resolveZqModel, type ZqModelName } from '@/lib/agent/model-names'
 import { stepUsageFromOpenRouter, type OpenRouterUsage } from '@/lib/agent/openrouter-usage'
@@ -49,6 +50,10 @@ function scrubChunk(chunk: Record<string, unknown>, name: ZqModelName) {
 export async function POST(request: NextRequest) {
   const auth = await requireApiTokenUser(request, 'cli')
   if (auth.response) return auth.response
+
+  if (!isModelApiEnabledFor(auth.user)) {
+    return apiError(403, 'Hosted zq models are not open yet. Use your own OpenRouter key: zq key <key>.', 'model_api_closed')
+  }
 
   if (!(await hitRateLimit(`v1:${auth.tokenId}`, 120, 60))) {
     return apiError(429, 'Too many requests. Slow down and try again.', 'rate_limited')

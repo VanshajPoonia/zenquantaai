@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireApiTokenUser } from '@/lib/auth/api-token'
+import { isModelApiEnabledFor } from '@/lib/agent/flags'
 import { listZqModels } from '@/lib/agent/model-names'
 import { getEffectiveSubscription } from '@/lib/billing/enforce'
 import { AGENT_PLAN_LIMITS } from '@/lib/config'
@@ -29,7 +30,8 @@ export async function GET(request: NextRequest) {
     loginId: auth.user.loginId,
     plan: subscription.tier,
     cliAccess: limits.cliAccess,
-    models: listZqModels(subscription.tier, override),
+    modelApi: isModelApiEnabledFor(auth.user),
+    models: isModelApiEnabledFor(auth.user) ? listZqModels(subscription.tier, override) : [],
     coreTokens: wallet(effective.coreTokensIncluded, subscription.coreTokensUsed),
     tierTokens: wallet(effective.tierTokensIncluded, subscription.tierTokensUsed),
     agentSteps: wallet(limits.agentStepsPerDay, subscription.dailyAgentStepCount),
