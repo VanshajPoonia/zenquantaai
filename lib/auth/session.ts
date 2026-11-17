@@ -15,7 +15,11 @@ import {
   zenProfiles,
   zenUsers,
 } from '@/lib/db/schema'
-import { neonProfilesRepository, neonUsersRepository } from '@/lib/db/repositories'
+import {
+  neonApiTokensRepository,
+  neonProfilesRepository,
+  neonUsersRepository,
+} from '@/lib/db/repositories'
 
 const SESSION_COOKIE = 'zenquanta-session-token'
 const LEGACY_ACCESS_TOKEN_COOKIE = 'zenquanta-access-token'
@@ -522,6 +526,7 @@ export async function updateLocalPassword(
   })
 
   await revokeOtherSessions(session.user.id, sessionToken)
+  await neonApiTokensRepository.revokeAllForUser(session.user.id)
 }
 
 export async function setUserPasswordByAdmin(
@@ -534,6 +539,7 @@ export async function setUserPasswordByAdmin(
   })
 
   await revokeAllSessions(userId)
+  await neonApiTokensRepository.revokeAllForUser(userId)
 }
 
 async function readSessionToken(token: string): Promise<RequestAuthSession> {

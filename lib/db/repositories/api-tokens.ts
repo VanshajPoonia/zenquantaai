@@ -93,6 +93,14 @@ class NeonApiTokensRepository {
     return rows.length > 0
   }
 
+  /** Revokes every live token the user has, such as after a password change. */
+  async revokeAllForUser(userId: string): Promise<void> {
+    await getDatabaseClient()
+      .update(zenApiTokens)
+      .set({ revokedAt: new Date() })
+      .where(and(eq(zenApiTokens.userId, userId), isNull(zenApiTokens.revokedAt)))
+  }
+
   /** Finds a live token by its plain value and marks it used at most once a minute. */
   async findActive(token: string): Promise<ApiTokenRecord | null> {
     if (!token.startsWith(API_TOKEN_PREFIX)) return null
