@@ -20,3 +20,7 @@ data/runtime/*.json
 .storage/
 tsconfig.tsbuildinfo
 packages/*/dist/
+
+# playwright output
+/test-results/
+/playwright-report/
