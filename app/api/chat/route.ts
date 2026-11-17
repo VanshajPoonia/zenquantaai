@@ -302,6 +302,7 @@ export async function POST(request: NextRequest) {
       reservedTokens: number
     } | null = null
     let agentRunId: string | null = null
+    let settleStoppedReply: (() => Promise<void>) | null = null
 
     try {
       const preparedBase = await prepareConversationForChat(payload)
@@ -782,6 +783,52 @@ export async function POST(request: NextRequest) {
       messageId = placeholder.id
       await linkFilesToSavedConversation(persistedConversation.id)
 
+      const buildReplyUsage = (completionText: string) => {
+        const textUsage = calculateTextUsageEstimate({
+          tier: subscription.tier,
+          walletType: routeConfig.walletType,
+          model: routeConfig.model,
+          promptText,
+          completionText,
+        })
+        const searchCharge = webSearchCharge(webSearchContext)
+        return searchCharge
+          ? addUsageEstimates(
+              textUsage,
+              buildChargeEstimate({
+                tier: subscription.tier,
+                walletType: reservationWalletType,
+                charge: searchCharge,
+              })
+            )
+          : textUsage
+      }
+      // A stopped reply already reached the model, so it is charged for what it used.
+      settleStoppedReply = async () => {
+        if (!textUsageReservation) return
+        const usage = buildReplyUsage(accumulated)
+        const finalized = await neonSubscriptionsRepository.finalizeTextUsage({
+          userId: auth.user.id,
+          walletType: textUsageReservation.walletType,
+          reservedTokens: textUsageReservation.reservedTokens,
+          actualTokens: usage.totalTokens,
+        })
+        textUsageReservation = null
+        await recordTextUsageEvent({
+          subscriptionId: finalized.id,
+          event: {
+            userId: auth.user.id,
+            conversationId: persistedConversation.id,
+            messageId: placeholder.id,
+            assistantFamily: getAssistantFamilyFromMode(billingMode),
+            mode: billingMode,
+            model: routeConfig.model,
+            walletType: routeConfig.walletType,
+            usage,
+          },
+        })
+      }
+
       await writer.write(
         encodeStreamEvent({
           type: 'start',
@@ -905,24 +952,7 @@ export async function POST(request: NextRequest) {
         })
       )
 
-      const textUsage = calculateTextUsageEstimate({
-        tier: subscription.tier,
-        walletType: routeConfig.walletType,
-        model: routeConfig.model,
-        promptText,
-        completionText: accumulated || 'No response returned.',
-      })
-      const searchCharge = webSearchCharge(webSearchContext)
-      const usage = searchCharge
-        ? addUsageEstimates(
-            textUsage,
-            buildChargeEstimate({
-              tier: subscription.tier,
-              walletType: textUsageReservation.walletType,
-              charge: searchCharge,
-            })
-          )
-        : textUsage
+      const usage = buildReplyUsage(accumulated || 'No response returned.')
       const clientUsage = {
         ...usage,
         rawCostUsd: 0,
@@ -1034,6 +1064,11 @@ export async function POST(request: NextRequest) {
           .catch((finishError) => {
             console.error('Failed to close the agent run.', finishError)
           })
+      }
+      if (textUsageReservation && request.signal.aborted && settleStoppedReply) {
+        await settleStoppedReply().catch((settleError) => {
+          console.error('Failed to settle a stopped reply.', settleError)
+        })
       }
       if (textUsageReservation) {
         await neonSubscriptionsRepository
