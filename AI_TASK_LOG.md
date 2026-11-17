@@ -13,7 +13,7 @@ Current direction: plan upgrades remain manual/admin-driven, payment automation 
 **What changed**:
 - Finished and committed the 11-17 leftovers: library names like Node.js no longer route to Forge, replies render http(s) links, the admin shows web and zq agent steps per user, and Playwright has a public smoke suite plus an opt-in signed-in suite (`SMOKE_LOGIN_ID`, `SMOKE_PASSWORD`). `PLAYWRIGHT_BASE_URL` now skips the local server.
 - Security review against spec 06 and `SECURITY_CHECKLIST.md`. Fixes:
-  - zq asks before compound commands (chaining, pipes, substitution, redirects), credential files like `.npmrc` and `.aws/`, and git commands that write files or change branches. Version bumped to `0.1.0-beta.2`, publish pending.
+  - zq asks before compound commands (chaining, pipes, substitution, redirects), credential files like `.npmrc` and `.aws/`, and git commands that write files or change branches. Git reads zq runs itself or auto-allows run with overrides (`core.fsmonitor=false`, `core.hooksPath=/dev/null`, no pager, no external diff), and git commands always ask when the repo's own git config names a program. Version bumped to `0.1.0-beta.3`, publish pending.
   - A stopped or cut step is charged by estimate instead of refunded, in the web agent loop, the Model API and the plain chat path (`AI_DECISIONS.md`).
   - `fetch_url` only opens links that already appeared in the chat (`AI_DECISIONS.md`).
   - Password changes and admin resets revoke zq tokens.
@@ -21,17 +21,19 @@ Current direction: plan upgrades remain manual/admin-driven, payment automation 
   - Private files show inline only as images, PDFs or plain text, with `nosniff`.
   - Device login: approvals limited per user, token polling limited per IP, and a warning on `/cli/authorize`.
   - Uploads and re-index requests limited per user per hour.
+  - The Model API step cap per run is enforced on the server: the run comes from the conversation, not the client's run id (`AI_DECISIONS.md`).
+  - Custom assistant tests, artifact actions and model comparisons reserve usage before the model call and settle after it, like `/api/chat` (`lib/billing/text-reservation.ts`). Model comparisons now also charge web searches.
   - New rules added to `SECURITY_CHECKLIST.md`. The full findings report is kept outside the public repo.
 - `/admin/system-health` has rows for the Node version, `AGENT_LOOP` and `ZQ_MODEL_API`, and the search row now says when web search runs on the OpenRouter fallback (page reading stays off without Tavily).
 - `/cli/authorize` links the terms and privacy pages, as spec 06 asks, and the public smoke suite covers it.
 - Admin analytics can filter by surface (web or zq) for the daily top-cost check in spec 06.
 - Docs: `AI_CHECKLIST.md` (zq model overrides, e2e options), `AI_PROJECT.md` (launch env vars), `PRODUCT.md` (launch features behind flags), launch plan progress and `NEEDS_YOU.md`.
 
-**Verified**: typecheck, lint, 170 web tests, 12 zq tests and the production build pass. Playwright public smoke passed against a local production build, the Vercel preview (reached through the trusted OIDC header) and production after `main` was fast-forwarded. Bearer tokens get 401 on cookie routes and cookies get 401 on `/api/v1`. No paid model calls, no migrations, no database writes.
+**Verified**: typecheck, lint, 177 web tests, 18 zq tests and the production build pass. Playwright public smoke passed against a local production build, the Vercel preview (reached through the trusted OIDC header) and production after `main` was fast-forwarded. Bearer tokens get 401 on cookie routes and cookies get 401 on `/api/v1`. No paid model calls, no migrations, no database writes.
 
-**Risky or open**: signed-in smoke and a manual prompt-injection test still need a test account and a few paid calls (Day 12 bug bash). The Stop charge is a visible behavior change. zq beta.2 needs a publish from the user's terminal.
+**Risky or open**: signed-in smoke and a manual prompt-injection test still need a test account and a few paid calls (Day 12 bug bash). The Stop charge is a visible behavior change. zq beta.3 needs a publish from the user's terminal. How links in replies open is a product choice in `NEEDS_YOU.md`.
 
-**Next**: publish zq beta.2, add the OpenRouter credit limit, run the signed-in smoke once a test account exists, then eval round 2.
+**Next**: publish zq beta.3, add the OpenRouter credit limit, run the signed-in smoke once a test account exists, then eval round 2.
 
 ## 2026-11-17 - Gate B applied, zq key mode, production smoke test (Claude Code, user-requested implementation)
 
