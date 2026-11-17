@@ -3,6 +3,7 @@ import { obj, str } from '@earendil-works/pi-schema'
 import { retrieveFileKnowledgeContext } from '@/lib/rag/retrieval'
 import type { ToolContext, ToolDetails } from '../types'
 import { toolResult } from './shared'
+import { collectUrls } from './urls'
 
 const parameters = obj({
   query: str({ description: 'What to look for in the user\'s uploaded files.', maxLength: 500 }),
@@ -29,6 +30,7 @@ export function createFilesSearchTool(ctx: ToolContext): AgentTool<typeof parame
       const text = sources
         .map((source) => `[${source.id}] ${source.title}\n${source.snippet}`)
         .join('\n\n')
+      collectUrls(text, ctx.readableUrls)
       return toolResult(text, {
         summary: `Found ${sources.length} passage${sources.length === 1 ? '' : 's'} in your files`,
         sources,

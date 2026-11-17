@@ -15,6 +15,8 @@ export interface ToolContext {
   mode: AIMode
   /** Hands out citation ids that stay unique across every source in the turn. */
   nextSourceId: () => string
+  /** Normalized links the page reader may open. Tools add the links they return. */
+  readableUrls: Set<string>
 }
 
 /** What a tool reports to the UI next to the text it returns to the model. */

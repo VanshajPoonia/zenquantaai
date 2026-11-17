@@ -4,6 +4,7 @@ import { searchWebForContext } from '@/lib/search/web-search'
 import { webSearchCharge } from '../metering'
 import type { ToolContext, ToolDetails } from '../types'
 import { toolResult } from './shared'
+import { normalizeUrl } from './urls'
 
 const parameters = obj({
   query: str({ description: 'What to search for, written as a search engine query.', maxLength: 300 }),
@@ -26,6 +27,10 @@ export function createWebSearchTool(ctx: ToolContext): AgentTool<typeof paramete
         )
       }
       const sources = context.sources.map((source) => ({ ...source, id: ctx.nextSourceId() }))
+      for (const source of sources) {
+        const url = normalizeUrl(source.url)
+        if (url) ctx.readableUrls.add(url)
+      }
       const text = sources
         .map((source) =>
           [`[${source.id}] ${source.title}`, `URL: ${source.url}`, source.publishedAt ? `Published: ${source.publishedAt}` : '', source.snippet]

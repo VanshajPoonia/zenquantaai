@@ -63,6 +63,7 @@ import {
 } from '@/lib/agent/metering'
 import { runAgentTurn } from '@/lib/agent/runtime'
 import { createServerTools, getToolNamesForMode } from '@/lib/agent/tools'
+import { collectReadableUrls, collectUrls } from '@/lib/agent/tools/urls'
 
 export const runtime = 'nodejs'
 export const maxDuration = 300
@@ -544,6 +545,11 @@ export async function POST(request: NextRequest) {
           payload.timeZone
         )
         let nextSourceId = messageSources.length
+        const readableUrls = collectReadableUrls(
+          prepared.generationConversation.messages,
+          messageSources
+        )
+        collectUrls(prepared.userMessage.content, readableUrls)
         const tools = createServerTools({
           userId: auth.user.id,
           conversationId: persistedConversation.id,
@@ -551,6 +557,7 @@ export async function POST(request: NextRequest) {
           projectId: persistedConversation.projectId,
           mode: prepared.assistantMode,
           nextSourceId: () => String(++nextSourceId),
+          readableUrls,
         })
 
         const attachedNames = (prepared.userMessage.attachments ?? [])
