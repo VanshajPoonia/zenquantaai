@@ -1,5 +1,17 @@
 # AI Architecture Decisions
 
+## A Stopped Or Cut Reply Is Charged For What It Used
+
+Decision (2026-11-18, security review): when a reply or agent step reaches the model and then stops before the provider reports usage (the user presses Stop, the client disconnects, the stream breaks), it is charged by estimate instead of refunded. The estimate is the prompt estimate plus the characters streamed so far, priced with pi's per-model rates (`estimateCutStepUsage`, `AgentMeter.settleCutStep`, `stepSettlement`). The plain chat path uses the same text estimate as a finished reply. Only our own 120 s step timeout, an upstream error before any output, or a failed request is refunded.
+
+Rationale: OpenRouter bills for the tokens it processed, and a refund on Stop or disconnect let a user or a script get answers for free.
+
+## The Page Reader Only Opens Links Already In The Chat
+
+Decision (2026-11-18, security review): `fetch_url` opens a link only if it appeared in the user's messages, saved sources, web search results, a page already read or a file passage in the same turn (`lib/agent/tools/urls.ts`). A link the model builds itself is refused and the model asks the user to paste it.
+
+Rationale: tool results are untrusted. Without this, text in a page or file could get the model to put private data into a URL for Tavily to fetch.
+
 ## Pi Is The Harness For Web Chat And The Terminal
 
 Decision (2026-11-16, planned, nothing built yet): Zenquanta becomes a chat and coding platform with one account, memory and plan. Pi (`earendil-works/pi`, MIT, TypeScript) is the harness. `pi-ai` and `pi-agent-core` run the tool loop inside `/api/chat`. `zq`, the terminal agent, runs pi's `main` with a Zenquanta extension. The direction is in `AI_PLATFORM_PLAN.md` and the launch plan is in `docs/launch/`.

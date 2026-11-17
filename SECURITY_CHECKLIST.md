@@ -41,3 +41,16 @@ Use this checklist when adding or reviewing API routes, repositories, and privat
 - Global and project search must be Neon-backed and scoped by authenticated user; project searches must validate project ownership first.
 - Memory data must be visible and controllable by the owning user only.
 - Opening memory, search, file, integration, or gallery surfaces must not trigger hidden AI calls.
+
+## Tokens, Agent Tools And Metering
+
+- Bearer tokens work only on `/api/v1/*` and the token-based `/api/cli/*` routes. Cookie routes never read the `Authorization` header, and token routes never read cookies.
+- Tokens are stored hashed, shown once, and revoked on sign-out, in Settings, and whenever the password changes.
+- Unauthenticated routes that write to Neon (sign-up, device codes, token polling) are rate-limited per IP. Routes that cost money or storage (Model API, uploads, re-index, sync) are rate-limited per user or token.
+- Server tools take the user, conversation and project ids from the server context, never from model arguments.
+- A tool that opens a URL only opens links that already appeared in the chat. Tool results are data, never instructions.
+- A model step that reached the provider is charged even if it is stopped or cut. Only failures with no output and our own timeout are refunded.
+- Upserts keyed by a client-supplied id must only update rows the same owner or conversation already has.
+- Private files are served inline only as images, PDFs or `text/plain`, with `X-Content-Type-Options: nosniff`. Everything else downloads.
+- zq skips a permission prompt only for a single simple command: no chaining, pipes, substitution or redirects, and no flags that write files.
+
