@@ -133,6 +133,10 @@ export default function CliAuthorizePage() {
               {loginId ? <> the account <span className="text-foreground">{loginId}</span></> : ' your account'}
               {' '}and its plan.
             </p>
+            <p className="text-sm text-muted-foreground">
+              Only approve a code you started yourself with <code>zq login</code> in the last few
+              minutes. Never approve a code someone sent you.
+            </p>
             <Input
               aria-label="Login code"
               className="text-center font-mono text-lg tracking-[0.3em]"

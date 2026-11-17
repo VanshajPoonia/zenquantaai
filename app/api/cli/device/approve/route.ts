@@ -1,12 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAuthenticatedUser } from '@/lib/auth/session'
 import { neonDeviceCodesRepository, normalizeUserCode } from '@/lib/db/repositories'
+import { hitRateLimit } from '@/lib/security/rate-limit'
 
 export const runtime = 'nodejs'
 
 export async function POST(request: NextRequest) {
   const auth = await requireAuthenticatedUser(request)
   if ('response' in auth) return auth.response
+  if (!(await hitRateLimit(`cli-approve:${auth.user.id}`, 20, 3_600))) {
+    return NextResponse.json(
+      { error: 'Too many login codes tried. Wait an hour and run `zq login` again.' },
+      { status: 429 }
+    )
+  }
 
   const body = (await request.json().catch(() => null)) as {
     userCode?: unknown

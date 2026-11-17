@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { neonApiTokensRepository, neonDeviceCodesRepository, neonUsersRepository } from '@/lib/db/repositories'
-import { hitRateLimit } from '@/lib/security/rate-limit'
+import { getClientIp, hitRateLimit } from '@/lib/security/rate-limit'
 
 export const runtime = 'nodejs'
 
@@ -13,6 +13,10 @@ export async function POST(request: NextRequest) {
   const deviceCode = typeof body?.device_code === 'string' ? body.device_code : ''
   if (!deviceCode) return oauthError('invalid_request')
 
+  // zq polls every 5 s for up to 10 minutes, so this leaves room for a few logins per network.
+  if (!(await hitRateLimit(`cli-token-ip:${getClientIp(request)}`, 600, 600))) {
+    return oauthError('slow_down', 429)
+  }
   if (!(await hitRateLimit(`cli-token:${deviceCode}`, 1, 4))) return oauthError('slow_down')
 
   const result = await neonDeviceCodesRepository.claim(deviceCode)
