@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireApiTokenUser } from '@/lib/auth/api-token'
 import { isModelApiEnabledFor } from '@/lib/agent/flags'
 import { AgentLimitError, AgentMeter } from '@/lib/agent/metering'
+import { serverRunKey, stepsSinceLastUserMessage } from '@/lib/agent/model-api-runs'
 import { isZqModelName, resolveZqModel, type ZqModelName } from '@/lib/agent/model-names'
 import { resolveAgentModel } from '@/lib/agent/models'
 import {
@@ -90,15 +91,15 @@ export async function POST(request: NextRequest) {
   const maxTokens = Math.max(1, Math.min(Math.floor(requestedMax), limits.maxAgentOutputTokens))
   const estimatedPromptTokens = Math.ceil(JSON.stringify([body.messages, body.tools ?? []]).length / 4)
 
-  const clientRunId = readClientId(request, 'x-zq-run-id')
-  const run = clientRunId
-    ? await neonAgentRunsRepository.findOrCreateClientRun({
-        userId: auth.user.id,
-        clientRunId,
-        clientSessionId: readClientId(request, 'x-zq-session-id'),
-      })
-    : await neonAgentRunsRepository.create({ userId: auth.user.id, surface: 'cli' })
-  if (run.stepCount >= limits.maxStepsPerRun) {
+  // The run comes from the conversation, not a client header, so a fresh run id does not reset the cap.
+  const sessionId = readClientId(request, 'x-zq-session-id')
+  const run = await neonAgentRunsRepository.findOrCreateClientRun({
+    userId: auth.user.id,
+    clientRunId: serverRunKey(auth.user.id, sessionId, body.messages),
+    clientSessionId: sessionId,
+  })
+  const stepsSoFar = Math.max(run.stepCount, stepsSinceLastUserMessage(body.messages))
+  if (stepsSoFar >= limits.maxStepsPerRun) {
     return apiError(429, 'This run reached its step limit for your current plan.', 'step_limit')
   }
 

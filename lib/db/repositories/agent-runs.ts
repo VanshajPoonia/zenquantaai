@@ -44,7 +44,10 @@ class NeonAgentRunsRepository {
     return toRecord(rows[0])
   }
 
-  /** Finds or creates the run a CLI request belongs to, keyed by the client's run id. */
+  /**
+   * Finds or creates the run a CLI request belongs to. A run idle for an hour
+   * starts its step count again, so an identical prompt later is a new run.
+   */
   async findOrCreateClientRun(input: {
     userId: string
     clientRunId: string
@@ -63,7 +66,10 @@ class NeonAgentRunsRepository {
       .onConflictDoUpdate({
         target: [zenAgentRuns.userId, zenAgentRuns.clientRunId],
         targetWhere: sql`${zenAgentRuns.clientRunId} is not null`,
-        set: { updatedAt: new Date() },
+        set: {
+          stepCount: sql`case when ${zenAgentRuns.updatedAt} < now() - interval '1 hour' then 0 else ${zenAgentRuns.stepCount} end`,
+          updatedAt: new Date(),
+        },
       })
       .returning()
     return toRecord(rows[0])
