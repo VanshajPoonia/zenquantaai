@@ -45,9 +45,12 @@ const DANGEROUS_COMMANDS = [
 
 const SAFE_COMMANDS = [
   /^(ls|pwd|whoami|date|which|echo)(\s|$)/,
-  /^git\s+(status|diff|log|show|branch|rev-parse)(\s|$)/,
+  /^git\s+(status|diff|log|show|rev-parse)(\s|$)/,
+  /^git\s+branch(\s+(-a|-r|-v|-vv|--list|--show-current))*$/,
   /^(node|npm|pnpm|yarn|bun|python3?|go|cargo|rustc)\s+(-v|--version)$/,
 ]
+// Read-only git commands can still write a file or run a configured program with these.
+const UNSAFE_GIT_FLAGS = /\s--(output|ext-diff|textconv)\b/
 
 export function isProtectedPath(path: string): boolean {
   return PROTECTED_PATHS.some((pattern) => pattern.test(path))
@@ -106,7 +109,8 @@ function decideWithUI(input: DecideInput): Decision {
     const command = typeof args.command === 'string' ? args.command.trim() : ''
     const dangerous = DANGEROUS_COMMANDS.some((pattern) => pattern.test(command))
     const touchesSecrets = PROTECTED_IN_COMMAND.some((pattern) => pattern.test(command))
-    const canSkipPrompt = !dangerous && !touchesSecrets && !SHELL_CONTROL.test(command)
+    const canSkipPrompt =
+      !dangerous && !touchesSecrets && !SHELL_CONTROL.test(command) && !UNSAFE_GIT_FLAGS.test(command)
     if (canSkipPrompt) {
       if (SAFE_COMMANDS.some((pattern) => pattern.test(command))) return { action: 'allow' }
       if (input.allowedCommands.includes(commandKey(command))) return { action: 'allow' }

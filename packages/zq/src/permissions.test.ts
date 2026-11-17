@@ -61,6 +61,18 @@ describe('zq permissions', () => {
     expect(decision.action === 'ask' && decision.rememberAs).toBeFalsy()
   })
 
+  it('asks for git commands that write files or change branches', () => {
+    expect(run({ toolName: 'bash', args: { command: 'git branch' } })).toBe('allow')
+    expect(run({ toolName: 'bash', args: { command: 'git branch --show-current' } })).toBe('allow')
+    expect(run({ toolName: 'bash', args: { command: 'git log --oneline -5' } })).toBe('allow')
+    expect(run({ toolName: 'bash', args: { command: 'git branch -D main' } })).toBe('ask')
+    expect(run({ toolName: 'bash', args: { command: 'git log -1 --format=%s --output=/home/me/.zshrc' } })).toBe('ask')
+    expect(run({ toolName: 'bash', args: { command: 'git diff --ext-diff' } })).toBe('ask')
+    expect(
+      run({ toolName: 'bash', args: { command: 'git diff --output=notes.txt' }, allowedCommands: ['git diff'] })
+    ).toBe('ask')
+  })
+
   it('asks before touching common credential files', () => {
     expect(run({ toolName: 'read', args: { path: '.npmrc' } })).toBe('ask')
     expect(run({ toolName: 'read', args: { path: 'deploy/.aws/credentials' } })).toBe('ask')
