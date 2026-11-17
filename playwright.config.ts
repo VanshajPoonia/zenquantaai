@@ -1,7 +1,8 @@
 import path from 'node:path'
 import { defineConfig, devices } from '@playwright/test'
 
-const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? 'http://127.0.0.1:3100'
+const externalBaseURL = process.env.PLAYWRIGHT_BASE_URL
+const baseURL = externalBaseURL ?? 'http://127.0.0.1:3100'
 const purgeE2EEnabled =
   process.env.PURGE_E2E_CONFIRM === 'dedicated-neon-branch' &&
   Boolean(process.env.PURGE_E2E_DATABASE_URL)
@@ -30,7 +31,8 @@ export default defineConfig({
       use: { ...devices['Desktop Chrome'] },
     },
   ],
-  webServer: {
+  // A given base URL (production or a preview) is tested as is, with no local server.
+  webServer: externalBaseURL ? undefined : {
     command: 'npm run dev -- --webpack --hostname 127.0.0.1 --port 3100',
     env: {
       ...process.env,

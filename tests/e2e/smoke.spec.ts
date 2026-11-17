@@ -1,100 +1,65 @@
 import { expect, Page, test } from '@playwright/test'
+import { collectPageErrors, expectNoHorizontalOverflow, gotoSmokeRoute } from './helpers'
 
-function collectPageErrors(page: Page): string[] {
-  const errors: string[] = []
-
-  page.on('console', (message) => {
-    const text = message.text()
-    if (
-      message.type() === 'error' &&
-      !text.startsWith('Failed to load resource:')
-    ) {
-      errors.push(text)
-    }
-  })
-
-  page.on('pageerror', (error) => {
-    errors.push(error.message)
-  })
-
-  return errors
+async function expectLanding(page: Page) {
+  await expect(page.getByRole('heading', { level: 1, name: /Six AI specialists/ })).toBeVisible()
+  await expect(page.locator('#landing-identifier')).toBeVisible()
 }
 
-async function expectAuthGate(page: Page) {
-  await expect(
-    page.getByRole('heading', { name: 'Sign in to your workspace' })
-  ).toBeVisible()
-  await expect(page.getByPlaceholder('Enter your ID')).toBeVisible()
-  await expect(page.getByPlaceholder('Enter your password')).toBeVisible()
-}
-
-async function gotoSmokeRoute(page: Page, path: string) {
-  await page.goto(path, { waitUntil: 'domcontentloaded' })
-}
-
-test.describe('Zenquanta smoke routes', () => {
-  test('landing route loads the unauthenticated auth gate', async ({ page }) => {
+test.describe('Zenquanta public smoke', () => {
+  test('landing page opens on the sign-up form', async ({ page }) => {
     const pageErrors = collectPageErrors(page)
 
     await gotoSmokeRoute(page, '/')
 
-    await expectAuthGate(page)
+    await expectLanding(page)
+    await expect(page.getByPlaceholder('e.g. sam.rivera')).toBeVisible()
+    await expect(page.getByPlaceholder('At least 8 characters')).toBeVisible()
+    await expect(page.getByPlaceholder('Type it once more')).toBeVisible()
     expect(pageErrors).toEqual([])
   })
 
-  test('sign-in form renders on the auth gate', async ({ page }) => {
+  test('landing form switches to sign-in', async ({ page }) => {
     const pageErrors = collectPageErrors(page)
 
     await gotoSmokeRoute(page, '/')
+    await page.locator('#landing-identifier').scrollIntoViewIfNeeded()
+    await page.locator('button[aria-pressed]', { hasText: 'Sign in' }).click()
 
     await expect(page.getByPlaceholder('Enter your ID')).toBeVisible()
     await expect(page.getByPlaceholder('Enter your password')).toBeVisible()
-    await expect(page.getByRole('button', { name: 'Sign in' }).first()).toBeVisible()
+    await expect(page.getByPlaceholder('Type it once more')).toHaveCount(0)
     expect(pageErrors).toEqual([])
   })
 
-  test('sign-up form renders from the auth gate', async ({ page }) => {
-    const pageErrors = collectPageErrors(page)
+  for (const path of ['/dashboard', '/knowledge', '/admin']) {
+    test(`${path} sends signed-out visitors to the landing page`, async ({ page }) => {
+      const pageErrors = collectPageErrors(page)
 
-    await gotoSmokeRoute(page, '/')
-    await page.getByRole('button', { name: 'Create account' }).first().click()
+      await gotoSmokeRoute(page, path)
 
-    await expect(page.getByPlaceholder('Choose your ID')).toBeVisible()
-    await expect(page.getByPlaceholder('Create a password')).toBeVisible()
-    await expect(page.getByPlaceholder('Confirm your password')).toBeVisible()
-    await expect(page.getByRole('button', { name: 'Create account' }).last()).toBeVisible()
-    expect(pageErrors).toEqual([])
-  })
+      await expect(page).toHaveURL('/')
+      await expectLanding(page)
+      expect(pageErrors).toEqual([])
+    })
+  }
 
-  test('dashboard protects unauthenticated users', async ({ page }) => {
-    const pageErrors = collectPageErrors(page)
+  const staticPages = [
+    { path: '/terms', title: 'Terms of Service' },
+    { path: '/privacy', title: 'Privacy Policy' },
+    { path: '/docs/cli', title: 'zq: Forge in your terminal' },
+  ]
 
-    await gotoSmokeRoute(page, '/dashboard')
+  for (const staticPage of staticPages) {
+    test(`${staticPage.path} renders`, async ({ page }) => {
+      const pageErrors = collectPageErrors(page)
 
-    await expect(page).toHaveURL('/')
-    await expectAuthGate(page)
-    expect(pageErrors).toEqual([])
-  })
+      await gotoSmokeRoute(page, staticPage.path)
 
-  test('pricing protects unauthenticated users', async ({ page }) => {
-    const pageErrors = collectPageErrors(page)
-
-    await gotoSmokeRoute(page, '/pricing')
-
-    await expect(page).toHaveURL('/')
-    await expectAuthGate(page)
-    expect(pageErrors).toEqual([])
-  })
-
-  test('admin blocks users without an authenticated admin session', async ({ page }) => {
-    const pageErrors = collectPageErrors(page)
-
-    await gotoSmokeRoute(page, '/admin')
-
-    await expect(page).toHaveURL('/')
-    await expectAuthGate(page)
-    expect(pageErrors).toEqual([])
-  })
+      await expect(page.getByRole('heading', { level: 1, name: staticPage.title })).toBeVisible()
+      expect(pageErrors).toEqual([])
+    })
+  }
 
   const assistantPages = [
     {
@@ -153,4 +118,15 @@ test.describe('Zenquanta smoke routes', () => {
       expect(pageErrors).toEqual([])
     })
   }
+
+  test.describe('phone width', () => {
+    test.use({ viewport: { width: 390, height: 844 } })
+
+    for (const path of ['/', '/pricing', '/terms', '/privacy', '/docs/cli', '/forge']) {
+      test(`${path} has no sideways scroll at 390 px`, async ({ page }) => {
+        await gotoSmokeRoute(page, path)
+        await expectNoHorizontalOverflow(page)
+      })
+    }
+  })
 })
