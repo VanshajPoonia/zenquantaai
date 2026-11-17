@@ -517,6 +517,8 @@ class NeonConversationsRepository {
           parts: sql`excluded.parts`,
           createdAt: sql`excluded.created_at`,
         },
+        // A message id that already lives in another conversation is never rewritten.
+        setWhere: eq(zenMessages.conversationId, conversationId),
       })
   }
 
