@@ -4,7 +4,7 @@ import { Agent, type AgentEvent, type AgentTool } from '@earendil-works/pi-agent
 import type { Api, AssistantMessage, Message as PiMessage, Model, Usage } from '@earendil-works/pi-ai'
 import type { Models } from '@earendil-works/pi-ai/models'
 import type { MessagePart, UsageEstimate } from '@/types'
-import { AgentLimitError } from './metering'
+import { AgentLimitError, type TokenPrices } from './metering'
 import { getAgentIdentity, getAgentModels, getOpenRouterApiKey, resolveAgentModel } from './models'
 import type { AgentRunEvent, ExtraCharge, StepUsage, ToolDetails } from './types'
 
@@ -33,6 +33,7 @@ export interface StepMeter {
   addCharge(charge: ExtraCharge): void
   reserveStep(estimatedPromptTokens: number): Promise<void>
   finalizeStep(usage: StepUsage): Promise<UsageEstimate | null>
+  settleCutStep(outputChars: number, prices?: TokenPrices): Promise<UsageEstimate | null>
   releasePending(): Promise<void>
 }
 
@@ -104,6 +105,32 @@ export function toStepUsage(usage: Usage | undefined): StepUsage {
 export function estimateContextTokens(systemPrompt: string, messages: unknown, tools: unknown): number {
   const size = systemPrompt.length + JSON.stringify(messages ?? []).length + JSON.stringify(tools ?? []).length
   return Math.ceil(size / 4)
+}
+
+/** Characters the model produced in a message: text, tool call arguments and thinking. */
+export function assistantOutputChars(message: AssistantMessage): number {
+  return message.content.reduce((total, part) => {
+    if (part.type === 'text') return total + part.text.length
+    if (part.type === 'toolCall') return total + JSON.stringify(part.arguments ?? {}).length
+    if (part.type === 'thinking') return total + part.thinking.length
+    return total
+  }, 0)
+}
+
+/**
+ * How a finished step is billed. A stop or a cut stream still reached the model,
+ * so only our own timeout or a failure with no output is refunded.
+ */
+export function stepSettlement(input: {
+  stopReason: string
+  usage: StepUsage
+  outputChars: number
+  timedOut: boolean
+}): 'usage' | 'estimate' | 'refund' {
+  const reported = input.usage.inputTokens + input.usage.outputTokens > 0
+  if (reported || (input.stopReason !== 'error' && input.stopReason !== 'aborted')) return 'usage'
+  if (input.timedOut) return 'refund'
+  return input.stopReason === 'aborted' || input.outputChars > 0 ? 'estimate' : 'refund'
 }
 
 function toolResultText(result: unknown): string {
@@ -200,12 +227,11 @@ export async function* runAgentTurn(
     },
     finishTurn: async ({ message }) => {
       const usage = toStepUsage(message.usage)
-      const empty = usage.inputTokens + usage.outputTokens === 0
-      if (empty && (message.stopReason === 'error' || message.stopReason === 'aborted')) {
-        await input.meter.releasePending()
-      } else {
-        await input.meter.finalizeStep(usage)
-      }
+      const outputChars = assistantOutputChars(message)
+      const settlement = stepSettlement({ stopReason: message.stopReason, usage, outputChars, timedOut })
+      if (settlement === 'refund') await input.meter.releasePending()
+      else if (settlement === 'estimate') await input.meter.settleCutStep(outputChars, model.cost)
+      else await input.meter.finalizeStep(usage)
       if (input.meter.stepCount >= input.maxSteps - 1) agent.state.tools = []
       return input.meter.reachedStepCap ? { action: 'end' } : undefined
     },

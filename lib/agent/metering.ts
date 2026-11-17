@@ -60,6 +60,35 @@ export function buildStepUsageEstimate(input: {
   }
 }
 
+/** Per-million-token prices, as pi reports them for a model. */
+export interface TokenPrices {
+  input: number
+  output: number
+}
+
+/**
+ * Usage for a step that reached the model but ended before the provider
+ * reported usage, such as a stop or a dropped stream: the prompt plus the output so far.
+ */
+export function estimateCutStepUsage(input: {
+  promptTokens: number
+  outputChars: number
+  prices?: TokenPrices
+}): StepUsage {
+  const outputTokens = Math.ceil(Math.max(input.outputChars, 0) / 4)
+  const prices = input.prices
+  return {
+    inputTokens: input.promptTokens,
+    outputTokens,
+    cacheReadTokens: 0,
+    cacheWriteTokens: 0,
+    rawCostUsd: prices
+      ? (input.promptTokens * prices.input + outputTokens * prices.output) / 1_000_000
+      : 0,
+    costFromProvider: false,
+  }
+}
+
 /** What a web search draws from the wallet, or null when no search ran. */
 export function webSearchCharge(context: WebSearchContext | undefined): ExtraCharge | null {
   if (!context?.sources.length) return null
@@ -126,7 +155,11 @@ export interface AgentMeterOptions {
 /** Reserves before each model request and settles after it, one step at a time. */
 export class AgentMeter {
   private steps = 0
-  private pending: { reservedTokens: number; countedMessage: boolean } | null = null
+  private pending: {
+    reservedTokens: number
+    promptTokens: number
+    countedMessage: boolean
+  } | null = null
   private subscriptionId: string | null = null
   private total: UsageEstimate | null = null
   private charges: ExtraCharge[] = []
@@ -179,7 +212,7 @@ export class AgentMeter {
     }
 
     this.subscriptionId = subscription.id
-    this.pending = { reservedTokens, countedMessage: countsMessage }
+    this.pending = { reservedTokens, promptTokens: estimatedPromptTokens, countedMessage: countsMessage }
     this.steps += 1
   }
 
@@ -226,6 +259,14 @@ export class AgentMeter {
 
     this.total = this.total ? addUsageEstimates(this.total, estimate) : estimate
     return estimate
+  }
+
+  /** Charges a step the model received but that ended before usage arrived. */
+  async settleCutStep(outputChars: number, prices?: TokenPrices): Promise<UsageEstimate | null> {
+    if (!this.pending) return null
+    return this.finalizeStep(
+      estimateCutStepUsage({ promptTokens: this.pending.promptTokens, outputChars, prices })
+    )
   }
 
   /** Refunds a step that never produced a response. */

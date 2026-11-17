@@ -9,8 +9,8 @@ import {
 import { obj, str } from '@earendil-works/pi-schema'
 import type { AgentTool } from '@earendil-works/pi-agent-core'
 import type { AgentRunEvent, StepUsage, ToolDetails } from '@/lib/agent/types'
-import { runAgentTurn, toStepUsage } from '@/lib/agent/runtime'
-import { AgentLimitError, billableTokens, buildStepUsageEstimate } from '@/lib/agent/metering'
+import { runAgentTurn, stepSettlement, toStepUsage } from '@/lib/agent/runtime'
+import { AgentLimitError, billableTokens, buildStepUsageEstimate, estimateCutStepUsage } from '@/lib/agent/metering'
 
 vi.mock('server-only', () => ({}))
 
@@ -18,6 +18,7 @@ class FakeMeter {
   stepCount = 0
   reserved = 0
   finalized: StepUsage[] = []
+  settled: number[] = []
   released = 0
   charges: Array<{ walletTokens: number; rawCostUsd: number }> = []
   constructor(private readonly maxSteps: number, private readonly failAt?: number) {}
@@ -38,8 +39,12 @@ class FakeMeter {
   addCharge(charge: { walletTokens: number; rawCostUsd: number }) {
     this.charges.push(charge)
   }
+  async settleCutStep(outputChars: number) {
+    this.settled.push(outputChars)
+    return null
+  }
   async releasePending() {
-    if (this.reserved > this.finalized.length + this.released) this.released += 1
+    if (this.reserved > this.finalized.length + this.settled.length + this.released) this.released += 1
   }
 }
 
@@ -151,6 +156,30 @@ describe('agent metering', () => {
     expect(estimate.totalTokens).toBe(260)
     expect(estimate.displayedCostUsd).toBeCloseTo(0.015)
     expect(estimate.creditsConsumed).toBe(2)
+  })
+
+  it('estimates a cut step from the prompt and the output so far', () => {
+    const usage = estimateCutStepUsage({
+      promptTokens: 1_000,
+      outputChars: 400,
+      prices: { input: 2, output: 10 },
+    })
+    expect(usage).toMatchObject({ inputTokens: 1_000, outputTokens: 100, costFromProvider: false })
+    expect(usage.rawCostUsd).toBeCloseTo(0.003)
+    expect(estimateCutStepUsage({ promptTokens: 10, outputChars: 0 }).rawCostUsd).toBe(0)
+  })
+
+  it('charges stopped or cut steps by estimate and refunds only empty failures', () => {
+    const none = toStepUsage(undefined)
+    const some = { ...none, inputTokens: 10, outputTokens: 5 }
+    const settle = (stopReason: string, usage = none, outputChars = 0, timedOut = false) =>
+      stepSettlement({ stopReason, usage, outputChars, timedOut })
+    expect(settle('stop', some)).toBe('usage')
+    expect(settle('aborted', some)).toBe('usage')
+    expect(settle('aborted')).toBe('estimate')
+    expect(settle('error', none, 120)).toBe('estimate')
+    expect(settle('error')).toBe('refund')
+    expect(settle('aborted', none, 120, true)).toBe('refund')
   })
 
   it('reads pi usage safely', () => {
