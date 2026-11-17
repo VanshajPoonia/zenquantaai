@@ -312,30 +312,55 @@ function formatInlineStyles(text: string): React.ReactNode {
       )
     }
 
-    const boldParts = part.split(/(\*\*[^*]+\*\*)/)
-
-    return boldParts.map((boldPart, j) => {
-      if (boldPart.startsWith('**') && boldPart.endsWith('**')) {
+    return part.split(MARKDOWN_LINK_SPLIT).map((linkPart, l) => {
+      const link = linkPart.match(MARKDOWN_LINK)
+      if (link) {
         return (
-          <strong key={`${i}-${j}`} className="font-semibold text-foreground">
-            {boldPart.slice(2, -2)}
-          </strong>
+          <a
+            key={`${i}-link-${l}`}
+            href={link[2]}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-foreground underline decoration-white/30 underline-offset-2 hover:decoration-white/70"
+          >
+            {formatEmphasis(link[1], `${i}-link-${l}`)}
+          </a>
         )
       }
 
-      const italicParts = boldPart.split(/(\*[^*]+\*)/)
+      return formatEmphasis(linkPart, `${i}-${l}`)
+    })
+  })
+}
 
-      return italicParts.map((italicPart, k) => {
-        if (italicPart.startsWith('*') && italicPart.endsWith('*')) {
-          return (
-            <em key={`${i}-${j}-${k}`} className="italic">
-              {italicPart.slice(1, -1)}
-            </em>
-          )
-        }
+// Only http(s) links render, so a reply cannot produce javascript: or data: hrefs.
+const MARKDOWN_LINK_SPLIT = /(\[[^\]\n]+\]\(https?:\/\/[^\s)]+\))/
+const MARKDOWN_LINK = /^\[([^\]\n]+)\]\((https?:\/\/[^\s)]+)\)$/
 
-        return italicPart
-      })
+function formatEmphasis(text: string, keyPrefix: string): React.ReactNode {
+  const boldParts = text.split(/(\*\*[^*]+\*\*)/)
+
+  return boldParts.map((boldPart, j) => {
+    if (boldPart.startsWith('**') && boldPart.endsWith('**')) {
+      return (
+        <strong key={`${keyPrefix}-${j}`} className="font-semibold text-foreground">
+          {boldPart.slice(2, -2)}
+        </strong>
+      )
+    }
+
+    const italicParts = boldPart.split(/(\*[^*]+\*)/)
+
+    return italicParts.map((italicPart, k) => {
+      if (italicPart.startsWith('*') && italicPart.endsWith('*')) {
+        return (
+          <em key={`${keyPrefix}-${j}-${k}`} className="italic">
+            {italicPart.slice(1, -1)}
+          </em>
+        )
+      }
+
+      return italicPart
     })
   })
 }
