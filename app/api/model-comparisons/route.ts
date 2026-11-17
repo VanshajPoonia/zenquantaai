@@ -24,9 +24,10 @@ import {
   prepareConversationForChat,
   resolveSessionSettings,
 } from '@/lib/ai/chat'
+import { addUsageEstimates, buildChargeEstimate, webSearchCharge } from '@/lib/agent/metering'
 import { calculateTextUsageEstimate } from '@/lib/billing/costs'
 import { enforceTextUsage, getEffectiveSubscription } from '@/lib/billing/enforce'
-import { logTextUsage } from '@/lib/billing/log-usage'
+import { TextUsageReservation } from '@/lib/billing/text-reservation'
 import {
   buildWebSearchQuery,
   searchWebForContext,
@@ -223,39 +224,58 @@ export async function POST(request: NextRequest) {
         auth.user
       )
 
+      const estimatedPromptTokens = estimatePromptTokens(promptText)
       enforceTextUsage({
         subscription: latestSubscription,
         override,
-        estimatedPromptTokens: estimatePromptTokens(promptText),
+        estimatedPromptTokens,
         requestedMaxOutputTokens: settings.maxTokens,
         walletType: routeConfig.walletType,
       })
 
-      let accumulated = ''
-      for await (const chunk of generateAssistantStream({
-        conversation: prepared.generationConversation,
-        settings,
-        mode,
-        action: 'send',
-        tier: subscription.tier,
-        webSearchContext,
-        fileKnowledgeContext,
-      })) {
-        accumulated += chunk
-      }
-
-      const candidateContent = accumulated || 'No response returned.'
-      const usage = calculateTextUsageEstimate({
-        tier: subscription.tier,
+      // Each candidate is its own model call, so each claims its own share first.
+      const reservation = await TextUsageReservation.reserve({
+        userId: auth.user.id,
         walletType: routeConfig.walletType,
-        model: routeConfig.model,
-        promptText,
-        completionText: candidateContent,
+        estimatedPromptTokens,
+        maxOutputTokens: settings.maxTokens,
+        effective: effectiveSubscription,
       })
+      let accumulated = ''
+      let usage: ReturnType<typeof calculateTextUsageEstimate>
 
-      await logTextUsage({
-        subscription: latestSubscription,
-        event: {
+      try {
+        for await (const chunk of generateAssistantStream({
+          conversation: prepared.generationConversation,
+          settings,
+          mode,
+          action: 'send',
+          tier: subscription.tier,
+          webSearchContext,
+          fileKnowledgeContext,
+        })) {
+          accumulated += chunk
+        }
+
+        const textUsage = calculateTextUsageEstimate({
+          tier: subscription.tier,
+          walletType: routeConfig.walletType,
+          model: routeConfig.model,
+          promptText,
+          completionText: accumulated || 'No response returned.',
+        })
+        const searchCharge = webSearchCharge(webSearchContext)
+        usage = searchCharge
+          ? addUsageEstimates(
+              textUsage,
+              buildChargeEstimate({
+                tier: subscription.tier,
+                walletType: routeConfig.walletType === 'tier_tokens' ? 'tier_tokens' : 'core_tokens',
+                charge: searchCharge,
+              })
+            )
+          : textUsage
+        await reservation.settle({
           userId: auth.user.id,
           conversationId: persistedConversation.id,
           messageId: null,
@@ -264,8 +284,12 @@ export async function POST(request: NextRequest) {
           model: routeConfig.model,
           walletType: routeConfig.walletType,
           usage,
-        },
-      })
+        })
+      } finally {
+        await reservation.release()
+      }
+
+      const candidateContent = accumulated || 'No response returned.'
 
       candidates.push({
         id: crypto.randomUUID(),

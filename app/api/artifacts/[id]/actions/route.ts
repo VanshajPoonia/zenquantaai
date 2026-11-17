@@ -17,7 +17,7 @@ import {
 } from '@/lib/ai/chat'
 import { calculateTextUsageEstimate } from '@/lib/billing/costs'
 import { enforceTextUsage, getEffectiveSubscription } from '@/lib/billing/enforce'
-import { logTextUsage } from '@/lib/billing/log-usage'
+import { TextUsageReservation } from '@/lib/billing/text-reservation'
 import { getAssistantFamilyFromMode } from '@/lib/config/assistants'
 import {
   neonArtifactsRepository,
@@ -220,38 +220,44 @@ export async function POST(
       mode
     )
 
+    const estimatedPromptTokens = estimatePromptTokens(promptText)
     enforceTextUsage({
       subscription,
       override,
-      estimatedPromptTokens: estimatePromptTokens(promptText),
+      estimatedPromptTokens,
       requestedMaxOutputTokens: settings.maxTokens,
       walletType: routeConfig.walletType,
     })
 
-    let accumulated = ''
-
-    for await (const chunk of generateAssistantStream({
-      conversation: prepared.generationConversation,
-      settings,
-      mode,
-      action: 'send',
-      tier: subscription.tier,
-    })) {
-      accumulated += chunk
-    }
-
-    const content = accumulated.trim() || 'No response returned.'
-    const usage = calculateTextUsageEstimate({
-      tier: subscription.tier,
+    const reservation = await TextUsageReservation.reserve({
+      userId: auth.user.id,
       walletType: routeConfig.walletType,
-      model: routeConfig.model,
-      promptText,
-      completionText: content,
+      estimatedPromptTokens,
+      maxOutputTokens: settings.maxTokens,
+      effective: effectiveSubscription,
     })
+    let accumulated = ''
+    let usage: ReturnType<typeof calculateTextUsageEstimate>
 
-    await logTextUsage({
-      subscription,
-      event: {
+    try {
+      for await (const chunk of generateAssistantStream({
+        conversation: prepared.generationConversation,
+        settings,
+        mode,
+        action: 'send',
+        tier: subscription.tier,
+      })) {
+        accumulated += chunk
+      }
+
+      usage = calculateTextUsageEstimate({
+        tier: subscription.tier,
+        walletType: routeConfig.walletType,
+        model: routeConfig.model,
+        promptText,
+        completionText: accumulated.trim() || 'No response returned.',
+      })
+      await reservation.settle({
         userId: auth.user.id,
         conversationId: artifact.conversationId ?? null,
         messageId: null,
@@ -260,8 +266,12 @@ export async function POST(
         model: routeConfig.model,
         walletType: routeConfig.walletType,
         usage,
-      },
-    })
+      })
+    } finally {
+      await reservation.release()
+    }
+
+    const content = accumulated.trim() || 'No response returned.'
 
     const responseBody: ArtifactActionResponse = {
       artifactId: artifact.id,
