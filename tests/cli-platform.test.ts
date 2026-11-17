@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { cliConversationId, isValidCliSessionId, parseCliEntries } from '@/lib/cli/session-sync'
 import { listZqModels, resolveZqModel } from '@/lib/agent/model-names'
-import { stepUsageFromOpenRouter } from '@/lib/agent/openrouter-usage'
+import { completionOutputChars, stepUsageFromOpenRouter } from '@/lib/agent/openrouter-usage'
 import { buildChargeEstimate, webSearchCharge } from '@/lib/agent/metering'
 
 vi.mock('server-only', () => ({}))
@@ -78,6 +78,25 @@ describe('OpenRouter usage', () => {
       prompt_tokens_details: { cached_tokens: 800, cache_write_tokens: 0 },
     })
     expect(usage).toMatchObject({ inputTokens: 200, cacheReadTokens: 800, outputTokens: 50, rawCostUsd: 0.002 })
+  })
+
+  it('counts output in stream chunks and full completions', () => {
+    expect(
+      completionOutputChars({
+        choices: [
+          {
+            delta: {
+              content: 'hello',
+              reasoning: 'hm',
+              tool_calls: [{ function: { arguments: '{"a":1}' } }],
+            },
+          },
+        ],
+      })
+    ).toBe(14)
+    expect(completionOutputChars({ choices: [{ message: { content: 'abc' } }] })).toBe(3)
+    expect(completionOutputChars({ choices: 'nope' })).toBe(0)
+    expect(completionOutputChars({})).toBe(0)
   })
 })
 

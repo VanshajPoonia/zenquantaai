@@ -20,3 +20,26 @@ export function stepUsageFromOpenRouter(usage: OpenRouterUsage): StepUsage {
     costFromProvider: typeof usage.cost === 'number',
   }
 }
+
+interface CompletionOutput {
+  content?: unknown
+  reasoning?: unknown
+  tool_calls?: unknown
+}
+
+/** Characters of model output in a chat completion or one stream chunk. */
+export function completionOutputChars(body: Record<string, unknown>): number {
+  if (!Array.isArray(body.choices)) return 0
+  let total = 0
+  for (const choice of body.choices as Array<{ delta?: CompletionOutput; message?: CompletionOutput }>) {
+    const output = choice?.delta ?? choice?.message
+    if (!output) continue
+    if (typeof output.content === 'string') total += output.content.length
+    if (typeof output.reasoning === 'string') total += output.reasoning.length
+    const calls = Array.isArray(output.tool_calls) ? output.tool_calls : []
+    for (const call of calls as Array<{ function?: { arguments?: unknown } }>) {
+      if (typeof call?.function?.arguments === 'string') total += call.function.arguments.length
+    }
+  }
+  return total
+}

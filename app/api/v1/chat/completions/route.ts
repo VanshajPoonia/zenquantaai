@@ -3,7 +3,12 @@ import { requireApiTokenUser } from '@/lib/auth/api-token'
 import { isModelApiEnabledFor } from '@/lib/agent/flags'
 import { AgentLimitError, AgentMeter } from '@/lib/agent/metering'
 import { isZqModelName, resolveZqModel, type ZqModelName } from '@/lib/agent/model-names'
-import { stepUsageFromOpenRouter, type OpenRouterUsage } from '@/lib/agent/openrouter-usage'
+import { resolveAgentModel } from '@/lib/agent/models'
+import {
+  completionOutputChars,
+  stepUsageFromOpenRouter,
+  type OpenRouterUsage,
+} from '@/lib/agent/openrouter-usage'
 import { getEffectiveSubscription } from '@/lib/billing/enforce'
 import { AGENT_PLAN_LIMITS } from '@/lib/config'
 import {
@@ -169,10 +174,16 @@ export async function POST(request: NextRequest) {
     )
   }
 
+  // From here the model has the request, so a missing usage report is charged by estimate.
+  const prices = resolveAgentModel(resolved.model).cost
+
   if (!stream) {
-    const json = (await upstream.json()) as Record<string, unknown> & { usage?: OpenRouterUsage }
-    if (json.usage) await meter.finalizeStep(stepUsageFromOpenRouter(json.usage))
-    else await meter.releasePending()
+    const json = (await upstream.json().catch(() => null)) as
+      | (Record<string, unknown> & { usage?: OpenRouterUsage })
+      | null
+    if (json?.usage) await meter.finalizeStep(stepUsageFromOpenRouter(json.usage))
+    else await meter.settleCutStep(json ? completionOutputChars(json) : 0, prices)
+    if (!json) return apiError(502, 'The model response could not be read.', 'upstream_error')
     return NextResponse.json(scrubChunk(json, modelName))
   }
 
@@ -185,6 +196,7 @@ export async function POST(request: NextRequest) {
   void (async () => {
     let buffer = ''
     let usage: OpenRouterUsage | null = null
+    let outputChars = 0
     try {
       while (true) {
         const { done, value } = await reader.read()
@@ -201,6 +213,7 @@ export async function POST(request: NextRequest) {
               usage?: OpenRouterUsage
             }
             if (chunk.usage) usage = chunk.usage
+            outputChars += completionOutputChars(chunk)
             await writer.write(encoder.encode(`data: ${JSON.stringify(scrubChunk(chunk, modelName))}\n`))
           } else {
             await writer.write(encoder.encode(`${line}\n`))
@@ -211,7 +224,9 @@ export async function POST(request: NextRequest) {
     } catch (error) {
       console.error('Model API stream failed.', error)
     } finally {
-      await meter.releasePending()
+      await meter.settleCutStep(outputChars, prices).catch((error) => {
+        console.error('Failed to settle a cut Model API step.', error)
+      })
       await writer.close().catch(() => undefined)
     }
   })()
