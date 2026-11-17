@@ -61,6 +61,17 @@ test.describe('Zenquanta public smoke', () => {
     })
   }
 
+  test('zq login page asks signed-out visitors to sign in', async ({ page }) => {
+    const pageErrors = collectPageErrors(page)
+
+    await gotoSmokeRoute(page, '/cli/authorize?code=ABCD-EFGH')
+
+    await expect(page.getByRole('heading', { level: 1, name: 'Sign in to zq' })).toBeVisible()
+    await expect(page.getByPlaceholder('Zenquanta ID')).toBeVisible()
+    await expect(page.getByRole('link', { name: 'Privacy Policy' })).toBeVisible()
+    expect(pageErrors).toEqual([])
+  })
+
   const assistantPages = [
     {
       path: '/nova',

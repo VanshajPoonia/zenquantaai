@@ -173,6 +173,12 @@ export default function CliAuthorizePage() {
           <p className="text-sm text-muted-foreground">Denied. zq was not connected.</p>
         ) : null}
         {stage === 'error' ? <p className="text-sm text-destructive">{message}</p> : null}
+
+        <p className="mt-6 text-xs text-muted-foreground">
+          By connecting zq you agree to the{' '}
+          <Link href="/terms" className="underline underline-offset-4">Terms</Link> and{' '}
+          <Link href="/privacy" className="underline underline-offset-4">Privacy Policy</Link>.
+        </p>
       </div>
     </div>
   )
