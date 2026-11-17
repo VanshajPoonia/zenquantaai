@@ -19,7 +19,7 @@ import {
 import { SubscriptionTier } from '@/types'
 
 const USER_GRID_COLUMNS =
-  'grid-cols-[minmax(19rem,2.5fr)_minmax(7rem,0.8fr)_minmax(7rem,0.8fr)_minmax(7rem,0.8fr)_minmax(7rem,0.8fr)_minmax(7rem,0.8fr)_minmax(7rem,0.8fr)_minmax(8rem,0.9fr)_minmax(8rem,0.9fr)_minmax(8rem,0.9fr)_minmax(7rem,0.8fr)_minmax(7rem,0.8fr)_minmax(10rem,1fr)]'
+  'grid-cols-[minmax(19rem,2.5fr)_minmax(7rem,0.8fr)_minmax(7rem,0.8fr)_minmax(9rem,0.9fr)_minmax(7rem,0.8fr)_minmax(7rem,0.8fr)_minmax(7rem,0.8fr)_minmax(7rem,0.8fr)_minmax(8rem,0.9fr)_minmax(8rem,0.9fr)_minmax(8rem,0.9fr)_minmax(7rem,0.8fr)_minmax(7rem,0.8fr)_minmax(10rem,1fr)]'
 
 const PLAN_TIERS: SubscriptionTier[] = ['free', 'basic', 'pro', 'ultra', 'prime']
 const ASSISTANT_FAMILIES = ['nova', 'velora', 'axiom', 'forge', 'pulse', 'prism']
@@ -391,7 +391,7 @@ export default async function AdminPage({
                   key={user.userId}
                   label={getDisplayUser(user)}
                   value={formatCurrency(user.rawCostUsd)}
-                  detail={`${formatCurrency(user.displayedCostUsd)} displayed${user.isUnusuallyHigh ? ' · unusually high' : ''}`}
+                  detail={`${formatCurrency(user.displayedCostUsd)} displayed · ${formatAgentSteps(user.webAgentSteps, user.cliSteps)}${user.isUnusuallyHigh ? ' · unusually high' : ''}`}
                   href={`/admin/users/${user.userId}`}
                 />
               ))
@@ -446,6 +446,7 @@ export default async function AdminPage({
                   <ColumnHeader>User</ColumnHeader>
                   <ColumnHeader>Displayed</ColumnHeader>
                   <ColumnHeader>Raw</ColumnHeader>
+                  <ColumnHeader>Agent Steps</ColumnHeader>
                   <ColumnHeader>Credits Left</ColumnHeader>
                   <ColumnHeader>Tier</ColumnHeader>
                   <ColumnHeader>Status</ColumnHeader>
@@ -500,6 +501,9 @@ export default async function AdminPage({
 
                       <StaticMetricCell value={`$${row.displayedCostUsd.toFixed(2)}`} />
                       <StaticMetricCell value={`$${row.rawCostUsd.toFixed(2)}`} />
+                      <StaticMetricCell
+                        value={formatAgentSteps(row.webAgentStepsThisPeriod, row.cliStepsThisPeriod)}
+                      />
                       <StaticMetricCell value={String(row.remainingDisplayedCredits)} />
 
                       <CompactPlanLimitFields
@@ -648,6 +652,10 @@ function ColumnHeader({ children }: { children: ReactNode }) {
       {children}
     </div>
   )
+}
+
+function formatAgentSteps(web: number, cli: number): string {
+  return `${web.toLocaleString()} web · ${cli.toLocaleString()} zq`
 }
 
 function StaticMetricCell({ value }: { value: string }) {

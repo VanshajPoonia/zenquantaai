@@ -1,5 +1,6 @@
 import {
   AssistantFamily,
+  ConversationSurface,
   ImageModelConfig,
   Subscription,
   SubscriptionTier,
@@ -125,6 +126,19 @@ export function countTextReplies(events: Array<{ agentRunId?: string | null }>):
     else plain += 1
   }
   return plain + runs.size
+}
+
+/** Web agent steps are web events tied to a run. Every zq request is one step. */
+export function countAgentSteps(
+  events: Array<{ surface?: ConversationSurface; agentRunId?: string | null }>
+): { web: number; cli: number } {
+  let web = 0
+  let cli = 0
+  for (const event of events) {
+    if (event.surface === 'cli') cli += 1
+    else if (event.agentRunId) web += 1
+  }
+  return { web, cli }
 }
 
 export function getAssistantUsageBreakdown(input: {

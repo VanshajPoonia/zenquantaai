@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { calculateImageUsageEstimate, calculateTextUsageEstimate, countTextReplies, estimateTokens, getAssistantUsageBreakdown, getDisplayedCreditsSnapshot, getRemainingWallets } from '@/lib/billing/costs'
+import { calculateImageUsageEstimate, calculateTextUsageEstimate, countAgentSteps, countTextReplies, estimateTokens, getAssistantUsageBreakdown, getDisplayedCreditsSnapshot, getRemainingWallets } from '@/lib/billing/costs'
 import { buildUsageLimitSnapshot, getPlanRequestStatusLabel, getUpgradeNudgeForError, isNearLimit, isUpgradeTier, sanitizePlanRequestAdminNote } from '@/lib/billing/upgrade-nudges'
 import { MODEL_PRICING_CONFIG, usdToDisplayedCredits } from '@/lib/config/pricing'
 import { Subscription } from '@/types'
@@ -129,6 +129,18 @@ describe('agent run reply counting', () => {
       imageEvents: [],
     })
     expect(breakdown.find((item) => item.family === 'forge')?.events).toBe(3)
+  })
+
+  it('splits agent steps into web and zq', () => {
+    expect(
+      countAgentSteps([
+        { agentRunId: null },
+        { surface: 'web', agentRunId: 'run-1' },
+        { agentRunId: 'run-1' },
+        { surface: 'cli', agentRunId: 'run-2' },
+        { surface: 'cli', agentRunId: null },
+      ])
+    ).toEqual({ web: 2, cli: 2 })
   })
 })
 

@@ -17,6 +17,7 @@ import {
   UsageEvent,
   UsageLimitOverride,
 } from '@/types'
+import { countAgentSteps } from '@/lib/billing/costs'
 import { usdToDisplayedCredits } from '@/lib/config'
 import { normalizeFileKnowledge } from '@/lib/files/intelligence'
 import { getDatabaseClient } from '../client'
@@ -72,6 +73,8 @@ export interface AdminOverview {
     displayName: string | null
     displayedCostUsd: number
     rawCostUsd: number
+    webAgentSteps: number
+    cliSteps: number
     isUnusuallyHigh: boolean
   }>
   marginByPlan: Array<{
@@ -196,6 +199,8 @@ export interface AdminUserRow {
   displayedCostUsd: number
   remainingDisplayedCredits: number
   requestsThisPeriod: number
+  webAgentStepsThisPeriod: number
+  cliStepsThisPeriod: number
   highestUsageRatio: number
 }
 
@@ -699,6 +704,7 @@ class NeonAdminRepository {
       const displayedCostUsd =
         sum(userUsage, (event) => event.displayedCostUsd) +
         sum(userImageUsage, (event) => event.displayedCostUsd)
+      const steps = countAgentSteps(userUsage)
 
       return {
         userId: subscription.userId,
@@ -707,6 +713,8 @@ class NeonAdminRepository {
         displayName: profile?.displayName ?? null,
         rawCostUsd,
         displayedCostUsd,
+        webAgentSteps: steps.web,
+        cliSteps: steps.cli,
       }
     })
     const highCostMedian = median(userRawCosts.map((item) => item.rawCostUsd))
@@ -1261,6 +1269,8 @@ class NeonAdminRepository {
       ],
     }
 
+    const overviewSteps = countAgentSteps(filteredUsageEvents)
+
     return {
       filters: normalizedFilters,
       activeUsers: subscriptionsForFilters.filter(
@@ -1308,14 +1318,12 @@ class NeonAdminRepository {
           filteredUsageEvents.filter((event) => event.surface !== 'cli' && event.agentRunId),
           (event) => event.rawCostUsd
         ),
-        webAgentSteps: filteredUsageEvents.filter(
-          (event) => event.surface !== 'cli' && event.agentRunId
-        ).length,
+        webAgentSteps: overviewSteps.web,
         cliRawCostUsd: sum(
           filteredUsageEvents.filter((event) => event.surface === 'cli'),
           (event) => event.rawCostUsd
         ),
-        cliSteps: filteredUsageEvents.filter((event) => event.surface === 'cli').length,
+        cliSteps: overviewSteps.cli,
       },
       mostExpensiveModels: [...modelBuckets.values()]
         .sort((a, b) => b.rawCostUsd - a.rawCostUsd)
@@ -1402,6 +1410,7 @@ class NeonAdminRepository {
         const displayedCostUsd =
           sum(userUsage, (event) => event.displayedCostUsd) +
           sum(userImages, (event) => event.displayedCostUsd)
+        const steps = countAgentSteps(userUsage)
         const riskLimits = buildLimitUsageDetails(subscription, override)
         const highestUsageRatio = riskLimits.reduce(
           (highest, limit) =>
@@ -1428,6 +1437,8 @@ class NeonAdminRepository {
             displayedCreditsTotal - usdToDisplayedCredits(displayedCostUsd)
           ),
           requestsThisPeriod: userUsage.length + userImages.length,
+          webAgentStepsThisPeriod: steps.web,
+          cliStepsThisPeriod: steps.cli,
           highestUsageRatio,
         }
       })
