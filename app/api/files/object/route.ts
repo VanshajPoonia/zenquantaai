@@ -2,7 +2,7 @@ import { NextRequest } from 'next/server'
 import { appendAuthCookies, requireAuthenticatedUser } from '@/lib/auth/session'
 import { neonFilesRepository } from '@/lib/db/repositories'
 import { getObjectStore } from '@/lib/storage/object-store'
-import { assertSafeObjectRef } from '@/lib/storage/security'
+import { assertSafeObjectRef, privateFileDisplay } from '@/lib/storage/security'
 
 export const runtime = 'nodejs'
 
@@ -48,13 +48,15 @@ export async function GET(request: NextRequest) {
       bucket,
       key: storagePath,
     })
+    const display = privateFileDisplay(object.contentType)
     const headers = new Headers({
-      'Content-Type': object.contentType,
+      'Content-Type': display.contentType,
       'Content-Length': String(object.contentLength),
       'Cache-Control': 'private, no-store',
-      'Content-Disposition': `${shouldDownload ? 'attachment' : 'inline'}; filename="${sanitizeDownloadName(
+      'Content-Disposition': `${shouldDownload || !display.inline ? 'attachment' : 'inline'}; filename="${sanitizeDownloadName(
         file.fileName
       )}"`,
+      'X-Content-Type-Options': 'nosniff',
     })
 
     if (auth.session.refreshed) {

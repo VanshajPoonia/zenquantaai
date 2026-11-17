@@ -11,6 +11,32 @@ export function normalizeMimeType(value: string | null | undefined): string {
   return normalized
 }
 
+const INLINE_MEDIA_TYPES = new Set([
+  'image/png',
+  'image/jpeg',
+  'image/gif',
+  'image/webp',
+  'image/avif',
+  'application/pdf',
+])
+const PLAIN_TEXT_TYPES = new Set(['application/json', 'application/x-yaml', 'application/yaml'])
+
+/**
+ * How a private file is served from our origin. Images and PDFs show as is,
+ * text shows as plain text, and anything that could run script is downloaded.
+ */
+export function privateFileDisplay(value: string | null | undefined): {
+  contentType: string
+  inline: boolean
+} {
+  const type = normalizeMimeType(value)
+  if (INLINE_MEDIA_TYPES.has(type)) return { contentType: type, inline: true }
+  if (type.startsWith('text/') || PLAIN_TEXT_TYPES.has(type)) {
+    return { contentType: 'text/plain; charset=utf-8', inline: true }
+  }
+  return { contentType: type, inline: false }
+}
+
 export function assertSafePrivateFileSize(bytes: Buffer, label = 'File'): void {
   if (bytes.byteLength > MAX_PRIVATE_FILE_BYTES) {
     throw new Error(`${label} exceeds the 25MB upload limit.`)

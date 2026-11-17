@@ -6,6 +6,7 @@ import {
   MAX_PRIVATE_FILE_BYTES,
   normalizeMimeType,
   parseValidatedDataUrl,
+  privateFileDisplay,
 } from '@/lib/storage/security'
 
 describe('storage security helpers', () => {
@@ -68,5 +69,18 @@ describe('storage security helpers', () => {
     expect(() =>
       assertSafePrivateFileSize(Buffer.alloc(MAX_PRIVATE_FILE_BYTES + 1), 'File')
     ).toThrow()
+  })
+
+  it('never serves a private file in a way that can run script', () => {
+    expect(privateFileDisplay('image/png')).toEqual({ contentType: 'image/png', inline: true })
+    expect(privateFileDisplay('application/pdf').inline).toBe(true)
+    expect(privateFileDisplay('text/html')).toEqual({
+      contentType: 'text/plain; charset=utf-8',
+      inline: true,
+    })
+    expect(privateFileDisplay('application/json').contentType).toBe('text/plain; charset=utf-8')
+    expect(privateFileDisplay('image/svg+xml')).toEqual({ contentType: 'image/svg+xml', inline: false })
+    expect(privateFileDisplay('application/xhtml+xml').inline).toBe(false)
+    expect(privateFileDisplay('not a type').inline).toBe(false)
   })
 })
