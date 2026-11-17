@@ -6,6 +6,32 @@ The repository contains a real Zenquanta AI platform backed by Neon for runtime 
 
 Current direction: plan upgrades remain manual/admin-driven, payment automation is out of scope unless explicitly requested, and Neon/storage start fresh without importing Supabase database rows or storage objects.
 
+## 2026-11-18 - Security review, metering fixes, admin surface filter, Gate C early check (Claude Code, overnight run)
+
+**Goal**: finish the leftover smoke tests and admin work from 11-17, do the Day 10 security review now, check Gate C on a preview and keep going down the launch plan.
+
+**What changed**:
+- Finished and committed the 11-17 leftovers: library names like Node.js no longer route to Forge, replies render http(s) links, the admin shows web and zq agent steps per user, and Playwright has a public smoke suite plus an opt-in signed-in suite (`SMOKE_LOGIN_ID`, `SMOKE_PASSWORD`). `PLAYWRIGHT_BASE_URL` now skips the local server.
+- Security review against spec 06 and `SECURITY_CHECKLIST.md`. Fixes:
+  - zq asks before compound commands (chaining, pipes, substitution, redirects), credential files like `.npmrc` and `.aws/`, and git commands that write files or change branches. Version bumped to `0.1.0-beta.2`, publish pending.
+  - A stopped or cut step is charged by estimate instead of refunded, in the web agent loop, the Model API and the plain chat path (`AI_DECISIONS.md`).
+  - `fetch_url` only opens links that already appeared in the chat (`AI_DECISIONS.md`).
+  - Password changes and admin resets revoke zq tokens.
+  - Message upserts only update rows in the same conversation.
+  - Private files show inline only as images, PDFs or plain text, with `nosniff`.
+  - Device login: approvals limited per user, token polling limited per IP, and a warning on `/cli/authorize`.
+  - Uploads and re-index requests limited per user per hour.
+  - New rules added to `SECURITY_CHECKLIST.md`. The full findings report is kept outside the public repo.
+- `/admin/system-health` has rows for the Node version, `AGENT_LOOP` and `ZQ_MODEL_API`.
+- Admin analytics can filter by surface (web or zq) for the daily top-cost check in spec 06.
+- Docs: `AI_CHECKLIST.md` (zq model overrides, e2e options), `AI_PROJECT.md` (launch env vars), `PRODUCT.md` (launch features behind flags), launch plan progress and `NEEDS_YOU.md`.
+
+**Verified**: typecheck, lint, 169 web tests, 12 zq tests and the production build pass. Playwright public smoke passed 20/20 against a local production build and against the Vercel preview (reached through the trusted OIDC header). Bearer tokens get 401 on cookie routes and cookies get 401 on `/api/v1`. No paid model calls, no migrations, no database writes.
+
+**Risky or open**: signed-in smoke and a manual prompt-injection test still need a test account and a few paid calls (Day 12 bug bash). The Stop charge is a visible behavior change. zq beta.2 needs a publish from the user's terminal.
+
+**Next**: publish zq beta.2, add the OpenRouter credit limit, run the signed-in smoke once a test account exists, then eval round 2.
+
 ## 2026-11-17 - Gate B applied, zq key mode, production smoke test (Claude Code, user-requested implementation)
 
 **Goal**: The user approved everything on the needs-you list and asked to proceed.
