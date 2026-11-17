@@ -177,13 +177,21 @@ function checkOpenRouter(): HealthCheck {
       )
 }
 
-function checkTavily(): HealthCheck {
+export function checkTavily(): HealthCheck {
+  if (process.env.TAVILY_API_KEY?.trim()) {
+    return makeCheck(
+      'tavily',
+      'Tavily web search',
+      'healthy',
+      'TAVILY_API_KEY is configured. Pulse live search and page reading are available.'
+    )
+  }
   return hasWebSearchConfig()
     ? makeCheck(
         'tavily',
         'Tavily web search',
-        'healthy',
-        'TAVILY_API_KEY is configured. Pulse live search is available.'
+        'degraded',
+        'Web search runs through OpenRouter. Page reading stays off until TAVILY_API_KEY is set.'
       )
     : makeCheck(
         'tavily',

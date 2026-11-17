@@ -7,7 +7,7 @@ vi.mock('@/lib/db/client', () => ({
   getNeonSql: vi.fn(),
 }))
 
-import { checkAgentLoopFlag, checkModelApiFlag, checkNodeVersion } from '@/lib/system-health/checks'
+import { checkAgentLoopFlag, checkModelApiFlag, checkNodeVersion, checkTavily } from '@/lib/system-health/checks'
 
 describe('launch health rows', () => {
   it('checks the Node version the agent loop needs', () => {
@@ -23,5 +23,14 @@ describe('launch health rows', () => {
     expect(checkAgentLoopFlag(undefined).status).toBe('degraded')
     expect(checkModelApiFlag('on').status).toBe('healthy')
     expect(checkModelApiFlag(undefined).message).toContain('Admin-only')
+  })
+
+  it('says when web search runs on the OpenRouter fallback', () => {
+    vi.stubEnv('TAVILY_API_KEY', '')
+    vi.stubEnv('OPENROUTER_API_KEY', 'test-key')
+    expect(checkTavily().message).toContain('runs through OpenRouter')
+    vi.stubEnv('TAVILY_API_KEY', 'tvly-test')
+    expect(checkTavily().status).toBe('healthy')
+    vi.unstubAllEnvs()
   })
 })
