@@ -10,48 +10,6 @@ import {
   neonUsageEventsRepository,
 } from '@/lib/db/repositories'
 
-export async function logTextUsage(input: {
-  subscription: Subscription
-  event: {
-    userId: string
-    conversationId?: string | null
-    messageId?: string | null
-    assistantFamily: UsageEvent['assistantFamily']
-    mode: UsageEvent['mode']
-    model: string
-    walletType: UsageEvent['walletType']
-    usage: UsageEstimate
-  }
-}): Promise<UsageEvent> {
-  const subscription = await neonSubscriptionsRepository.incrementTextUsage({
-    userId: input.subscription.userId,
-    walletType:
-      input.event.usage.walletType === 'tier_tokens'
-        ? 'tier_tokens'
-        : 'core_tokens',
-    totalTokens: input.event.usage.totalTokens,
-  })
-
-  return await neonUsageEventsRepository.create({
-    userId: input.event.userId,
-    subscriptionId: subscription.id,
-    conversationId: input.event.conversationId,
-    messageId: input.event.messageId,
-    assistantFamily: input.event.assistantFamily,
-    mode: input.event.mode,
-    model: input.event.model,
-    walletType: input.event.walletType,
-    promptTokens: input.event.usage.promptTokens,
-    completionTokens: input.event.usage.completionTokens,
-    totalTokens: input.event.usage.totalTokens,
-    rawCostUsd: input.event.usage.rawCostUsd,
-    displayedCostUsd: input.event.usage.displayedCostUsd,
-    displayMultiplier: input.event.usage.displayMultiplier,
-    marginUsd: input.event.usage.marginUsd,
-    creditsConsumed: input.event.usage.creditsConsumed ?? 0,
-  })
-}
-
 export async function logImageUsage(input: {
   subscription: Subscription
   event: Omit<ImageGenerationEvent, 'id' | 'createdAt' | 'subscriptionId'>
