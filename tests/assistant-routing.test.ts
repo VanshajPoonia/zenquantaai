@@ -66,6 +66,23 @@ describe('assistant routing and config helpers', () => {
     expect(result.matchedSignals).toContain('file-extension')
   })
 
+  it('does not treat library names like Node.js as source files', () => {
+    const result = getAssistantRecommendation({
+      prompt:
+        'Search the web: what is the current LTS version of Node.js? Answer in two lines with a source.',
+      currentMode: 'general',
+    })
+
+    expect(result.matchedSignals).not.toContain('file-extension')
+    expect(result.predictedAssistant).not.toBe('forge')
+    expect(
+      getAssistantRecommendation({
+        prompt: 'Why does server.js crash when Node.js starts it?',
+        currentMode: 'general',
+      }).matchedSignals
+    ).toContain('file-extension')
+  })
+
   it('recommends Pulse for current source-backed research prompts', () => {
     const result = getAssistantRecommendation({
       prompt: 'Look up current official sources and verify the latest market update today.',

@@ -29,6 +29,16 @@ const STACK_TRACE_PATTERN =
   /\b(traceback|stack trace|typeerror:|referenceerror:|syntaxerror:|exception:|npm err!|error:\s|at\s+[^\n]+\([^)]+\)|failed to compile|build failed|runtime error)\b/i
 const FILE_NAME_PATTERN =
   /\b[\w./-]+\.(ts|tsx|js|jsx|mjs|cjs|py|go|java|rb|rs|php|html|css|scss|sql|json|yaml|yml)\b/i
+const FILE_NAME_PATTERN_GLOBAL = new RegExp(FILE_NAME_PATTERN.source, 'gi')
+// Library names like Node.js are not files, so they should not pull a prompt to Forge.
+const LIBRARY_NAME_PATTERN =
+  /^(node|next|nuxt|vue|react|angular|express|nest|three|d3|chart|p5|alpine|solid|ember|backbone|moment|socket\.io)\.js$/i
+
+function mentionsSourceFile(text: string): boolean {
+  return [...text.matchAll(FILE_NAME_PATTERN_GLOBAL)].some(
+    (match) => !LIBRARY_NAME_PATTERN.test(match[0])
+  )
+}
 const CODE_INTENT_PATTERN =
   /\b(debug|fix|refactor|implement|write code|api route|endpoint|function|component|hook|typescript|javascript|python|next\.?js|react|node|schema|query|class|stack trace|bug|compile|deployment error|database migration|orm|sql query)\b/i
 const CURRENT_INFO_PATTERN =
@@ -104,7 +114,7 @@ const RULES: Rule[] = [
     }
 
     if (
-      FILE_NAME_PATTERN.test(context.prompt) ||
+      mentionsSourceFile(context.prompt) ||
       FILE_NAME_PATTERN.test(context.normalizedAttachmentNames)
     ) {
       signals.push({
