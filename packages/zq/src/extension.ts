@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto'
 import type { ExtensionAPI, ExtensionFactory } from '@earendil-works/pi-coding-agent'
 import { apiFetch, type MeResponse } from './api.js'
 import { getAppUrl, readCredentials, readSettings, setProjectSync, updateGlobalSettings, type PermissionMode } from './config.js'
+import { gitConfigCanRunPrograms } from './git-safety.js'
 import { decide } from './permissions.js'
 import { SessionSync } from './sync.js'
 
@@ -85,15 +86,22 @@ export function createZenquantaExtension(options: ZenquantaExtensionOptions): Ex
     })
 
     pi.on('tool_call', async (event, ctx) => {
+      const args = (event.input ?? {}) as Record<string, unknown>
+      const isGitCommand = event.toolName === 'bash' && typeof args.command === 'string' && /^\s*git\s/.test(args.command)
       const decision = decide({
         toolName: event.toolName,
-        args: (event.input ?? {}) as Record<string, unknown>,
+        args,
         mode: mode(),
         allowedCommands: settings.allowedCommands,
         cwd,
         hasUI: ctx.hasUI,
+        gitConfigRisky: isGitCommand ? gitConfigCanRunPrograms(cwd) : false,
       })
-      if (decision.action === 'allow') return undefined
+      if (decision.action === 'allow') {
+        // pi runs the input as mutated here, so an auto-allowed git read runs hardened.
+        if (decision.command && event.toolName === 'bash') args.command = decision.command
+        return undefined
+      }
       if (decision.action === 'block') return { block: true, reason: decision.reason }
 
       const always = decision.rememberAs ? `Yes, always allow "${decision.rememberAs}"` : null

@@ -1,8 +1,10 @@
 import { isAbsolute, relative, resolve } from 'node:path'
 import type { PermissionMode } from './config.js'
+import { hardenGitRead } from './git-safety.js'
 
 export type Decision =
-  | { action: 'allow' }
+  /** `command` replaces a bash command before it runs. */
+  | { action: 'allow'; command?: string }
   | { action: 'ask'; title: string; detail: string; rememberAs?: string }
   | { action: 'block'; reason: string }
 
@@ -79,6 +81,8 @@ export interface DecideInput {
   allowedCommands: string[]
   cwd: string
   hasUI: boolean
+  /** The repo's own git config names a program git could run. */
+  gitConfigRisky?: boolean
 }
 
 function decideWithUI(input: DecideInput): Decision {
@@ -109,16 +113,24 @@ function decideWithUI(input: DecideInput): Decision {
     const command = typeof args.command === 'string' ? args.command.trim() : ''
     const dangerous = DANGEROUS_COMMANDS.some((pattern) => pattern.test(command))
     const touchesSecrets = PROTECTED_IN_COMMAND.some((pattern) => pattern.test(command))
+    const isGit = /^git\s/.test(command)
+    const riskyGit = isGit && input.gitConfigRisky === true
     const canSkipPrompt =
-      !dangerous && !touchesSecrets && !SHELL_CONTROL.test(command) && !UNSAFE_GIT_FLAGS.test(command)
+      !dangerous &&
+      !touchesSecrets &&
+      !riskyGit &&
+      !SHELL_CONTROL.test(command) &&
+      !UNSAFE_GIT_FLAGS.test(command)
     if (canSkipPrompt) {
-      if (SAFE_COMMANDS.some((pattern) => pattern.test(command))) return { action: 'allow' }
+      if (SAFE_COMMANDS.some((pattern) => pattern.test(command))) {
+        return isGit ? { action: 'allow', command: hardenGitRead(command) } : { action: 'allow' }
+      }
       if (input.allowedCommands.includes(commandKey(command))) return { action: 'allow' }
     }
     return {
       action: 'ask',
       title: dangerous ? 'Run this risky command?' : 'Run this command?',
-      detail: command,
+      detail: riskyGit ? `${command}\nThis repo's git config can run programs, so git commands need approval.` : command,
       rememberAs: canSkipPrompt ? commandKey(command) : undefined,
     }
   }

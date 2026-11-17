@@ -2,6 +2,7 @@ import { spawnSync } from 'node:child_process'
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { basename, join } from 'node:path'
 import { apiFetch } from './api.js'
+import { SAFE_GIT_ARGS, SAFE_GIT_ENV } from './git-safety.js'
 import { isProtectedPath } from './permissions.js'
 import { OUTBOX_DIR } from './paths.js'
 
@@ -45,7 +46,12 @@ function textOf(content: PiMessageLike['content']): string {
 }
 
 function git(cwd: string, args: string[]): string | undefined {
-  const result = spawnSync('git', args, { cwd, encoding: 'utf8', timeout: 2_000 })
+  const result = spawnSync('git', [...SAFE_GIT_ARGS, ...args], {
+    cwd,
+    encoding: 'utf8',
+    timeout: 2_000,
+    env: { ...process.env, ...SAFE_GIT_ENV },
+  })
   return result.status === 0 ? result.stdout.trim() || undefined : undefined
 }
 
