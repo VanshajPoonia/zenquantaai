@@ -1,5 +1,11 @@
 # AI Architecture Decisions
 
+## The Server Decides Which Run A Model API Request Belongs To
+
+Decision (2026-11-18, security review): `/api/v1/chat/completions` no longer trusts `x-zq-run-id` for the step cap. The run key is a hash of the user, the `x-zq-session-id` header and the messages up to the last user message (`lib/agent/model-api-runs.ts`), and the step count is the larger of that run's stored count and the assistant turns since the last user message in the request. A run idle for an hour starts again.
+
+Rationale: a client could send a fresh run id with every request and never hit `maxStepsPerRun`. Steps in one prompt share the same prefix, so the server can tell them apart without client help.
+
 ## A Stopped Or Cut Reply Is Charged For What It Used
 
 Decision (2026-11-18, security review): when a reply or agent step reaches the model and then stops before the provider reports usage (the user presses Stop, the client disconnects, the stream breaks), it is charged by estimate instead of refunded. The estimate is the prompt estimate plus the characters streamed so far, priced with pi's per-model rates (`estimateCutStepUsage`, `AgentMeter.settleCutStep`, `stepSettlement`). The plain chat path uses the same text estimate as a finished reply. Only our own 120 s step timeout, an upstream error before any output, or a failed request is refunded.

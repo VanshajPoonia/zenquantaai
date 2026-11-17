@@ -53,4 +53,7 @@ Use this checklist when adding or reviewing API routes, repositories, and privat
 - Upserts keyed by a client-supplied id must only update rows the same owner or conversation already has.
 - Private files are served inline only as images, PDFs or `text/plain`, with `X-Content-Type-Options: nosniff`. Everything else downloads.
 - zq skips a permission prompt only for a single simple command: no chaining, pipes, substitution or redirects, and no flags that write files.
+- Git reads that zq runs itself or auto-allows use overrides so a repo's own git config cannot run a program. If that config names a program, git commands ask.
+- Every route that calls a model reserves usage atomically before the call and settles or releases it after. A check followed by a log is not enough.
+- Limits that belong to a run are counted from what the server sees, never from an id the client chooses.
 
