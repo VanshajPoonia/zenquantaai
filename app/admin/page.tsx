@@ -40,6 +40,7 @@ export default async function AdminPage({
     to: getParam(params.to),
     tier: getParam(params.tier),
     assistant: getParam(params.assistant),
+    surface: getParam(params.surface),
     user: getParam(params.user),
   }
   const normalizedFilters =
@@ -129,7 +130,7 @@ export default async function AdminPage({
             <CardTitle>Analytics filters</CardTitle>
           </CardHeader>
           <CardContent>
-            <form className="grid gap-3 md:grid-cols-2 xl:grid-cols-[repeat(5,minmax(0,1fr))_auto] xl:items-end">
+            <form className="grid gap-3 md:grid-cols-2 xl:grid-cols-[repeat(6,minmax(0,1fr))_auto] xl:items-end">
               <FilterField label="From">
                 <Input
                   type="date"
@@ -172,6 +173,17 @@ export default async function AdminPage({
                       {assistant}
                     </option>
                   ))}
+                </select>
+              </FilterField>
+              <FilterField label="Surface">
+                <select
+                  name="surface"
+                  defaultValue={normalizedFilters.surface ?? ''}
+                  className="flex h-10 w-full rounded-xl border border-input bg-background px-3 text-sm text-foreground outline-none transition-colors focus:border-primary/40 focus:ring-2 focus:ring-primary/20"
+                >
+                  <option value="">Web and zq</option>
+                  <option value="web">Web</option>
+                  <option value="cli">zq</option>
                 </select>
               </FilterField>
               <FilterField label="User">

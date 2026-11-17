@@ -6,6 +6,7 @@ import {
   AssistantFamily,
   AssistantRecommendationAnalyticsSummary,
   AssistantRecommendationEvent,
+  ConversationSurface,
   DashboardUsageSummary,
   FeedbackEntityType,
   FeedbackRating,
@@ -177,6 +178,7 @@ export interface AdminAnalyticsFilters {
   to?: string | null
   tier?: string | null
   assistant?: string | null
+  surface?: string | null
   user?: string | null
 }
 
@@ -185,6 +187,7 @@ export interface NormalizedAdminAnalyticsFilters {
   to: string
   tier: SubscriptionTier | null
   assistant: AssistantFamily | null
+  surface: ConversationSurface | null
   user: string | null
 }
 
@@ -312,8 +315,17 @@ export function normalizeAdminAnalyticsFilters(
     to: toDateInputValue(to),
     tier: isSubscriptionTier(filters.tier) ? filters.tier : null,
     assistant: isAssistantFamily(filters.assistant) ? filters.assistant : null,
+    surface: filters.surface === 'web' || filters.surface === 'cli' ? filters.surface : null,
     user,
   }
+}
+
+/** Events without a surface predate zq and are web. Images are always web. */
+export function matchesSurfaceFilter(
+  surface: ConversationSurface | null | undefined,
+  filter: ConversationSurface | null
+): boolean {
+  return !filter || (surface ?? 'web') === filter
 }
 
 function isWithinPeriod(iso: string, filters: NormalizedAdminAnalyticsFilters): boolean {
@@ -655,14 +667,16 @@ class NeonAdminRepository {
         filteredUserIds.has(event.userId) &&
         isWithinPeriod(event.createdAt, normalizedFilters) &&
         (!normalizedFilters.assistant ||
-          event.assistantFamily === normalizedFilters.assistant)
+          event.assistantFamily === normalizedFilters.assistant) &&
+        matchesSurfaceFilter(event.surface, normalizedFilters.surface)
     )
     const filteredImageEvents = imageEvents.filter(
       (event) =>
         filteredUserIds.has(event.userId) &&
         isWithinPeriod(event.createdAt, normalizedFilters) &&
         (!normalizedFilters.assistant ||
-          event.assistantFamily === normalizedFilters.assistant)
+          event.assistantFamily === normalizedFilters.assistant) &&
+        matchesSurfaceFilter('web', normalizedFilters.surface)
     )
     const filteredRequests = requests.filter((request) =>
       filteredUserIds.has(request.userId)
@@ -1389,14 +1403,16 @@ class NeonAdminRepository {
             event.userId === subscription.userId &&
             isWithinPeriod(event.createdAt, normalizedFilters) &&
             (!normalizedFilters.assistant ||
-              event.assistantFamily === normalizedFilters.assistant)
+              event.assistantFamily === normalizedFilters.assistant) &&
+            matchesSurfaceFilter(event.surface, normalizedFilters.surface)
         )
         const userImages = imageEvents.filter(
           (event) =>
             event.userId === subscription.userId &&
             isWithinPeriod(event.createdAt, normalizedFilters) &&
             (!normalizedFilters.assistant ||
-              event.assistantFamily === normalizedFilters.assistant)
+              event.assistantFamily === normalizedFilters.assistant) &&
+            matchesSurfaceFilter('web', normalizedFilters.surface)
         )
         const pendingRequest =
           requests.find(
