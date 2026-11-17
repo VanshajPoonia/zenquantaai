@@ -16,8 +16,20 @@ const PROTECTED_PATHS = [
   /(^|[\\/])\.git([\\/]|$)/,
   /(^|[\\/])\.ssh([\\/]|$)/,
   /(^|[\\/])\.zq[\\/]credentials\.json$/,
+  /(^|[\\/])\.(npmrc|netrc|pgpass)$/,
+  /(^|[\\/])\.(aws|kube|docker|gnupg)([\\/]|$)/,
 ]
-const PROTECTED_IN_COMMAND = [/\.env\b/, /\.ssh\//, /id_rsa|id_ed25519/, /\.pem\b/, /credentials\.json/]
+const PROTECTED_IN_COMMAND = [
+  /\.env\b/,
+  /\.ssh\//,
+  /id_rsa|id_ed25519/,
+  /\.pem\b/,
+  /credentials\.json/,
+  /\.(npmrc|netrc|pgpass)\b/,
+  /\.(aws|kube|docker|gnupg)\//,
+]
+// Chaining, pipes, substitution and redirects can hide a second command behind a safe one.
+const SHELL_CONTROL = /[;&|`$<>(){}\\\n\r]/
 
 const DANGEROUS_COMMANDS = [
   /\bsudo\b/,
@@ -94,7 +106,8 @@ function decideWithUI(input: DecideInput): Decision {
     const command = typeof args.command === 'string' ? args.command.trim() : ''
     const dangerous = DANGEROUS_COMMANDS.some((pattern) => pattern.test(command))
     const touchesSecrets = PROTECTED_IN_COMMAND.some((pattern) => pattern.test(command))
-    if (!dangerous && !touchesSecrets) {
+    const canSkipPrompt = !dangerous && !touchesSecrets && !SHELL_CONTROL.test(command)
+    if (canSkipPrompt) {
       if (SAFE_COMMANDS.some((pattern) => pattern.test(command))) return { action: 'allow' }
       if (input.allowedCommands.includes(commandKey(command))) return { action: 'allow' }
     }
@@ -102,7 +115,7 @@ function decideWithUI(input: DecideInput): Decision {
       action: 'ask',
       title: dangerous ? 'Run this risky command?' : 'Run this command?',
       detail: command,
-      rememberAs: dangerous || touchesSecrets ? undefined : commandKey(command),
+      rememberAs: canSkipPrompt ? commandKey(command) : undefined,
     }
   }
 

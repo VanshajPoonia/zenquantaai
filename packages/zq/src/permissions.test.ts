@@ -42,6 +42,31 @@ describe('zq permissions', () => {
     expect(run({ toolName: 'bash', args: { command: 'cat .env' }, allowedCommands: ['cat .env'] })).toBe('ask')
   })
 
+  it('asks when a safe or remembered command is chained with another', () => {
+    for (const command of [
+      'ls; node -e 1',
+      'echo $(whoami)',
+      'echo `id`',
+      'git status && npm publish',
+      'ls | sh',
+      'echo hi > notes.txt',
+      'ls\nnode -e 1',
+    ]) {
+      expect(run({ toolName: 'bash', args: { command } })).toBe('ask')
+    }
+    expect(
+      run({ toolName: 'bash', args: { command: 'npm test || npm publish' }, allowedCommands: ['npm test'] })
+    ).toBe('ask')
+    const decision = decide({ ...base, toolName: 'bash', args: { command: 'npm test | tail' } })
+    expect(decision.action === 'ask' && decision.rememberAs).toBeFalsy()
+  })
+
+  it('asks before touching common credential files', () => {
+    expect(run({ toolName: 'read', args: { path: '.npmrc' } })).toBe('ask')
+    expect(run({ toolName: 'read', args: { path: 'deploy/.aws/credentials' } })).toBe('ask')
+    expect(run({ toolName: 'bash', args: { command: 'cat .netrc' }, allowedCommands: ['cat .netrc'] })).toBe('ask')
+  })
+
   it('does not offer to remember risky commands', () => {
     const decision = decide({ ...base, toolName: 'bash', args: { command: 'sudo rm -rf /' } })
     expect(decision.action === 'ask' && decision.rememberAs).toBeFalsy()
