@@ -337,6 +337,51 @@ function checkDeploymentEnvironment(): HealthCheck {
   )
 }
 
+const MIN_AGENT_NODE = [22, 19]
+
+/** pi's agent loop needs Node 22.19 or newer. */
+export function checkNodeVersion(version: string = process.versions.node): HealthCheck {
+  const [major = 0, minor = 0] = version.split('.').map(Number)
+  const supported =
+    major > MIN_AGENT_NODE[0] || (major === MIN_AGENT_NODE[0] && minor >= MIN_AGENT_NODE[1])
+  return supported
+    ? makeCheck('node_version', 'Node version', 'healthy', `Node ${version} runs the agent loop.`)
+    : makeCheck(
+        'node_version',
+        'Node version',
+        'degraded',
+        `Node ${version} is too old for the agent loop. Set the Vercel Node version to 22.19 or newer.`
+      )
+}
+
+export function checkAgentLoopFlag(value: string | undefined = process.env.AGENT_LOOP): HealthCheck {
+  const flag = value?.trim().toLowerCase()
+  if (flag === 'on' || flag === 'true') {
+    return makeCheck('agent_loop', 'Agent loop (AGENT_LOOP)', 'healthy', 'Tools are on for everyone.')
+  }
+  if (flag === 'admins') {
+    return makeCheck('agent_loop', 'Agent loop (AGENT_LOOP)', 'healthy', 'Tools are on for admins only.')
+  }
+  return makeCheck(
+    'agent_loop',
+    'Agent loop (AGENT_LOOP)',
+    'degraded',
+    'Off. Web chat answers without tools. Set AGENT_LOOP to admins or on.'
+  )
+}
+
+export function checkModelApiFlag(value: string | undefined = process.env.ZQ_MODEL_API): HealthCheck {
+  const flag = value?.trim().toLowerCase()
+  return flag === 'on' || flag === 'true'
+    ? makeCheck('model_api', 'Hosted zq models (ZQ_MODEL_API)', 'healthy', 'Open to every plan with zq access.')
+    : makeCheck(
+        'model_api',
+        'Hosted zq models (ZQ_MODEL_API)',
+        'degraded',
+        'Admin-only. Other zq users run on their own OpenRouter key until this is on.'
+      )
+}
+
 function summarize(checks: HealthCheck[]) {
   return {
     healthy: checks.filter((c) => c.status === 'healthy').length,
@@ -360,6 +405,9 @@ export async function runSystemHealthChecks(): Promise<SystemHealthReport> {
     dbSchema,
     pgvector,
     checkOpenRouter(),
+    checkNodeVersion(),
+    checkAgentLoopFlag(),
+    checkModelApiFlag(),
     checkTavily(),
     checkEmbeddings(),
     checkStorageProvider(),
