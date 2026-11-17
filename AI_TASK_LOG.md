@@ -22,11 +22,12 @@ Current direction: plan upgrades remain manual/admin-driven, payment automation 
   - Device login: approvals limited per user, token polling limited per IP, and a warning on `/cli/authorize`.
   - Uploads and re-index requests limited per user per hour.
   - New rules added to `SECURITY_CHECKLIST.md`. The full findings report is kept outside the public repo.
-- `/admin/system-health` has rows for the Node version, `AGENT_LOOP` and `ZQ_MODEL_API`.
+- `/admin/system-health` has rows for the Node version, `AGENT_LOOP` and `ZQ_MODEL_API`, and the search row now says when web search runs on the OpenRouter fallback (page reading stays off without Tavily).
+- `/cli/authorize` links the terms and privacy pages, as spec 06 asks, and the public smoke suite covers it.
 - Admin analytics can filter by surface (web or zq) for the daily top-cost check in spec 06.
 - Docs: `AI_CHECKLIST.md` (zq model overrides, e2e options), `AI_PROJECT.md` (launch env vars), `PRODUCT.md` (launch features behind flags), launch plan progress and `NEEDS_YOU.md`.
 
-**Verified**: typecheck, lint, 169 web tests, 12 zq tests and the production build pass. Playwright public smoke passed 20/20 against a local production build and against the Vercel preview (reached through the trusted OIDC header). Bearer tokens get 401 on cookie routes and cookies get 401 on `/api/v1`. No paid model calls, no migrations, no database writes.
+**Verified**: typecheck, lint, 170 web tests, 12 zq tests and the production build pass. Playwright public smoke passed against a local production build, the Vercel preview (reached through the trusted OIDC header) and production after `main` was fast-forwarded. Bearer tokens get 401 on cookie routes and cookies get 401 on `/api/v1`. No paid model calls, no migrations, no database writes.
 
 **Risky or open**: signed-in smoke and a manual prompt-injection test still need a test account and a few paid calls (Day 12 bug bash). The Stop charge is a visible behavior change. zq beta.2 needs a publish from the user's terminal.
 
