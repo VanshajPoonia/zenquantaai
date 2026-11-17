@@ -78,7 +78,10 @@ Current scope:
 - Playwright smoke tests cover service-free route and form rendering only.
 - The v1 suite starts a local Next dev server on `127.0.0.1:3100` with webpack by default, unless `PLAYWRIGHT_BASE_URL` is set.
 - E2E smoke tests must not require `.env.local` secrets, OpenRouter, Tavily, Neon test data beyond protected redirects, S3/R2, GitHub, Supabase, Stripe, browser automation services, production credentials, or real secrets.
-- Authenticated workspace E2E coverage such as command palette open and global search empty state requires a future seeded Neon test database/session plan. Do not weaken auth or hardcode credentials to make those tests pass.
+- `tests/e2e/smoke.spec.ts` covers the landing page, sign-in switch, protected redirects, terms, privacy, `/docs/cli`, the assistant pages and no sideways scroll at 390 px.
+- `tests/e2e/signed-in.spec.ts` runs only with `SMOKE_LOGIN_ID` and `SMOKE_PASSWORD` set (an existing account; never commit them). It signs in once and checks the workspace, dashboard, pricing and knowledge pages on desktop and phone. `SMOKE_CHAT=1` also sends one short paid message, so leave it unset unless you mean it.
+- `PLAYWRIGHT_BASE_URL=https://...` tests a deployed URL with no local server. Vercel previews are behind Vercel Authentication, so they need the `x-vercel-trusted-oidc-idp-token` header from `vercel env run` (for example through a small local proxy that adds it only for the preview host).
+- Do not weaken auth or hardcode credentials to make signed-in tests pass.
 
 If Playwright browser binaries are missing, install the Chromium browser dependency before running E2E locally:
 
@@ -118,6 +121,9 @@ FILE_STORAGE_LOCAL_DIR=.storage/zenquanta
 # NEXT_PUBLIC_APP_URL=  # public origin used in zq login links and OpenRouter attribution
 # ZQ_MODEL_API=         # on: hosted zq models for every plan. Unset: admins only, others use their own OpenRouter key (zq key). Keep unset until OpenRouter confirms resale terms
 # NEXT_PUBLIC_ZQ_RELEASED= # true once `zenquanta` is on npm; shows the zq landing section, footer link, pricing line and Settings > Terminal
+# ZQ_FAST_MODEL=        # optional OpenRouter id for forge-fast (default openai/gpt-5.1-codex-mini)
+# ZQ_LITE_MODEL=        # optional OpenRouter id for forge-lite (default deepseek/deepseek-chat-v3.1)
+# ZQ_BEST_MODEL=        # optional OpenRouter id for forge-best (default anthropic/claude-sonnet-4.6)
 ```
 
 Production file storage is Cloudflare R2 since 2026-11-16: private bucket `zenquanta-files`, an account API token scoped to Object Read & Write on that bucket only, and `FILE_STORAGE_PROVIDER=r2`, `FILE_STORAGE_BUCKET`, `FILE_STORAGE_REGION=auto`, `FILE_STORAGE_ENDPOINT`, `FILE_STORAGE_ACCESS_KEY_ID` and `FILE_STORAGE_SECRET_ACCESS_KEY` set for Production on Vercel. Preview deploys still use local storage.

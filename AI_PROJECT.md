@@ -405,6 +405,9 @@ Required or expected variables:
 - `GITHUB_APP_PRIVATE_KEY`
 - `GITHUB_APP_CALLBACK_URL`
 - `AGENT_LOOP` (`off`, `admins` or `on`)
+- `ZQ_MODEL_API` (`on` opens hosted zq models to every plan; unset keeps them admin-only)
+- `NEXT_PUBLIC_ZQ_RELEASED` (`true` shows the zq landing section, pricing line and Settings > Terminal)
+- `ZQ_FAST_MODEL`, `ZQ_LITE_MODEL`, `ZQ_BEST_MODEL` (optional model overrides for zq)
 - `NEXT_PUBLIC_APP_URL`
 
 Without Tavily or embeddings keys, web search and embeddings fall back to OpenRouter with `OPENROUTER_API_KEY`.

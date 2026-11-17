@@ -37,6 +37,7 @@ Six specialists, one place. Each assistant is tuned for a different kind of work
 - Free plan: 50 messages a day, 50 image credits, 2 images a day.
 - Workspace features: projects, private file upload with file-aware answers, conversation memory, saved prompts and playbooks, model comparison, private custom assistants.
 - All AI models go through OpenRouter.
+- Launching 2026-12-01 behind flags: assistants that use tools (web search, page reading, file search, memory, saving artifacts, handing images to Prism) with each step shown as a card; zq, Forge in the terminal (npm `zenquanta`); and an installable web app. Agent limits per plan live in `AGENT_PLAN_LIMITS`.
 - Do not claim payment automation, team features, or capabilities not in the code.
 
 ## Brand Commitments
