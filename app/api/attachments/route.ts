@@ -4,6 +4,7 @@ import {
   neonConversationRepository,
 } from '@/lib/db/repositories'
 import { resolveOwnedProjectScope } from '@/lib/security/ownership'
+import { hitRateLimit } from '@/lib/security/rate-limit'
 import { conversationBelongsToProject } from '@/lib/security/user-scope'
 import { uploadAttachmentBinary } from '@/lib/storage/attachments'
 import { MAX_PRIVATE_FILE_BYTES, normalizeMimeType } from '@/lib/storage/security'
@@ -45,6 +46,12 @@ function isAttachmentMetadata(value: unknown): value is Attachment {
 export async function POST(request: NextRequest) {
   const auth = await requireAuthenticatedUser(request)
   if ('response' in auth) return auth.response
+  if (!(await hitRateLimit(`uploads:${auth.user.id}`, 60, 3_600))) {
+    return NextResponse.json(
+      { error: 'Too many uploads in the last hour. Try again later.' },
+      { status: 429 }
+    )
+  }
 
   const formData = await request.formData()
   const metadataRaw = formData.get('metadata')

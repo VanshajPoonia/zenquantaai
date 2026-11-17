@@ -6,6 +6,7 @@ import {
 } from '@/lib/db/repositories'
 import { hasEmbeddingConfig } from '@/lib/rag/embeddings'
 import { indexUploadedFileForKnowledge } from '@/lib/rag/indexing'
+import { hitRateLimit } from '@/lib/security/rate-limit'
 import { getObjectStore } from '@/lib/storage/object-store'
 
 export const runtime = 'nodejs'
@@ -17,6 +18,12 @@ interface RouteContext {
 export async function POST(request: NextRequest, context: RouteContext) {
   const auth = await requireAuthenticatedUser(request)
   if ('response' in auth) return auth.response
+  if (!(await hitRateLimit(`reindex:${auth.user.id}`, 30, 3_600))) {
+    return NextResponse.json(
+      { error: 'Too many re-index requests in the last hour. Try again later.' },
+      { status: 429 }
+    )
+  }
 
   await neonProfilesRepository.ensureFromAuthUser(auth.user)
 
