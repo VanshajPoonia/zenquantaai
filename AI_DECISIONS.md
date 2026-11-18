@@ -1,5 +1,29 @@
 # AI Architecture Decisions
 
+## A Password Change Needs The Current Password
+
+Decision (2026-11-18, owner): `/api/auth/password/update` needs `currentPassword` and checks it against the stored scrypt hash before saving the new one (`updateLocalPassword` in `lib/auth/session.ts`). A wrong guess counts toward the same login ID and IP lockout as sign-in. The form on `/auth/reset-password` has the new field. Admin resets are unchanged.
+
+Rationale: security review item L7. A stolen session cookie could change the password and lock the owner out. Sharing the sign-in lockout stops the cookie from being used to guess the password.
+
+## zq Stays On Bring-Your-Own-Key; The OpenRouter Request Is Not Sent
+
+Decision (2026-11-18, owner): the permission request in `docs/launch/openrouter-permission-request.md` is not sent. zq launches on each user's own OpenRouter key, and `ZQ_MODEL_API` stays off, so the hosted Model API stays admin-only.
+
+Rationale: bring-your-own-key fits OpenRouter's terms as written and was already built and tested on 2026-11-17. The draft stays in the repo in case this is revisited.
+
+## Free Sign-Ups Launch With The IP Limit And A Credit Limit
+
+Decision (2026-11-18, owner): for launch, free-account farming (security review item M5) is handled by the existing sign-up limit of 10 accounts per IP per hour plus a monthly credit limit on the production OpenRouter key. No email verification or captcha for now. Revisit after a week of sign-up numbers in `/admin`.
+
+Rationale: stronger checks add friction to every sign-up. The credit limit caps the worst case while real numbers come in.
+
+## Reply Links Stay As They Are For Launch
+
+Decision (2026-11-18, owner): links in chat replies keep working as plain `http(s)` links with `rel="noopener noreferrer"`. No confirm step and no site name label. This is an accepted risk (security review item L8), to revisit after launch.
+
+Rationale: a link with private data in it leaks only if the user clicks it, no referrer is sent and nothing loads on its own. A confirm step would also fire on ordinary links, which hurts normal answers.
+
 ## The Server Decides Which Run A Model API Request Belongs To
 
 Decision (2026-11-18, security review): `/api/v1/chat/completions` no longer trusts `x-zq-run-id` for the step cap. The run key is a hash of the user, the `x-zq-session-id` header and the messages up to the last user message (`lib/agent/model-api-runs.ts`), and the step count is the larger of that run's stored count and the assistant turns since the last user message in the request. A run idle for an hour starts again.
@@ -57,6 +81,8 @@ Rationale: a search costs about $0.007 upstream, which is about 8,000 tokens at 
 Finding (2026-11-17): OpenRouter's terms (last updated 31 August 2026), section 7, forbid "reselling API access to Models" and "developing a competing service". Sections 5.1 and 5.2 allow products built for your own customers if they agree to the model providers' terms. The web app fits that. The zq Model API, an OpenAI-compatible endpoint with user keys, may not. Until OpenRouter confirms in writing, zq stays unpublished and the endpoint is not advertised for other tools. The options are in `docs/launch/NEEDS_YOU.md`, and `/terms` now passes on the model providers' terms.
 
 Follow-up (2026-11-17): the hosted Model API is admin-only unless `ZQ_MODEL_API=on`. For everyone else zq runs in bring-your-own-key mode: `zq key <openrouter key>` stores the key locally, and pi's built-in OpenRouter provider calls OpenRouter directly from the user's machine with `qwen/qwen3-coder`. Zenquanta still handles sign-in and session sync. So zq can launch on 2026-12-01 whatever OpenRouter answers, and setting `ZQ_MODEL_API=on` switches users to hosted models once permission arrives.
+
+Follow-up (2026-11-18): the owner decided not to ask OpenRouter. zq stays on bring-your-own-key and `ZQ_MODEL_API` stays off (see the decision at the top).
 
 ## Web Search And Embeddings Fall Back To OpenRouter
 

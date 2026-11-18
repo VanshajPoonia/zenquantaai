@@ -1,6 +1,6 @@
 # Draft: Permission Request To OpenRouter
 
-For the "Talk to sales" form on openrouter.ai. Not sent. Edit freely.
+For the "Talk to sales" form on openrouter.ai. Not sent: on 2026-11-18 the owner decided to keep zq on bring-your-own-key instead. Kept for reference.
 
 ---
 
