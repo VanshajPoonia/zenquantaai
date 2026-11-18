@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import {
   appendClearedAuthCookies,
+  isAuthRateLimitError,
+  isInvalidCurrentPasswordError,
   readRequestAuthSession,
   updateLocalPassword,
 } from '@/lib/auth/session'
@@ -24,9 +26,19 @@ export async function POST(request: NextRequest) {
   }
 
   const body = (await request.json().catch(() => null)) as
-    | { password?: string }
+    | { currentPassword?: unknown; password?: unknown }
     | null
-  const password = body?.password?.trim() ?? ''
+  // Not trimmed, to match how sign-in checks the password.
+  const currentPassword =
+    typeof body?.currentPassword === 'string' ? body.currentPassword : ''
+  const password = typeof body?.password === 'string' ? body.password.trim() : ''
+
+  if (!currentPassword) {
+    return NextResponse.json(
+      { error: 'Enter your current password.' },
+      { status: 400 }
+    )
+  }
 
   if (password.length < 8) {
     return NextResponse.json(
@@ -35,7 +47,20 @@ export async function POST(request: NextRequest) {
     )
   }
 
-  await updateLocalPassword(session.accessToken, password)
+  try {
+    await updateLocalPassword({
+      sessionToken: session.accessToken,
+      currentPassword,
+      newPassword: password,
+      request,
+    })
+  } catch (error) {
+    if (isAuthRateLimitError(error) || isInvalidCurrentPasswordError(error)) {
+      return NextResponse.json({ error: error.message }, { status: error.status })
+    }
+
+    throw error
+  }
 
   return NextResponse.json({
     ok: true,

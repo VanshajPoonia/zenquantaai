@@ -58,6 +58,16 @@ export function isAuthRateLimitError(error: unknown): error is AuthRateLimitErro
   return error instanceof AuthRateLimitError
 }
 
+export class InvalidCurrentPasswordError extends Error {
+  status = 403
+}
+
+export function isInvalidCurrentPasswordError(
+  error: unknown
+): error is InvalidCurrentPasswordError {
+  return error instanceof InvalidCurrentPasswordError
+}
+
 function normalizeLoginId(value: string): string {
   return value.trim().toLowerCase()
 }
@@ -511,21 +521,51 @@ export async function signInWithLocalCredentials(
   })
 }
 
-export async function updateLocalPassword(
-  sessionToken: string,
-  password: string
-): Promise<void> {
-  const session = await readSessionToken(sessionToken)
+export async function updateLocalPassword(input: {
+  sessionToken: string
+  currentPassword: string
+  newPassword: string
+  request?: NextRequest
+}): Promise<void> {
+  const session = await readSessionToken(input.sessionToken)
   if (!session.user) {
     throw new Error('Your password reset session has expired. Request help from an admin.')
   }
 
+  const loginId = session.user.loginId
+  if (!loginId) {
+    throw new InvalidCurrentPasswordError('This account has no password to change.')
+  }
+
+  // Wrong guesses count toward the same lockout as sign-in, so a stolen cookie cannot brute-force it.
+  const { ipAddress } = input.request
+    ? getRequestMetadata(input.request)
+    : { ipAddress: null }
+  await assertAuthAttemptsAllowed(loginId, ipAddress)
+
+  const credential = await neonUsersRepository.getCredentialByLoginId(loginId)
+  const isCurrentPassword =
+    credential?.user.id === session.user.id &&
+    (await verifyPassword({
+      password: input.currentPassword,
+      passwordHash: credential.passwordHash,
+      passwordSalt: credential.passwordSalt,
+      passwordParams: credential.passwordParams,
+    }))
+
+  if (!isCurrentPassword) {
+    await recordAuthFailure(loginId, ipAddress)
+    throw new InvalidCurrentPasswordError('Your current password is not correct.')
+  }
+
+  await clearAuthFailures(loginId, ipAddress)
+
   await neonUsersRepository.updateLocalPassword({
     userId: session.user.id,
-    ...(await hashPassword(password)),
+    ...(await hashPassword(input.newPassword)),
   })
 
-  await revokeOtherSessions(session.user.id, sessionToken)
+  await revokeOtherSessions(session.user.id, input.sessionToken)
   await neonApiTokensRepository.revokeAllForUser(session.user.id)
 }
 
