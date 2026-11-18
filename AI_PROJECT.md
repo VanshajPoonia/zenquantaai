@@ -102,7 +102,7 @@ Mode mapping:
 - `/pricing`: public plan overview; signed-in users see it inside the workspace layout and can send manual plan requests.
 - `/admin`: admin overview and user/request management.
 - `/admin/users/[id]`: per-user admin detail.
-- `/auth/reset-password`: password reset completion page.
+- `/auth/reset-password`: change password for a signed-in user. Asks for the current password, which the server checks.
 - `/cli/authorize`: approve a `zq login` code.
 - `/terms`, `/privacy`, `/docs/cli`: public static pages.
 - `/nova`, `/velora`, `/axiom`, `/forge`, `/pulse`, `/prism`: public assistant pages.

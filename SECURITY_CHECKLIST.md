@@ -8,6 +8,7 @@ Use this checklist when adding or reviewing API routes, repositories, and privat
 - Admin routes must call `requireAdminApiUser` for APIs or the server admin page guard for admin pages.
 - Public auth compatibility routes are the exception and should stay narrowly scoped to sign-in, sign-up, reset, session, or sign-out behavior.
 - Return `401` for unauthenticated protected requests before reading or writing user data.
+- A signed-in password change checks the current password on the server, and wrong guesses count toward the sign-in lockout. A session cookie alone is never enough.
 
 ## Ownership And Scope
 
