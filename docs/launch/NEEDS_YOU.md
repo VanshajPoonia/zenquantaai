@@ -6,14 +6,13 @@ Things only the owner can do or decide before the 2026-12-01 launch. Claude Code
 
 | # | What | Why | When |
 |---|---|---|---|
-| 1 | **Move `latest` to beta.3**: run `npm dist-tag add zenquanta@0.1.0-beta.3 latest` in your own terminal (it needs your passkey), then check with `npm view zenquanta dist-tags` | beta.3 is on npm under `beta`, but `latest` still points to beta.1, which has the zq permission and git holes from the 2026-11-18 security review. A plain `npm i -g zenquanta` installs beta.1 | Now |
-| 2 | Read `/terms` and `/privacy` and say OK or what to change. If zq stays on OpenRouter, the terms also need a line passing on the model providers' terms (OpenRouter section 5.2) | They are plain-language drafts, not legal advice | Day 9 (11-25) |
-| 3 | Check the `v0-zenquantaai` Vercel project (it is in another Vercel account): set Node 22.19 or newer, or disconnect it from `main` | It also deploys `main`. The agent loop needs Node 22.19 or newer | Before Day 11 |
-| 4 | Optional: Apple Developer account ($99 a year) | Needed to sign the Mac desktop app in v1.1 | After launch |
-| 5 | Set a monthly credit limit on the production OpenRouter key and turn on the low-balance email (openrouter.ai, Settings > Keys and Credits) | Spec 06 cost control. Since 2026-11-18 it is also the main guard against free-account farming, together with the sign-up limit per IP | Before Day 14 (11-30) |
-| 6 | Optional: make a non-admin test account and add `SMOKE_LOGIN_ID` and `SMOKE_PASSWORD` to `.env.local` | Lets agents run the signed-in smoke test (`tests/e2e/signed-in.spec.ts`) for Gate C without your main account. Agents do not write to the production database, so they cannot make it themselves | Before Day 8 (11-24) |
-| 7 | After a week of sign-ups, look at new accounts per day in `/admin` and decide whether Free needs email verification, a captcha or a lower cap for new accounts | Launch relies on the sign-up limit per IP plus the OpenRouter credit limit (decided 2026-11-18) | About 12-08 |
-| 8 | Revisit how links in replies open: as now, a confirm step for links that did not come from you, a search or a file, or the site name next to each link | Kept as is for launch as an accepted risk (decided 2026-11-18) | After launch |
+| 1 | Read `/terms` and `/privacy` and say OK or what to change. If zq stays on OpenRouter, the terms also need a line passing on the model providers' terms (OpenRouter section 5.2) | They are plain-language drafts, not legal advice | Day 9 (11-25) |
+| 2 | Check the `v0-zenquantaai` Vercel project (it is in another Vercel account): set Node 22.19 or newer, or disconnect it from `main` | It also deploys `main`. The agent loop needs Node 22.19 or newer | Before Day 11 |
+| 3 | Optional: Apple Developer account ($99 a year) | Needed to sign the Mac desktop app in v1.1 | After launch |
+| 4 | Set a monthly credit limit on the production OpenRouter key and turn on the low-balance email (openrouter.ai, Settings > Keys and Credits) | Spec 06 cost control. Since 2026-11-18 it is also the main guard against free-account farming, together with the sign-up limit per IP | Before Day 14 (11-30) |
+| 5 | Optional: make a non-admin test account and add `SMOKE_LOGIN_ID` and `SMOKE_PASSWORD` to `.env.local` | Lets agents run the signed-in smoke test (`tests/e2e/signed-in.spec.ts`) for Gate C without your main account. Agents do not write to the production database, so they cannot make it themselves | Before Day 8 (11-24) |
+| 6 | After a week of sign-ups, look at new accounts per day in `/admin` and decide whether Free needs email verification, a captcha or a lower cap for new accounts | Launch relies on the sign-up limit per IP plus the OpenRouter credit limit (decided 2026-11-18) | About 12-08 |
+| 7 | Revisit how links in replies open: as now, a confirm step for links that did not come from you, a search or a file, or the site name next to each link | Kept as is for launch as an accepted risk (decided 2026-11-18) | After launch |
 
 ## OpenRouter terms
 
@@ -45,7 +44,8 @@ Decided 2026-11-18: option B. The request is not sent and `ZQ_MODEL_API` stays o
 | 2026-11-17 | R2 env vars added to Vercel Preview deploys |
 | 2026-11-17 | Logged in to npm as `vanshajpoonia`, turned on 2FA with a passkey, published `zenquanta@0.1.0-beta.1` and approved npm's staged release. `latest` and `beta` both point to it. Verified by installing from npm and running a task against production |
 | 2026-11-17 | Built option B as the fallback: zq runs on the user's own OpenRouter key until `ZQ_MODEL_API=on` |
-| 2026-11-18 | Published `zenquanta@0.1.0-beta.3` under the `beta` tag. Moving `latest` waits on your passkey (open item 1) |
+| 2026-11-18 | Published `zenquanta@0.1.0-beta.3` under the `beta` tag. |
+| 2026-11-19 | Moved `latest` to `0.1.0-beta.3` from your terminal. `npm view zenquanta dist-tags` shows `latest` and `beta` both on `0.1.0-beta.3` |
 | 2026-11-18 | Purged the test accounts `zq-agent-test`, `zq-smoke-d3dbb1` and `ux-audit-5f0ef7` from production with the app's own purge code. Their R2 files were deleted too |
 | 2026-11-18 | Decided not to send the OpenRouter permission request. zq stays on bring-your-own-key and `ZQ_MODEL_API` stays off |
 | 2026-11-18 | Decided that links in replies stay as they are for launch, an accepted risk to revisit after launch (open item 8) |
