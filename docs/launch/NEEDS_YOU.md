@@ -50,4 +50,4 @@ Decided 2026-11-18: option B. The request is not sent and `ZQ_MODEL_API` stays o
 | 2026-11-18 | Decided not to send the OpenRouter permission request. zq stays on bring-your-own-key and `ZQ_MODEL_API` stays off |
 | 2026-11-18 | Decided that links in replies stay as they are for launch, an accepted risk to revisit after launch (open item 8) |
 | 2026-11-18 | Decided to launch free sign-ups with the sign-up limit per IP plus the OpenRouter credit limit, and to revisit after a week of sign-up numbers (open item 7) |
-| 2026-11-18 | Asked for a current password field on the change-password form, checked on the server. Built the same day (`fd4fd54`) |
+| 2026-11-18 | Asked for a current password field on the change-password form, checked on the server. Built and live in production the same day (`fd4fd54`) |

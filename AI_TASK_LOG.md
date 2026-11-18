@@ -24,7 +24,7 @@ Current direction: plan upgrades remain manual/admin-driven, payment automation 
 - `tests/password-change.test.ts` runs the real route and scrypt check with the database mocked: missing, wrong and locked cases, and a round trip where the old password stops working and the new one does.
 - `SECURITY_CHECKLIST.md` has the new rule. Launch plan progress and the OpenRouter draft note the decisions.
 
-**Verified**: typecheck, lint, 181 web tests and the production build pass. The public Playwright smoke passed 21/21 against a local production build. The form renders with no sideways scroll at 390 px. Signed out, the route still returns 401.
+**Verified**: typecheck, lint, 181 web tests and the production build pass. The public Playwright smoke passed 21/21 against a local production build. The form renders with no sideways scroll at 390 px. Signed out, the route still returns 401. `main` was fast-forwarded to `25c128d` and production (`zqai-qul7shqwa`) shows the new field and returns 401 signed out. The public smoke against production passed 21/21 twice. A first run right after the deploy passed 19 (likely cold starts, not captured).
 
 **Risky or open**: the signed-in change itself was not run against a real database (no smoke account). Worth one manual change in the Day 12 bug bash. Moving zq's `latest` tag and the OpenRouter credit limit are still on `NEEDS_YOU.md`.
 
