@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input'
 
 export default function ResetPasswordPage() {
   const router = useRouter()
+  const [currentPassword, setCurrentPassword] = useState('')
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [authParam, setAuthParam] = useState('')
@@ -61,13 +62,24 @@ export default function ResetPasswordPage() {
         </div>
 
         <p className="mb-6 text-sm leading-7 text-muted-foreground">
-          Choose a new password for your workspace. Once it is updated, you can
-          sign in with your ID and password.
+          Enter your current password, then choose a new one. Your other
+          devices and zq are signed out once it changes.
         </p>
 
         <div className="space-y-4">
           <Input
             type="password"
+            autoComplete="current-password"
+            value={currentPassword}
+            onChange={(event) => setCurrentPassword(event.target.value)}
+            placeholder="Current password"
+            className="h-12 rounded-2xl"
+            disabled={status === 'submitting'}
+          />
+
+          <Input
+            type="password"
+            autoComplete="new-password"
             value={password}
             onChange={(event) => setPassword(event.target.value)}
             placeholder="New password"
@@ -77,6 +89,7 @@ export default function ResetPasswordPage() {
 
           <Input
             type="password"
+            autoComplete="new-password"
             value={confirmPassword}
             onChange={(event) => setConfirmPassword(event.target.value)}
             placeholder="Confirm new password"
@@ -88,6 +101,7 @@ export default function ResetPasswordPage() {
             className="h-12 w-full rounded-2xl"
             disabled={
               status === 'submitting' ||
+              !currentPassword ||
               !password.trim() ||
               !confirmPassword.trim() ||
               Boolean(validationError) ||
@@ -104,7 +118,7 @@ export default function ResetPasswordPage() {
                     'Content-Type': 'application/json',
                   },
                   cache: 'no-store',
-                  body: JSON.stringify({ password }),
+                  body: JSON.stringify({ currentPassword, password }),
                 })
 
                 const payload = (await response.json().catch(() => null)) as
