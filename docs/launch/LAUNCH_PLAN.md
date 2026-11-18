@@ -14,11 +14,11 @@ Updated 2026-11-18, early on Day 2. Work runs ahead of the day plan on branch `f
 | Migration `20261117_zenquanta_agent_platform.sql` | Applied to Neon and verified |
 | Spec 01: agent loop, tools, tool cards, per-step metering | Built and tested locally and on a preview, behind `AGENT_LOOP` |
 | Spec 02: tokens, device login, Model API | Built and tested locally |
-| Spec 03: `zq` 0.1 | Login, read, edit and sync to web work against production. `0.1.0-beta.1` is on npm. zq runs on the user's own OpenRouter key until `ZQ_MODEL_API=on` |
+| Spec 03: `zq` 0.1 | Login, read, edit and sync to web work against production. `0.1.0-beta.3` is on npm under `beta` (`latest` is still beta.1). zq launches on the user's own OpenRouter key and `ZQ_MODEL_API` stays off (decided 2026-11-18) |
 | Spec 04: PWA | Built. Install flow still to check on real phones |
 | Spec 05: evals and limits | Gate B approved and applied on 2026-11-17. Eval round 2 not run yet (it needs paid model calls) |
 | Spec 06: terms, privacy, docs, landing section, sign-up rate limit, admin cost split | Built. Production setup and the user's legal review are open |
-| Security review (Day 10 item) | Done early on 2026-11-18. Fixes for zq permissions, metering on stopped or cut steps, the page reader, token revocation, file serving, device login, upload limits, the Model API step cap per run, usage reservation in the older AI routes and zq's git reads are in. `zenquanta@0.1.0-beta.3` carries the zq fixes and waits for a publish |
+| Security review (Day 10 item) | Done early on 2026-11-18. Fixes for zq permissions, metering on stopped or cut steps, the page reader, token revocation, file serving, device login, upload limits, the Model API step cap per run, usage reservation in the older AI routes and zq's git reads are in. `zenquanta@0.1.0-beta.3` carries the zq fixes and is on npm under `beta`. A password change now needs the current password. The other open items were decided by the owner on 2026-11-18 (`AI_DECISIONS.md`) |
 | Admin cost views | Agent steps per user split into web and zq, plus a surface filter (Day 7 and Day 10 items) |
 | `/admin/system-health` | Rows for the Node version, `AGENT_LOOP` and `ZQ_MODEL_API` |
 | Gate C, early check on the preview of 2026-11-18 | Signed-out smoke passed: 20 tests on landing, sign-in, protected redirects, terms, privacy, `/docs/cli`, assistant pages, the manifest and 390 px layout. Token and cookie auth stay separate. Signed-in checks wait on a smoke account (see `NEEDS_YOU.md`) |

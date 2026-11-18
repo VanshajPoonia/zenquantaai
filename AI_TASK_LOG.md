@@ -6,6 +6,30 @@ The repository contains a real Zenquanta AI platform backed by Neon for runtime 
 
 Current direction: plan upgrades remain manual/admin-driven, payment automation is out of scope unless explicitly requested, and Neon/storage start fresh without importing Supabase database rows or storage objects.
 
+## 2026-11-18 - Owner decisions on the security review, current password on password change (Claude Code, user-requested implementation)
+
+**Goal**: record the owner's decisions on the open security review items and build the one that needs code.
+
+**Decisions** (all in `AI_DECISIONS.md` and `docs/launch/NEEDS_YOU.md`):
+- Links in chat replies stay as they are for launch (L8). Accepted risk, revisit after launch.
+- Free-account farming (M5): launch with the sign-up limit per IP plus a credit limit on the OpenRouter key. Revisit after a week of sign-up numbers.
+- The change-password form asks for the current password and the server checks it (L7). Built below.
+- The OpenRouter permission request is not sent. zq stays on bring-your-own-key and `ZQ_MODEL_API` stays off.
+
+**Also done today**: `zenquanta@0.1.0-beta.3` is on npm under `beta`. `latest` still points to beta.1 until the owner moves it with their passkey. The test accounts `zq-agent-test`, `zq-smoke-d3dbb1` and `ux-audit-5f0ef7` were purged from production with the app's own purge code, R2 files included.
+
+**What changed**:
+- `/api/auth/password/update` needs `currentPassword` and checks it against the stored hash before saving (`updateLocalPassword` in `lib/auth/session.ts`). A wrong guess returns 403 and counts toward the sign-in lockout for that login ID and IP. A locked account gets 429 before any check. A missing current password gets 400.
+- `/auth/reset-password` has a current password field, autocomplete hints and copy that says other devices and zq sign out after a change.
+- `tests/password-change.test.ts` runs the real route and scrypt check with the database mocked: missing, wrong and locked cases, and a round trip where the old password stops working and the new one does.
+- `SECURITY_CHECKLIST.md` has the new rule. Launch plan progress and the OpenRouter draft note the decisions.
+
+**Verified**: typecheck, lint, 181 web tests and the production build pass. The public Playwright smoke passed 21/21 against a local production build. The form renders with no sideways scroll at 390 px. Signed out, the route still returns 401.
+
+**Risky or open**: the signed-in change itself was not run against a real database (no smoke account). Worth one manual change in the Day 12 bug bash. Moving zq's `latest` tag and the OpenRouter credit limit are still on `NEEDS_YOU.md`.
+
+**Next**: the owner moves `latest` to beta.3 and sets the credit limit. Then the signed-in smoke once a test account exists.
+
 ## 2026-11-18 - Security review, metering fixes, admin surface filter, Gate C early check (Claude Code, overnight run)
 
 **Goal**: finish the leftover smoke tests and admin work from 11-17, do the Day 10 security review now, check Gate C on a preview and keep going down the launch plan.
