@@ -1,9 +1,10 @@
 import { randomUUID } from 'node:crypto'
 import type { ExtensionAPI, ExtensionFactory } from '@earendil-works/pi-coding-agent'
-import { apiFetch, type MeResponse } from './api.js'
+import { ApiError, apiFetch, type MeResponse } from './api.js'
 import { getAppUrl, readCredentials, readSettings, setProjectSync, updateGlobalSettings, type PermissionMode } from './config.js'
 import { gitConfigCanRunPrograms } from './git-safety.js'
 import { decide } from './permissions.js'
+import { fitsRemoteApproval, httpApprovalClient, raceApproval, type ApprovalOutcome } from './remote-approvals.js'
 import { SessionSync } from './sync.js'
 
 export type ModelSource = 'zenquanta' | 'openrouter'
@@ -57,11 +58,13 @@ export function createZenquantaExtension(options: ZenquantaExtensionOptions): Ex
     const mode = (): PermissionMode =>
       options.yolo ? 'yolo' : options.allowEdits && settings.permissionMode === 'ask' ? 'edits' : settings.permissionMode
     const sync = new SessionSync(cwd, () => settings.sync)
+    let warnedRemote = false
 
     pi.on('session_start', (_event, ctx) => {
       cwd = ctx.cwd
       settings = readSettings(cwd)
       sessionId = ctx.sessionManager.getSessionId()
+      warnedRemote = false
       sync.start(sessionId)
       if (!ctx.hasUI) return
       ctx.ui.notify(
@@ -73,6 +76,7 @@ export function createZenquantaExtension(options: ZenquantaExtensionOptions): Ex
         me ? 'info' : 'warning'
       )
       if (me && !me.cliAccess) ctx.ui.notify('zq is not included in your plan. Request an upgrade at /pricing.', 'warning')
+      if (settings.remoteApprovals) ctx.ui.notify('Web approvals are on. Prompts also show in the Zenquanta web app.', 'info')
     })
 
     pi.on('before_agent_start', () => {
@@ -105,7 +109,40 @@ export function createZenquantaExtension(options: ZenquantaExtensionOptions): Ex
       if (decision.action === 'block') return { block: true, reason: decision.reason }
 
       const always = decision.rememberAs ? `Yes, always allow "${decision.rememberAs}"` : null
-      const choice = await ctx.ui.select(`${decision.title}\n${decision.detail}`, ['Yes', ...(always ? [always] : []), 'No'])
+      const prompt = `${decision.title}\n${decision.detail}`
+      const choices = ['Yes', ...(always ? [always] : []), 'No']
+      const request = { sessionId, tool: event.toolName, title: decision.title, detail: decision.detail }
+      const outcome: ApprovalOutcome =
+        settings.remoteApprovals && settings.sync && sessionId !== 'unknown' && fitsRemoteApproval(request)
+          ? await raceApproval({
+              request,
+              askLocal: (signal) => ctx.ui.select(prompt, choices, { signal }),
+              client: {
+                ...httpApprovalClient,
+                // The web shows the card inside the synced session, so send the latest turn first.
+                create: (input) => {
+                  void sync.flush()
+                  return httpApprovalClient.create(input)
+                },
+              },
+              signal: ctx.signal,
+              onRemoteUnavailable: (error) => {
+                if (warnedRemote) return
+                warnedRemote = true
+                ctx.ui.notify(
+                  error instanceof ApiError && error.status === 404
+                    ? 'Web approvals are not open on Zenquanta yet. Answer here.'
+                    : 'Could not reach Zenquanta for web approvals. Answer here.',
+                  'warning'
+                )
+              },
+            })
+          : { source: 'local', choice: await ctx.ui.select(prompt, choices) }
+      if (outcome.source === 'web') {
+        ctx.ui.notify(outcome.approved ? 'Approved once from the web.' : 'Denied from the web.', 'info')
+        return outcome.approved ? undefined : { block: true, reason: 'The user declined this action from the web.' }
+      }
+      const choice = outcome.choice
       if (choice === 'Yes') return undefined
       if (always && choice === always && decision.rememberAs) {
         settings.allowedCommands = [...settings.allowedCommands, decision.rememberAs]
@@ -147,7 +184,30 @@ export function createZenquantaExtension(options: ZenquantaExtensionOptions): Ex
       description: 'Show the permission mode and always-allowed commands',
       handler: async (_args, ctx) => {
         const allowed = settings.allowedCommands.length ? settings.allowedCommands.join(', ') : 'none'
-        ctx.ui.notify(`Mode: ${mode()}. Always allowed: ${allowed}. Set "permissionMode" to ask, edits or yolo in ~/.zq/settings.json.`, 'info')
+        ctx.ui.notify(
+          `Mode: ${mode()}. Always allowed: ${allowed}. Web approvals: ${settings.remoteApprovals ? 'on' : 'off'}. Set "permissionMode" to ask, edits or yolo in ~/.zq/settings.json.`,
+          'info'
+        )
+      },
+    })
+
+    pi.registerCommand('remote', {
+      description: 'Also answer permission prompts from the Zenquanta web app',
+      handler: async (args, ctx) => {
+        const value = args.trim().toLowerCase()
+        if (value !== 'on' && value !== 'off') {
+          ctx.ui.notify(`Web approvals are ${settings.remoteApprovals ? 'on' : 'off'}. Use /remote on or /remote off.`, 'info')
+          return
+        }
+        updateGlobalSettings({ remoteApprovals: value === 'on' })
+        settings = readSettings(cwd)
+        warnedRemote = false
+        ctx.ui.notify(
+          settings.remoteApprovals
+            ? `Web approvals on. Each prompt also shows in the web app for 10 minutes. The web can approve once or deny, never always allow.${settings.sync ? '' : ' Turn /sync on so the web can show them.'}`
+            : 'Web approvals off. Prompts only show here.',
+          'info'
+        )
       },
     })
   }

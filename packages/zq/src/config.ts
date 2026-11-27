@@ -16,9 +16,16 @@ export interface ZqSettings {
   permissionMode: PermissionMode
   allowedCommands: string[]
   sync: boolean
+  /** Also send permission prompts to the web app. Off unless the user runs `/remote on`. */
+  remoteApprovals: boolean
 }
 
-const DEFAULT_SETTINGS: ZqSettings = { permissionMode: 'ask', allowedCommands: [], sync: true }
+const DEFAULT_SETTINGS: ZqSettings = {
+  permissionMode: 'ask',
+  allowedCommands: [],
+  sync: true,
+  remoteApprovals: false,
+}
 
 function readJson<T>(path: string): Partial<T> | null {
   try {
@@ -64,7 +71,7 @@ export function deleteCredentials() {
   if (existsSync(CREDENTIALS_PATH)) rmSync(CREDENTIALS_PATH)
 }
 
-/** Global settings merged with the project's `.zq/settings.json`. Projects can only turn sync off. */
+/** Global settings merged with the project's `.zq/settings.json`. Projects can only turn sync off, never approvals on. */
 export function readSettings(cwd: string): ZqSettings {
   const global = { ...DEFAULT_SETTINGS, ...readJson<ZqSettings>(SETTINGS_PATH) }
   const project = readJson<ZqSettings>(join(cwd, PROJECT_SETTINGS_FILE))
@@ -72,6 +79,7 @@ export function readSettings(cwd: string): ZqSettings {
     permissionMode: global.permissionMode,
     allowedCommands: Array.isArray(global.allowedCommands) ? global.allowedCommands : [],
     sync: global.sync !== false && project?.sync !== false,
+    remoteApprovals: global.remoteApprovals === true,
   }
 }
 
