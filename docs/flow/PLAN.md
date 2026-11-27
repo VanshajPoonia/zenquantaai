@@ -4,15 +4,15 @@ Planned on 2026-11-28, the day of the v1.0 code freeze. Flow is built on branch 
 
 ## Status
 
-Built on 2026-11-28. Everything in the four lanes below is on `feat/flow`. Typecheck, lint, 392 web tests, 27 zq tests and the production build pass. Nothing has been checked in a browser yet.
+Built on 2026-11-28. Everything in the four lanes below is on `feat/flow`. Typecheck, lint, 397 web tests, 27 zq tests and the production build pass.
+
+Migrations 24 to 26 were applied to production Neon on 2026-11-28. The `feat/flow` preview has the Flow flags and `AGENT_LOOP=on` for that branch only. A browser run on that preview as the test account passed: sign in, manifest, slash menu, the To Forge chip, a draft surviving a reload, Personalization saving, a reply that followed About you on the agent path, the context meter, creating a share link, the shared page for a signed-out visitor at 390 px (noindex, no sideways scroll), a revoked link returning 404, Branch from here with its banner, the share target filling the composer, and the slash menu at 390 px. Edit in a new branch passed in a separate probe. Not checked: live zq sessions, approvals from the web and done notices, which need zq or a background tab.
 
 To ship it:
 
-1. Apply migrations 24 to 26 (`AI_CHECKLIST.md`) to a Neon branch and run the browser checks from `docs/flow/notes/` on a preview.
-2. Apply them to production Neon. Migration 24 must come before the merge.
-3. Merge `feat/flow` to `main`.
-4. Set `NEXT_PUBLIC_CHAT_SHARING=true` and `CLI_APPROVALS=on`, then redeploy.
-5. Publish `zenquanta@0.1.1-beta.0`.
+1. After the launch, merge `feat/flow` to `main`. Expect doc conflicts in `NEEDS_YOU.md`, `AI_TASK_LOG.md` and `AI_CHECKLIST.md` with `release/zq-0.1.0`.
+2. Set `NEXT_PUBLIC_CHAT_SHARING=true` and `CLI_APPROVALS=on` in production, then redeploy.
+3. Check zq approvals with zq 0.1.1-beta.0 against production, then publish it.
 
 ## The problem
 
