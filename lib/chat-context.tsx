@@ -228,6 +228,8 @@ interface ComposerDraftRequest {
   mode: AIMode
   attachments?: Attachment[]
   projectId?: string | null
+  // Adds the content to the current draft instead of replacing it.
+  append?: boolean
 }
 
 interface WorkspaceSearchRequest {
@@ -404,6 +406,7 @@ interface ChatContextType {
     kind?: 'chat' | 'image'
     mode?: AIMode
     projectId?: string | null
+    append?: boolean
   }) => void
   clearComposerDraftRequest: (requestId: number) => void
   workspaceSearchRequest: WorkspaceSearchRequest | null
@@ -1416,6 +1419,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       kind?: 'chat' | 'image'
       mode?: AIMode
       projectId?: string | null
+      append?: boolean
     }) => {
       const mode = request.mode ?? (request.kind === 'image' ? 'image' : currentMode)
       const kind = request.kind ?? (mode === 'image' ? 'image' : 'chat')
@@ -1433,6 +1437,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         kind,
         mode,
         projectId: request.projectId ?? null,
+        append: request.append ?? false,
       })
     },
     [currentMode, setCurrentMode, setSelectedProjectId]

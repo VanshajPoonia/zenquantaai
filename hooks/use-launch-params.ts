@@ -32,6 +32,7 @@ export function useLaunchParams(): void {
     if (!launch || currentChat || !isNewChatDraft) return
     pendingRef.current = null
     if (!launch.prompt && !launch.mode) return
-    prepareComposerDraft({ content: launch.prompt ?? '', mode: launch.mode ?? undefined })
+    // Append so a saved new-chat draft survives a share or shortcut launch.
+    prepareComposerDraft({ content: launch.prompt ?? '', mode: launch.mode ?? undefined, append: true })
   }, [currentChat, isNewChatDraft, prepareComposerDraft])
 }

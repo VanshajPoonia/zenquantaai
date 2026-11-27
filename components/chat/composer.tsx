@@ -8,6 +8,7 @@ import { AIMode, Attachment, MODE_CONFIGS, PendingAttachment } from '@/lib/types
 import { getModelOverrideForUsageOptimization } from '@/lib/config'
 import { usePromptPrecheck } from '@/hooks/usePromptPrecheck'
 import { useComposerDraft } from '@/hooks/useComposerDraft'
+import { appendDraftText } from '@/lib/chat/composer-prefill'
 import { createPendingAttachment } from '@/lib/utils/files'
 import { getModeAccentClass } from '@/lib/mode-utils'
 import { Button } from '@/components/ui/button'
@@ -164,9 +165,10 @@ export function Composer({
   useEffect(() => {
     if (!composerDraftRequest) return
 
-    setValue(composerDraftRequest.content)
+    const { append, content } = composerDraftRequest
+    setValue((previous) => (append ? (content ? appendDraftText(previous, content) : previous) : content))
     setComposerKind(composerDraftRequest.kind)
-    setPendingAttachments(composerDraftRequest.attachments ?? [])
+    if (!append) setPendingAttachments(composerDraftRequest.attachments ?? [])
     setPendingDraftClear(null)
     clearComposerDraftRequest(composerDraftRequest.requestId)
     requestAnimationFrame(() => textareaRef.current?.focus())
