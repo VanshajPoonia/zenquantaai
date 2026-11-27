@@ -13,7 +13,7 @@ export default function PrivacyPage() {
       <ul>
         <li>Your account: Zenquanta ID, a salted hash of your password, and an email if you add one.</li>
         <li>Your work: chats, uploaded files, memory, projects, prompts, playbooks, artifacts and generated images.</li>
-        <li>zq sessions, when sync is on: your prompts, the answers and short tool outputs, cut to 4 KB. Output from protected files like <code>.env</code> is never sent. Turn sync off with <code>/sync off</code>.</li>
+        <li>zq sessions, when sync is on: your prompts, the answers and short tool outputs, cut to 4 KB. Output from protected files like <code>.env</code> is never sent. Turn sync off with <code>/sync off</code>. zq sends your prompts and code straight to OpenRouter with your own key, so we only receive what sync uploads.</li>
         <li>Usage: tokens, steps and costs for each request, so plans and limits work.</li>
         <li>Security records: a hashed form of IP addresses and tokens, used for rate limits and to stop abuse.</li>
       </ul>
@@ -38,7 +38,7 @@ export default function PrivacyPage() {
           <tr><td>Tavily</td><td>Web search and page reading, when configured</td></tr>
           <tr><td>Neon</td><td>Database</td></tr>
           <tr><td>Vercel</td><td>Hosting and basic analytics</td></tr>
-          <tr><td>Our file storage provider</td><td>Private storage for uploads and generated images</td></tr>
+          <tr><td>Cloudflare R2</td><td>Private storage for uploads and generated images</td></tr>
         </tbody>
       </table>
       <p>These services process data only to provide their part of Zenquanta.</p>

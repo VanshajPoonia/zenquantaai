@@ -52,6 +52,11 @@ export default function TermsPage() {
         actions you approve or allow with options like <code>--yolo</code>. Use version control and
         review changes before you rely on them.
       </p>
+      <p>
+        zq runs on your own OpenRouter key. OpenRouter bills you for those requests, and its terms and
+        the model providers&apos; terms apply to them. Zenquanta handles your zq sign-in and keeps the
+        sessions you sync.
+      </p>
 
       <h2>Plans and usage</h2>
       <p>
