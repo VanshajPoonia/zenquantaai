@@ -431,6 +431,9 @@ export function SettingsPanel() {
                   {RESPONSE_PROFILE_LABELS[sessionSettings.modelOverride]}:{' '}
                   {RESPONSE_PROFILE_DESCRIPTIONS[sessionSettings.modelOverride]}
                 </p>
+                <p className="text-xs text-muted-foreground">
+                  This picks the model. The Intelligence menu in the composer changes it too.
+                </p>
               </div>
 
               <PanelSlider
