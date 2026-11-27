@@ -24,7 +24,9 @@ export function useLiveCliSession(
   chat: Conversation | null,
   applyLiveMessages: (conversationId: string, page: ConversationMessagesAfterResponse) => void
 ): LiveCliSession {
-  const chatId = chat?.surface === 'cli' ? chat.id : null
+  // Wait for the first page, or the cursor would page through the whole history.
+  const isLoaded = chat ? chat.messages.length > 0 || chat.messageCount === 0 : false
+  const chatId = chat?.surface === 'cli' && isLoaded ? chat.id : null
   const [state, setState] = useState<LiveCliSession & { chatId: string | null }>({
     ...IDLE,
     chatId: null,
