@@ -419,6 +419,7 @@ export function Composer({
             onChange={(e) => commands.handleChange(e.target.value)}
             onKeyDown={handleKeyDown}
             onPaste={handlePaste}
+            onFocus={commands.handleFocus}
             onBlur={commands.handleBlur}
             aria-controls={commands.isOpen ? commands.menuId : undefined}
             aria-activedescendant={commands.activeOptionId}

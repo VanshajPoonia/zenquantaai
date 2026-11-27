@@ -107,8 +107,9 @@ export function useComposerCommands({
     setCurrentCustomAssistant,
   } = useChatContext()
   const menuId = useId()
-  // Esc, blur or an inserted prompt close the menu until the next edit.
+  // Esc or an inserted prompt close the menu until the next edit. It only shows while focused.
   const [dismissed, setDismissed] = useState(false)
+  const [focused, setFocused] = useState(false)
   const [active, setActive] = useState({ key: '', index: 0 })
 
   const mentionTargets = useMemo(
@@ -132,7 +133,7 @@ export function useComposerCommands({
   const mention = parseLeadingMention(value, mentionTargets)
 
   const entries = useMemo<MenuEntry[]>(() => {
-    if (!trigger || dismissed) return []
+    if (!trigger || dismissed || !focused) return []
     if (trigger.type === 'mention') {
       return filterMentionTargets(mentionTargets, trigger.query).map((target) => ({
         kind: 'mention',
@@ -147,7 +148,7 @@ export function useComposerCommands({
       group: SLASH_GROUP_LABELS[item.group],
       item,
     }))
-  }, [dismissed, mentionTargets, slashItems, trigger])
+  }, [dismissed, focused, mentionTargets, slashItems, trigger])
 
   const isOpen = entries.length > 0
   const activeIndex =
@@ -245,7 +246,7 @@ export function useComposerCommands({
     if (menu && event.relatedTarget instanceof Node && menu.contains(event.relatedTarget)) {
       return
     }
-    setDismissed(true)
+    setFocused(false)
   }
 
   // A typed or pasted "@prism " turns on image mode, like picking Prism does.
@@ -331,6 +332,7 @@ export function useComposerCommands({
     pick,
     handleKeyDown,
     handleBlur,
+    handleFocus: () => setFocused(true),
     handleChange,
     removeMention,
     routeSubmission,
@@ -366,10 +368,19 @@ export function ComposerCommandMenu({ commands }: { commands: ComposerCommands }
   const { entries, isOpen, activeIndex, menuId, optionId, triggerType, setActiveIndex, pick } =
     commands
 
+  // Scrolls the list only, so the page does not jump on a phone.
   useEffect(() => {
-    if (!isOpen) return
-    document.getElementById(optionId(activeIndex))?.scrollIntoView({ block: 'nearest' })
-  }, [activeIndex, isOpen, optionId])
+    const list = document.getElementById(menuId)
+    const option = document.getElementById(optionId(activeIndex))
+    if (!isOpen || !list || !option) return
+    if (activeIndex === 0) {
+      list.scrollTop = 0
+    } else if (option.offsetTop < list.scrollTop) {
+      list.scrollTop = option.offsetTop
+    } else if (option.offsetTop + option.offsetHeight > list.scrollTop + list.clientHeight) {
+      list.scrollTop = option.offsetTop + option.offsetHeight - list.clientHeight
+    }
+  }, [activeIndex, isOpen, menuId, optionId])
 
   if (!isOpen) return null
 
