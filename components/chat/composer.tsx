@@ -22,6 +22,7 @@ import { ContextMeter } from './context-meter'
 import { CustomAssistantButton } from './custom-assistant-button'
 import { ModelComparisonButton } from './model-comparison-button'
 import { PromptLibraryButton } from './prompt-library-button'
+import { useDictation, VoiceInputButton } from './voice-input-button'
 
 interface ComposerProps {
   onSend: (input: {
@@ -98,6 +99,7 @@ export function Composer({
   const fileInputRef = useRef<HTMLInputElement>(null)
   const commands = useComposerCommands({ value, setValue, setComposerKind, textareaRef })
   const draft = useComposerDraft({ conversationId: currentChat?.id, value, setValue, textareaRef })
+  const dictation = useDictation(setValue, currentChat?.id)
   const clearDraft = useCallback(() => {
     setValue('')
     setPendingAttachments([])
@@ -214,6 +216,7 @@ export function Composer({
 
   const handleSubmit = async () => {
     if ((!value.trim() && pendingAttachments.length === 0) || disabled) return
+    dictation.cancel()
     const filesPrompt = `Review these files and help me with them: ${pendingAttachments
       .map((attachment) => attachment.name)
       .join(', ')}.`
@@ -496,6 +499,7 @@ export function Composer({
                   }
                 />
               ) : null}
+              <VoiceInputButton dictation={dictation} draft={value} disabled={disabled} />
               {isStreaming ? (
                 <>
                   {hasDraft ? (
