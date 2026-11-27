@@ -115,6 +115,7 @@ import {
   resolveSend,
 } from '@/lib/chat/sendMessage'
 import { useSendMessage } from '@/hooks/useSendMessage'
+import { clearAllDrafts, getDraftStore } from '@/lib/chat/draft-storage'
 import {
   createPromptQueue,
   isQueuePaused as isQueuePausedFor,
@@ -1184,6 +1185,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       cache: 'no-store',
     }).catch(() => undefined)
 
+    clearAllDrafts(getDraftStore())
     clearAuthedState()
     setAuthState({
       status: 'unauthenticated',

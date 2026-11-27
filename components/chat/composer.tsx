@@ -7,6 +7,7 @@ import { useChatContext, type QueuedPrompt } from '@/lib/chat-context'
 import { AIMode, Attachment, MODE_CONFIGS, PendingAttachment } from '@/lib/types'
 import { getModelOverrideForUsageOptimization } from '@/lib/config'
 import { usePromptPrecheck } from '@/hooks/usePromptPrecheck'
+import { useComposerDraft } from '@/hooks/useComposerDraft'
 import { createPendingAttachment } from '@/lib/utils/files'
 import { getModeAccentClass } from '@/lib/mode-utils'
 import { Button } from '@/components/ui/button'
@@ -96,6 +97,7 @@ export function Composer({
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const commands = useComposerCommands({ value, setValue, setComposerKind, textareaRef })
+  const draft = useComposerDraft({ conversationId: currentChat?.id, value, setValue, textareaRef })
   const clearDraft = useCallback(() => {
     setValue('')
     setPendingAttachments([])
@@ -115,6 +117,7 @@ export function Composer({
     [composerKind, pendingAttachments, suppressRecommendation, value]
   )
   const markSubmitted = (normalizedContent: string) => {
+    draft.discard()
     // A queued message shows in the queue, so the composer is free right away.
     if (isStreaming) {
       clearDraft()
