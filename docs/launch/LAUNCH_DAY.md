@@ -1,6 +1,6 @@
 # Launch day runbook
 
-For Gate D on Monday 2026-11-30 and the launch on Tuesday 2026-12-01. Written 2026-11-28 after the bug bash. Production is `https://zqai.vercel.app`.
+For Gate D on Monday 2026-11-30 and the launch on Tuesday 2026-12-01. Written 2026-11-28 after the bug bash. Production is `https://zqai.vanshajpoonia.com` (also `https://zqai.vercel.app`).
 
 ## State on 2026-11-28
 
