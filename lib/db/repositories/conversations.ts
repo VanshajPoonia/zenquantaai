@@ -1,6 +1,6 @@
 import 'server-only'
 
-import { SQL, and, asc, desc, eq, gt, inArray, lt, ne, sql } from 'drizzle-orm'
+import { SQL, and, asc, desc, eq, gt, gte, inArray, lt, ne, sql } from 'drizzle-orm'
 import { createSessionSettings, DEFAULT_PROJECT_ID } from '@/lib/config'
 import { conversationUsageAggregateToEstimate } from '@/lib/conversations/usage-aggregate'
 import { getAssistantFamilyFromMode } from '@/lib/config/assistants'
@@ -21,6 +21,7 @@ import {
   ConversationSummary,
   CrossChatMatch,
   CustomAssistantReference,
+  ConversationMessagesAfterResponse,
   ConversationMessagesPageResponse,
   MessagePart,
   MessageSource,
@@ -440,6 +441,40 @@ class NeonConversationsRepository {
       messages,
       hasMoreBefore,
       nextBefore: hasMoreBefore && oldest ? oldest.createdAt : null,
+    }
+  }
+
+  /** Messages at or after `after`, oldest first. Inclusive, since zq rewrites a running turn in place. */
+  async listMessagesAfter(
+    userId: string,
+    conversationId: string,
+    options: { after: Date; limit?: number | null }
+  ): Promise<ConversationMessagesAfterResponse | null> {
+    const conversation = await this.get(userId, conversationId, { messageLimit: 1 })
+    if (!conversation) return null
+
+    const limit = normalizeMessageLimit(options.limit)
+    const rows = await getDatabaseClient()
+      .select()
+      .from(zenMessages)
+      .where(
+        and(
+          eq(zenMessages.conversationId, conversationId),
+          gte(zenMessages.createdAt, options.after)
+        )
+      )
+      .orderBy(asc(zenMessages.createdAt))
+      .limit(limit + 1)
+    const messages = (await Promise.all(rows.slice(0, limit).map(rowToMessage))).sort(
+      compareMessagesChronologically
+    )
+
+    return {
+      conversationId,
+      messages,
+      hasMoreAfter: rows.length > limit,
+      updatedAt: conversation.updatedAt,
+      serverNow: new Date().toISOString(),
     }
   }
 

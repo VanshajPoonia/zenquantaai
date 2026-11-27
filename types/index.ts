@@ -1878,6 +1878,15 @@ export interface ConversationMessagesPageResponse {
   nextBefore: string | null
 }
 
+/** Newer messages for a live zq session. `serverNow` lets the client age `updatedAt` without trusting its own clock. */
+export interface ConversationMessagesAfterResponse {
+  conversationId: string
+  messages: Message[]
+  hasMoreAfter: boolean
+  updatedAt: string
+  serverNow: string
+}
+
 export interface ImageGenerateRequest {
   action?: ChatAction
   conversationId?: string
