@@ -25,6 +25,7 @@ import { cn } from '@/lib/utils'
 import { useChatContext } from '@/lib/chat-context'
 import { ConversationSummary, Project } from '@/lib/types'
 import { InstallAppItem } from './install-app-item'
+import { DoneNoticesItem } from './done-notices-item'
 import { TerminalSessionBadge } from './terminal-session-badge'
 import { ModeIcon, getModeAccentClass } from '@/lib/mode-utils'
 import { getChatPath } from '@/lib/utils/chat-path'
@@ -855,6 +856,7 @@ export function Sidebar({ onOpenSettings }: SidebarProps) {
                 </DropdownMenuItem>
               ) : null}
               <InstallAppItem />
+              <DoneNoticesItem />
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={() => void signOut()}>
                 Sign out

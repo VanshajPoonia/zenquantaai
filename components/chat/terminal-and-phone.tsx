@@ -1,6 +1,7 @@
 'use client'
 
 import { useCliApprovalsPoller } from '@/hooks/use-cli-approvals'
+import { useDoneNotices } from '@/hooks/use-done-notices'
 import { useLaunchParams } from '@/hooks/use-launch-params'
 import { PendingApprovalsNotice } from './terminal-approvals'
 
@@ -8,5 +9,6 @@ import { PendingApprovalsNotice } from './terminal-approvals'
 export function TerminalAndPhone() {
   useCliApprovalsPoller()
   useLaunchParams()
+  useDoneNotices()
   return <PendingApprovalsNotice />
 }
