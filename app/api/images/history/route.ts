@@ -7,6 +7,7 @@ import {
 } from '@/lib/db/repositories'
 import { createPrivateFileUrl } from '@/lib/storage/object-store'
 import { PrismStudioHistoryResponse } from '@/types'
+import { parseLimitParam } from '@/lib/utils/query'
 
 export const runtime = 'nodejs'
 
@@ -14,12 +15,6 @@ function parseDateParam(value: string | null): Date | null {
   if (!value) return null
   const date = new Date(value)
   return Number.isNaN(date.getTime()) ? null : date
-}
-
-function parseLimit(value: string | null, fallback = 80): number {
-  const parsed = Number(value)
-  if (!Number.isFinite(parsed)) return fallback
-  return Math.max(1, Math.min(200, Math.floor(parsed)))
 }
 
 function privateImageUrl(bucket: string | null, storagePath: string | null) {
@@ -44,7 +39,7 @@ export async function GET(request: NextRequest) {
   const from = parseDateParam(searchParams.get('from'))
   const to = parseDateParam(searchParams.get('to'))
   const before = parseDateParam(searchParams.get('before'))
-  const limit = parseLimit(searchParams.get('limit'))
+  const limit = parseLimitParam(searchParams.get('limit'), 80, 200)
 
   if (projectId) {
     const project = await neonProjectsRepository.get(auth.user.id, projectId)

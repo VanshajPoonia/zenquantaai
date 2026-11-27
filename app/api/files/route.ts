@@ -8,6 +8,7 @@ import {
 } from '@/lib/db/repositories'
 import { hasEmbeddingConfig } from '@/lib/rag/embeddings'
 import { conversationBelongsToProject } from '@/lib/security/user-scope'
+import { parseLimitParam } from '@/lib/utils/query'
 
 export const runtime = 'nodejs'
 
@@ -20,12 +21,6 @@ function parseIds(value: string | null): string[] {
         .filter(Boolean)
     ),
   ].slice(0, 100)
-}
-
-function parseLimit(value: string | null, fallback = 100): number {
-  const parsed = Number(value)
-  if (!Number.isFinite(parsed)) return fallback
-  return Math.max(1, Math.min(300, Math.floor(parsed)))
 }
 
 function parseDateParam(value: string | null): Date | null {
@@ -44,7 +39,7 @@ export async function GET(request: NextRequest) {
   const ids = parseIds(searchParams.get('ids'))
   const projectId = searchParams.get('projectId')?.trim() || null
   const conversationId = searchParams.get('conversationId')?.trim() || null
-  const limit = parseLimit(searchParams.get('limit'))
+  const limit = parseLimitParam(searchParams.get('limit'), 100, 300)
   const before = parseDateParam(searchParams.get('before'))
 
   if (projectId) {
