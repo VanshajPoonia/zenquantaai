@@ -303,10 +303,14 @@ class NeonMemoryVaultRepository {
     const current = currentRows[0]
     if (!current) return null
 
-    const nextSessionSettings = createSessionSettings(current.mode as AIMode, {
-      ...toJsonObject<Partial<SessionSettings>>(current.sessionSettings, {}),
-      memory,
-    })
+    const currentSettings = toJsonObject<Partial<SessionSettings> & { continuedFrom?: unknown }>(
+      current.sessionSettings,
+      {}
+    )
+    const nextSessionSettings = {
+      ...createSessionSettings(current.mode as AIMode, { ...currentSettings, memory }),
+      ...(currentSettings.continuedFrom ? { continuedFrom: currentSettings.continuedFrom } : {}),
+    }
 
     await getDatabaseClient()
       .update(zenConversations)
@@ -334,6 +338,8 @@ class NeonMemoryVaultRepository {
       .update(zenConversations)
       .set({
         memorySummary: null,
+        memorySummaryStructured: null,
+        summarizedThroughMessageId: null,
         memoryUpdatedAt: null,
       })
       .where(

@@ -60,6 +60,7 @@ import {
   MIN_TOON_ROWS,
   type ToonRow,
 } from '@/lib/context/toon'
+import { renderStructuredSummary } from './memory-summary'
 import { buildSystemPrompt } from './prompts'
 import {
   createOpenRouterImage,
@@ -1217,7 +1218,10 @@ export async function completeConversationWithAssistant(
       }
     : updateConversationMemory(
         completedConversation,
-        completedConversation.sessionSettings.memory
+        completedConversation.sessionSettings.memory,
+        completedConversation.continuedFrom && completedConversation.memorySummaryStructured
+          ? renderStructuredSummary(completedConversation.memorySummaryStructured)
+          : undefined
       )
 
   return updateConversationSnapshot(completedConversation, {

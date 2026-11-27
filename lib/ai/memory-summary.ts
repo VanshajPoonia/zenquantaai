@@ -134,6 +134,35 @@ export function renderStructuredSummary(structured: ConversationMemoryStructured
   return sections.filter(Boolean).join('\n\n')
 }
 
+const RENDERED_SECTION_KEYS: Record<string, keyof ConversationMemoryStructured> = {
+  'conversation goal': 'objective',
+  'known preferences': 'preferences',
+  'important facts and constraints': 'facts',
+  'decisions made': 'decisions',
+  'open threads': 'openLoops',
+}
+
+/** Reads a rendered summary (either summarizer's text) back into sections. */
+export function parseRenderedSummary(text: string | null | undefined): ConversationMemoryStructured | null {
+  const sections: Partial<Record<keyof ConversationMemoryStructured, string[]>> = {}
+  let key: keyof ConversationMemoryStructured = 'facts'
+
+  for (const rawLine of (text ?? '').split('\n')) {
+    const line = rawLine.trim()
+    if (!line) continue
+    const header = line.endsWith(':')
+      ? RENDERED_SECTION_KEYS[line.slice(0, -1).trim().toLowerCase()]
+      : undefined
+    if (header) {
+      key = header
+      continue
+    }
+    ;(sections[key] ??= []).push(line.replace(/^[-*]\s*/, ''))
+  }
+
+  return coerceStructured({ ...sections, objective: sections.objective?.join(' ') })
+}
+
 function buildSummaryPrompt(
   previous: ConversationMemoryStructured | null,
   newMessages: Message[]

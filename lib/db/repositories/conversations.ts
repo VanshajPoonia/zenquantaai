@@ -15,6 +15,7 @@ import {
   AIMode,
   Attachment,
   Conversation,
+  ConversationContinuation,
   ConversationMemoryStructured,
   ConversationMutation,
   ConversationSummary,
@@ -140,6 +141,29 @@ async function rowToMessage(messageRow: MessageRow): Promise<Message> {
   })
 }
 
+const CONTINUATION_TITLE_MAX_CHARS = 200
+
+// Only createContinuation writes continuedFrom. Reads keep a valid, bounded shape.
+function readContinuation(sessionSettings: unknown): ConversationContinuation | null {
+  const value = toJsonObject<{ continuedFrom?: unknown }>(sessionSettings, {}).continuedFrom
+  if (!value || typeof value !== 'object') return null
+  const { conversationId, title } = value as Record<string, unknown>
+  if (typeof conversationId !== 'string' || !conversationId || conversationId.length > 200) {
+    return null
+  }
+  return {
+    conversationId,
+    title: typeof title === 'string' ? title.slice(0, CONTINUATION_TITLE_MAX_CHARS) : '',
+  }
+}
+
+function withoutContinuation(sessionSettings: SessionSettings): SessionSettings {
+  if (!('continuedFrom' in sessionSettings)) return sessionSettings
+  const copy: Record<string, unknown> = { ...sessionSettings }
+  delete copy.continuedFrom
+  return copy as unknown as SessionSettings
+}
+
 function vectorLiteral(embedding: number[]): string {
   return `[${embedding.map((value) => Number(value).toFixed(8)).join(',')}]`
 }
@@ -190,6 +214,7 @@ async function rowToConversation(row: ConversationRow): Promise<Conversation> {
     workspace: row.workspace
       ? toJsonObject<ConversationWorkspace>(row.workspace, {})
       : null,
+    continuedFrom: readContinuation(row.sessionSettings),
   }
 }
 
@@ -204,7 +229,7 @@ function conversationToInsert(userId: string, conversation: Conversation) {
     isPinned: conversation.isPinned,
     preview: conversation.preview,
     messageCount: conversation.messageCount,
-    sessionSettings: conversation.sessionSettings,
+    sessionSettings: withoutContinuation(conversation.sessionSettings),
     customAssistantId: conversation.customAssistantId ?? null,
     customAssistant: conversation.customAssistant ?? null,
     usage: conversation.usage ?? null,
@@ -366,6 +391,7 @@ class NeonConversationsRepository {
         customAssistant: conversation.customAssistant,
         surface: conversation.surface,
         workspace: conversation.workspace,
+        continuedFrom: conversation.continuedFrom,
       }))
     )
   }
@@ -436,6 +462,47 @@ class NeonConversationsRepository {
     return await this.save(userId, conversation)
   }
 
+  /** A new empty chat in the same project and assistant that starts from the source's summary. */
+  async createContinuation(
+    userId: string,
+    input: {
+      source: Conversation
+      memorySummaryStructured: ConversationMemoryStructured | null
+    }
+  ): Promise<Conversation> {
+    await neonUsersRepository.ensureUserReference(userId)
+
+    const { source } = input
+    const conversation = createConversation({
+      mode: source.mode,
+      projectId: source.projectId ?? DEFAULT_PROJECT_ID,
+      sessionSettings: { ...withoutContinuation(source.sessionSettings), memory: true },
+      memorySummary: source.memorySummary,
+      memoryUpdatedAt: source.memoryUpdatedAt,
+      customAssistantId: source.customAssistantId ?? null,
+      customAssistant: source.customAssistant ?? null,
+    })
+    const values = conversationToInsert(userId, conversation)
+    const continuedFrom: ConversationContinuation = {
+      conversationId: source.id,
+      title: source.title.slice(0, CONTINUATION_TITLE_MAX_CHARS),
+    }
+
+    await getDatabaseClient()
+      .insert(zenConversations)
+      .values({
+        ...values,
+        sessionSettings: { ...values.sessionSettings, continuedFrom },
+        memorySummaryStructured: input.memorySummaryStructured,
+      })
+
+    const saved = await this.get(userId, conversation.id)
+    if (!saved) {
+      throw new Error('Unable to load saved conversation from Neon.')
+    }
+    return saved
+  }
+
   private async assertConversationWritable(
     userId: string,
     conversationId: string
@@ -475,7 +542,8 @@ class NeonConversationsRepository {
           isPinned: values.isPinned,
           preview: values.preview,
           messageCount: values.messageCount,
-          sessionSettings: values.sessionSettings,
+          // Keeps the stored continuedFrom; a client can never set it.
+          sessionSettings: sql`(excluded.session_settings - 'continuedFrom') || jsonb_strip_nulls(jsonb_build_object('continuedFrom', ${zenConversations.sessionSettings} -> 'continuedFrom'))`,
           customAssistantId: values.customAssistantId,
           customAssistant: values.customAssistant,
           usage: values.usage,

@@ -443,6 +443,12 @@ export interface Message {
   parts?: MessagePart[]
 }
 
+/** Set when a chat was started fresh from another chat's summary. */
+export interface ConversationContinuation {
+  conversationId: string
+  title: string
+}
+
 export interface ConversationSummary {
   id: string
   title: string
@@ -460,6 +466,7 @@ export interface ConversationSummary {
   customAssistant?: CustomAssistantReference | null
   surface?: ConversationSurface
   workspace?: ConversationWorkspace | null
+  continuedFrom?: ConversationContinuation | null
 }
 
 export interface ConversationMemoryStructured {

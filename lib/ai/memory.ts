@@ -305,7 +305,8 @@ export function getRecentContextMessages(conversation: Conversation): Message[] 
 
 export function updateConversationMemory(
   conversation: Conversation,
-  enabled: boolean
+  enabled: boolean,
+  carriedSummary?: string
 ): Pick<Conversation, 'memorySummary' | 'memoryUpdatedAt'> {
   if (!enabled) {
     return {
@@ -314,7 +315,13 @@ export function updateConversationMemory(
     }
   }
 
-  const summary = buildConversationMemorySummary(conversation)
+  const ownSummary = buildConversationMemorySummary(conversation)
+  // A chat started fresh keeps the summary it was given ahead of its own.
+  const summary = carriedSummary?.trim()
+    ? [`Carried over from an earlier chat:\n${carriedSummary.trim()}`, ownSummary]
+        .filter(Boolean)
+        .join('\n\n')
+    : ownSummary
 
   return {
     memorySummary: summary || undefined,
