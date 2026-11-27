@@ -8,14 +8,9 @@ import {
 } from '@/lib/db/repositories'
 import { resolveOwnedProjectScope } from '@/lib/security/ownership'
 import { AIMode, SessionSettings } from '@/types'
+import { parseLimitParam } from '@/lib/utils/query'
 
 export const runtime = 'nodejs'
-
-function parseLimit(value: string | null, fallback: number): number {
-  const parsed = Number(value)
-  if (!Number.isFinite(parsed)) return fallback
-  return Math.max(1, Math.min(500, Math.floor(parsed)))
-}
 
 function parseDateParam(value: string | null): Date | null {
   if (!value) return null
@@ -38,7 +33,7 @@ export async function GET(request: NextRequest) {
 
   const conversations = await neonConversationRepository.list(auth.user.id, {
     projectId: projectScope.projectId,
-    limit: parseLimit(searchParams.get('limit'), 100),
+    limit: parseLimitParam(searchParams.get('limit'), 100, 500),
     beforeUpdatedAt: parseDateParam(
       searchParams.get('beforeUpdatedAt') ?? searchParams.get('before')
     ),
