@@ -6,6 +6,25 @@ The repository contains a real Zenquanta AI platform backed by Neon for runtime 
 
 Current direction: plan upgrades remain manual/admin-driven, payment automation is out of scope unless explicitly requested, and Neon/storage start fresh without importing Supabase database rows or storage objects.
 
+## 2026-11-28 - Code freeze bug bash, list limit fix, launch prep (Claude Code, user-approved)
+
+**Goal**: the Day 12 bug bash and the next launch steps. The owner approved a test account, the Flow migrations on production, a $50 OpenRouter cap set through Chrome, launch drafts, the 0.1.0 prep and a terms review.
+
+**What changed**:
+- Fixed and shipped (`d0ab938`): `/api/conversations`, `/api/images/history`, `/api/files` and `/api/admin/plan-requests` read a missing `?limit=` as 1, because `Number(null)` is 0. The workspace loads its chat list without a limit, so after any reload the sidebar showed only the newest chat. Prism history and the files list showed one item. One helper now parses limits (`lib/utils/query.ts`) with tests. Live since about 01:51 IST, verified with the test account (5 chats instead of 1).
+- The signed-in smoke skips first-run setup once through `/api/onboarding`, so the dialog cannot hide the composer (on `feat/flow`).
+- Test account `zq-bugbash-084244` (Free) through production sign-up, saved in `.env.local`.
+- Flow migrations 24 to 26 applied to production Neon in one transaction and checked with `information_schema`. They only add a nullable column and two tables that today's code never reads.
+- OpenRouter: the production key `zqainew` (ends 740, same as Vercel production) has a $50 monthly limit, checked through `/api/v1/key`. The low-balance email fires below $5. The account balance is $8.83.
+- Branch `release/zq-0.1.0`: zq version 0.1.0 (pack dry run: 14 files, 12.6 kB, `zq --version` prints 0.1.0), `docs/launch/LAUNCH_DAY.md` and `docs/launch/terms-privacy-review.md`.
+- Six launch drafts and four trends filed to Zenquanta AI in Postroom. The Zenquanta board in Postroom is current.
+
+**Verified**: public and signed-in smoke on production 30/30 after the fix, with a real streamed reply. Typecheck, lint and 186 web tests on the fix branch, zq typecheck and 18 tests on the release branch.
+
+**Risky or open**: the OpenRouter balance. The terms and privacy pages have two wrong lines about zq and storage. The `v0-zenquantaai` project is still unchecked.
+
+**Next**: owner tops up credits and approves the drafts and the terms. Gate D on 11-30 with `docs/launch/LAUNCH_DAY.md`.
+
 ## 2026-11-18 - Owner decisions on the security review, current password on password change (Claude Code, user-requested implementation)
 
 **Goal**: record the owner's decisions on the open security review items and build the one that needs code.

@@ -277,6 +277,8 @@ Fresh foundation migration available for Neon:
 22. `neon/migrations/20260712_zenquanta_context_engine_cross_chat.sql`
 23. `neon/migrations/20261117_zenquanta_agent_platform.sql` (message parts, conversation surface, agent runs, API tokens, device codes, rate limits, per-surface usage; applied and verified on 2026-11-16)
 
+The Flow migrations `20261201_zenquanta_project_instructions.sql`, `20261201_zenquanta_conversation_shares.sql` and `20261201_zenquanta_cli_approvals.sql` were applied to production Neon on 2026-11-28, before their code. Their files and schema arrive with branch `feat/flow`. They only add a nullable column and two tables, so code on `main` is unaffected.
+
 Context Engine Phase 5 (TOON) and Phase 3c (Memory Vault durable surfacing + forget) add **no** migration — they only read/soft-expire existing `zen_memory_items` and serialize existing blocks.
 
 **2026-07-12**: migrations 20 through 22 (the three context engine migrations above) were found to have never actually been applied to the live database, even though `lib/db/schema.ts` already assumed their columns/table existed — every `zen_conversations` insert was failing (`column "memory_summary_structured" does not exist`), so no new conversation could be saved. They have since been applied and verified (all 36 tables in `schema.ts` now exist live; a real conversation create/reply round trip succeeds). There is no automated migration runner in this repo — files here are just SQL someone must run manually — so schema.ts drifting ahead of the live database like this can recur silently for any future migration. Before trusting that a migration listed here is actually live, verify with `information_schema.columns`/`pg_tables` rather than assuming the checklist order was followed.

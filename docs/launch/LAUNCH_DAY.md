@@ -48,5 +48,5 @@ If any of these fail, move the launch by up to 3 days. Do not ship a known secur
 ## After launch
 
 - Purge `zq-bugbash-084244` with the admin purge.
-- Decide on Free sign-up checks after a week of numbers (`NEEDS_YOU.md` item 6).
+- Decide on Free sign-up checks after a week of numbers (`NEEDS_YOU.md` item 4).
 - Flow: `docs/flow/PLAN.md`. Its migrations are already applied.
