@@ -2,6 +2,18 @@
 
 Planned on 2026-11-28, the day of the v1.0 code freeze. Flow is built on branch `feat/flow` and does not merge to `main` until after the 2026-12-01 launch.
 
+## Status
+
+Built on 2026-11-28. Everything in the four lanes below is on `feat/flow`. Typecheck, lint, 392 web tests, 27 zq tests and the production build pass. Nothing has been checked in a browser yet.
+
+To ship it:
+
+1. Apply migrations 24 to 26 (`AI_CHECKLIST.md`) to a Neon branch and run the browser checks from `docs/flow/notes/` on a preview.
+2. Apply them to production Neon. Migration 24 must come before the merge.
+3. Merge `feat/flow` to `main`.
+4. Set `NEXT_PUBLIC_CHAT_SHARING=true` and `CLI_APPROVALS=on`, then redeploy.
+5. Publish `zenquanta@0.1.1-beta.0`.
+
 ## The problem
 
 Zenquanta already has a lot: six assistants, projects, files, memory, playbooks, Model Duel, Prism Studio, Pulse Research Room, Artifact Studio, a terminal agent and more. A new user meets most of it through separate menus and studios. Some basics people expect from other AI apps are missing or clunky:

@@ -28,11 +28,11 @@ Branch `flow/share`. Written 2026-11-28 for the lead to merge into the AI docs.
 ### Edit any message
 
 - Earlier user messages get "Edit in a new branch". It branches with `before: true`, opens the branch and puts the original text in the composer. The latest message keeps "Save & rerun" as it was.
-- No existing insert path fit. `prepareComposerDraft` calls `setCurrentMode`, which clears the custom assistant and PATCHes the chat it has in its closure (the old chat right after a switch). I added `prefillComposerText(content, mode)` to `lib/chat-context.tsx`. It only sets `composerDraftRequest`. If Lane A's prefill helper does the same, swap the one call in `components/chat/use-branch-actions.ts` and drop mine.
+- `prepareComposerDraft` did not fit: it calls `setCurrentMode`, which clears the custom assistant and PATCHes the chat in its closure. Lane B first added a `prefillComposerText` setter. At merge the lead replaced it: `use-branch-actions.ts` saves the text as the branch's draft (`writeDraft` with the new chat id) before opening it, so Lane A's draft restore loads it. If storage is unavailable it falls back to `prefillComposer`.
 
 ## Hot files touched
 
-- `lib/chat-context.tsx`: `prefillComposerText` in the context type, next to `prepareComposerDraft`, and in the value and deps lists (14 lines).
+- `lib/chat-context.tsx`: nothing after the merge. The lead added `useOptionalChatContext` so `ToolSteps` renders on the share page.
 - `components/chat/message.tsx`: `onBranch` and `onEditInBranch` props, one icon in the latest-user action row, a second row for earlier user messages, one More menu item, `hasMoreActions` includes branching.
 - `components/chat/chat-area.tsx`: the hook, two stable callbacks, two props on `ChatMessage`, the banner above the content.
 - `components/chat/header.tsx`: "Share chat" menu item behind the flag and the dialog mount.
