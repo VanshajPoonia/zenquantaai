@@ -13,7 +13,7 @@ interface BranchResult {
 
 /** Branch actions for the open chat. Each one opens the new chat when it is ready. */
 export function useBranchActions() {
-  const { currentChat, isStreaming, openConversation } = useChatContext()
+  const { currentChat, isStreaming, openConversation, prefillComposerText } = useChatContext()
   const busyRef = useRef(false)
 
   const branch = useCallback(
@@ -65,5 +65,15 @@ export function useBranchActions() {
     [branch]
   )
 
-  return { branchFromMessage }
+  // Branches just before an earlier message and puts its text back in the composer.
+  const editInBranch = useCallback(
+    async (message: Message) => {
+      if (!(await branch(message.id, true))) return
+      prefillComposerText(message.content, message.mode)
+      toast.success('Branch opened. Edit the message and send it.')
+    },
+    [branch, prefillComposerText]
+  )
+
+  return { branchFromMessage, editInBranch }
 }

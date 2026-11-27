@@ -408,6 +408,7 @@ interface ChatContextType {
     projectId?: string | null
     append?: boolean
   }) => void
+  prefillComposerText: (content: string, mode: AIMode) => void
   clearComposerDraftRequest: (requestId: number) => void
   workspaceSearchRequest: WorkspaceSearchRequest | null
   openWorkspaceSearch: (request?: {
@@ -1442,6 +1443,17 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     },
     [currentMode, setCurrentMode, setSelectedProjectId]
   )
+
+  // Fills the composer without switching the open chat's assistant, unlike prepareComposerDraft.
+  const prefillComposerText = useCallback((content: string, mode: AIMode) => {
+    composerDraftRequestIdRef.current += 1
+    setComposerDraftRequest({
+      requestId: composerDraftRequestIdRef.current,
+      content,
+      kind: mode === 'image' ? 'image' : 'chat',
+      mode,
+    })
+  }, [])
 
   const clearComposerDraftRequest = useCallback((requestId: number) => {
     setComposerDraftRequest((previous) =>
@@ -3783,6 +3795,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       handleWorkspaceDeepLink,
       composerDraftRequest,
       prepareComposerDraft,
+      prefillComposerText,
       clearComposerDraftRequest,
       workspaceSearchRequest,
       openWorkspaceSearch,
@@ -3845,6 +3858,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       openWorkspaceTool,
       openWorkspaceSearch,
       prepareComposerDraft,
+      prefillComposerText,
       promptQueue,
       queuedPrompts,
       removeQueuedPrompt,

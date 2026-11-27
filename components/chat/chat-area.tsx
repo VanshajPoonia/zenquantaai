@@ -299,8 +299,9 @@ export function ChatArea({
   const onSaveArtifact = useStableCallback(handleSaveMessageArtifact)
   const onHandoff = useStableCallback(handleHandoffMessage)
   const onQualityAction = useStableCallback(handleQualityActionMessage)
-  const { branchFromMessage } = useBranchActions()
+  const { branchFromMessage, editInBranch } = useBranchActions()
   const onBranch = useStableCallback(branchFromMessage)
+  const onEditInBranch = useStableCallback(editInBranch)
 
   const pathname = usePathname()
   // While a linked chat loads, show a quiet placeholder rather than mounting
@@ -403,6 +404,7 @@ export function ChatArea({
                   onEdit={isTerminalChat ? undefined : onEdit}
                   onAskAnotherMode={isTerminalChat ? undefined : onAskAnotherMode}
                   onBranch={onBranch}
+                  onEditInBranch={onEditInBranch}
                   onSaveArtifact={onSaveArtifact}
                   onHandoff={isTerminalChat ? undefined : onHandoff}
                   onQualityAction={isTerminalChat ? undefined : onQualityAction}

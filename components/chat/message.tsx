@@ -93,6 +93,7 @@ interface ChatMessageProps {
   onEdit?: (content: string, targetMessageId?: string) => void
   onAskAnotherMode?: (mode: AIMode) => void
   onBranch?: (message: Message) => void
+  onEditInBranch?: (message: Message) => void
   onSaveArtifact?: (message: Message) => Promise<void>
   onHandoff?: (
     message: Message,
@@ -755,6 +756,7 @@ export const ChatMessage = memo(function ChatMessage({
   onEdit,
   onAskAnotherMode,
   onBranch,
+  onEditInBranch,
   onSaveArtifact,
   onHandoff,
   onQualityAction,
@@ -979,11 +981,18 @@ export const ChatMessage = memo(function ChatMessage({
                   ) : null}
                 </div>
               )}
-              {!isLastUser && !isEditing && onBranch ? (
+              {!isLastUser && !isEditing && (onBranch || onEditInBranch) ? (
                 <div className="flex items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100 [@media(hover:none)]:opacity-100">
-                  <ActionIconButton label="Branch from here" onClick={() => onBranch(message)}>
-                    <GitBranch className="size-4" />
-                  </ActionIconButton>
+                  {onEditInBranch ? (
+                    <ActionIconButton label="Edit in a new branch" onClick={() => onEditInBranch(message)}>
+                      <PencilLine className="size-4" />
+                    </ActionIconButton>
+                  ) : null}
+                  {onBranch ? (
+                    <ActionIconButton label="Branch from here" onClick={() => onBranch(message)}>
+                      <GitBranch className="size-4" />
+                    </ActionIconButton>
+                  ) : null}
                 </div>
               ) : null}
             </div>
