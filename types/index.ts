@@ -305,6 +305,9 @@ export interface AppSettings {
   sessionDefaults: SessionSettings
   gatewayDrafts: OpenRouterSettingsDraft
   onboarding: OnboardingState
+  aboutYou: string
+  responseInstructions: string
+  useCustomInstructions: boolean
 }
 
 export interface AppSettingsPatch

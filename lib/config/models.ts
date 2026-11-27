@@ -314,4 +314,7 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
     skippedAt: null,
     updatedAt: null,
   },
+  aboutYou: '',
+  responseInstructions: '',
+  useCustomInstructions: true,
 }

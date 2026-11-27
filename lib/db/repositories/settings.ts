@@ -19,6 +19,10 @@ import {
   StarterPackId,
   UsageOptimization,
 } from '@/types'
+import {
+  ABOUT_YOU_MAX_CHARS,
+  RESPONSE_INSTRUCTIONS_MAX_CHARS,
+} from '@/lib/ai/user-instructions'
 import { getDatabaseClient } from '../client'
 import { zenUserSettings } from '../schema'
 import { toJsonObject } from './helpers'
@@ -81,6 +85,10 @@ const VALID_DEFAULT_PROJECT_BEHAVIORS = new Set<DefaultProjectBehavior>([
   'last_used',
   'inbox',
 ])
+
+function normalizeInstructionText(value: unknown, max: number): string {
+  return typeof value === 'string' ? value.trim().slice(0, max) : ''
+}
 
 function normalizeSettings(input: Partial<AppSettings>): AppSettings {
   const defaultMode = input.defaultMode ?? DEFAULT_APP_SETTINGS.defaultMode
@@ -145,6 +153,15 @@ function normalizeSettings(input: Partial<AppSettings>): AppSettings {
         input.gatewayDrafts?.openRouterBaseUrl ?? OPENROUTER_DEFAULT_BASE_URL,
     },
     onboarding: normalizeOnboarding(input.onboarding),
+    aboutYou: normalizeInstructionText(input.aboutYou, ABOUT_YOU_MAX_CHARS),
+    responseInstructions: normalizeInstructionText(
+      input.responseInstructions,
+      RESPONSE_INSTRUCTIONS_MAX_CHARS
+    ),
+    useCustomInstructions:
+      typeof input.useCustomInstructions === 'boolean'
+        ? input.useCustomInstructions
+        : DEFAULT_APP_SETTINGS.useCustomInstructions,
   }
 }
 
