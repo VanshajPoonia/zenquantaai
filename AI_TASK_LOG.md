@@ -6,6 +6,25 @@ The repository contains a real Zenquanta AI platform backed by Neon for runtime 
 
 Current direction: plan upgrades remain manual/admin-driven, payment automation is out of scope unless explicitly requested, and Neon/storage start fresh without importing Supabase database rows or storage objects.
 
+## 2026-11-28 - Flow, the v1.1 web release, built on `feat/flow` (Claude Code, user-requested product work)
+
+**Goal**: the user asked for product thinking on how to streamline Zenquanta, with ideas from pi and opencode, and to build the new features with subagents.
+
+**What changed** (branch `feat/flow` off `main`, 49 commits, not on `main`):
+- `docs/flow/PLAN.md`: the problem, the four lanes, what waits and the rules. Lane notes with files, decisions and browser checklists are in `docs/flow/notes/`.
+- Lane A, composer: `/` command menu (prompts, playbooks, tools, chat actions) sharing one list with Cmd+K (`lib/chat/commands.ts`), `@assistant` mentions, a visible queue with Edit, Remove and Send now, Stop pauses the queue instead of sending the next one (`lib/chat/prompt-queue.ts`), saved drafts per chat, voice input, locked intelligence levels shown as locked.
+- Lane B, share and branch: redacted snapshot share links (`lib/share/*`, `/share/c/[token]`, behind `NEXT_PUBLIC_CHAT_SHARING`), copy a shared chat into your workspace, Branch from here on any message, Edit in a new branch for earlier messages.
+- Lane C, instructions and context: About you and How to answer in Settings, project instructions on Project Home, one server-built instructions block on both chat paths (`lib/ai/user-instructions.ts`), a context meter, Start fresh with a summary (`/api/conversations/[id]/continue`), Open artifact on save_artifact cards. Also fixed the legacy summarizer replacing a carried-over summary and Clear memory leaving the structured summary.
+- Lane D, terminal and phone: live zq sessions on the web, zq approvals from the web (`/remote on` in zq, `CLI_APPROVALS` on the server, zq 0.1.1-beta.0, not published), a PWA share target and shortcuts, done notices. Also fixed the messages route defaulting `limit` to 1.
+- Merge fixes by the lead: share and shortcut text adds to a saved draft instead of replacing it, Edit in a new branch saves the text as the branch's draft before opening it, tool cards render on the share page without the workspace context, and one upsert rule keeps both `continuedFrom` and `forkedFrom`.
+- Migrations 24 to 26 written, not applied (`AI_CHECKLIST.md`). Decisions in `AI_DECISIONS.md`. Owner items 8 to 11 in `docs/launch/NEEDS_YOU.md`.
+
+**Verified**: typecheck, lint (0 errors, the 2 baseline warnings), 392 web tests (181 before), 27 zq tests (18 before) and the production build pass on `feat/flow`. Nothing ran against a database, a browser or a model.
+
+**Risky or open**: migration 24 must run before the merge or projects and chat break. Every UI piece needs the browser checks in `docs/flow/notes/`. The live and approval polls write rate limit rows, so watch Neon compute when `CLI_APPROVALS` is on. Redaction is pattern based. User instructions add up to about 1,800 tokens per request, so Free users reach the per-request cap sooner.
+
+**Next**: after launch, apply the migrations on a Neon branch, run the browser checks on a preview, then merge and turn the flags on.
+
 ## 2026-11-18 - Owner decisions on the security review, current password on password change (Claude Code, user-requested implementation)
 
 **Goal**: record the owner's decisions on the open security review items and build the one that needs code.

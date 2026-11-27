@@ -276,6 +276,11 @@ Fresh foundation migration available for Neon:
 21. `neon/migrations/20260711_zenquanta_context_engine_memory_items.sql`
 22. `neon/migrations/20260712_zenquanta_context_engine_cross_chat.sql`
 23. `neon/migrations/20261117_zenquanta_agent_platform.sql` (message parts, conversation surface, agent runs, API tokens, device codes, rate limits, per-surface usage; applied and verified on 2026-11-16)
+24. `neon/migrations/20261201_zenquanta_project_instructions.sql` (Flow: `zen_projects.instructions`). **Not applied.** It has no flag, so it must run before `feat/flow` reaches any deployed environment. Without it every project query and every chat request fails.
+25. `neon/migrations/20261201_zenquanta_conversation_shares.sql` (Flow: `zen_conversation_shares`). Not applied. Then set `NEXT_PUBLIC_CHAT_SHARING=true` and redeploy.
+26. `neon/migrations/20261201_zenquanta_cli_approvals.sql` (Flow: `zen_cli_approvals`). Not applied. Then set `CLI_APPROVALS=on`.
+
+Flow (branch `feat/flow`, written 2026-11-28) turns on in this order: apply 24 to 26, check them with `information_schema`, merge to `main`, then set the two flags. The plan and the manual checks are in `docs/flow/PLAN.md` and `docs/flow/notes/`.
 
 Context Engine Phase 5 (TOON) and Phase 3c (Memory Vault durable surfacing + forget) add **no** migration — they only read/soft-expire existing `zen_memory_items` and serialize existing blocks.
 

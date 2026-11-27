@@ -13,6 +13,10 @@ Things only the owner can do or decide before the 2026-12-01 launch. Claude Code
 | 5 | Optional: make a non-admin test account and add `SMOKE_LOGIN_ID` and `SMOKE_PASSWORD` to `.env.local` | Lets agents run the signed-in smoke test (`tests/e2e/signed-in.spec.ts`) for Gate C without your main account. Agents do not write to the production database, so they cannot make it themselves | Before Day 8 (11-24) |
 | 6 | After a week of sign-ups, look at new accounts per day in `/admin` and decide whether Free needs email verification, a captcha or a lower cap for new accounts | Launch relies on the sign-up limit per IP plus the OpenRouter credit limit (decided 2026-11-18) | About 12-08 |
 | 7 | Revisit how links in replies open: as now, a confirm step for links that did not come from you, a search or a file, or the site name next to each link | Kept as is for launch as an accepted risk (decided 2026-11-18) | After launch |
+| 8 | Flow (v1.1 web, branch `feat/flow`): say when it can merge to `main`. Before the merge, apply migrations 24 to 26 from `AI_CHECKLIST.md` to Neon. Migration 24 has no flag and the app breaks without it | Agents do not write to the production database, and local and production share it | After the 12-01 launch |
+| 9 | Flow browser checks: the lists at the end of each file in `docs/flow/notes/`, ideally on a preview with the migrations on a Neon branch | Flow was checked with typecheck, lint, 392 unit tests and the build only | Before the Flow merge |
+| 10 | Flow flags after the merge: `NEXT_PUBLIC_CHAT_SHARING=true` for share links and `CLI_APPROVALS=on` for zq approvals | Both stay off until their tables exist | After the Flow merge |
+| 11 | Publish `zenquanta@0.1.1-beta.0` from your terminal (`/remote on`, web approvals) once the Flow server side is live | npm needs your passkey | After item 10 |
 
 ## OpenRouter terms
 

@@ -1,5 +1,35 @@
 # AI Architecture Decisions
 
+## Flow Waits On Its Own Branch Until After Launch
+
+Decision (2026-11-28): the v1.1 web release "Flow" (`docs/flow/PLAN.md`) is built on `feat/flow` and does not merge to `main` before the 2026-12-01 launch. It was written on code freeze day and needs three migrations on the shared Neon database.
+
+Rationale: a push to `main` deploys production. The launch plan allows only blocker fixes after the freeze.
+
+## Shared Chats Are Redacted Snapshots
+
+Decision (2026-11-28, Flow): a chat share link shows a snapshot built on the server from the owner's rows when the link is made. Later messages stay private. Keys and tokens are hidden by pattern (`lib/share/redact.ts`) and the dialog calls this a best effort. Attachments, Prism images, model ids, usage, memory, project info and tool result data are left out. Pages are `noindex`. Tokens are stored as is, unlike artifact share tokens, because the snapshot sits in the same row and the owner can copy an old link again.
+
+Rationale: a live view would leak whatever the user types next. A visitor who copies a shared chat also gets its links, so `fetch_url` may open them later. That is accepted for now.
+
+## Approvals From The Web Approve Once
+
+Decision (2026-11-28, Flow): zq can mirror a permission prompt to the web when the user runs `/remote on` (default off) and the server has `CLI_APPROVALS=on`. The terminal and the web race and the first answer wins. The web can approve once or deny, never "always allow". zq's own routes can only mark an approval answered locally or expired, never approve. Expiry, network errors and a stopped run never approve, so the terminal prompt stays the fallback. A decision is one conditional update on a pending, unexpired row owned by the user.
+
+Rationale: people leave zq running and walk away. A phone answer saves the run without weakening the permission rules.
+
+## User Instructions Are Preferences
+
+Decision (2026-11-28, Flow): "About you", "How to answer" and project instructions are loaded on the server from Neon and sent as one bounded block after the system prompt, on the plain and agent paths. The block says they never override safety, system or tool rules or plan limits. They do not reach Prism, the Model API, zq, Model Duel or the custom assistant test.
+
+Rationale: one place for user context, framed so a user's text cannot unlock anything.
+
+## Chat Links In Session Settings Belong To The Server
+
+Decision (2026-11-28, Flow): `continuedFrom` and `forkedFrom` live in `zen_conversations.session_settings`. Only the continue route writes `continuedFrom`. A turn save keeps the stored `continuedFrom` and keeps the stored `forkedFrom` unless the row has none (`lib/db/repositories/conversations.ts`, upsert).
+
+Rationale: turn saves rebuild session settings from the client, which would drop or forge the links.
+
 ## A Password Change Needs The Current Password
 
 Decision (2026-11-18, owner): `/api/auth/password/update` needs `currentPassword` and checks it against the stored scrypt hash before saving the new one (`updateLocalPassword` in `lib/auth/session.ts`). A wrong guess counts toward the same login ID and IP lockout as sign-in. The form on `/auth/reset-password` has the new field. Admin resets are unchanged.

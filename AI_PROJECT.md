@@ -28,6 +28,8 @@ This is the current six-assistant platform, not the old four-mode version.
 
 ## Implemented Features
 
+Flow (v1.1 web, branch `feat/flow`, not on `main` until after launch, see `docs/flow/PLAN.md`): a `/` command menu and `@assistant` mentions in the composer, a visible queue that Stop pauses, saved drafts, voice input, locked intelligence levels shown as locked, chat share links with redaction, branch from any message, edit an earlier message in a branch, About you and project instructions, a context meter with "Start fresh with a summary", Open artifact on tool cards, live zq sessions, zq approvals from the web, a PWA share target and shortcuts, and done notices.
+
 - Authenticated workspace.
 - Workspace Home as the authenticated `/` first screen for continuing recent work and opening core workspace tools.
 - ID/password auth backed by fresh Neon credentials.
@@ -115,6 +117,7 @@ Mode mapping:
 - `/api/cli/me`, `/api/cli/logout`: zq account info and sign-out.
 - `/api/cli/tokens` and `/api/cli/tokens/[id]`: list and revoke terminal sign-ins (cookie auth, for Settings).
 - `/api/cli/sessions` and `/api/cli/sessions/[id]/entries`: zq session sync into web conversations.
+- Flow routes (branch `feat/flow`, not on `main` yet): `/api/conversations/[id]/shares` and `/shares/[shareId]` (share links), `/api/share/conversations/[token]/copy`, the `/share/c/[token]` page, `/api/conversations/[id]/branch`, `/api/conversations/[id]/continue`, `/api/conversations/[id]/messages?after=` (live zq view), `/api/cli/approvals` and `/api/cli/approvals/[id]` (zq bearer), `/api/approvals` and `/api/approvals/[id]/decide` (web cookie), `/share-target` (PWA share sheet).
 - `/api/images/generate`: Prism image generation.
 - `/api/images/history`: user-scoped Prism Studio generated-image gallery.
 - `/api/images/history/[id]`: generated-image favorite/project metadata updates.
