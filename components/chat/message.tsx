@@ -6,6 +6,7 @@ import {
   Download,
   ExternalLink,
   FileText,
+  GitBranch,
   ImageIcon,
   MoreHorizontal,
   PencilLine,
@@ -91,6 +92,7 @@ interface ChatMessageProps {
   onRetry?: () => void
   onEdit?: (content: string, targetMessageId?: string) => void
   onAskAnotherMode?: (mode: AIMode) => void
+  onBranch?: (message: Message) => void
   onSaveArtifact?: (message: Message) => Promise<void>
   onHandoff?: (
     message: Message,
@@ -752,6 +754,7 @@ export const ChatMessage = memo(function ChatMessage({
   onRetry,
   onEdit,
   onAskAnotherMode,
+  onBranch,
   onSaveArtifact,
   onHandoff,
   onQualityAction,
@@ -894,7 +897,11 @@ export const ChatMessage = memo(function ChatMessage({
     effectiveStatus === 'complete' &&
     Boolean(message.content.trim())
   const hasMoreActions =
-    canSaveArtifact || canRunQualityAction || canHandoff || Boolean(firstImageAttachment)
+    canSaveArtifact ||
+    canRunQualityAction ||
+    canHandoff ||
+    Boolean(firstImageAttachment) ||
+    Boolean(onBranch)
   const qualityGroups = useMemo(
     () => getQualityActionGroupsForMessage(message),
     [message]
@@ -965,8 +972,20 @@ export const ChatMessage = memo(function ChatMessage({
                       <RefreshIcon className="size-4" />
                     </ActionIconButton>
                   ) : null}
+                  {onBranch ? (
+                    <ActionIconButton label="Branch from here" onClick={() => onBranch(message)}>
+                      <GitBranch className="size-4" />
+                    </ActionIconButton>
+                  ) : null}
                 </div>
               )}
+              {!isLastUser && !isEditing && onBranch ? (
+                <div className="flex items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100 [@media(hover:none)]:opacity-100">
+                  <ActionIconButton label="Branch from here" onClick={() => onBranch(message)}>
+                    <GitBranch className="size-4" />
+                  </ActionIconButton>
+                </div>
+              ) : null}
             </div>
           </div>
         </div>
@@ -1219,6 +1238,12 @@ export const ChatMessage = memo(function ChatMessage({
                       </Tooltip>
                     </TooltipProvider>
                     <DropdownMenuContent align="start" className="w-64">
+                      {onBranch ? (
+                        <DropdownMenuItem onSelect={() => onBranch(message)}>
+                          <GitBranch className="size-4" />
+                          Branch from here
+                        </DropdownMenuItem>
+                      ) : null}
                       {canSaveArtifact ? (
                         <DropdownMenuItem
                           disabled={isSavingArtifact}

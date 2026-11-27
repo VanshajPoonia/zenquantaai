@@ -15,6 +15,7 @@ import {
 import { ArtifactSourceType, ArtifactType, Message } from '@/types'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
+import { BranchBanner } from './branch-banner'
 import { ChatMessage } from './message'
 import { EmptyState } from './empty-state'
 import { Composer } from './composer'
@@ -22,6 +23,7 @@ import { ContinuedFromBanner } from './continued-from-banner'
 import { ProjectHome } from './project-home'
 import { WorkspaceHome } from './workspace-home'
 import { TerminalSessionFooter } from './terminal-session-footer'
+import { useBranchActions } from './use-branch-actions'
 
 export function ChatArea({
   onOpenAssistantHelp,
@@ -297,6 +299,8 @@ export function ChatArea({
   const onSaveArtifact = useStableCallback(handleSaveMessageArtifact)
   const onHandoff = useStableCallback(handleHandoffMessage)
   const onQualityAction = useStableCallback(handleQualityActionMessage)
+  const { branchFromMessage } = useBranchActions()
+  const onBranch = useStableCallback(branchFromMessage)
 
   const pathname = usePathname()
   // While a linked chat loads, show a quiet placeholder rather than mounting
@@ -312,6 +316,7 @@ export function ChatArea({
   return (
     <div className="flex flex-col flex-1 h-full min-h-0 overflow-hidden">
       <ContinuedFromBanner />
+      {currentChat?.forkedFrom ? <BranchBanner fork={currentChat.forkedFrom} /> : null}
       {showProjectHome && activeProjectHomeId ? (
         <div className="flex-1 min-h-0 overflow-y-auto">
           <ProjectHome projectId={activeProjectHomeId} />
@@ -397,6 +402,7 @@ export function ChatArea({
                   onRetry={isTerminalChat ? undefined : onRetry}
                   onEdit={isTerminalChat ? undefined : onEdit}
                   onAskAnotherMode={isTerminalChat ? undefined : onAskAnotherMode}
+                  onBranch={onBranch}
                   onSaveArtifact={onSaveArtifact}
                   onHandoff={isTerminalChat ? undefined : onHandoff}
                   onQualityAction={isTerminalChat ? undefined : onQualityAction}
