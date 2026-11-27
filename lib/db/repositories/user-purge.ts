@@ -1,5 +1,6 @@
 import 'server-only'
 
+import { isCliApprovalsEnabled } from '@/lib/agent/flags'
 import { getNeonSql } from '@/lib/db/client'
 import {
   buildSafeUserPurgePreview,
@@ -185,6 +186,10 @@ class NeonUserPurgeRepository {
         tx.query('delete from public.zen_projects where user_id = $1', [userId]),
         tx.query('delete from public.zen_user_settings where user_id = $1', [userId]),
       ]
+      // The table exists only once its migration is applied, which is when the flag goes on.
+      if (isCliApprovalsEnabled()) {
+        statements.push(tx.query('delete from public.zen_cli_approvals where user_id = $1', [userId]))
+      }
 
       if (scope === 'workspace_data') {
         statements.push(

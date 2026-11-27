@@ -1640,6 +1640,38 @@ export const zenDeviceCodes = pgTable(
   ]
 )
 
+export const zenCliApprovals = pgTable(
+  'zen_cli_approvals',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => zenUsers.id, { onDelete: 'cascade' }),
+    tokenId: uuid('token_id')
+      .notNull()
+      .references(() => zenApiTokens.id, { onDelete: 'cascade' }),
+    sessionId: text('session_id').notNull(),
+    tool: text('tool').notNull(),
+    title: text('title').notNull(),
+    detail: text('detail').notNull(),
+    status: text('status').notNull().default('pending'),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    decidedAt: timestamp('decided_at', { withTimezone: true }),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+  },
+  (table) => [
+    index('zen_cli_approvals_user_status_idx').on(table.userId, table.status, table.expiresAt),
+    check('zen_cli_approvals_title_check', sql`char_length(${table.title}) <= 200`),
+    check('zen_cli_approvals_detail_check', sql`char_length(${table.detail}) <= 4000`),
+    check(
+      'zen_cli_approvals_status_check',
+      sql`${table.status} in ('pending', 'approved', 'denied', 'expired', 'answered_locally')`
+    ),
+  ]
+)
+
 export const zenRateLimits = pgTable('zen_rate_limits', {
   key: text('key').primaryKey(),
   windowStartedAt: timestamp('window_started_at', { withTimezone: true })

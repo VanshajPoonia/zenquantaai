@@ -19,3 +19,12 @@ export function isModelApiEnabledFor(user: { role?: string | null }): boolean {
   if (value === 'on' || value === 'true') return true
   return user.role === 'admin'
 }
+
+/**
+ * `CLI_APPROVALS`: `on` lets zq ask for approvals on the web. Keep it off
+ * until neon/migrations/20261201_zenquanta_cli_approvals.sql is applied.
+ */
+export function isCliApprovalsEnabled(): boolean {
+  const value = process.env.CLI_APPROVALS?.trim().toLowerCase()
+  return value === 'on' || value === 'true'
+}
