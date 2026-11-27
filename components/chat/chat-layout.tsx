@@ -24,6 +24,7 @@ import { PrismStudio } from './prism-studio'
 import { PulseResearchRoom } from './pulse-research-room'
 import { AskFilesPanel } from './ask-files-panel'
 import { GitHubIntegrationPanel } from './github-integration-panel'
+import { TerminalAndPhone } from './terminal-and-phone'
 
 // Signed-out visitors at "/" get the landing page. It carries three.js, so it
 // loads in its own chunk and never reaches signed-in users.
@@ -177,6 +178,7 @@ function ChatShell({
 
       <Suspense fallback={null}>
         <WorkspaceDeepLinks />
+        <TerminalAndPhone />
       </Suspense>
 
       <AssistantHelpDialog

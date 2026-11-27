@@ -5,6 +5,7 @@ import { useChatContext } from '@/lib/chat-context'
 import { formatLastUpdate } from '@/lib/cli/live-session'
 import { useLiveCliSession } from '@/hooks/use-live-cli-session'
 import type { Conversation } from '@/types'
+import { TerminalApprovals } from './terminal-approvals'
 
 function LivePill() {
   return (
@@ -35,6 +36,7 @@ export function TerminalSessionFooter({ chat }: { chat: Conversation }) {
 
   return (
     <div className="border-t border-border px-4 py-3 text-center text-[13px] text-muted-foreground">
+      <TerminalApprovals conversationId={chat.id} />
       <p aria-live="polite" className="flex flex-wrap items-center justify-center gap-x-2 gap-y-1">
         {isLive ? <LivePill /> : null}
         {!isLive && lastActivityAt !== null ? (
