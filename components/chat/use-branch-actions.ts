@@ -3,6 +3,8 @@
 import { useCallback, useRef } from 'react'
 import { toast } from 'sonner'
 import { useChatContext } from '@/lib/chat-context'
+import { prefillComposer } from '@/lib/chat/composer-prefill'
+import { draftStorageKey, getDraftStore, writeDraft } from '@/lib/chat/draft-storage'
 import type { AIMode, Message } from '@/types'
 
 interface BranchResult {
@@ -13,11 +15,11 @@ interface BranchResult {
 
 /** Branch actions for the open chat. Each one opens the new chat when it is ready. */
 export function useBranchActions() {
-  const { currentChat, isStreaming, openConversation, prefillComposerText } = useChatContext()
+  const { currentChat, isStreaming, openConversation } = useChatContext()
   const busyRef = useRef(false)
 
   const branch = useCallback(
-    async (messageId: string, before: boolean): Promise<BranchResult | null> => {
+    async (messageId: string, before: boolean, draft?: string): Promise<BranchResult | null> => {
       if (!currentChat || busyRef.current) return null
       if (isStreaming) {
         toast.error('Wait for the reply to finish, then branch.')
@@ -42,11 +44,14 @@ export function useBranchActions() {
           return null
         }
 
+        // Saved as the new chat's draft first, so the composer restores it when the chat opens.
+        const draftSaved = draft ? writeDraft(getDraftStore(), draftStorageKey(body.conversation.id), draft) : true
         const opened = await openConversation(body.conversation.id)
         if (!opened) {
           toast.error('The branch was made but did not open. Find it in your chat list.')
           return null
         }
+        if (draft && !draftSaved) prefillComposer(draft)
         return body.conversation
       } catch {
         toast.error('Could not branch this chat. Check your connection.')
@@ -68,11 +73,10 @@ export function useBranchActions() {
   // Branches just before an earlier message and puts its text back in the composer.
   const editInBranch = useCallback(
     async (message: Message) => {
-      if (!(await branch(message.id, true))) return
-      prefillComposerText(message.content, message.mode)
+      if (!(await branch(message.id, true, message.content))) return
       toast.success('Branch opened. Edit the message and send it.')
     },
-    [branch, prefillComposerText]
+    [branch]
   )
 
   return { branchFromMessage, editInBranch }
