@@ -162,7 +162,7 @@ type ProjectFilterId = 'all' | string
 
 type SavePromptWorkflowInput = PromptWorkflowInput & { id?: string }
 
-type WorkspaceTool =
+export type WorkspaceTool =
   | 'prompt-library'
   | 'playbooks'
   | 'model-comparison'

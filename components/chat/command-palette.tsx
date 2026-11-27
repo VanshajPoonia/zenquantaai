@@ -22,9 +22,10 @@ import {
   Plus,
   Search,
   Zap,
+  type LucideIcon,
 } from 'lucide-react'
 import { ASSISTANT_FAMILY_COPY, MODE_CONFIGS } from '@/lib/config'
-import { useChatContext } from '@/lib/chat-context'
+import { useChatContext, type WorkspaceTool } from '@/lib/chat-context'
 import {
   AIMode,
   SearchEntityType,
@@ -44,6 +45,7 @@ import {
 } from '@/components/ui/command'
 import { Button } from '@/components/ui/button'
 import { ModeIcon } from '@/lib/mode-utils'
+import { WORKSPACE_TOOL_COMMANDS } from '@/lib/chat/commands'
 
 const ASSISTANT_MODES: AIMode[] = [
   'general',
@@ -53,6 +55,19 @@ const ASSISTANT_MODES: AIMode[] = [
   'live',
   'image',
 ]
+
+const TOOL_ICONS: Record<WorkspaceTool, LucideIcon> = {
+  'prompt-library': BookText,
+  playbooks: Play,
+  artifacts: FileText,
+  'memory-vault': Brain,
+  'pulse-research-room': Zap,
+  'ask-files': Database,
+  'github-integration': Github,
+  'model-comparison': GitCompareArrows,
+  'custom-assistants': Bot,
+  'prism-studio': ImageIcon,
+}
 
 const ENTITY_LABELS: Record<SearchResult['entityType'], string> = {
   project: 'Project',
@@ -615,91 +630,27 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
             <CreditCard className="size-4" />
             <span>Open pricing</span>
           </CommandItem>
-          <CommandItem
-            value="open prompt library prompts"
-            onSelect={() => void runAction(() => openWorkspaceTool('prompt-library'))}
-          >
-            <BookText className="size-4" />
-            <span>Open prompt library</span>
-          </CommandItem>
-          <CommandItem
-            value="open ai playbooks workflows reusable runs"
-            onSelect={() => void runAction(() => openWorkspaceTool('playbooks'))}
-          >
-            <Play className="size-4" />
-            <span>Open AI Playbooks</span>
-          </CommandItem>
-          <CommandItem
-            value="open artifact studio artifacts saved outputs"
-            onSelect={() => void runAction(() => openWorkspaceTool('artifacts'))}
-          >
-            <FileText className="size-4" />
-            <span>Open Artifact Studio</span>
-          </CommandItem>
-          <CommandItem
-            value="open memory vault conversation summaries preferences"
-            onSelect={() => void runAction(() => openWorkspaceTool('memory-vault'))}
-          >
-            <Brain className="size-4" />
-            <span>Open Memory Vault</span>
-          </CommandItem>
-          <CommandItem
-            value="open pulse research room sources web search citations"
-            onSelect={() =>
-              void runAction(() => openWorkspaceTool('pulse-research-room'))
-            }
-          >
-            <Zap className="size-4" />
-            <span>Open Pulse Research Room</span>
-          </CommandItem>
-          <CommandItem
-            value="open ask files uploaded file rag knowledge retrieval"
-            onSelect={() => void runAction(() => openWorkspaceTool('ask-files'))}
-          >
-            <Database className="size-4" />
-            <span>Open Ask Files</span>
-          </CommandItem>
-          <CommandItem
-            value="open github repo context forge code integration"
-            onSelect={() =>
-              void runAction(() =>
-                openWorkspaceTool({
-                  tool: 'github-integration',
-                  projectId: activeConcreteProjectId,
-                })
-              )
-            }
-          >
-            <Github className="size-4" />
-            <span>Open GitHub repo context</span>
-          </CommandItem>
-          <CommandItem
-            value="open model duel compare assistants models"
-            onSelect={() =>
-              void runAction(() => openWorkspaceTool('model-comparison'))
-            }
-          >
-            <GitCompareArrows className="size-4" />
-            <span>Open Model Duel</span>
-          </CommandItem>
-          <CommandItem
-            value="open custom assistants builder"
-            onSelect={() =>
-              void runAction(() => openWorkspaceTool('custom-assistants'))
-            }
-          >
-            <Bot className="size-4" />
-            <span>Open custom assistants</span>
-          </CommandItem>
-          <CommandItem
-            value="open prism image history recent generations"
-            onSelect={() =>
-              void runAction(() => openWorkspaceTool('prism-studio'))
-            }
-          >
-            <ImageIcon className="size-4" />
-            <span>Open Prism Studio</span>
-          </CommandItem>
+          {WORKSPACE_TOOL_COMMANDS.map((command) => {
+            const Icon = TOOL_ICONS[command.tool]
+            return (
+              <CommandItem
+                key={command.tool}
+                value={`open ${command.keywords}`}
+                onSelect={() =>
+                  void runAction(() =>
+                    openWorkspaceTool(
+                      command.tool === 'github-integration'
+                        ? { tool: command.tool, projectId: activeConcreteProjectId }
+                        : command.tool
+                    )
+                  )
+                }
+              >
+                <Icon className="size-4" />
+                <span>Open {command.label}</span>
+              </CommandItem>
+            )
+          })}
         </CommandGroup>
 
         <CommandGroup heading="Switch Assistant">
