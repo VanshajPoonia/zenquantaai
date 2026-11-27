@@ -26,6 +26,9 @@ test.describe('Zenquanta signed-in smoke', () => {
     await page.getByPlaceholder('Enter your password').fill(password!)
     await page.locator('form').getByRole('button', { name: 'Sign in' }).click()
     await expect(page.getByRole('textbox', { name: 'Message' })).toBeVisible({ timeout: 30_000 })
+    // A new account gets the first-run setup dialog. Skip it the way its button does, so later tests start clean.
+    const skipped = await page.request.post('/api/onboarding', { data: { action: 'skip' } })
+    expect(skipped.ok()).toBe(true)
     storageState = await context.storageState()
     await context.close()
   })
