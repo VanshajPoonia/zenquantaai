@@ -14,7 +14,7 @@ import {
   SquareArrowOutUpRight,
   Wrench,
 } from 'lucide-react'
-import { useChatContext } from '@/lib/chat-context'
+import { useOptionalChatContext } from '@/lib/chat-context'
 import { cn } from '@/lib/utils'
 import type { MessagePart } from '@/types'
 import { Button } from '@/components/ui/button'
@@ -55,9 +55,11 @@ function describeArgs(args: unknown): string | null {
   return values[0]?.slice(0, 160) ?? null
 }
 
-// Reads the context here so the memoized cards above it stay stable.
+// Reads the context here so the memoized cards above it stay stable. Shared chat pages have none.
 function OpenArtifactButton({ artifactId, title }: { artifactId: string; title?: string }) {
-  const { openWorkspaceTool } = useChatContext()
+  const chat = useOptionalChatContext()
+  if (!chat) return null
+  const { openWorkspaceTool } = chat
 
   return (
     <Button

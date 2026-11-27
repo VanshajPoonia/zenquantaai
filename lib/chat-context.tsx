@@ -3929,3 +3929,8 @@ export function useChatContext() {
 
   return context
 }
+
+// For parts that also render outside the workspace, like a shared chat page.
+export function useOptionalChatContext() {
+  return useContext(ChatContext) ?? null
+}
