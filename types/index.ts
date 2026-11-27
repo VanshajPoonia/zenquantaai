@@ -400,6 +400,13 @@ export interface ConversationWorkspace {
   branch?: string
 }
 
+/** Where a branched chat came from. Lives in session_settings.forkedFrom. */
+export interface ConversationFork {
+  conversationId: string
+  messageId: string
+  title: string
+}
+
 export interface ToolResultData {
   imagePrompt?: string
   artifactId?: string
@@ -467,6 +474,7 @@ export interface ConversationSummary {
   surface?: ConversationSurface
   workspace?: ConversationWorkspace | null
   continuedFrom?: ConversationContinuation | null
+  forkedFrom?: ConversationFork | null
 }
 
 export interface ConversationMemoryStructured {
@@ -809,6 +817,62 @@ export interface TemplateCopyResult {
   type: TemplateShareType
   id: string
   title: string
+}
+
+export interface SharedChatSource {
+  title: string
+  /** Only public http(s) links. File sources keep their name and no url. */
+  url: string | null
+}
+
+/** One message of a shared chat, already redacted on the server. */
+export interface SharedChatMessage {
+  role: 'user' | 'assistant'
+  content: string
+  mode: AIMode
+  assistantFamily: AssistantFamily | null
+  customAssistant: { name: string; iconEmoji: string } | null
+  createdAt: string
+  /** Tool calls and results only, with inputs and outputs cut short. */
+  parts: MessagePart[]
+  sources: SharedChatSource[]
+  attachmentNames: string[]
+  imageOmitted: boolean
+}
+
+export interface ConversationShareSnapshot {
+  version: 1
+  title: string
+  mode: AIMode
+  surface: ConversationSurface
+  messages: SharedChatMessage[]
+}
+
+export interface ConversationShareInfo {
+  id: string
+  conversationId: string
+  token: string
+  title: string
+  messageCount: number
+  redactionCount: number
+  createdAt: string
+}
+
+export interface ConversationSharePreview {
+  messageCount: number
+  redactionCount: number
+  /** Why a link cannot be made right now, or null when it can. */
+  blockedReason: string | null
+}
+
+export interface ConversationSharesResponse {
+  shares: ConversationShareInfo[]
+  preview: ConversationSharePreview
+}
+
+export interface PublicConversationShare {
+  createdAt: string
+  snapshot: ConversationShareSnapshot
 }
 
 export type UserPurgeScope = 'workspace_data' | 'full_account'
