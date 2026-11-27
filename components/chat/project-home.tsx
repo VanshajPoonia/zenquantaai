@@ -44,6 +44,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { FileIntelligenceCard } from './file-intelligence-card'
+import { ProjectInstructionsCard } from './project-instructions-card'
 
 interface ProjectHomeProps {
   projectId: string
@@ -569,6 +570,12 @@ export function ProjectHome({ projectId }: ProjectHomeProps) {
             icon={Zap}
           />
         </div>
+
+        <ProjectInstructionsCard
+          key={projectId}
+          projectId={projectId}
+          initialInstructions={home.project.instructions ?? ''}
+        />
       </div>
 
       <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-9">
