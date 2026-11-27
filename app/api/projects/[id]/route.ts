@@ -4,6 +4,7 @@ import {
   neonProfilesRepository,
   neonProjectsRepository,
 } from '@/lib/db/repositories'
+import { PROJECT_INSTRUCTIONS_MAX_CHARS } from '@/lib/ai/user-instructions'
 
 export const runtime = 'nodejs'
 
@@ -21,8 +22,27 @@ export async function PATCH(
         name?: string
         description?: string
         color?: string
+        instructions?: string | null
       }
     | null
+
+  const rawInstructions: unknown = body?.instructions
+  let instructions: string | undefined
+  if (rawInstructions === null) {
+    instructions = ''
+  } else if (typeof rawInstructions === 'string') {
+    if (rawInstructions.length > PROJECT_INSTRUCTIONS_MAX_CHARS) {
+      return NextResponse.json(
+        {
+          error: `Instructions can be up to ${PROJECT_INSTRUCTIONS_MAX_CHARS.toLocaleString('en-US')} characters.`,
+        },
+        { status: 400 }
+      )
+    }
+    instructions = rawInstructions.trim()
+  } else if (typeof rawInstructions !== 'undefined') {
+    return NextResponse.json({ error: 'Instructions must be text.' }, { status: 400 })
+  }
 
   const project = await neonProjectsRepository.update(auth.user.id, id, {
     ...(typeof body?.name === 'string' ? { name: body.name.trim() } : {}),
@@ -30,6 +50,7 @@ export async function PATCH(
       ? { description: body.description?.trim() || undefined }
       : {}),
     ...(typeof body?.color === 'string' ? { color: body.color.trim() } : {}),
+    ...(typeof instructions !== 'undefined' ? { instructions } : {}),
   })
 
   if (!project) {

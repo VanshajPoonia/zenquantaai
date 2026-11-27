@@ -40,6 +40,7 @@ function rowToProject(row: ProjectRow): Project {
     id: row.id,
     name: row.name,
     description: row.description ?? undefined,
+    instructions: row.instructions ?? undefined,
     color: row.color,
     createdAt: toIsoString(row.createdAt),
     updatedAt: toIsoString(row.updatedAt),
@@ -138,7 +139,7 @@ class NeonProjectsRepository {
   async update(
     userId: string,
     projectId: string,
-    input: Partial<Pick<Project, 'name' | 'description' | 'color'>>
+    input: Partial<Pick<Project, 'name' | 'description' | 'color' | 'instructions'>>
   ): Promise<Project | null> {
     if (projectId === DEFAULT_PROJECT_ID && input.name === '') {
       return null
@@ -152,6 +153,9 @@ class NeonProjectsRepository {
           ? { description: input.description }
           : {}),
         ...(typeof input.color === 'string' ? { color: input.color } : {}),
+        ...(typeof input.instructions !== 'undefined'
+          ? { instructions: input.instructions || null }
+          : {}),
         updatedAt: new Date(),
       })
       .where(and(eq(zenProjects.userId, userId), eq(zenProjects.id, projectId)))

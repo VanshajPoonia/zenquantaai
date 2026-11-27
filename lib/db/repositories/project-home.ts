@@ -37,6 +37,7 @@ function rowToProject(row: ProjectRow): Project {
     id: row.id,
     name: row.name,
     description: row.description ?? undefined,
+    instructions: row.instructions ?? undefined,
     color: row.color,
     createdAt: toIsoString(row.createdAt),
     updatedAt: toIsoString(row.updatedAt),

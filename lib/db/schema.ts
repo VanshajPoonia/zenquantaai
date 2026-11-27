@@ -489,6 +489,7 @@ export const zenProjects = pgTable(
       .references(() => zenUsers.id, { onDelete: 'cascade' }),
     name: text('name').notNull(),
     description: text('description'),
+    instructions: text('instructions'),
     color: text('color').notNull().default('general'),
     isDefault: boolean('is_default').notNull().default(false),
     ...timestamps,
