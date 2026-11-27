@@ -9,11 +9,13 @@ import {
   Pin,
   PinOff,
   Search,
+  Share2,
   Shield,
   SlidersHorizontal,
   Trash2,
 } from 'lucide-react'
 import { useChatContext } from '@/lib/chat-context'
+import { isChatSharingEnabled } from '@/lib/config/features'
 import { Button } from '@/components/ui/button'
 import {
   Tooltip,
@@ -44,6 +46,7 @@ import {
   DownloadIcon,
   SettingsIcon,
 } from '@/components/icons'
+import { ShareChatDialog } from './share-chat-dialog'
 
 interface HeaderProps {
   // Set on pages such as Dashboard, which show their name instead of a chat.
@@ -95,6 +98,7 @@ function ChatTitle() {
   const [draftTitle, setDraftTitle] = useState('')
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
+  const [isShareOpen, setIsShareOpen] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -204,6 +208,12 @@ function ChatTitle() {
             <SlidersHorizontal className="size-4" />
             Chat settings
           </DropdownMenuItem>
+          {isChatSharingEnabled() ? (
+            <DropdownMenuItem onSelect={() => setIsShareOpen(true)}>
+              <Share2 className="size-4" />
+              Share chat
+            </DropdownMenuItem>
+          ) : null}
           <DropdownMenuSeparator />
           <DropdownMenuItem onSelect={() => exportCurrentChat('markdown')}>
             <DownloadIcon className="size-4" />
@@ -220,6 +230,8 @@ function ChatTitle() {
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
+
+      <ShareChatDialog open={isShareOpen} onOpenChange={setIsShareOpen} chatId={chatId} />
 
       <AlertDialog
         open={confirmDelete}
