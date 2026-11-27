@@ -24,6 +24,7 @@ import {
   ChevronDown,
   Loader2,
   MessagesSquare,
+  NotebookPen,
   Settings2,
   Trash2,
   UserRound,
@@ -32,6 +33,7 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { TerminalTokens } from './terminal-tokens'
+import { PersonalizationSettings } from './personalization-settings'
 import { ZQ_RELEASED } from '@/lib/config/features'
 import { INTELLIGENCE_LEVEL_OPTIONS } from '@/lib/config'
 import { ModeIcon, getModeAccentClass } from '@/lib/mode-utils'
@@ -309,10 +311,18 @@ function UserDeletionDangerZone() {
   )
 }
 
-type SettingsSection = 'general' | 'chats' | 'suggestions' | 'memory' | 'terminal' | 'account'
+type SettingsSection =
+  | 'general'
+  | 'personalization'
+  | 'chats'
+  | 'suggestions'
+  | 'memory'
+  | 'terminal'
+  | 'account'
 
 const SETTINGS_SECTIONS: Array<{ id: SettingsSection; label: string; icon: ReactNode }> = [
   { id: 'general', label: 'General', icon: <Settings2 className="size-4" /> },
+  { id: 'personalization', label: 'Personalization', icon: <NotebookPen className="size-4" /> },
   { id: 'chats', label: 'Chats', icon: <MessagesSquare className="size-4" /> },
   { id: 'suggestions', label: 'Suggestions', icon: <Wand2 className="size-4" /> },
   { id: 'memory', label: 'Memory', icon: <Brain className="size-4" /> },
@@ -579,6 +589,17 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
               </SettingRow>
             </TabsContent>
 
+            <TabsContent value="personalization" className="mt-0">
+              <SectionHeading
+                title="Personalization"
+                description="Tell Zenquanta about you and how you like answers, once, for every assistant."
+              />
+              <PersonalizationSettings
+                value={localSettings}
+                onChange={(patch) => setLocalSettings((previous) => ({ ...previous, ...patch }))}
+              />
+            </TabsContent>
+
             <TabsContent value="chats" className="mt-0">
               <SectionHeading
                 title="Chats"
@@ -833,7 +854,11 @@ export function SettingsModal({ open, onOpenChange }: SettingsModalProps) {
         {section !== 'account' ? (
           <div className="flex items-center justify-between gap-3 border-t border-border/70 px-5 py-3 sm:px-6">
             <p className="text-xs text-muted-foreground" aria-live="polite">
-              {isDirty ? 'You have unsaved changes.' : 'Changes apply to new chats.'}
+              {isDirty
+                ? 'You have unsaved changes.'
+                : section === 'personalization'
+                  ? 'Changes apply from your next message.'
+                  : 'Changes apply to new chats.'}
             </p>
             <div className="flex items-center gap-2">
               {isDirty ? (
