@@ -6,6 +6,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useReducer,
   useRef,
   useState,
   type ReactNode,
@@ -114,6 +115,12 @@ import {
   resolveSend,
 } from '@/lib/chat/sendMessage'
 import { useSendMessage } from '@/hooks/useSendMessage'
+import {
+  createPromptQueue,
+  isQueuePaused as isQueuePausedFor,
+  nextQueuedPrompt,
+  reducePromptQueue,
+} from '@/lib/chat/prompt-queue'
 import { usePrismImages } from '@/hooks/usePrismImages'
 import { useMemoryVault } from '@/hooks/useMemoryVault'
 import { usePulseResearchRoom } from '@/hooks/usePulseResearchRoom'
@@ -148,7 +155,7 @@ interface SendMessageInput {
   projectIdOverride?: string | null
 }
 
-interface QueuedPrompt {
+export interface QueuedPrompt {
   id: string
   input: SendMessageInput
   mode: AIMode
@@ -257,6 +264,13 @@ interface ChatContextType {
   togglePinChat: (chatId: string) => Promise<void>
   renameChat: (chatId: string, title: string) => Promise<void>
   queuedPromptCount: number
+  queuedPrompts: QueuedPrompt[]
+  isQueuePaused: boolean
+  removeQueuedPrompt: (id: string) => void
+  takeQueuedPrompt: (id: string) => QueuedPrompt | null
+  sendQueuedPromptNow: (id: string) => void
+  resumeQueue: () => void
+  clearQueue: () => void
   sendMessage: (input: SendMessageInput) => Promise<void>
   regenerateLastResponse: (intelligenceLevel?: UsageOptimization) => Promise<void>
   retryLastMessage: () => Promise<void>
@@ -479,7 +493,15 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const [customAssistants, setCustomAssistants] = useState<CustomAssistant[]>([])
   const [currentCustomAssistantId, setCurrentCustomAssistantId] =
     useState<string | null>(null)
-  const [queuedPrompts, setQueuedPrompts] = useState<QueuedPrompt[]>([])
+  const [promptQueue, dispatchQueue] = useReducer(
+    reducePromptQueue<QueuedPrompt>,
+    undefined,
+    createPromptQueue<QueuedPrompt>
+  )
+  const queuedPrompts = promptQueue.items
+  // Bumped when a queued send settles, so the queue looks again for the next one.
+  const [queueTick, setQueueTick] = useState(0)
+  const activePlaybookRunsRef = useRef(0)
   const [workspaceToolRequest, setWorkspaceToolRequest] =
     useState<WorkspaceToolRequest | null>(null)
   const [workspaceSearchRequest, setWorkspaceSearchRequest] =
@@ -576,7 +598,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     setCustomAssistants([])
     setCurrentCustomAssistantId(null)
     setAssistantPersonalizationSummary(null)
-    setQueuedPrompts([])
+    dispatchQueue({ type: 'reset' })
     setWorkspaceToolRequest(null)
     setWorkspaceSearchRequest(null)
     setComposerDraftRequest(null)
@@ -1802,7 +1824,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   )
 
   const enqueuePrompt = useCallback((prompt: QueuedPrompt) => {
-    setQueuedPrompts((previous) => [...previous, prompt])
+    dispatchQueue({ type: 'enqueue', item: prompt })
   }, [])
 
   const { savePrompt, deletePrompt } = usePromptLibrary({
@@ -2052,12 +2074,45 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     )
   }, [])
 
-  const stopStreaming = useCallback(() => {
+  const abortActiveReply = useCallback(() => {
     streamAbortRef.current?.abort()
     streamAbortRef.current = null
     activeSendIdRef.current = null
     setSendLifecycleStatus('idle')
     setStreamingState({ status: 'idle' })
+  }, [])
+
+  // Stop pauses this chat's queue instead of sending the next message.
+  const stopStreaming = useCallback(() => {
+    dispatchQueue({ type: 'stop', conversationId: currentChatRef.current?.id })
+    abortActiveReply()
+  }, [abortActiveReply])
+
+  const removeQueuedPrompt = useCallback((id: string) => {
+    dispatchQueue({ type: 'remove', id })
+  }, [])
+
+  const takeQueuedPrompt = useCallback((id: string) => {
+    const prompt = queuedPromptsRef.current.find((item) => item.id === id) ?? null
+    if (prompt) dispatchQueue({ type: 'remove', id })
+    return prompt
+  }, [])
+
+  // Stops the reply in this chat, then the chosen message goes next.
+  const sendQueuedPromptNow = useCallback(
+    (id: string) => {
+      dispatchQueue({ type: 'send-now', id })
+      if (isStreaming) abortActiveReply()
+    },
+    [abortActiveReply, isStreaming]
+  )
+
+  const resumeQueue = useCallback(() => {
+    dispatchQueue({ type: 'resume', conversationId: currentChatRef.current?.id })
+  }, [])
+
+  const clearQueue = useCallback(() => {
+    dispatchQueue({ type: 'clear', conversationId: currentChatRef.current?.id })
   }, [])
 
   const ensureConversationForMessage = useCallback(
@@ -2999,7 +3054,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     executeSendMessage,
   })
 
-  const runPromptWorkflow = useCallback(
+  const runPromptWorkflowSteps = useCallback(
     async (workflowId: string, variableValues: Record<string, string> = {}) => {
       const workflow = promptWorkflows.find((item) => item.id === workflowId)
       if (!workflow) return
@@ -3159,6 +3214,20 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       selectedProjectId,
       sessionSettings,
     ]
+  )
+
+  // Queued messages wait while a playbook runs, so they never land between its steps.
+  const runPromptWorkflow = useCallback(
+    async (workflowId: string, variableValues: Record<string, string> = {}) => {
+      activePlaybookRunsRef.current += 1
+      try {
+        await runPromptWorkflowSteps(workflowId, variableValues)
+      } finally {
+        activePlaybookRunsRef.current -= 1
+        setQueueTick((tick) => tick + 1)
+      }
+    },
+    [runPromptWorkflowSteps]
   )
 
   const { runModelComparison, chooseModelComparisonResponse } = useModelComparisons({
@@ -3539,31 +3608,45 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (streamingState.status === 'streaming') return
     if (isProcessingQueueRef.current) return
-    if (queuedPromptsRef.current.length === 0) return
 
-    const nextPrompt = queuedPromptsRef.current[0]
+    const nextPrompt = nextQueuedPrompt(promptQueue)
     if (!nextPrompt) return
 
-    isProcessingQueueRef.current = true
-    setQueuedPrompts((previous) => previous.slice(1))
+    // Wait a tick so a reply that was just stopped finishes cleaning up first.
+    const timer = window.setTimeout(() => {
+      if (
+        isProcessingQueueRef.current ||
+        activeSendIdRef.current ||
+        streamAbortRef.current ||
+        activePlaybookRunsRef.current > 0
+      ) {
+        return
+      }
 
-    debugSendPipeline('queue-restored', {
-      queueId: nextPrompt.id,
-      mode: nextPrompt.mode,
-      kind: nextPrompt.input.kind,
-      modeOverride: nextPrompt.input.modeOverride,
-      conversationId: nextPrompt.conversationId ?? currentChatRef.current?.id,
-    })
+      isProcessingQueueRef.current = true
+      dispatchQueue({ type: 'dispatched', id: nextPrompt.id })
 
-    void executeSendMessage(nextPrompt.input, {
-      conversationId: nextPrompt.conversationId ?? currentChatRef.current?.id,
-      mode: nextPrompt.mode,
-      settings: nextPrompt.settings,
-      projectId: nextPrompt.projectId,
-    }).finally(() => {
-      isProcessingQueueRef.current = false
-    })
-  }, [executeSendMessage, queuedPrompts, streamingState.status])
+      debugSendPipeline('queue-restored', {
+        queueId: nextPrompt.id,
+        mode: nextPrompt.mode,
+        kind: nextPrompt.input.kind,
+        modeOverride: nextPrompt.input.modeOverride,
+        conversationId: nextPrompt.conversationId ?? currentChatRef.current?.id,
+      })
+
+      void executeSendMessage(nextPrompt.input, {
+        conversationId: nextPrompt.conversationId ?? currentChatRef.current?.id,
+        mode: nextPrompt.mode,
+        settings: nextPrompt.settings,
+        projectId: nextPrompt.projectId,
+      }).finally(() => {
+        isProcessingQueueRef.current = false
+        setQueueTick((tick) => tick + 1)
+      })
+    }, 0)
+
+    return () => window.clearTimeout(timer)
+  }, [executeSendMessage, promptQueue, queueTick, streamingState.status])
 
   const value = useMemo<ChatContextType>(
     () => ({
@@ -3592,6 +3675,13 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       togglePinChat,
       renameChat,
       queuedPromptCount: queuedPrompts.length,
+      queuedPrompts,
+      isQueuePaused: isQueuePausedFor(promptQueue, currentChat?.id),
+      removeQueuedPrompt,
+      takeQueuedPrompt,
+      sendQueuedPromptNow,
+      resumeQueue,
+      clearQueue,
       sendMessage,
       regenerateLastResponse,
       retryLastMessage,
@@ -3732,7 +3822,13 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       openWorkspaceTool,
       openWorkspaceSearch,
       prepareComposerDraft,
-      queuedPrompts.length,
+      promptQueue,
+      queuedPrompts,
+      removeQueuedPrompt,
+      takeQueuedPrompt,
+      sendQueuedPromptNow,
+      resumeQueue,
+      clearQueue,
       setSidebarWidth,
       sidebarWidth,
       moveChatToProject,
