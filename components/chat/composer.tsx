@@ -1,6 +1,6 @@
 'use client'
 
-import { ReactNode, useCallback, useState, useRef, useEffect, useMemo } from 'react'
+import { ReactNode, useCallback, useId, useState, useRef, useEffect, useMemo } from 'react'
 import { ArrowUp, Globe, ImagePlus } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useChatContext, type QueuedPrompt } from '@/lib/chat-context'
@@ -100,6 +100,7 @@ export function Composer({
   const commands = useComposerCommands({ value, setValue, setComposerKind, textareaRef })
   const draft = useComposerDraft({ conversationId: currentChat?.id, value, setValue, textareaRef })
   const dictation = useDictation(setValue, currentChat?.id)
+  const hintId = useId()
   const clearDraft = useCallback(() => {
     setValue('')
     setPendingAttachments([])
@@ -422,6 +423,7 @@ export function Composer({
             aria-controls={commands.isOpen ? commands.menuId : undefined}
             aria-activedescendant={commands.activeOptionId}
             aria-autocomplete="list"
+            aria-describedby={hintId}
             aria-label={isImageDraft ? 'Describe the image' : 'Message'}
             enterKeyHint="send"
             placeholder={
@@ -542,6 +544,10 @@ export function Composer({
             </div>
           </div>
         </div>
+
+        <p id={hintId} className="mt-1.5 hidden px-1 text-[11px] text-muted-foreground/70 sm:block">
+          Type / for commands and @ for assistants
+        </p>
 
         <ModelComparisonButton
           hideTrigger
