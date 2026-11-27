@@ -3,7 +3,7 @@
 import { ReactNode, useCallback, useState, useRef, useEffect, useMemo } from 'react'
 import { ArrowUp, Globe, ImagePlus } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { useChatContext } from '@/lib/chat-context'
+import { useChatContext, type QueuedPrompt } from '@/lib/chat-context'
 import { AIMode, Attachment, MODE_CONFIGS, PendingAttachment } from '@/lib/types'
 import { getModelOverrideForUsageOptimization } from '@/lib/config'
 import { usePromptPrecheck } from '@/hooks/usePromptPrecheck'
@@ -15,6 +15,7 @@ import { AssistantRecommendationDialog } from './assistant-recommendation-dialog
 import { AssistantRecommendationChip } from './assistant-recommendation-chip'
 import { AssistantPicker, ComposerToolsMenu } from './composer-controls'
 import { ComposerCommandMenu, MentionChip, useComposerCommands } from './composer-command-menu'
+import { ComposerQueue } from './composer-queue'
 import { ComposerUsageNotice, IntelligencePicker, useComposerPlan } from './composer-usage'
 import { ContextMeter } from './context-meter'
 import { CustomAssistantButton } from './custom-assistant-button'
@@ -114,6 +115,11 @@ export function Composer({
     [composerKind, pendingAttachments, suppressRecommendation, value]
   )
   const markSubmitted = (normalizedContent: string) => {
+    // A queued message shows in the queue, so the composer is free right away.
+    if (isStreaming) {
+      clearDraft()
+      return
+    }
     setPendingDraftClear({
       value,
       normalizedContent,
@@ -268,6 +274,17 @@ export function Composer({
     stopStreaming()
   }
 
+  const restoreQueuedPrompt = (prompt: QueuedPrompt) => {
+    if (prompt.input.kind === 'image') setComposerKind('image')
+    setPendingAttachments((previous) => [...previous, ...(prompt.input.attachments ?? [])])
+    setValue(
+      value.trim()
+        ? `${value.trimEnd()}\n\n${prompt.input.content}`
+        : commands.queuedText({ ...prompt.input, mode: prompt.mode })
+    )
+    requestAnimationFrame(() => textareaRef.current?.focus())
+  }
+
   const handleOpenFilePicker = () => {
     fileInputRef.current?.click()
   }
@@ -322,6 +339,7 @@ export function Composer({
           attachments={pendingAttachments}
           settings={sessionSettings}
         />
+        <ComposerQueue onEdit={restoreQueuedPrompt} />
         <div
           data-busy={isStreaming ? '' : undefined}
           style={{ '--mode': `var(--${currentMode})` } as React.CSSProperties}
@@ -488,10 +506,6 @@ export function Composer({
                     >
                       Queue{queuedPromptCount > 0 ? ` (${queuedPromptCount + 1})` : ''}
                     </Button>
-                  ) : queuedPromptCount > 0 ? (
-                    <span className="px-2 text-xs text-muted-foreground">
-                      {queuedPromptCount} queued
-                    </span>
                   ) : null}
                   <Button
                     type="button"

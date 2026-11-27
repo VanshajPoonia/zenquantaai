@@ -33,6 +33,7 @@ import {
   filterMentionTargets,
   filterSlashItems,
   MentionTarget,
+  mentionPrefixFor,
   parseComposerTrigger,
   parseLeadingMention,
   parseSlashSubmission,
@@ -97,6 +98,7 @@ export function useComposerCommands({
     promptWorkflows,
     customAssistants,
     currentMode,
+    currentCustomAssistantId,
     currentChat,
     openWorkspaceTool,
     createNewChat,
@@ -301,6 +303,20 @@ export function useComposerCommands({
     }
   }
 
+  // A queued message for another assistant comes back with its @mention.
+  const queuedText = (prompt: {
+    content: string
+    kind?: 'chat' | 'image'
+    mode: AIMode
+    customAssistantId?: string | null
+  }) => {
+    const sameAssistant =
+      prompt.mode === currentMode &&
+      (prompt.customAssistantId ?? null) === (currentCustomAssistantId ?? null)
+    if (prompt.kind === 'image' || sameAssistant) return prompt.content
+    return `${mentionPrefixFor(mentionTargets, prompt.mode, prompt.customAssistantId)}${prompt.content}`
+  }
+
   return {
     menuId,
     entries,
@@ -318,6 +334,7 @@ export function useComposerCommands({
     handleChange,
     removeMention,
     routeSubmission,
+    queuedText,
   }
 }
 
