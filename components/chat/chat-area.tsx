@@ -178,6 +178,7 @@ export function ChatArea({
     attachments?: Parameters<typeof sendMessage>[0]['attachments']
     kind?: Parameters<typeof sendMessage>[0]['kind']
     modeOverride?: Parameters<typeof sendMessage>[0]['modeOverride']
+    customAssistantId?: Parameters<typeof sendMessage>[0]['customAssistantId']
   }) => {
     setSelectedPrompt('')
     await sendMessage(input)

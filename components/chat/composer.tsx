@@ -14,6 +14,7 @@ import { StopIcon, XIcon } from '@/components/icons'
 import { AssistantRecommendationDialog } from './assistant-recommendation-dialog'
 import { AssistantRecommendationChip } from './assistant-recommendation-chip'
 import { AssistantPicker, ComposerToolsMenu } from './composer-controls'
+import { ComposerCommandMenu, MentionChip, useComposerCommands } from './composer-command-menu'
 import { ComposerUsageNotice, IntelligencePicker, useComposerPlan } from './composer-usage'
 import { ContextMeter } from './context-meter'
 import { CustomAssistantButton } from './custom-assistant-button'
@@ -26,6 +27,7 @@ interface ComposerProps {
     attachments?: Array<Attachment | PendingAttachment>
     kind?: 'chat' | 'image'
     modeOverride?: AIMode
+    customAssistantId?: string | null
   }) => Promise<void>
   disabled?: boolean
   initialValue?: string
@@ -92,6 +94,7 @@ export function Composer({
   const plan = useComposerPlan()
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const commands = useComposerCommands({ value, setValue, setComposerKind, textareaRef })
   const clearDraft = useCallback(() => {
     setValue('')
     setPendingAttachments([])
@@ -101,14 +104,23 @@ export function Composer({
       textareaRef.current.style.height = 'auto'
     }
   }, [])
+  const suppressRecommendation = commands.hasTrigger || Boolean(commands.mention)
   const promptDraft = useMemo(
     () => ({
-      content: value,
+      content: suppressRecommendation ? '' : value,
       attachments: pendingAttachments,
       kind: composerKind,
     }),
-    [composerKind, pendingAttachments, value]
+    [composerKind, pendingAttachments, suppressRecommendation, value]
   )
+  const markSubmitted = (normalizedContent: string) => {
+    setPendingDraftClear({
+      value,
+      normalizedContent,
+      attachmentIds: pendingAttachments.map((attachment) => attachment.id),
+      composerKind,
+    })
+  }
   const {
     draftRecommendation,
     pendingRecommendation,
@@ -124,14 +136,7 @@ export function Composer({
   } = usePromptPrecheck({
     draft: promptDraft,
     onContinue: onSend,
-    onSubmitted: (submission) => {
-      setPendingDraftClear({
-        value,
-        normalizedContent: submission.content,
-        attachmentIds: pendingAttachments.map((attachment) => attachment.id),
-        composerKind,
-      })
-    },
+    onSubmitted: (submission) => markSubmitted(submission.content),
   })
 
   const modeConfig = MODE_CONFIGS[currentMode]
@@ -200,13 +205,28 @@ export function Composer({
 
   const handleSubmit = async () => {
     if ((!value.trim() && pendingAttachments.length === 0) || disabled) return
-    const normalizedContent =
-      value.trim() ||
-      `Review these files and help me with them: ${pendingAttachments
-        .map((attachment) => attachment.name)
-        .join(', ')}.`
+    const filesPrompt = `Review these files and help me with them: ${pendingAttachments
+      .map((attachment) => attachment.name)
+      .join(', ')}.`
+    const normalizedContent = value.trim() || filesPrompt
 
     setPendingDraftClear(null)
+
+    // "/compare", "/image" and "@assistant" sends skip the assistant suggestion.
+    const routed = commands.routeSubmission(pendingAttachments.length > 0)
+    if (routed?.type === 'handled') return
+    if (routed) {
+      const content = routed.content.trim() || filesPrompt
+      await onSend({
+        content,
+        attachments: pendingAttachments,
+        kind: routed.kind,
+        modeOverride: routed.modeOverride,
+        customAssistantId: routed.customAssistantId,
+      })
+      markSubmitted(content)
+      return
+    }
 
     await precheckAndSend({
       content: normalizedContent,
@@ -224,6 +244,8 @@ export function Composer({
   }
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (commands.handleKeyDown(e)) return
+
     if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
       e.preventDefault()
       void handleSubmit()
@@ -319,6 +341,7 @@ export function Composer({
           }}
           onDrop={handleDrop}
         >
+          <ComposerCommandMenu commands={commands} />
           <input
             ref={fileInputRef}
             type="file"
@@ -361,12 +384,20 @@ export function Composer({
             </div>
           )}
 
+          {commands.mention ? (
+            <MentionChip target={commands.mention.target} onRemove={commands.removeMention} />
+          ) : null}
+
           <textarea
             ref={textareaRef}
             value={value}
-            onChange={(e) => setValue(e.target.value)}
+            onChange={(e) => commands.handleChange(e.target.value)}
             onKeyDown={handleKeyDown}
             onPaste={handlePaste}
+            onBlur={commands.handleBlur}
+            aria-controls={commands.isOpen ? commands.menuId : undefined}
+            aria-activedescendant={commands.activeOptionId}
+            aria-autocomplete="list"
             aria-label={isImageDraft ? 'Describe the image' : 'Message'}
             enterKeyHint="send"
             placeholder={
