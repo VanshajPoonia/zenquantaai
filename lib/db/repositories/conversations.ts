@@ -2,6 +2,7 @@ import 'server-only'
 
 import { SQL, and, asc, desc, eq, gt, gte, inArray, lt, ne, sql } from 'drizzle-orm'
 import { createSessionSettings, DEFAULT_PROJECT_ID } from '@/lib/config'
+import { readConversationFork } from '@/lib/conversations/branch'
 import { conversationUsageAggregateToEstimate } from '@/lib/conversations/usage-aggregate'
 import { getAssistantFamilyFromMode } from '@/lib/config/assistants'
 import { createPrivateFileUrl } from '@/lib/storage/object-store'
@@ -216,6 +217,7 @@ async function rowToConversation(row: ConversationRow): Promise<Conversation> {
       ? toJsonObject<ConversationWorkspace>(row.workspace, {})
       : null,
     continuedFrom: readContinuation(row.sessionSettings),
+    forkedFrom: readConversationFork(row.sessionSettings),
   }
 }
 
@@ -577,8 +579,9 @@ class NeonConversationsRepository {
           isPinned: values.isPinned,
           preview: values.preview,
           messageCount: values.messageCount,
-          // Keeps the stored continuedFrom; a client can never set it.
-          sessionSettings: sql`(excluded.session_settings - 'continuedFrom') || jsonb_strip_nulls(jsonb_build_object('continuedFrom', ${zenConversations.sessionSettings} -> 'continuedFrom'))`,
+          // Turn saves rebuild session settings. The row keeps its continuedFrom, and keeps
+          // its forkedFrom unless it has none yet. A client can never set continuedFrom.
+          sessionSettings: sql`(excluded.session_settings - 'continuedFrom' - 'forkedFrom') || jsonb_strip_nulls(jsonb_build_object('continuedFrom', ${zenConversations.sessionSettings} -> 'continuedFrom', 'forkedFrom', coalesce(${zenConversations.sessionSettings} -> 'forkedFrom', excluded.session_settings -> 'forkedFrom')))`,
           customAssistantId: values.customAssistantId,
           customAssistant: values.customAssistant,
           usage: values.usage,
