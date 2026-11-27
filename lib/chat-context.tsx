@@ -31,6 +31,7 @@ import {
   ChatAction,
   ChatRequest,
   Conversation,
+  ConversationMessagesAfterResponse,
   ConversationMessagesPageResponse,
   ConversationSummary,
   CustomAssistant,
@@ -145,6 +146,7 @@ import {
 } from '@/lib/utils/files'
 import { buildWorkflowStepPrompt } from '@/lib/utils/prompt-workflows'
 import { mergeConversationMessagePage } from '@/lib/conversations/message-pages'
+import { mergeLiveMessages } from '@/lib/cli/live-session'
 
 interface SendMessageInput {
   content: string
@@ -255,6 +257,7 @@ interface ChatContextType {
   setCurrentChat: (chat: ConversationSummary | Conversation | null) => void
   openConversation: (conversationId: string) => Promise<Conversation | null>
   loadOlderMessages: (conversationId: string) => Promise<void>
+  applyLiveMessages: (conversationId: string, page: ConversationMessagesAfterResponse) => void
   activeProjectHomeId: string | null
   isNewChatDraft: boolean
   hasLoadedWorkspaceData: boolean
@@ -1322,6 +1325,17 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       commitState(nextConversations, merged)
     },
     [commitState, requestJson]
+  )
+
+  // Live zq sessions resend their running turn, so only real changes reach state.
+  const applyLiveMessages = useCallback(
+    (conversationId: string, page: ConversationMessagesAfterResponse) => {
+      const existing = conversationsRef.current.find((item) => item.id === conversationId)
+      if (!existing) return
+      const merged = mergeLiveMessages(existing, page)
+      if (merged !== existing) applyConversationPatch(conversationId, () => merged)
+    },
+    [applyConversationPatch]
   )
 
   const openWorkspaceTool = useCallback((request: WorkspaceToolRequestInput) => {
@@ -3667,6 +3681,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       setCurrentChat,
       openConversation,
       loadOlderMessages,
+      applyLiveMessages,
       activeProjectHomeId,
       isNewChatDraft,
       hasLoadedWorkspaceData,
@@ -3814,6 +3829,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       listArtifactVersions,
       listFileIntelligence,
       loadOlderMessages,
+      applyLiveMessages,
       listPrismImages,
       listMemoryVault,
       listPulseResearchRoom,
