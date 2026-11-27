@@ -489,12 +489,14 @@ function buildOpenRouterMessages(
   customAssistantContext?: CustomAssistantRuntimeContext,
   durableMemoryContext?: DurableMemoryContext,
   crossChatContext?: CrossChatRecallContext,
-  timeZone?: string
+  timeZone?: string,
+  userInstructions?: string
 ): Array<{
   role: 'system' | 'user' | 'assistant'
   content: string
 }> {
   const systemPrompt = buildSystemPrompt(mode, settings.systemPreset)
+  const userInstructionsBlock = userInstructions?.trim() ?? ''
   const temporalBlock = buildTemporalContextBlock(conversation, timeZone)
   const memoryBlock =
     settings.memory && conversation.memorySummary
@@ -523,6 +525,7 @@ function buildOpenRouterMessages(
         computeMessageSelectionBudget({
           contextBlockTexts: [
             systemPrompt,
+            userInstructionsBlock,
             temporalBlock,
             customAssistantBlock,
             durableMemoryBlock,
@@ -553,6 +556,9 @@ function buildOpenRouterMessages(
   if (budgetEnabled) {
     return [
       { role: 'system', content: systemPrompt },
+      ...(userInstructionsBlock
+        ? [{ role: 'system' as const, content: userInstructionsBlock }]
+        : []),
       ...(customAssistantBlock
         ? [{ role: 'system' as const, content: customAssistantBlock }]
         : []),
@@ -578,6 +584,9 @@ function buildOpenRouterMessages(
 
   return [
     { role: 'system', content: systemPrompt },
+    ...(userInstructionsBlock
+      ? [{ role: 'system' as const, content: userInstructionsBlock }]
+      : []),
     ...(customAssistantBlock
       ? [{ role: 'system' as const, content: customAssistantBlock }]
       : []),
@@ -615,7 +624,8 @@ export function buildAgentPromptParts(
   customAssistantContext?: CustomAssistantRuntimeContext,
   durableMemoryContext?: DurableMemoryContext,
   crossChatContext?: CrossChatRecallContext,
-  timeZone?: string
+  timeZone?: string,
+  userInstructions?: string
 ): {
   systemPrompt: string
   history: Array<{ role: 'user' | 'assistant'; content: string }>
@@ -630,7 +640,8 @@ export function buildAgentPromptParts(
     customAssistantContext,
     durableMemoryContext,
     crossChatContext,
-    timeZone
+    timeZone,
+    userInstructions
   )
   const systemPrompt = messages
     .filter((message) => message.role === 'system')
@@ -656,7 +667,8 @@ export function buildPromptTextForUsage(
   customAssistantContext?: CustomAssistantRuntimeContext,
   durableMemoryContext?: DurableMemoryContext,
   crossChatContext?: CrossChatRecallContext,
-  timeZone?: string
+  timeZone?: string,
+  userInstructions?: string
 ): string {
   return buildOpenRouterMessages(
     conversation,
@@ -667,7 +679,8 @@ export function buildPromptTextForUsage(
     customAssistantContext,
     durableMemoryContext,
     crossChatContext,
-    timeZone
+    timeZone,
+    userInstructions
   )
     .map((message) => message.content)
     .join('\n\n')
@@ -685,6 +698,7 @@ export async function* generateAssistantStream(input: {
   durableMemoryContext?: DurableMemoryContext
   crossChatContext?: CrossChatRecallContext
   timeZone?: string
+  userInstructions?: string
   signal?: AbortSignal
 }): AsyncIterable<string> {
   if (input.mode === 'image' || input.action === 'generate-image') {
@@ -723,7 +737,8 @@ export async function* generateAssistantStream(input: {
       input.customAssistantContext,
       input.durableMemoryContext,
       input.crossChatContext,
-      input.timeZone
+      input.timeZone,
+      input.userInstructions
     ),
     temperature: input.settings.temperature,
     maxTokens: input.settings.maxTokens,

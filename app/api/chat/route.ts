@@ -34,6 +34,7 @@ import {
   prepareConversationForChat,
   resolveSessionSettings,
 } from '@/lib/ai/chat'
+import { loadUserInstructionsBlock } from '@/lib/ai/load-user-instructions'
 import { maybeUpdateRollingSummary } from '@/lib/ai/memory-summary'
 import { maybeExtractDurableMemories } from '@/lib/ai/memory-extraction'
 import { retrieveDurableMemoryContext } from '@/lib/ai/memory-retrieval'
@@ -429,6 +430,11 @@ export async function POST(request: NextRequest) {
         ...(fileKnowledgeContext?.sources ?? []),
       ]
       persistedMessageSources = messageSources
+      const userInstructions = await loadUserInstructionsBlock({
+        userId: auth.user.id,
+        settings: appSettings,
+        projectId: prepared.conversation.projectId,
+      })
       const promptText = buildPromptTextForUsage(
         prepared.generationConversation,
         prepared.responseSettings,
@@ -438,7 +444,8 @@ export async function POST(request: NextRequest) {
         customAssistantContext,
         durableMemoryContext,
         crossChatContext,
-        payload.timeZone
+        payload.timeZone,
+        userInstructions
       )
 
       const estimatedPromptTokens = estimatePromptTokens(promptText)
@@ -542,7 +549,8 @@ export async function POST(request: NextRequest) {
           customAssistantContext,
           durableMemoryContext,
           crossChatContext,
-          payload.timeZone
+          payload.timeZone,
+          userInstructions
         )
         let nextSourceId = messageSources.length
         const readableUrls = collectReadableUrls(
@@ -905,6 +913,7 @@ export async function POST(request: NextRequest) {
         durableMemoryContext,
         crossChatContext,
         timeZone: payload.timeZone,
+        userInstructions,
         signal: request.signal,
       })) {
         accumulated += chunk
