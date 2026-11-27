@@ -15,6 +15,7 @@ import { AssistantRecommendationDialog } from './assistant-recommendation-dialog
 import { AssistantRecommendationChip } from './assistant-recommendation-chip'
 import { AssistantPicker, ComposerToolsMenu } from './composer-controls'
 import { ComposerUsageNotice, IntelligencePicker, useComposerPlan } from './composer-usage'
+import { ContextMeter } from './context-meter'
 import { CustomAssistantButton } from './custom-assistant-button'
 import { ModelComparisonButton } from './model-comparison-button'
 import { PromptLibraryButton } from './prompt-library-button'
@@ -427,6 +428,9 @@ export function Composer({
             ) : null}
 
             <div className="ml-auto flex shrink-0 items-center gap-1">
+              {!isImageDraft && currentMode !== 'image' ? (
+                <ContextMeter plan={plan} draft={value} attachments={pendingAttachments} />
+              ) : null}
               {!isImageDraft && currentMode !== 'image' ? (
                 <IntelligencePicker
                   plan={plan}

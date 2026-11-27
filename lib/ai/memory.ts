@@ -7,7 +7,7 @@ import {
 import { nowIso } from '@/lib/utils/chat'
 import { containsExactEvidence } from '@/lib/context/exact-evidence'
 
-const RECENT_TURN_MESSAGE_LIMIT = 8
+export const RECENT_TURN_MESSAGE_LIMIT = 8
 const MAX_MEMORY_ITEMS = 6
 const MAX_MEMORY_LINE_LENGTH = 220
 const MAX_CONTEXT_MESSAGE_CHARS = 6_000

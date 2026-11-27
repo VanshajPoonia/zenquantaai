@@ -243,6 +243,16 @@ export function resolveModelConfig(
   )
 }
 
+// The catalog lists no per-model windows. Every text model takes at least the
+// largest plan cap, so the plan's per-request input limit is the real window.
+export function getChatContextWindowTokens(
+  mode: AIMode,
+  tier: SubscriptionTier
+): number | null {
+  if (mode === 'image') return null
+  return PLAN_CONFIGS[tier]?.maxInputTokensPerRequest ?? null
+}
+
 export function createSessionSettings(
   mode: AIMode,
   overrides: Partial<SessionSettings> = {}
