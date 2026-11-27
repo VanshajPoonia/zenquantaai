@@ -16,6 +16,7 @@ export {
 } from './artifacts'
 export { neonAssistantRecommendationEventsRepository } from './assistant-recommendations'
 export { neonConversationRepository } from './conversations'
+export { neonConversationSharesRepository } from './conversation-shares'
 export { neonCustomAssistantsRepository } from './custom-assistants'
 export {
   FeedbackEntityNotFoundError,
