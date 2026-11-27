@@ -29,6 +29,7 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 
@@ -248,6 +249,14 @@ export function IntelligencePicker({
     () => (plan ? getAllowedModelsForTier(plan.plan.tier) : null),
     [plan]
   )
+  // Locked levels cannot be picked, so a send never fails on the plan check.
+  const isLocked = (option: (typeof INTELLIGENCE_LEVEL_OPTIONS)[number]) =>
+    Boolean(allowedModels) &&
+    !allowedModels!.includes(
+      resolveModelConfig(mode, option.modelOverride, plan?.plan.tier ?? 'free').model
+    )
+  const selectedLocked = isLocked(selected)
+  const anyLocked = INTELLIGENCE_LEVEL_OPTIONS.some(isLocked)
 
   return (
     <DropdownMenu>
@@ -257,9 +266,10 @@ export function IntelligencePicker({
           variant="ghost"
           size="sm"
           disabled={disabled}
-          aria-label={`Intelligence: ${selected.label}`}
+          aria-label={`Intelligence: ${selected.label}${selectedLocked ? ', needs a higher plan' : ''}`}
           className="h-8 gap-1 rounded-full px-2.5 text-[12.5px] font-medium text-muted-foreground hover:text-foreground"
         >
+          {selectedLocked ? <Lock aria-hidden className="size-3" /> : null}
           {selected.label}
           <ChevronDown className="size-3.5 opacity-70" />
         </Button>
@@ -269,25 +279,22 @@ export function IntelligencePicker({
           Intelligence for this chat
         </DropdownMenuLabel>
         {INTELLIGENCE_LEVEL_OPTIONS.map((option) => {
-          const optionModel = resolveModelConfig(
-            mode,
-            option.modelOverride,
-            plan?.plan.tier ?? 'free'
-          ).model
-          const locked = Boolean(allowedModels) && !allowedModels!.includes(optionModel)
+          const locked = isLocked(option)
           const isSelected = option.id === selected.id
 
           return (
             <DropdownMenuItem
               key={option.id}
               className="items-start gap-2 py-2"
+              disabled={locked}
+              aria-disabled={locked || undefined}
               onSelect={() => onChange(option.id)}
             >
               <span className="mt-0.5 flex size-4 shrink-0 items-center justify-center">
-                {isSelected ? (
-                  <Check className="size-4" />
-                ) : locked ? (
+                {locked ? (
                   <Lock className="size-3.5 text-muted-foreground" />
+                ) : isSelected ? (
+                  <Check className="size-4" />
                 ) : null}
               </span>
               <span className="min-w-0">
@@ -300,6 +307,14 @@ export function IntelligencePicker({
             </DropdownMenuItem>
           )
         })}
+        {anyLocked ? (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem asChild className="text-[13px] font-medium">
+              <Link href="/pricing">Upgrade</Link>
+            </DropdownMenuItem>
+          </>
+        ) : null}
       </DropdownMenuContent>
     </DropdownMenu>
   )
