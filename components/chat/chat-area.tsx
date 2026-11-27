@@ -18,6 +18,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { ChatMessage } from './message'
 import { EmptyState } from './empty-state'
 import { Composer } from './composer'
+import { ContinuedFromBanner } from './continued-from-banner'
 import { ProjectHome } from './project-home'
 import { WorkspaceHome } from './workspace-home'
 
@@ -308,6 +309,7 @@ export function ChatArea({
 
   return (
     <div className="flex flex-col flex-1 h-full min-h-0 overflow-hidden">
+      <ContinuedFromBanner />
       {showProjectHome && activeProjectHomeId ? (
         <div className="flex-1 min-h-0 overflow-y-auto">
           <ProjectHome projectId={activeProjectHomeId} />

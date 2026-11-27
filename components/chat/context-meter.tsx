@@ -1,12 +1,14 @@
 'use client'
 
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
+import { Loader2, RotateCcw } from 'lucide-react'
 import { useChatContext } from '@/lib/chat-context'
 import { DEFAULT_PROJECT_ID, getChatContextWindowTokens } from '@/lib/config'
 import { buildUserInstructionsBlock } from '@/lib/ai/user-instructions'
 import { estimateContextUsage } from '@/lib/chat/context-meter'
 import { cn } from '@/lib/utils'
-import type { Attachment, PendingAttachment } from '@/types'
+import type { Attachment, Conversation, PendingAttachment } from '@/types'
+import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import type { ComposerPlanSnapshot } from './composer-usage'
 
@@ -58,7 +60,12 @@ export function ContextMeter({
     selectedProjectId,
     customAssistants,
     currentCustomAssistantId,
+    isStreaming,
+    openConversation,
   } = useChatContext()
+  const [open, setOpen] = useState(false)
+  const [isContinuing, setIsContinuing] = useState(false)
+  const [continueError, setContinueError] = useState<string | null>(null)
 
   const projectId =
     currentChat?.projectId ??
@@ -120,13 +127,43 @@ export function ContextMeter({
           ? 'text-amber-300'
           : 'text-muted-foreground'
   const updated = formatUpdated(currentChat?.memoryUpdatedAt)
+  const canStartFresh =
+    Boolean(currentChat?.memorySummary?.trim()) &&
+    currentChat?.surface !== 'cli' &&
+    (currentChat?.messageCount ?? 0) > 0
+
+  const startFresh = async () => {
+    if (!currentChat) return
+    setIsContinuing(true)
+    setContinueError(null)
+
+    try {
+      const response = await fetch(
+        `/api/conversations/${encodeURIComponent(currentChat.id)}/continue`,
+        { method: 'POST' }
+      )
+      const payload = (await response.json().catch(() => null)) as
+        | (Conversation & { error?: string })
+        | null
+      if (!response.ok || !payload?.id) {
+        throw new Error(payload?.error ?? 'Could not start a new chat.')
+      }
+      setOpen(false)
+      await openConversation(payload.id)
+    } catch (error) {
+      setContinueError(error instanceof Error ? error.message : 'Could not start a new chat.')
+    } finally {
+      setIsContinuing(false)
+    }
+  }
+
   const label =
     percent !== null
       ? `Context: about ${percent}% of what one message can send. Show details`
       : `Context: ${messageCount} of ${estimate.windowSize} recent messages. Show details`
 
   return (
-    <Popover>
+    <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <button
           type="button"
@@ -183,6 +220,38 @@ export function ContextMeter({
           Web results and file excerpts are added when they are used, so the real total can be
           higher.
         </p>
+        <div className="space-y-1.5 border-t border-border/70 pt-3">
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            className="w-full gap-1.5 rounded-lg"
+            disabled={!canStartFresh || isContinuing || isStreaming}
+            aria-describedby={!canStartFresh ? 'context-meter-fresh-hint' : undefined}
+            onClick={() => void startFresh()}
+          >
+            {isContinuing ? (
+              <Loader2 className="size-3.5 animate-spin" aria-hidden />
+            ) : (
+              <RotateCcw className="size-3.5" aria-hidden />
+            )}
+            Start fresh with a summary
+          </Button>
+          {!canStartFresh ? (
+            <p id="context-meter-fresh-hint" className="text-center text-xs text-muted-foreground">
+              Available after a longer chat
+            </p>
+          ) : (
+            <p className="text-center text-xs text-muted-foreground">
+              Opens a new chat in this project that carries the summary over.
+            </p>
+          )}
+          {continueError ? (
+            <p role="alert" className="text-center text-xs text-destructive">
+              {continueError}
+            </p>
+          ) : null}
+        </div>
       </PopoverContent>
     </Popover>
   )
