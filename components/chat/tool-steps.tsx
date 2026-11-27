@@ -11,8 +11,10 @@ import {
   ImageIcon,
   Link2,
   Loader2,
+  SquareArrowOutUpRight,
   Wrench,
 } from 'lucide-react'
+import { useChatContext } from '@/lib/chat-context'
 import { cn } from '@/lib/utils'
 import type { MessagePart } from '@/types'
 import { Button } from '@/components/ui/button'
@@ -53,6 +55,24 @@ function describeArgs(args: unknown): string | null {
   return values[0]?.slice(0, 160) ?? null
 }
 
+// Reads the context here so the memoized cards above it stay stable.
+function OpenArtifactButton({ artifactId, title }: { artifactId: string; title?: string }) {
+  const { openWorkspaceTool } = useChatContext()
+
+  return (
+    <Button
+      size="sm"
+      variant="secondary"
+      className="h-7 shrink-0 gap-1.5 rounded-full px-3 text-xs"
+      aria-label={title ? `Open artifact ${title}` : 'Open artifact'}
+      onClick={() => openWorkspaceTool({ tool: 'artifacts', artifactId })}
+    >
+      <SquareArrowOutUpRight className="size-3.5" />
+      Open artifact
+    </Button>
+  )
+}
+
 const ToolStepCard = memo(function ToolStepCard({
   step,
   isStreaming,
@@ -68,6 +88,10 @@ const ToolStepCard = memo(function ToolStepCard({
   const failed = step.result && !step.result.ok
   const detail = describeArgs(step.call.args)
   const imagePrompt = step.result?.ok ? step.result.data?.imagePrompt : undefined
+  const artifactId =
+    step.call.name === 'save_artifact' && step.result?.ok
+      ? step.result.data?.artifactId
+      : undefined
 
   return (
     <div className="rounded-md border border-border bg-white/[0.02] text-[13px]">
@@ -114,6 +138,14 @@ const ToolStepCard = memo(function ToolStepCard({
             <ImageIcon className="size-3.5" />
             Create with Prism
           </Button>
+        </div>
+      ) : null}
+      {artifactId ? (
+        <div className="flex items-center gap-2 border-t border-border px-2.5 py-2">
+          <p className="min-w-0 flex-1 truncate text-[12px] text-muted-foreground">
+            {step.result?.data?.artifactTitle ?? 'Saved to Artifact Studio'}
+          </p>
+          <OpenArtifactButton artifactId={artifactId} title={step.result?.data?.artifactTitle} />
         </div>
       ) : null}
     </div>
