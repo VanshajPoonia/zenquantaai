@@ -1458,6 +1458,38 @@ export const zenTemplateShares = pgTable(
   ]
 )
 
+// Read-only chat links. The snapshot is redacted when the link is made.
+export const zenConversationShares = pgTable(
+  'zen_conversation_shares',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    token: text('token').notNull(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => zenUsers.id, { onDelete: 'cascade' }),
+    conversationId: text('conversation_id')
+      .notNull()
+      .references(() => zenConversations.id, { onDelete: 'cascade' }),
+    title: text('title').notNull(),
+    snapshot: jsonb('snapshot').notNull(),
+    messageCount: integer('message_count').notNull().default(0),
+    redactionCount: integer('redaction_count').notNull().default(0),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    revokedAt: timestamp('revoked_at', { withTimezone: true }),
+  },
+  (table) => [
+    uniqueIndex('zen_conversation_shares_token_idx').on(table.token),
+    index('zen_conversation_shares_user_conversation_idx').on(
+      table.userId,
+      table.conversationId,
+      table.createdAt
+    ),
+    index('zen_conversation_shares_conversation_idx').on(table.conversationId),
+  ]
+)
+
 export const zenFeedbackEvents = pgTable(
   'zen_feedback_events',
   {
