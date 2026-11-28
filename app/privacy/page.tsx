@@ -6,7 +6,7 @@ export const metadata: Metadata = { title: 'Privacy | Zenquanta AI' }
 
 export default function PrivacyPage() {
   return (
-    <StaticPage title="Privacy Policy" updated="16 November 2026">
+    <StaticPage title="Privacy Policy" updated="28 November 2026">
       <p>This page explains what Zenquanta AI stores, why, who helps us run it, and how to delete it.</p>
 
       <h2>What we store</h2>
@@ -42,6 +42,25 @@ export default function PrivacyPage() {
         </tbody>
       </table>
       <p>These services process data only to provide their part of Zenquanta.</p>
+      <p>
+        Model providers handle your prompts under their own data policies, and some keep logs of
+        them for a time. OpenRouter lists each provider&apos;s policy.
+      </p>
+
+      <h2>Where it is stored</h2>
+      <p>
+        The database and the app run in the US, in the US East region. Uploaded files and generated
+        images are stored in the Asia Pacific region. Model providers may process prompts in other
+        countries.
+      </p>
+
+      <h2>How long we keep it</h2>
+      <ul>
+        <li>Your account and your work stay until you delete them, or until you delete your account.</li>
+        <li>Usage records stay while your account exists and are deleted with it.</li>
+        <li>A sign-in lasts 30 days. zq sign-ins expire after 90 days.</li>
+        <li>Database backups can hold deleted data for up to 7 days. After that it is gone.</li>
+      </ul>
 
       <h2>Cookies</h2>
       <p>We use one sign-in cookie to keep you signed in, plus privacy-friendly analytics from Vercel.</p>
