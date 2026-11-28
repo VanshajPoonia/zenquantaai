@@ -2,6 +2,18 @@
 
 For Gate D on Monday 2026-11-30 and the launch on Tuesday 2026-12-01. Written 2026-11-28 after the bug bash. Production is `https://zqai.vanshajpoonia.com` (also `https://zqai.vercel.app`).
 
+## Launched early on 2026-11-28
+
+The owner moved the launch up to Saturday 2026-11-28, without an OpenRouter top-up. The switch-on steps below are done:
+
+- `release/zq-0.1.0` is on `main` (`c4b7484`), so the terms, privacy page and age checkbox are live.
+- Production has `AGENT_LOOP=on` and `NEXT_PUBLIC_ZQ_RELEASED=true`. The landing page shows the terminal section and the footer link to `/docs/cli`.
+- `zenquanta@0.1.0` is on npm as `latest`. `beta` still points to `0.1.0-beta.3`.
+- Smoke suites passed 30 of 30 on production before and after the switch.
+- Launch posts went out on the owner's personal X, LinkedIn and Instagram. The rest of the Zenquanta drafts stay in Postroom.
+
+The launch day watch list and roll back steps below still apply.
+
 ## State on 2026-11-28
 
 - Public and signed-in smoke suites pass on production (30 of 30), including a real streamed reply.
