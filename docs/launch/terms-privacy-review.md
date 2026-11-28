@@ -24,6 +24,17 @@ Checked on 2026-11-28 against the code on `main`. This compares the pages with w
 7. **Minimum age.** The terms say 13. India's DPDP Act treats everyone under 18 as a child and needs verifiable parental consent. Decide which rule you follow.
 8. **Paying for plans.** Paid plans are switched on by an admin, but the terms do not say how people pay or whether refunds exist.
 
+## Resolved on 2026-11-28
+
+The owner approved fixes for all eight points. Items 1 and 2 were fixed first. Items 3 to 8 now read:
+
+3. The terms say Zenquanta AI is run from India and Indian law applies.
+4. The privacy page says work stays until you delete it, usage records go with the account, sign-ins last 30 days, zq sign-ins 90 days, and backups can hold deleted data for up to 7 days (the Neon Free restore window is shorter).
+5. The privacy page says the database and app run in US East and files sit in Asia Pacific.
+6. The privacy page says model providers handle prompts under their own data policies and some keep logs.
+7. The age stays 13 and over. Under 18, or where local law requires it, a parent or guardian must agree. Both sign-up forms have a required checkbox for this and the sign-up API refuses requests without `ageConfirmed: true`. Nothing is stored about the answer.
+8. The terms say how you pay is agreed before a plan is switched on, with a refund if you ask within 7 days of paying.
+
 ## For the Flow merge, not launch
 
 When Flow ships, the privacy page also needs share links (a public, noindex snapshot that you can revoke, with key hiding as a best effort), copying a shared chat into another account, drafts kept in browser storage, voice input through the browser's speech service (Chrome sends audio to Google), custom and project instructions, and zq approvals (exact commands stored for up to a day).

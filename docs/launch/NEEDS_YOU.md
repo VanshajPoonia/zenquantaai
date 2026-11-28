@@ -6,14 +6,11 @@ Things only the owner can do or decide before the 2026-12-01 launch. Claude Code
 
 | # | What | Why | When |
 |---|---|---|---|
-| 1 | Read `/terms` and `/privacy` with `docs/launch/terms-privacy-review.md` (2026-11-28). Two lines are wrong now: zq runs on the user's own OpenRouter key, and the file storage provider (Cloudflare R2) is unnamed. Say OK or what to change | They are plain-language drafts, not legal advice | Day 9 (11-25) |
-| 2 | Check the `v0-zenquantaai` Vercel project (it is in another Vercel account): set Node 22.19 or newer, or disconnect it from `main` | It also deploys `main`. The agent loop needs Node 22.19 or newer | Before Day 11 |
-| 3 | Optional: Apple Developer account ($99 a year) | Needed to sign the Mac desktop app in v1.1 | After launch |
-| 4 | After a week of sign-ups, look at new accounts per day in `/admin` and decide whether Free needs email verification, a captcha or a lower cap for new accounts | Launch relies on the sign-up limit per IP plus the OpenRouter credit limit (decided 2026-11-18) | About 12-08 |
-| 5 | Revisit how links in replies open: as now, a confirm step for links that did not come from you, a search or a file, or the site name next to each link | Kept as is for launch as an accepted risk (decided 2026-11-18) | After launch |
-| 6 | **Top up OpenRouter credits.** The balance was $8.83 on 2026-11-28. All AI replies stop when it runs out | The key now has a $50 monthly limit and a low-balance email below $5, but neither adds credit | Before Gate D (11-30) |
-| 7 | Approve or edit the six launch drafts for Zenquanta AI in Postroom (2 X, 1 LinkedIn, 3 Instagram) | Posting stays manual | Before 11-30 |
-| 8 | Gate D and switch-on with `docs/launch/LAUNCH_DAY.md`: publish `zenquanta@0.1.0` from your terminal (passkey), then `AGENT_LOOP=on` and `NEXT_PUBLIC_ZQ_RELEASED=true` | npm needs your passkey. Claude can do the Vercel steps on your go | 11-30 |
+| 1 | Optional: Apple Developer account ($99 a year) | Needed to sign the Mac desktop app in v1.1 | After launch |
+| 2 | After a week of sign-ups, look at new accounts per day in `/admin` and decide whether Free needs email verification, a captcha or a lower cap for new accounts | Launch relies on the sign-up limit per IP plus the OpenRouter credit limit (decided 2026-11-18) | About 12-08 |
+| 3 | Revisit how links in replies open: as now, a confirm step for links that did not come from you, a search or a file, or the site name next to each link | Kept as is for launch as an accepted risk (decided 2026-11-18) | After launch |
+| 4 | **Top up OpenRouter credits.** The balance was $8.83 on 2026-11-28. All AI replies stop when it runs out | The key now has a $50 monthly limit and a low-balance email below $5, but neither adds credit. No auto top-up (decided 2026-11-28) | Before Gate D (11-30) |
+| 5 | Gate D and switch-on with `docs/launch/LAUNCH_DAY.md`: publish `zenquanta@0.1.0` from your terminal (passkey), then `AGENT_LOOP=on` and `NEXT_PUBLIC_ZQ_RELEASED=true` | npm needs your passkey. Claude can do the Vercel steps on your go | 11-30 |
 
 ## OpenRouter terms
 
@@ -54,3 +51,7 @@ Decided 2026-11-18: option B. The request is not sent and `ZQ_MODEL_API` stays o
 | 2026-11-18 | Asked for a current password field on the change-password form, checked on the server. Built and live in production the same day (`fd4fd54`) |
 | 2026-11-28 | Monthly credit limit of $50 on the production OpenRouter key (`zqainew`, ends 740) and the low-balance email below $5, set by Claude in your Chrome |
 | 2026-11-28 | Test account `zq-bugbash-084244` (Free, not admin) made through production sign-up and saved in `.env.local`. Purge it after launch |
+| 2026-11-28 | Approved the terms and privacy changes: zq on the user's own OpenRouter key, Cloudflare R2 named, run from India under Indian law, age 13 and over with parent or guardian permission under 18, pay as agreed with a 7-day refund, where data is stored, how long it is kept and model provider policies. Built on `release/zq-0.1.0` |
+| 2026-11-28 | Asked for a required "I'm 18 or older, or my parent or guardian agrees" checkbox on both sign-up forms. The server refuses sign-ups without it. Built on `release/zq-0.1.0` |
+| 2026-11-28 | Approved the six launch drafts in Postroom. Their links now point to `zqai.vanshajpoonia.com` |
+| 2026-11-28 | Decided to leave the `v0-zenquantaai` Vercel project as it is. It is a leftover copy in another Vercel account and holds no data |
