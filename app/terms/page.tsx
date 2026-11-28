@@ -6,7 +6,7 @@ export const metadata: Metadata = { title: 'Terms | Zenquanta AI' }
 
 export default function TermsPage() {
   return (
-    <StaticPage title="Terms of Service" updated="16 November 2026">
+    <StaticPage title="Terms of Service" updated="28 November 2026">
       <p>
         These terms cover your use of Zenquanta AI, its web app and the zq terminal app. By creating
         an account or using zq, you agree to them.
@@ -15,8 +15,12 @@ export default function TermsPage() {
       <h2>Your account</h2>
       <p>
         You need a Zenquanta ID and password to use the app. Keep your password and your zq sign-ins
-        safe. You are responsible for what happens under your account. You must be at least 13 years
-        old, or the minimum age to use online services where you live if that is higher.
+        safe. You are responsible for what happens under your account.
+      </p>
+      <p>
+        You must be at least 13 years old, or older if the law where you live sets a higher minimum
+        age. If you are under 18 you need a parent or guardian&apos;s permission to use Zenquanta. The
+        same applies wherever local law requires it. You confirm this when you create an account.
       </p>
 
       <h2>Acceptable use</h2>
@@ -62,7 +66,9 @@ export default function TermsPage() {
       <p>
         Each plan has limits on messages, tokens, images and agent steps, shown on the Plans page.
         Paid plans are switched on by an admin after you request one. There is no automatic billing.
-        We may change plans and limits, and we will show the current ones on the Plans page.
+        We agree with you how you pay before an admin switches your plan on. If the plan is not right
+        for you, ask for a refund within 7 days of paying. We may change plans and limits, and we will
+        show the current ones on the Plans page.
       </p>
 
       <h2>Your content</h2>
@@ -83,6 +89,9 @@ export default function TermsPage() {
         are not liable for indirect or consequential losses, or for losses caused by AI output or by
         actions you approved in zq.
       </p>
+
+      <h2>Who runs Zenquanta</h2>
+      <p>Zenquanta AI is run from India. Indian law applies to these terms.</p>
 
       <h2>Contact</h2>
       <p>
