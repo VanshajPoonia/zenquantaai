@@ -9,8 +9,7 @@ Things only the owner can do or decide before the 2026-12-01 launch. Claude Code
 | 1 | Optional: Apple Developer account ($99 a year) | Needed to sign the Mac desktop app in v1.1 | After launch |
 | 2 | After a week of sign-ups, look at new accounts per day in `/admin` and decide whether Free needs email verification, a captcha or a lower cap for new accounts | Launch relies on the sign-up limit per IP plus the OpenRouter credit limit (decided 2026-11-18) | About 12-08 |
 | 3 | Revisit how links in replies open: as now, a confirm step for links that did not come from you, a search or a file, or the site name next to each link | Kept as is for launch as an accepted risk (decided 2026-11-18) | After launch |
-| 4 | **Top up OpenRouter credits.** The balance was $8.83 on 2026-11-28. All AI replies stop when it runs out | The key now has a $50 monthly limit and a low-balance email below $5, but neither adds credit. No auto top-up (decided 2026-11-28) | Before Gate D (11-30) |
-| 5 | Gate D and switch-on with `docs/launch/LAUNCH_DAY.md`: publish `zenquanta@0.1.0` from your terminal (passkey), then `AGENT_LOOP=on` and `NEXT_PUBLIC_ZQ_RELEASED=true` | npm needs your passkey. Claude can do the Vercel steps on your go | 11-30 |
+| 4 | **Top up OpenRouter credits.** The balance was $8.83 at launch on 2026-11-28. All AI replies stop when it runs out | The key has a $50 monthly limit and a low-balance email below $5, but neither adds credit. You chose to launch without a top-up and with no auto top-up | When the low-balance email arrives |
 
 ## OpenRouter terms
 
@@ -55,3 +54,5 @@ Decided 2026-11-18: option B. The request is not sent and `ZQ_MODEL_API` stays o
 | 2026-11-28 | Asked for a required "I'm 18 or older, or my parent or guardian agrees" checkbox on both sign-up forms. The server refuses sign-ups without it. Built on `release/zq-0.1.0` |
 | 2026-11-28 | Approved the six launch drafts in Postroom. Their links now point to `zqai.vanshajpoonia.com` |
 | 2026-11-28 | Decided to leave the `v0-zenquantaai` Vercel project as it is. It is a leftover copy in another Vercel account and holds no data |
+| 2026-11-28 | Launched early instead of on 12-01. Merged `release/zq-0.1.0` to `main`, set `AGENT_LOOP=on` and `NEXT_PUBLIC_ZQ_RELEASED=true` in production and published `zenquanta@0.1.0` (`latest`) with your passkey. Smoke suites passed 30 of 30 before and after |
+| 2026-11-28 | Chose to post the launch on your personal X, LinkedIn and Instagram, like Spool. The X thread, LinkedIn post and Instagram carousel are live and marked posted in Postroom |
