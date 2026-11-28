@@ -3,6 +3,7 @@
 import { FormEvent, RefObject, useEffect, useState } from 'react'
 import { Eye, EyeOff } from 'lucide-react'
 import { useChatContext } from '@/lib/chat-context'
+import { Checkbox } from '@/components/ui/checkbox'
 import { cn } from '@/lib/utils'
 import styles from './landing.module.css'
 
@@ -23,6 +24,7 @@ export function LandingAuthForm({
   const [identifier, setIdentifier] = useState('')
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
+  const [ageConfirmed, setAgeConfirmed] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
   const [status, setStatus] = useState<'idle' | 'submitting' | 'done' | 'error'>('idle')
   const [message, setMessage] = useState('')
@@ -46,7 +48,7 @@ export function LandingAuthForm({
     Boolean(trimmedIdentifier) &&
     Boolean(password.trim()) &&
     !submitting &&
-    (!isSignUp || (!validationMessage && Boolean(confirmPassword.trim())))
+    (!isSignUp || (!validationMessage && Boolean(confirmPassword.trim()) && ageConfirmed))
   const visibleAuthError = submitting ? null : authError
   const feedback = validationMessage || message || visibleAuthError
   const isError = Boolean(validationMessage) || status === 'error' || Boolean(visibleAuthError)
@@ -66,7 +68,7 @@ export function LandingAuthForm({
 
     try {
       if (isSignUp) {
-        const result = await requestPasswordSignUp(trimmedIdentifier, password)
+        const result = await requestPasswordSignUp(trimmedIdentifier, password, ageConfirmed)
         setMessage(result)
       } else {
         await requestPasswordSignIn(trimmedIdentifier, password)
@@ -176,6 +178,22 @@ export function LandingAuthForm({
               className={styles.field}
               disabled={submitting}
             />
+          </div>
+        )}
+
+        {isSignUp && (
+          <div className="flex items-start gap-3">
+            <Checkbox
+              id="landing-age"
+              checked={ageConfirmed}
+              onCheckedChange={(value) => setAgeConfirmed(value === true)}
+              disabled={submitting}
+              required
+              className="mt-0.5 border-white/40"
+            />
+            <label htmlFor="landing-age" className="text-[13.5px] leading-5 text-[var(--text-2)]">
+              I&apos;m 18 or older, or my parent or guardian agrees.
+            </label>
           </div>
         )}
 

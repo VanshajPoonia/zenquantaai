@@ -105,7 +105,7 @@ async function signUpAccount(
   const loginId = `purge-${label}-${suffix}`.slice(0, 32)
   const password = `Purge-${suffix}-safe-password`
   const response = await context.request.post('/api/auth/password/sign-up', {
-    data: { identifier: loginId, password },
+    data: { identifier: loginId, password, ageConfirmed: true },
   })
   if (!response.ok()) {
     throw new Error(`Unable to create purge test account: ${await response.text()}`)

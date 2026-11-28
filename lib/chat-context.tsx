@@ -236,7 +236,11 @@ interface ChatContextType {
   authError: string | null
   requestMagicLink: (email: string) => Promise<void>
   requestPasswordSignIn: (email: string, password: string) => Promise<void>
-  requestPasswordSignUp: (email: string, password: string) => Promise<string>
+  requestPasswordSignUp: (
+    email: string,
+    password: string,
+    ageConfirmed: boolean
+  ) => Promise<string>
   requestPasswordReset: (email: string) => Promise<string>
   signOut: () => Promise<void>
   currentMode: AIMode
@@ -1124,10 +1128,10 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   )
 
   const requestPasswordSignUp = useCallback(
-    async (identifier: string, password: string) => {
+    async (identifier: string, password: string, ageConfirmed: boolean) => {
       const response = await requestAuthJson<{ message?: string }>(
         '/api/auth/password/sign-up',
-        { identifier, password },
+        { identifier, password, ageConfirmed },
         'Unable to create the account right now.'
       )
 

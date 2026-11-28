@@ -18,7 +18,7 @@ export async function POST(request: NextRequest) {
   }
 
   const body = (await request.json().catch(() => null)) as
-    | { identifier?: string; password?: string }
+    | { identifier?: string; password?: string; ageConfirmed?: boolean }
     | null
   const identifier = body?.identifier ?? ''
   const password = body?.password ?? ''
@@ -26,6 +26,13 @@ export async function POST(request: NextRequest) {
   if (!identifier.trim() || !password) {
     return NextResponse.json(
       { error: 'ID and password are required.' },
+      { status: 400 }
+    )
+  }
+
+  if (body?.ageConfirmed !== true) {
+    return NextResponse.json(
+      { error: 'Confirm that you are 18 or older, or that your parent or guardian agrees.' },
       { status: 400 }
     )
   }

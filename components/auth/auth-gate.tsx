@@ -6,6 +6,7 @@ import { Eye, EyeOff, LifeBuoy } from 'lucide-react'
 import { useChatContext } from '@/lib/chat-context'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Checkbox } from '@/components/ui/checkbox'
 import { ZenquantaLogo } from '@/components/icons'
 
 const ADMIN_CONTACT_EMAIL = 'zqai@vanshajpoonia.com'
@@ -19,6 +20,7 @@ export function AuthGate() {
   const [identifier, setIdentifier] = useState('')
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
+  const [ageConfirmed, setAgeConfirmed] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
   const [passwordMode, setPasswordMode] = useState<'sign-in' | 'sign-up'>(
     'sign-in'
@@ -62,7 +64,7 @@ export function AuthGate() {
     Boolean(password.trim()) &&
     status !== 'submitting' &&
     (!validationMessage || passwordMode === 'sign-in') &&
-    (passwordMode === 'sign-in' || Boolean(confirmPassword.trim()))
+    (passwordMode === 'sign-in' || (Boolean(confirmPassword.trim()) && ageConfirmed))
   // A stale session error should not linger while a new attempt is running.
   const visibleAuthError = status === 'submitting' ? null : authError
   const feedbackTone =
@@ -84,7 +86,7 @@ export function AuthGate() {
         await requestPasswordSignIn(identifier.trim(), password)
         setStatus('signed-in')
       } else {
-        const nextMessage = await requestPasswordSignUp(identifier.trim(), password)
+        const nextMessage = await requestPasswordSignUp(identifier.trim(), password, ageConfirmed)
         setStatus('signed-in')
         setMessage(nextMessage)
       }
@@ -200,6 +202,19 @@ export function AuthGate() {
                 className="h-12 rounded-xl"
                 disabled={status === 'submitting'}
               />
+              <div className="flex items-start gap-3 px-1">
+                <Checkbox
+                  id="auth-age"
+                  checked={ageConfirmed}
+                  onCheckedChange={(value) => setAgeConfirmed(value === true)}
+                  disabled={status === 'submitting'}
+                  required
+                  className="mt-0.5"
+                />
+                <label htmlFor="auth-age" className="text-sm leading-5 text-muted-foreground">
+                  I&apos;m 18 or older, or my parent or guardian agrees.
+                </label>
+              </div>
             </>
           )}
 
