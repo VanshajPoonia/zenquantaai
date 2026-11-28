@@ -6,6 +6,18 @@ The repository contains a real Zenquanta AI platform backed by Neon for runtime 
 
 Current direction: plan upgrades remain manual/admin-driven, payment automation is out of scope unless explicitly requested, and Neon/storage start fresh without importing Supabase database rows or storage objects.
 
+## 2026-11-28 - Terms, privacy and the sign-up age check (Claude Code, user-approved)
+
+**Goal**: finish the terms and privacy text the owner approved and add a required age checkbox to sign-up.
+
+**What changed** (branch `release/zq-0.1.0`):
+- Terms: run from India under Indian law, age 13 and over with parent or guardian permission under 18 or where local law requires it, pay as agreed with a 7-day refund.
+- Privacy: model providers' own data policies, where data is stored (US East for the database and app, Asia Pacific for files) and how long it is kept.
+- Both sign-up forms (landing and auth gate) need "I'm 18 or older, or my parent or guardian agrees" checked. `/api/auth/password/sign-up` returns 400 without `ageConfirmed: true`. The answer is not stored.
+- Postroom launch drafts now link to `zqai.vanshajpoonia.com`. The owner left `v0-zenquantaai` as it is.
+
+**Verified**: typecheck, lint and 186 web tests. On the branch preview both forms keep the submit button disabled until the box is ticked. The API returned 400 without `ageConfirmed` and with the string `"true"`, and with `true` it moved on to the password check. No account was created. The new terms and privacy text renders.
+
 ## 2026-11-28 - Code freeze bug bash, list limit fix, launch prep (Claude Code, user-approved)
 
 **Goal**: the Day 12 bug bash and the next launch steps. The owner approved a test account, the Flow migrations on production, a $50 OpenRouter cap set through Chrome, launch drafts, the 0.1.0 prep and a terms review.
